@@ -305,6 +305,34 @@ erDiagram
     users ||--o{ user_consents : accepts
     devices ||--o{ security_events : "context for"
     sessions ||--o| sessions : "rotates into"
+    users ||--o{ user_places : "saves home and work"
+    users ||--o| user_stats : "measured by"
+    places ||--o{ user_places : "may reference"
+
+    user_places {
+        ulid id PK
+        ulid user_id FK
+        varchar label "home work university custom"
+        varchar display_name
+        ulid place_id FK "nullable if free point"
+        point point "PRIVATE never exposed exactly"
+        decimal lat
+        decimal lng
+        varchar address
+        boolean is_default_origin "drives the Home screen"
+        tinyint blur_radius_meters "200 default"
+    }
+    user_stats {
+        ulid user_id PK_FK
+        int completed_trips_as_passenger
+        int completed_trips_as_driver
+        decimal avg_rating_as_passenger
+        decimal avg_rating_as_driver
+        decimal on_time_rate
+        decimal cancellation_rate
+        int no_show_count
+        timestamp computed_at
+    }
 
     users {
         ulid id PK
@@ -389,6 +417,19 @@ erDiagram
 
 **ملاحظة على `sessions ||--o| sessions`:** دي علاقة ذاتية بتمثّل سلسلة التدوير.
 كل تجديد بيعمل صف جديد بيشاور على القديم. كلهم بنفس `token_family_id`.
+
+> 🔴 **`devices` — الفهرس لازم يكون مركّب:**
+> ```sql
+> UNIQUE (user_id, device_public_id)   -- ✅ صح
+> UNIQUE (device_public_id)            -- ❌ غلط
+> ```
+> شاشة **"استخدام حساب آخر"** في الموبايل بتعرض أكتر من حساب على نفس الجهاز
+> (مريم وسلمى). الفهرس الفريد على الجهاز لوحده كان هيمنع ده تمامًا.
+
+> ⚠️ **`user_places` هو أهم جدول للـ Home screen.** الـ bottom sheet بتاع الاتجاه
+> (إلى العمل صباحًا / إلى المنزل مساءً + تبديل) مبني عليه بالكامل، وكذلك
+> التحية والاتجاه الافتراضي و"مطابقات على طريقك".
+> 🔒 نقطة البيت **عمرها ما تتعرض بدقتها** — بتتشوّش بـ `blur_radius_meters`.
 
 ---
 
@@ -745,6 +786,7 @@ erDiagram
         tinyint max_detour_minutes
         int budget_monthly_piastres
         varchar audience_preference
+        boolean wants_return_trip "evening leg toggle in UI"
         varchar status "active matched expired cancelled"
         timestamp expires_at
         timestamp last_notified_at "anti spam"
@@ -846,13 +888,16 @@ erDiagram
     }
     pickup_point_requests {
         ulid id PK
-        ulid seat_request_id FK
+        ulid seat_request_id FK "nullable - new joiner"
+        ulid group_member_id FK "nullable - existing member"
+        ulid requested_by_user_id FK
         point proposed_point
         varchar proposed_label
         decimal added_minutes "computed by us not claimed by user"
         decimal added_km
         varchar status "pending approved suggested_alternative rejected"
         ulid alternative_place_id FK
+        varchar effective_from "next_trip or specific_date"
     }
     bookings {
         ulid id PK
@@ -1615,10 +1660,12 @@ flowchart TB
 01  organizations
 02  users
 03  otp_challenges
-04  devices
+04  devices                    ← UNIQUE(user_id, device_public_id)
 05  sessions
 06  security_events
 07  user_consents
+07a user_places                ← جديد: بيت/شغل المستخدم
+07b user_stats                 ← جديد: إحصاءات الراكب والسائق
 ──────────────────────────── ① خلصت
 08  admin_users + roles + permissions      ← بدري عشان reviewed_by
 09  user_verifications
@@ -1771,19 +1818,83 @@ flowchart TB
 
 ---
 
-# 23. الخطوة الجاية
+# 23. مراجعة التغطية مقابل شاشات الموبايل الـ 47
+
+راجعت كل شاشة في الـ prototype وقارنتها بالمخطط. النتيجة والترقيعات:
+
+## 23.1 الفجوات اللي اتصلحت
+
+| # | الفجوة | الشاشة المتأثرة | الحل |
+|---|---|---|---|
+| 1 | مفيش بيت/شغل محفوظين | Home · Direction sheet · Discover | ✅ جدول `user_places` |
+| 2 | الراكب مالوش إحصائيات | Profile (12 رحلة · ⭐4.9 · 96%) | ✅ جدول `user_stats` |
+| 3 | حسابين على نفس الجهاز مستحيل | Use another account | ✅ `UNIQUE(user_id, device_public_id)` |
+| 4 | تغيير نقطة الالتقاء للعضو الحالي | Group → "اقترحي تغيير نقطة الالتقاء" | ✅ `pickup_point_requests.group_member_id` |
+| 5 | رحلة العودة مش متسجلة | Create commute request | ✅ `commute_demands.wants_return_trip` |
+| 6 | مصدر "السعر المقترح العادل" | Publish route | ✅ `platform_settings` — القسم 23.3 |
+
+## 23.2 الشاشات اللي محتاجة تعديل (مش الداتابيز)
+
+| الشاشة | المشكلة | التعديل المطلوب |
+|---|---|---|
+| **Match details** | *"لو انضم راكب رابع، حصتك تنزل لـ ~68 ج.م"* | ❌ **تتشال.** القرار = سعر ثابت للمقعد. المبلغ مايتغيرش بعدد الركاب |
+| **Match details** | "مساهمة الطريق 240 ÷ 3" | تتحول لـ: **"80 ج.م للمقعد · إجمالي الطريق 240 على 3 مقاعد"** — عرض معلوماتي بس |
+| **Group → Payments** | *"مستحق الخميس · 352 ج.م"* | القرار D13 = دفع بعد كل رحلة. تتحول لـ **"رحلات الأسبوع: 4 · مدفوع 352 ج.م"** بإيصالات |
+| **Pre-trip check-in** | الراكب بيعمل check-in | القرار D18 = السائقة بتأكد. تتحول لـ **"أنا في نقطة الالتقاء"** (إشارة للسائقة) والسائقة هي اللي بتأكد الركوب |
+
+> ⚠️ التعديلات دي **لازم تتبلّغ لفريق الموبايل قبل ما يبدأوا** — وإلا هيبنوا شاشات
+> بمنطق مالوش وجود في الـ backend.
+
+## 23.3 مصدر "السعر المقترح العادل"
+
+شاشة النشر بتقول `80 ج.م — المقترح العادل`. الحساب:
 
 ```
-✅ المخطط جاهز للمراجعة
-⬜ مراجعتك واعتمادك  ← إحنا هنا
+السعر المقترح للمقعد = (المسافة كم × مؤشر التكلفة للكيلومتر) ÷ متوسط الركاب
+                       مقرّب لأقرب 5 ج.م
+```
+كل المتغيرات في `platform_settings`:
+```
+pricing.cost_per_km_piastres        = 750     ← يتحدّث مع تغير سعر البنزين
+pricing.assumed_occupancy           = 3
+pricing.rounding_step_piastres      = 500
+pricing.min_price_piastres          = 5000
+pricing.max_price_piastres          = 12000
+```
+> الأدمن فيه broadcast اسمه *"fuel index update"* — ده بيبعت لكل السائقين
+> لما `cost_per_km_piastres` يتغيّر.
+
+## 23.4 القرارات الأخيرة (معتمدة)
+
+| القرار | القيمة | التأثير على الداتابيز |
+|---|---|---|
+| **نموذج التسعير** | سعر ثابت للمقعد | `commute_offers.price_per_seat_piastres` ✓ · اللقطات في `bookings` تفضل متجمّدة ✓ |
+| **احتفاظ `trip_locations`** | **90 يوم** | `purge_after = recorded_at + 90 days` · تقسيم شهري + job حذف يومي |
+| **حد دين الكاش** | **200 ج.م** (20000 قرش) | `platform_settings: payment.max_driver_debt_piastres = 20000` |
+
+## 23.5 تغطية الشاشات النهائية
+
+```
+47 شاشة  →  52 endpoint  →  57 جدول
+✅ 47 / 47 مغطاة بالكامل
+⚠️  4 شاشات محتاجة تعديل في النص/المنطق (القسم 23.2)
+```
+
+---
+
+# 24. الخطوة الجاية
+
+```
+✅ المخطط مرسوم ومراجَع مقابل الـ UI
+✅ الفجوات الست اتصلحت
+✅ القرارات الأخيرة اتحسمت
+⬜ اعتمادك النهائي  ← إحنا هنا
 ⬜ المرحلة 0 — الأساسات (3–5 أيام)
-⬜ المرحلة 1 — الـ 69 migration بالترتيب أعلاه
+⬜ المرحلة 1 — الـ 71 migration بالترتيب
 ```
 
-**قبل ما نبدأ، محتاج منك:**
-1. اعتماد المخطط (أو تعديلات)
-2. قرار مدة الاحتفاظ بـ `trip_locations` — 30 ولا 90 يوم؟
-3. حد الدين اللي بعده نمنع النشر — 200 ج.م مناسبة؟
+**حاجة واحدة لازم تتعمل بالتوازي:** إبلاغ فريق الموبايل بالتعديلات الأربعة
+في القسم 23.2، قبل ما يبدأوا يبنوا الشاشات دي.
 
 ---
 

@@ -11,16 +11,12 @@ return new class extends Migration
      */
     public function up(): void
     {
-        Schema::create('users', function (Blueprint $table) {
-            $table->id();
-            $table->string('name');
-            $table->string('email')->unique();
-            $table->timestamp('email_verified_at')->nullable();
-            $table->string('password');
-            $table->rememberToken();
-            $table->timestamps();
-        });
-
+        // The default Laravel `users` table is replaced entirely by the
+        // Rafeeq Identity migration (ULID PK, phone_e164, gender, trust
+        // level, etc. — Engineering Bible §4, ERD group ①). Laravel's own
+        // password-reset and web-session tables are still needed as-is:
+        // password_reset_tokens for the admin dashboard's email/password
+        // login (Phase 13), and sessions for Livewire's HTTP session store.
         Schema::create('password_reset_tokens', function (Blueprint $table) {
             $table->string('email')->primary();
             $table->string('token');
@@ -29,7 +25,9 @@ return new class extends Migration
 
         Schema::create('sessions', function (Blueprint $table) {
             $table->string('id')->primary();
-            $table->foreignId('user_id')->nullable()->index();
+            // ulid, not foreignId: the authenticated web guard is admin_users
+            // (ULID PK) — Livewire admin dashboard only, per decision D4.
+            $table->ulid('user_id')->nullable()->index();
             $table->string('ip_address', 45)->nullable();
             $table->text('user_agent')->nullable();
             $table->longText('payload');
@@ -42,7 +40,6 @@ return new class extends Migration
      */
     public function down(): void
     {
-        Schema::dropIfExists('users');
         Schema::dropIfExists('password_reset_tokens');
         Schema::dropIfExists('sessions');
     }
