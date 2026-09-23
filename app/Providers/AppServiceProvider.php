@@ -4,6 +4,8 @@ namespace App\Providers;
 
 use App\Domains\Identity\Contracts\OtpSender;
 use App\Domains\Identity\Support\LogOtpSender;
+use App\Domains\Verification\Contracts\VirusScanner;
+use App\Domains\Verification\Support\SignatureVirusScanner;
 use App\Http\OpenApi\DescribeErrorResponses;
 use Carbon\CarbonImmutable;
 use Dedoc\Scramble\Scramble;
@@ -29,6 +31,16 @@ class AppServiceProvider extends ServiceProvider
             'log' => new LogOtpSender,
             default => throw new InvalidArgumentException(
                 'Unsupported OTP driver ['.config('rafeeq.auth.otp.driver').'].'
+            ),
+        });
+
+        // Same shape, same reason: the real engine is not chosen yet, and
+        // `SignatureVirusScanner` refuses to run in production so a deploy
+        // without one fails rather than accepting unscanned uploads.
+        $this->app->bind(VirusScanner::class, fn () => match (config('rafeeq.verification.virus_scanner')) {
+            'signature' => new SignatureVirusScanner,
+            default => throw new InvalidArgumentException(
+                'Unsupported virus scanner ['.config('rafeeq.verification.virus_scanner').'].'
             ),
         });
     }

@@ -37,6 +37,74 @@ return [
         'privacy_version' => env('RAFEEQ_PRIVACY_VERSION', '1.0'),
     ],
 
+    'verification' => [
+        /*
+         * DEPLOY-ONLY. Which filesystem disk holds identity documents.
+         *
+         * Decision D7: a private S3-compatible bucket, never a public URL.
+         * The default `documents` disk is private local storage for
+         * development; production sets this to `s3`. It is not runtime-tunable
+         * because moving the disk out from under existing rows would orphan
+         * every document already stored.
+         */
+        'documents_disk' => env('RAFEEQ_DOCUMENTS_DISK', 'documents'),
+
+        /*
+         * DEPLOY-ONLY. Whether a document link points straight at storage
+         * (a presigned URL, decision D7) or at our own signed route.
+         *
+         * An explicit flag rather than asking the disk what it supports: that
+         * capability is not stable. `Storage::fake()` makes EVERY disk claim it
+         * can presign, so a capability check silently takes a different branch
+         * under test than in production — which is the one place the difference
+         * must not exist, because the two branches have different security
+         * properties. Turn this on wherever `documents_disk` is S3.
+         */
+        'presigned_document_urls' => env('RAFEEQ_PRESIGNED_DOCUMENT_URLS', false),
+
+        /*
+         * DEPLOY-ONLY. Which scanner inspects an upload before it can be
+         * submitted for review. `signature` is the development scanner and
+         * refuses to run in production, so shipping without a real engine
+         * fails loudly instead of waving malware through.
+         */
+        'virus_scanner' => env('RAFEEQ_VIRUS_SCANNER', 'signature'),
+
+        // How long a document access link stays valid. Short because the link
+        // is the only thing standing between a leaked URL and someone's
+        // national ID.
+        'document_url_ttl_seconds' => 120,
+
+        'max_document_size_kilobytes' => 8192,
+
+        // Attempts before a verification type is locked and needs an admin to
+        // reopen it — an upload loop is the cheapest way to probe what a
+        // reviewer accepts.
+        'max_submission_attempts' => 5,
+    ],
+
+    'driver' => [
+        // Chapter 3 §7: "vehicle year configurable". The floor is a policy
+        // decision about what the platform is willing to put passengers in,
+        // not a technical limit.
+        'vehicle_minimum_year' => 2005,
+
+        // §7: "seats between 2 and 8". This is the vehicle's TOTAL seats
+        // including the driver; bookable seats are always one fewer.
+        'vehicle_minimum_seats' => 2,
+        'vehicle_maximum_seats' => 8,
+
+        'maximum_vehicles_per_driver' => 3,
+
+        /*
+         * A licence must still be valid this far into the future before an
+         * application is accepted. Reviewing takes 24–48 hours (§4), so a
+         * licence expiring tomorrow would be approved and immediately
+         * worthless — and the driver would have published commutes by then.
+         */
+        'licence_minimum_validity_days' => 30,
+    ],
+
     'profile' => [
         /*
          * ASSUMPTION, flagged for product/legal sign-off: Chapter 2 §17.3

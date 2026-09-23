@@ -38,6 +38,23 @@ return [
             'report' => false,
         ],
 
+        /*
+         * Identity documents (national IDs, selfies, licences). Private, and
+         * outside `storage/app/public` so no symlink can ever expose it:
+         * decision D7 forbids a public URL for any of this, and the only way
+         * to read a file here is through an authorised app route or a
+         * short-lived presigned URL. Production points
+         * `RAFEEQ_DOCUMENTS_DISK` at `s3` instead.
+         */
+        'documents' => [
+            'driver' => 'local',
+            'root' => storage_path('app/documents'),
+            'serve' => false,
+            'visibility' => 'private',
+            'throw' => true,
+            'report' => false,
+        ],
+
         'public' => [
             'driver' => 'local',
             'root' => storage_path('app/public'),

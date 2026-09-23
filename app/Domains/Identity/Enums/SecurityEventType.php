@@ -24,6 +24,20 @@ enum SecurityEventType: string
     case LocalPinReset = 'local_pin_reset';
     case SuspendedAccessAttempt = 'suspended_access_attempt';
 
+    // ---- Verification (Phase 3) ---------------------------------------
+    case DocumentRejected = 'document_rejected';
+    case DocumentAccessed = 'document_accessed';
+    case VerificationSubmitted = 'verification_submitted';
+    case VerificationApproved = 'verification_approved';
+    case VerificationRejected = 'verification_rejected';
+
+    // ---- Driver application (Phase 4) ---------------------------------
+    case DriverDuplicateDetected = 'driver_duplicate_detected';
+    case DriverApplicationSubmitted = 'driver_application_submitted';
+    case DriverApproved = 'driver_approved';
+    case DriverRejected = 'driver_rejected';
+    case DriverSuspended = 'driver_suspended';
+
     /**
      * The default severity for this kind of event. A caller may still raise
      * it (a failed OTP is routine; the tenth in a minute is not), but never
@@ -39,7 +53,16 @@ enum SecurityEventType: string
             self::OtpRateLimited,
             self::DeviceRevoked,
             self::LocalPinReset,
-            self::SuspendedAccessAttempt => SecurityRiskLevel::Medium,
+            self::SuspendedAccessAttempt,
+            // A refused upload is either a mistake or a probe, and the two are
+            // indistinguishable at the moment it happens.
+            self::DocumentRejected,
+            self::DriverSuspended => SecurityRiskLevel::Medium,
+
+            // Two people claiming the same national id or licence is the
+            // signature of identity fraud, and Chapter 3 §16 says such an
+            // application must never be approved automatically.
+            self::DriverDuplicateDetected => SecurityRiskLevel::High,
 
             default => SecurityRiskLevel::Low,
         };

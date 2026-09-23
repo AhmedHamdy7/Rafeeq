@@ -2,6 +2,7 @@
 
 use App\Http\Middleware\EnsureAccountIsActive;
 use App\Http\Middleware\EnsureProfileIsComplete;
+use App\Http\Middleware\RequiresVerification;
 use App\Http\Middleware\SetLocaleFromHeader;
 use App\Http\Responses\ApiExceptionHandler;
 use Illuminate\Foundation\Application;
@@ -27,6 +28,10 @@ return Application::configure(basePath: dirname(__DIR__))
         $middleware->alias([
             'account.active' => EnsureAccountIsActive::class,
             'profile.complete' => EnsureProfileIsComplete::class,
+            // `verified:government_id,selfie` — the gate half of the
+            // pendingIntent pattern. Its refusal names the missing levels so
+            // the app can send the person to verify and bring them back.
+            'verified' => RequiresVerification::class,
         ]);
     })
     ->withExceptions(function (Exceptions $exceptions): void {

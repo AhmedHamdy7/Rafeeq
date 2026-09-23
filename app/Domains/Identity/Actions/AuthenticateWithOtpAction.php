@@ -12,6 +12,7 @@ use App\Domains\Identity\Support\DeviceIdentity;
 use App\Domains\Identity\Support\LaunchRouter;
 use App\Domains\Identity\Support\SecurityLog;
 use App\Domains\Shared\ValueObjects\PhoneNumber;
+use App\Domains\Verification\Actions\GrantPhoneVerificationAction;
 use Illuminate\Support\Facades\DB;
 
 /**
@@ -31,6 +32,7 @@ final readonly class AuthenticateWithOtpAction
         private RegisterDeviceAction $registerDevice,
         private IssueSessionAction $issueSession,
         private RecordConsentAction $recordConsent,
+        private GrantPhoneVerificationAction $grantPhoneVerification,
     ) {}
 
     public function execute(string $challengeId, string $code, DeviceIdentity $identity): AuthenticationResult
@@ -92,6 +94,12 @@ final readonly class AuthenticateWithOtpAction
             // the original timestamp would misreport when it was last shown.
             $existing->forceFill(['phone_verified_at' => now()])->save();
 
+            // Level 1 of the Verification Centre. Granted on every sign-in,
+            // not only at registration, so an account that predates the
+            // Centre — or one whose phone verification lapsed — is brought up
+            // to date by the act that re-proved it.
+            $this->grantPhoneVerification->execute($existing);
+
             return [$existing, AccountState::ExistingUser];
         }
 
@@ -115,6 +123,8 @@ final readonly class AuthenticateWithOtpAction
         $user->refresh();
 
         $this->recordConsent->execute($user, ConsentSource::Registration);
+
+        $this->grantPhoneVerification->execute($user);
 
         SecurityLog::record(SecurityEventType::AccountCreated, $user, metadata: [
             'phone' => SecurityLog::maskPhone($phone),

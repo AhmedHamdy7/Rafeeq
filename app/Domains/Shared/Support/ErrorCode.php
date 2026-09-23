@@ -37,6 +37,36 @@ enum ErrorCode: string
     case AccountSuspended = 'ACCOUNT_SUSPENDED';
     case ProfileIncomplete = 'ACCOUNT_PROFILE_INCOMPLETE';
 
+    // ---- Verification & documents (Phase 3) ----------------------------
+    // `VerificationRequired` is the one the app acts on rather than merely
+    // displays: it names the levels still missing, so the client can save the
+    // intent, route to the Verification Centre, and come back to the same
+    // screen afterwards.
+    case VerificationRequired = 'VERIFICATION_REQUIRED';
+    case VerificationNotSubmittable = 'VERIFICATION_NOT_SUBMITTABLE';
+    case VerificationAlreadyApproved = 'VERIFICATION_ALREADY_APPROVED';
+    case VerificationAttemptsExhausted = 'VERIFICATION_ATTEMPTS_EXHAUSTED';
+    case DocumentUnreadable = 'DOCUMENT_UNREADABLE';
+    case DocumentRejectedByScanner = 'DOCUMENT_REJECTED_BY_SCANNER';
+    case DocumentKindNotAccepted = 'DOCUMENT_KIND_NOT_ACCEPTED';
+    case OrganizationEmailMismatch = 'ORGANIZATION_EMAIL_MISMATCH';
+
+    // ---- Driver & vehicles (Phase 4, Chapter 3) ------------------------
+    case DriverNotEligible = 'DRIVER_NOT_ELIGIBLE';
+    case DriverApplicationLocked = 'DRIVER_APPLICATION_LOCKED';
+    case DriverApplicationIncomplete = 'DRIVER_APPLICATION_INCOMPLETE';
+    case LicenceExpired = 'DRIVER_LICENCE_EXPIRED';
+    /*
+     * One code for every duplicate, whichever field it was. Telling an
+     * applicant WHICH of a national id, a licence number or a plate already
+     * exists would turn the endpoint into a lookup for whether a given
+     * person or car is on the platform — and the honest applicant does not
+     * need to know, because for them it means a mistake in what they typed.
+     */
+    case DriverDuplicateDetected = 'DRIVER_DUPLICATE_DETECTED';
+    case VehicleNotAllowed = 'VEHICLE_NOT_ALLOWED';
+    case VehicleLimitReached = 'VEHICLE_LIMIT_REACHED';
+
     public function defaultStatus(): int
     {
         return match ($this) {
@@ -73,7 +103,29 @@ enum ErrorCode: string
             // allowed through. A 401 would make the app throw away a valid
             // session and loop back to the phone screen.
             self::AccountSuspended,
-            self::ProfileIncomplete => 403,
+            self::ProfileIncomplete,
+            // 403: the caller is who they say they are and is simply not
+            // allowed through yet. A 401 would make the app throw away a
+            // perfectly good session and start over at the phone screen.
+            self::VerificationRequired => 403,
+
+            self::VerificationAlreadyApproved => 409,
+            self::VerificationAttemptsExhausted => 429,
+            self::VerificationNotSubmittable,
+            self::DocumentUnreadable,
+            self::DocumentRejectedByScanner,
+            self::DocumentKindNotAccepted,
+            self::OrganizationEmailMismatch,
+            self::DriverApplicationIncomplete,
+            self::LicenceExpired,
+            self::VehicleNotAllowed => 422,
+
+            // 403: the account is fine, this person just may not do it yet.
+            self::DriverNotEligible => 403,
+
+            self::DriverApplicationLocked,
+            self::DriverDuplicateDetected,
+            self::VehicleLimitReached => 409,
         };
     }
 

@@ -31,4 +31,25 @@ return [
     'AUTH_DEVICE_REVOKED' => 'This device no longer has access. Please sign in again.',
     'ACCOUNT_SUSPENDED' => 'Your account is currently suspended.',
     'ACCOUNT_PROFILE_INCOMPLETE' => 'Please finish setting up your profile first.',
+
+    // Verification. These are read out loud to the person, so they say what to
+    // do next rather than what went wrong internally.
+    'VERIFICATION_REQUIRED' => 'Please complete verification to continue.',
+    'VERIFICATION_NOT_SUBMITTABLE' => 'Some required documents are still missing or being checked.',
+    'VERIFICATION_ALREADY_APPROVED' => 'This step is already verified.',
+    'VERIFICATION_ATTEMPTS_EXHAUSTED' => 'You have tried this too many times. Our team will take a look.',
+    'DOCUMENT_UNREADABLE' => 'We could not read that image. Please take a clear, uncropped photo and try again.',
+    'DOCUMENT_REJECTED_BY_SCANNER' => 'That file could not be accepted. Please upload a photo taken with your camera.',
+    'DOCUMENT_KIND_NOT_ACCEPTED' => 'That document is not part of this step.',
+    'ORGANIZATION_EMAIL_MISMATCH' => 'That email does not belong to the organization you selected.',
+
+    // Driver application. The duplicate message is deliberately vague about
+    // WHICH detail matched — see the note on the error code.
+    'DRIVER_NOT_ELIGIBLE' => 'You cannot apply to drive yet.',
+    'DRIVER_APPLICATION_LOCKED' => 'Your application is being reviewed and cannot be changed. Withdraw it first if you need to make a correction.',
+    'DRIVER_APPLICATION_INCOMPLETE' => 'Some required details or documents are still missing.',
+    'DRIVER_LICENCE_EXPIRED' => 'Your licence must be valid for at least :days more days.',
+    'DRIVER_DUPLICATE_DETECTED' => 'Some of these details are already registered. Please check what you entered, or contact support.',
+    'VEHICLE_NOT_ALLOWED' => 'This vehicle does not meet the requirements.',
+    'VEHICLE_LIMIT_REACHED' => 'You have reached the maximum number of vehicles.',
 ];

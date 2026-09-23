@@ -27,6 +27,14 @@ abstract class TestCase extends BaseTestCase
     {
         $this->app['auth']->forgetGuards();
 
+        // `Authenticate` middleware calls `shouldUse($guard)` on success, which
+        // changes the DEFAULT guard for the rest of the process. In production
+        // that dies with the request; inside one test it persists, so after any
+        // authenticated call `$request->user()` would resolve a bearer token on
+        // a route that has no auth middleware at all — and a test of an
+        // unauthenticated path would silently exercise an authenticated one.
+        $this->app['auth']->shouldUse(config('auth.defaults.guard'));
+
         return parent::call($method, $uri, $parameters, $cookies, $files, $server, $content);
     }
 }

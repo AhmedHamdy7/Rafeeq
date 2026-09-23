@@ -92,6 +92,22 @@ it('generates a document describing every /v1 route', function () {
         'GET /v1/account/consents',
         'POST /v1/account/consents',
         'PUT /v1/account/profile/basic',
+        'GET /v1/account/verifications',
+        'GET /v1/account/verifications/documents/{document}',
+        'POST /v1/account/verifications/organization',
+        'POST /v1/account/verifications/{type}/documents',
+        'POST /v1/account/verifications/{type}/submit',
+        'GET /v1/driver/eligibility',
+        'GET /v1/driver/application',
+        'POST /v1/driver/application',
+        'PUT /v1/driver/application/licence',
+        'POST /v1/driver/application/submit',
+        'DELETE /v1/driver/application',
+        'GET /v1/driver/vehicles',
+        'POST /v1/driver/vehicles',
+        'PATCH /v1/driver/vehicles/{vehicle}',
+        'POST /v1/driver/vehicles/{vehicle}/activate',
+        'POST /v1/driver/vehicles/{vehicle}/documents',
     ]);
 });
 
