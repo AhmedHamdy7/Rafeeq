@@ -43,15 +43,21 @@
 | 27 | **كود الخطأ مقابل الـ status** | ممنوع أي 4xx يرجع `SERVER_ERROR` — العميل هيفتكرها قابلة لإعادة المحاولة. `ErrorCode::fromHttpStatus()` بترجع لفئة الـ status (4xx → `BAD_REQUEST`) مش لـ `ServerError` |
 | 28 | **موديلات الـ session guard** | أي موديل مربوط بـ guard نوعه `session` (زي `AdminUser`) لازم عمود `remember_token` — `SessionGuard::logout()` بيقرا `getRememberToken()` دايمًا، وده بيرمي `MissingAttributeException` تحت `Model::shouldBeStrict()` |
 | 29 | **كاش الإعدادات** | ممنوع تخزّن الـ `$default` بتاع المستدعي جوّه الكاش — خزّن قيمة الصف بس وطبّق الـ default بعد الكاش، وإلا أول fallback هيتجمّد للأبد ويترد على كل المستدعيين بعد كده |
+| 35 | **تصفير الـ auth guards في الاختبارات** | Laravel مش بيصفّر الـ guards بين الطلبات جوّه نفس الاختبار، و`RequestGuard` (اللي هو `auth:sanctum`) بيحفظ اليوزر اللي حلّه في أول طلب. النتيجة: أي اختبار بيتأكد إن حاجة **بتقفل** الوصول (logout، إلغاء جهاز، سحب توكن) بيعدّي وهو غلط. `Tests\TestCase::call()` بيعمل `forgetGuards()` قبل كل طلب — ده بيرجّع سلوك الإنتاج (كل طلب بيبوّت app جديد) مش بيلتف حواليه |
+| 36 | **قيد CHECK بدل القيمة الافتراضية الوهمية** | لو عمود لازم يفضل فاضي لحد خطوة لاحقة في الـ flow، خليه `nullable` + `CHECK` بيربط اكتمال الحالة بامتلائه — **مش** قيمة placeholder. مثال حي: `users.gender` لو اتحطت `prefer_not_to_say` مؤقتًا كانت هتستبعد ست صامتًا من مطابقة النساء، لأن دي إجابة حقيقية مش "مش متجاوبة" |
+| 37 | **إلغاء الجلسة لازم يمسح التوكن كمان** | تعليم `auth_sessions.revoked_at` لوحده بيمنع الـ refresh بس — الـ access token اللي في إيد السارق بيفضل شغال لحد ما ينتهي لوحده. عشان كده اسم توكن Sanctum = `auth_session.id`، و`AuthSession::revoke()` بتمسح الصف والتوكن مع بعض |
+| 38 | **التعليق فوق قاعدة التحقق = توثيق API** | Scramble بينشر التعليق اللي فوق كل سطر في `rules()` كوصف الحقل في المستند اللي الفريق الخارجي بيقراه. يعني التعليقات هناك **مكتوبة للعميل** مش للصيانة — أي شرح داخلي (فخاخ، أسباب اختيار قاعدة على تانية) مكانه docblock الكلاس. نفس الكلام على الـ Resources والـ Actions اللي شكل خرجها بيتستنتج |
+| 39 | **`Rule::in` لوحدها مش بتحدد نوع** | `['nullable', Rule::in([...])]` بيحدد القيم المسموحة بس من غير أي نوع مُعلَن — لا في التحقق ولا في العقد. لازم `'string'` (أو `'integer'`) جنبها. ولو القيم جاية من enum، `Rule::enum(X::class)->only([...])` أفضل: بيحدد النوع والمجموعة مع بعض، وبيمنع إضافة case جديدة من إنها توسّع المسموح بالسكوت |
+| 40 | **ممنوع object في ملف config** | Laravel بيسيريالايز الـ config بـ `var_export` وقت `config:cache`، وده ما بيعرفش يعبّر عن object. أي إعداد محتاج object لازم يبقى class string والـ object يتبني في الكلاس — حتى لو توثيق الحزمة نفسه موصّي بغير كده (حصل فعلاً مع `scramble.security_strategy`) |
 | 24 | **`hasMany`/`hasOne` من موديل بـ PK غير قياسي** | لو الموديل الأب مفتاحه الأساسي مش `id` (زي `DriverProfile` اللي مفتاحه `user_id`)، Eloquent بيخمّن اسم الـ FK بصيغة `{model}_{primary_key}` (يعني `driver_profile_user_id`!) مش `driver_profile_id`. أي `hasMany`/`hasOne` من موديل زي ده **لازم** يحدد الـ FK والـ local key صراحة: `hasMany(Vehicle::class, 'driver_profile_id', 'user_id')`. الفخ ده اتكشف متأخر في الـ seeder لأن الاختبارات كانت بتستخدم اتجاه العلاقة العكسي (`belongsTo`) بس |
 
 ---
 
 ## الحالة الحالية
 
-**آخر تحديث:** 2026-09-19
-**الوضع:** ✅ **Phase 0 و Phase 1 مكتملتين ومراجَعتين (جولتين code review).** 72 migration · 71 جدول دومين · 71 موديل · 77 enum · 71 factory · seeder كامل · **375 اختبار كلهم خضرا**.
-**مستند التسليم الكامل:** `RAFEEQ_PHASE_0_1_DELIVERY.md` — جاهزين نبدأ Phase 2 (المصادقة والهوية).
+**آخر تحديث:** 2026-09-23
+**الوضع:** ✅ **Phase 0 و Phase 1 و Phase 2 مكتملات + تسليم OpenAPI للفريق الخارجي.** 73 migration · 71 جدول دومين · 71 موديل · 80 enum · 71 factory · 11 endpoint · 32 رد خطأ موصوف · **473 اختبار كلهم خضرا** (+98 اختبار جديد في Phase 2).
+**مستند التسليم:** `RAFEEQ_PHASE_0_1_DELIVERY.md` (المرحلتين 0 و1) — الخطوة الجاية Phase 3 (توثيق السائق والمركبة، الفصل 3).
 
 ### ✅ خلصنا
 - قراءة وفهم المخطط الكامل (Master Plan + Engineering Bible + ERD)
@@ -117,13 +123,148 @@
 
 **نتيجة مهمة — ملاحظة اتحققت وطلعت غير دقيقة:** المراجعة قالت إن `abort($response)`/Precognition بيتحولوا لـ 500. **مش صح** — `Route::run()` بيمسك `HttpResponseException` بنفسه، فهي عمرها ما بتوصل للـ handler من داخل route action (اتأكدنا بـ probe فعلي + كود الإطار). **بس** لو اترمت من **middleware** فهي بتوصل فعلاً وبتتحول لـ 500 — فالحماية اتضافت والاختبار بيغطي المسار الصح ده (اتأكدنا إنه بيفشل من غير الحماية).
 
+---
+
+## Phase 2 — المصادقة والهوية ✅ (2026-09-20)
+
+**المصدر:** `book/RAFEEQ_Chapter_02_Detailed_Authentication_Story.md` (1697 سطر، اتقرا كامل قبل أي كود).
+
+### نقاط الـ API (11)
+
+| الطريقة | المسار | الوصول | الفصل |
+|---|---|---|---|
+| POST | `/v1/auth/otp/request` | عام | §23.1 |
+| POST | `/v1/auth/otp/verify` | عام | §23.2 |
+| POST | `/v1/auth/session/refresh` | عام (الـ refresh token هو الاعتماد) | §23.3 |
+| GET | `/v1/auth/me` | مسجّل دخول (حتى لو موقوف) | §3 |
+| POST | `/v1/auth/logout` | مسجّل دخول (حتى لو موقوف) | §23.4 |
+| GET | `/v1/account/devices` | مسجّل دخول (حتى لو موقوف) | §21 |
+| DELETE | `/v1/account/devices/{id}/session` | مسجّل دخول (حتى لو موقوف) | §23.5 |
+| PATCH | `/v1/account/devices/current/security` | مسجّل دخول | §15/§16 |
+| GET · POST | `/v1/account/consents` | مسجّل دخول | §27 |
+| PUT | `/v1/account/profile/basic` | نشِط (غير موقوف) | §17 |
+
+**ثلاث طبقات وصول** موثّقة في `routes/api.php`: عام · مسجّل دخول · نشِط. المسارات اللي بيحتاجها الموقوف (يشوف حالته، يخرج، يلغي جهاز مسروق) عمدًا **برّه** طبقة `account.active` — عشان ما نحبسش حد من غير طريق للاستئناف (سيناريو H).
+
+### القرارات الحاسمة
+
+| # | القرار | السبب |
+|---|---|---|
+| 30 | **طول الـ PIN = 4** (الكتاب بيقول 6) | `RAFEEQ_MASTER_PLAN.md` §13 حسم التعارض لصالح الـ prototype. وهامشي هندسيًا: الـ PIN محلي بالكامل، السيرفر بيخزن `devices.has_local_pin` (boolean) بس. الـ **OTP** 6 أرقام (رقم تاني متسق بين المصدرين) |
+| 31 | **`OtpSender` interface + `LogOtpSender`** | مزوّد الـ SMS لسه سؤال مفتوح (§19 سؤال 2). التبديل = كلاس واحد + سطر config. `LogOtpSender` **بيرمي exception في production** عشان النشر من غير مزوّد حقيقي يفشل بصوت عالي مش بصمت |
+| 32 | **`users.gender` و`registered_role` بقوا nullable + CHECK constraint** | الـ flow الموثّق بينشئ الصف عند تحقق الـ OTP، والحقلين بيتجمّعوا بعدين (§17 + Bible §1.3/§1.5 + الفصل §20.1 بيعلّم gender بـ "Policy-based"). **رفضنا القيمة الافتراضية الوهمية**: `prefer_not_to_say` إجابة حقيقية، فست نصّ مسجّلة كانت هتتستبعد صامتًا من مطابقة النساء. الـ CHECK بيمنع `profile_status='basic_complete'` طول ما أي حقل هوية فاضي |
+| 33 | **الـ access token اسمه = `auth_session.id`** | عشان `revoke()` تقدر تمسح التوكن الفعلي كمان مش بس تعلّم الصف — من غير كده التوكن المسروق بيفضل شغال 15 دقيقة كاملة بعد الإلغاء (سيناريو G) |
+| 34 | **`Rotated` و`Superseded`** اتضافوا لـ `SessionRevocationReason` | لازم نفرّق بين توكن **متدوّر** (استخدامه تاني = سرقة → إلغاء العيلة كلها) وتوكن **مسجّل خروجه** (عميل قديم بس → إلغاء فردي). من غير التفرقة دي إما نكذب في سجل التدقيق أو نعمل تسجيل خروج جماعي على سباق عادي |
+| 35 | **`Model::forgetGuards()` في `TestCase::call()`** | Laravel مش بيصفّر الـ guards بين الطلبات جوّه نفس الاختبار، و`RequestGuard` (وهو `auth:sanctum`) بيحفظ اليوزر اللي حلّه. يعني اختبار "الخروج بيقفل الوصول" كان بيعدّي لسبب غلط. ده بيرجّع سلوك الإنتاج (كل طلب بيبوّت app جديد) مش بيلتف حواليه |
+
+### الضمانات الأمنية المُختبَرة
+
+- **منع الاستعلام عن الحسابات (سيناريو D):** `otp/request` **عمره ما بيلمس جدول `users`** — مفيش branch أصلاً يقدر يفرّق. اختبار بيقارن الرد على رقم له حساب ورقم مالوش: نفس الـ status، نفس المفاتيح، نفس القيم كلها ما عدا اللي مشتقة من الرقم اللي المستخدم كتبه بنفسه
+- **الـ OTP:** `random_int` (CSPRNG) → `Hash::make` → مفيش plaintext في الرد ولا الداتابيز ولا أي لوج. استعمال واحد فقط (بـ update شرطي ذرّي عشان السباق) · مربوط بالغرض · الإصدار الجديد بيقتل القديم فورًا (سيناريو E)
+- **الـ rate limiting على 3 محاور:** الرقم (5/ساعة) · الـ IP (20/ساعة) · التحقق من نفس الـ challenge (10/دقيقة) — كلها بترجّع `Retry-After`
+- **`refresh` rotation + كشف إعادة الاستخدام:** sha256 بس في الداتابيز · أي استخدام تاني لتوكن متدوّر → **إلغاء الـ `token_family_id` كله** + `security_event` بـ `risk_level: high` (RFC 9700 §4.14.2)
+- **`SecurityLog` بيغسل الـ metadata:** أي مفتاح اسمه `code`/`otp`/`pin`/`token`/... بيتحوّل لـ `[redacted]`، والأرقام بتتخزن مقنّعة (`*********5678`)، والـ IP بـ sha256
+- **IDOR:** جهاز حد تاني بيرجّع **404 مش 403** — 403 كان هيأكد إن الـ id موجود
+- **`gender`** غير موجود في أي خرج، واختبار بيفحص الـ payload كله كـ string مش بس المفاتيح
+
+### الملفات
+
+```
+app/Domains/Identity/
+  Actions/       RequestOtp · VerifyOtp · AuthenticateWithOtp · RegisterDevice ·
+                 IssueSession · RefreshSession · RevokeSession · RecordConsent ·
+                 CompleteBasicProfile
+  Contracts/     OtpSender
+  Enums/         +AccountState · NextStep · SecurityEventType (المجموع 80)
+  Support/       AuthSettings · LaunchRouter · SecurityLog · ConsentRegistry ·
+                 CurrentSession · LogOtpSender · DeviceIdentity ·
+                 IssuedSession · AuthenticationResult
+app/Domains/Shared/Exceptions/DomainException.php
+app/Http/  Controllers/Api/V1/{Auth,Account} · Requests/{Auth,Account} ·
+           Resources/{User,Device,Session,Authentication} ·
+           Middleware/{EnsureAccountIsActive,EnsureProfileIsComplete}
+config/rafeeq.php          كل رقم إعداد (OTP · session · profile · legal)
+database/migrations/2026_09_20_090000_relax_users_profile_columns_*.php
+tests/Feature/{Auth,Account}/   71 اختبار جديد
+tests/Support/FakeOtpSender.php
+```
+
+### باجات حقيقية اتكشفت أثناء التنفيذ
+
+1. 🔴 **سلسلة الـ resend ماكانتش بترجع تتصفّر** — `activeChallengeFor` كان بيدوّر على `status = pending` بس، ومفيش حاجة بتقلب الصف لـ `expired` لما وقته يخلص. يعني اللي يطلب 4 أكواد ومايتحققش **كان هيتقفل عليه للأبد**، والحد الساعي ماكانش هيوصل له أصلاً. اتصلح بشرط `expires_at > now()`
+2. 🔴 **`User::create()` مش بيقرا الـ defaults بتاعة الداتابيز** — `account_status` رجع `null` وكسر أول رد تسجيل بـ 500. اتصلح بـ `refresh()` بعد الإنشاء
+3. 🟠 **`*/` جوّه docblock** (في `lang/*/errors`) كانت بتقفل التعليق بدري وتكسر الملف — اتلقطت من الـ linter
+4. 🟠 **التحدي المقفول (`Blocked`) كان بيرجّع `AUTH_OTP_INVALID`** بدل `AUTH_OTP_MAX_ATTEMPTS` — العميل ما كانش هيعرف إنه لازم يطلب كود جديد
+5. 🟠 **`getPreferredLanguage()` مش بيفرّق بين "طابق" و"مطابقش"** — بيرجّع أول لغة في القايمة اللي بعتها له لما مفيش تطابق، فـ `Accept-Language: fr` كان بيتقري كأنه طلب عربي. اتصلح بمسح يدوي لـ `getLanguages()` بترتيب أفضلية العميل نفسه (لازم عشان الرجوع للغة المخزّنة يبقى قابل للوصول أصلاً)
+
+### التوطين (ar/en)
+`SetLocaleFromHeader` بقى بيكمّل الوعد اللي كان مكتوب في تعليقه: `Accept-Language` بيكسب لو بيطلب لغة إحنا بنتكلمها، وإلا `users.preferred_language` للمسجّل دخوله، وإلا العربي. كل أكواد الأخطاء الجديدة (15 كود) ورسايل التحقق مترجمة في `lang/ar` و`lang/en`.
+**ملاحظة للاختبارات:** `Request::create()` بتاعة Symfony بتحقن `Accept-Language: en-us` افتراضيًا، فمفيش اختبار يقدر يبعت "من غير هيدر" — بنستخدم `fr` كبديل لنفس نقطة القرار.
+
+### ⬜ مؤجّل من Phase 2 (موثّق مش مسكوت عنه)
+
+- **مزوّد SMS حقيقي** — السؤال المفتوح رقم 2. الـ seam جاهز (`OtpSender`)
+- **تغيير رقم الموبايل (سيناريو F)** — الفصل نفسه بيقول إنها ميزة أمان حساب مش تعديل بروفايل، ومحتاجة purpose `phone_change` بـ endpoint خاص لمستخدم مسجّل دخوله. مؤجّلة للمرحلة اللي فيها إعدادات الحساب
+- **رفع صورة البروفايل + تجريد الـ metadata** — محتاج طبقة التخزين S3 (قرار D7)، مؤجّل للمرحلة اللي فيها الملفات
+- **إشعار أمان عند إلغاء جهاز** — `security_event` بيتكتب، لكن الإشعار الفعلي محتاج طبقة الإشعارات
+- **الحد الأدنى للسن = 18 — افتراض مش قرار موثّق.** الفصل بيطلب حد أدنى من غير ما يحدد رقم، ولا الخطة ولا الـ Bible فيهم رقم. اخترنا 18 (سن الرشد + الحد الأدنى لرخصة القيادة في مصر). **محتاج تأكيد من المنتج/القانوني** — بس مش بيوقف حاجة، لأنه قابل للتعديل من `platform_settings` (تحت)
+
+### الأرقام القابلة للتعديل وقت التشغيل (معيار #11)
+
+بقرار المستخدم (2026-09-23): أي رقم سياسة زي الحد الأدنى للسن لازم يتعدّل من الـ **settings** مش من الكود، والداشبورد هتعدّله لما نوصل لمرحلتها.
+
+كل رقم بيمرّ من `platform_settings` → لو مفيش صف، الافتراضي من `config/rafeeq.php`. **ممنوع أي Action أو Request أو Resource يقرا `config('rafeeq...')` مباشرة** — لازم عبر accessor:
+
+| الـ accessor | بيغطّي |
+|---|---|
+| `Identity\Support\AuthSettings` | طول الـ OTP · عمره · مهلة إعادة الإرسال · حد المحاولات وإعادة الإرسال · عمر الـ access/refresh token · طول الـ PIN · حدود الـ rate limiting الثلاثة |
+| `Identity\Support\ProfileSettings` | الحد الأدنى للسن · أدنى وأقصى طول للاسم |
+| `Identity\Support\ConsentRegistry` | إصدارات الشروط وسياسة الخصوصية |
+
+**استثناء واحد معلّم `DEPLOY-ONLY`:** `auth.otp.driver` (مزوّد الـ SMS). ده توصيل بنية تحتية مش سياسة — خطأ كتابة فيه من داشبورد كان هيوقّف المصادقة على الكل، ومش زي رقم السياسة مش ممكن تتحقق منه بالنظر. `RuntimeTunableSettingsTest` فيه اختبار بيثبت إن صف `platform_settings` عليه **مالوش أي تأثير**.
+
+**سقوف مهمة:** أي إعداد بيحدّد طول عمود، عرض العمود هو السقف الحقيقي (`users.full_name` = varchar(100)، `users.public_first_name` = varchar(50)). موثّقة inline في `config/rafeeq.php`. عشان كده `public_first_name` بيتقص على 50 كـ literal مش كإعداد — لو بقى قابل للتعديل كان ممكن حد يظبّطه على قيمة بتقطع الكتابة.
+
+**اختبار:** `tests/Feature/Account/RuntimeTunableSettingsTest.php` (11 اختبار) — بيثبت إن تغيير صف بيغيّر السلوك فعلاً على الـ endpoints، مش بس قيمة الـ accessor. الوعد ده مش حقيقي إلا لو مُختبَر: accessor بيفضل يقرا `config` بالسر كان هيبان مطابق تمامًا من برّه.
+
+**تبعية على مرحلة الداشبورد (⑭):** الداشبورد محتاجة كتالوج بالمفاتيح القابلة للتعديل (المفتاح · النوع · الافتراضي · الوصف · السقف). مش اتعمل دلوقتي عمدًا — بيتعمل مع الشاشة نفسها عشان ما نبنيش تجريد لواجهة لسه ما اتحددتش.
+
+### تسليم OpenAPI للفريق الخارجي ✅ (2026-09-23)
+
+الخطة §15.4/§18 بتحسب الـ OpenAPI + staging تسليم مستحق **من نهاية Phase 2** مش بعدين. Scramble كان مثبّت من Phase 0 بس من غير ضبط.
+
+| | |
+|---|---|
+| `config/scramble.php` | عنوان · إصدار · servers (Local + Staging) · وصف بيشرح الـ envelope والتوطين وقاعدة الـ refresh · شاشة الـ docs محمية بـ `RestrictedDocsAccess` (local بس) |
+| `BearerTokenSecurity` | بيشتق متطلّب المصادقة **من الـ middleware بتاع المسار** — المصدر الوحيد اللي ما يقدرش يبعد عن الحقيقة. المسارات العامة بتتعلّم `security: []` صراحة |
+| `DescribeErrorResponses` | operation transformer: بيصلّح `meta` + بيضيف ردود الأخطاء |
+| `#[ApiErrors(...)]` | attribute على كل controller method بيعلن أخطاء الـ endpoint. **32 رد خطأ موصوف** على 11 endpoint |
+| `composer openapi` | أمر واحد يولّد المستند (`storage/app/openapi.json`، مش في git — مُشتَق) |
+| `OpenApiDocumentTest` | **10 اختبارات** بتحمي العقد |
+
+**ليه الأخطاء معلَنة (attribute) مش مُستنتَجة:** كل رفض في النظام ده `DomainException` بيترمي جوّه طبقة الـ Action — عمره ما يظهر في return type. أي تخمين ساكن هيبقى غلط أو واسع لدرجة ما يفيدش. الـ attribute يخلّي العقد قرار مقصود، و`OpenApiDocumentTest` بيمنعه من التعفّن: لو Action رمى كود جديد ومحدش وثّقه، الاختبار بيفشل ويسمّي الكود.
+
+**الأخطاء العامة مُشتَقة مش معلَنة:** 422 لو فيه FormRequest · 401 لو `auth:sanctum` · 403 لو `account.active` · 500 دايمًا. دي حقايق عن المسار، مش تخمين.
+
+#### باجات حقيقية اتكشفت وهي بتتعمل
+
+1. 🔴 **`purpose` و`preferredLanguage` ماكانش عليهم قاعدة `string` أصلاً** — `Rule::in` لوحدها بتحدد القيم المسموحة بس مش النوع، فالحقلين كانوا **بلا نوع مُعلَن** في التحقق نفسه مش بس في التوثيق. و`purpose` بقى `Rule::enum(OtpPurpose::class)->only([...])` — كده إضافة case جديدة للـ enum ما تقدرش توسّع اللي الطلب المجهول يقدر يطلبه بالسكوت
+2. 🔴 **Scramble بينشر التعليقات الداخلية كوصف الحقول في العقد** — الفريق الخارجي كان هيقرا "pitfall #31" و"filter-then-map". التعليق فوق أي قاعدة تحقق **هو توثيق API**، فاتكتب للجمهور ده، وملاحظات الصيانة اتنقلت لـ docblock الكلاس. القاعدة دي معيار #38 تحت
+3. 🟠 **`--fail-on-unknown` بيدّي false positive** — بيفحص شجرة النوع الداخلية قبل التطبيع وبيبلّغ عن حقول بتخرج موصوفة صح. مش مستخدم في `composer openapi`؛ بدالُه اختبار بيمشي على **المستند المنشور** نفسه ويفشل على أي عقدة من غير نوع (اتأكدنا إنه بيعضّ فعلاً)
+4. ⚠️ **خطأ مني اتصحّح:** وأنا بحاول أرضي الـ flag الكداب، حوّلت `outstandingFor()` من `foreach` لـ `array_map` — وده **كسر** نوع عناصر المصفوفة في العقد المنشور (كان سليم من الأصل). اترجع، والسبب موثّق في الميثود عشان محدش يعيدها كـ"تحسين"
+
+**اختبار `config:cache`:** الحزمة بنفسها بتوصّي تحط `SecurityScheme` **object** في الـ config. ده بيشتغل لحد أول deploy بيعمل `config:cache` وبعدها بيقع، لأن Laravel بيسيريالايز الـ config بـ `var_export` اللي ما بيعرفش يعبّر عن object. عشان كده الـ scheme في كلاس والـ config فيه class string بس — واتأكدنا إن `config:cache` بيعدّي.
+
 ### 🎯 الخطوة الجاية
-**Phase 2 — المصادقة والهوية** (الفصل 2 من الكتاب): OTP request/verify · تسجيل/دخول موحّد · PIN 4 أرقام محلي · Session refresh rotation · Logout · Device management · Forgot PIN · Consents versioning. راجع `RAFEEQ_ENGINEERING_BIBLE.md` المشهد 1 و2 قبل البدء.
+**Phase 3 — توثيق السائق والمركبة** (الفصل 3 من الكتاب). الفصل 2 بيقفل بشرط صريح: "Chapter 3 can create a driver profile using the same `user_id`" — وده متحقق (`driver_profiles.user_id` هو الـ PK وبيشاور على `users.id`).
 
 ---
 
 ## سجل التقدّم (الأحدث فوق)
 
+- **2026-09-23** — **تسليم OpenAPI اتقفل** (§15.4/§18 بيحسبه مستحق من نهاية Phase 2): `config/scramble.php` + `BearerTokenSecurity` (الأمان مشتق من الـ middleware) + `DescribeErrorResponses` + `#[ApiErrors]` على كل endpoint + `composer openapi` + `OpenApiDocumentTest` (10 اختبارات). كشف باجين حقيقيين: `purpose`/`preferredLanguage` ماكانش عليهم قاعدة `string` أصلاً، وScramble كان بينشر التعليقات الداخلية كوصف الحقول للفريق الخارجي. معايير #38–#40 اتضافوا. (المجموع 473 خضرا)
+- **2026-09-23** — قرار من المستخدم: أي رقم سياسة (زي الحد الأدنى للسن) يتعدّل من الـ settings مش من الكود. الحد الأدنى للسن وأطوال الاسم كانوا بيتقروا من `config` مباشرة في الـ FormRequest — مخالفة لمعيار #11 من ناحيتي. اتصلح بـ `ProfileSettings` accessor جديد + 11 اختبار بيثبتوا إن تغيير صف `platform_settings` بيغيّر السلوك فعلاً على الـ endpoints. و`auth.otp.driver` اتعلّم `DEPLOY-ONLY` صراحة مع اختبار بيثبت إنه مش قابل للتعديل من الـ settings. (المجموع 463 خضرا)
+- **2026-09-20** — **Phase 2 (المصادقة والهوية) كاملة.** 11 endpoint · 9 Actions · 9 Support classes · 3 enums جديدة · 4 Resources · 2 middleware · migration واحدة · 71 اختبار جديد (المجموع 446 خضرا). اتقرا الفصل 2 كامل قبل الكود. تعارضان اتوضّحوا (طول الـ PIN 4 مش 6 حسب §13 · مزوّد الـ SMS لسه مفتوح فاتعمل له seam). باج حقيقي في السكيمة اتكشف واتصلح: `gender`/`registered_role` كانوا NOT NULL رغم إن الـ flow الموثّق ينشئ الصف من غيرهم.
 - **2026-09-19** — مجموعة ① (الهوية والجلسات) كاملة: users/organizations/otp_challenges/devices/auth_sessions/security_events/user_consents/user_places/user_stats. قرارات مهمة اتاخدت: `auth_sessions` بدل `sessions` (تعارض اسم مع Laravel) · `SpatialPoint` cast مشترك للأعمدة الجغرافية · `dateTime()` بدل `timestamp()` للأعمدة الإجبارية من غير default · generated column لحل مشكلة `UNIQUE(phone, deleted_at)` · تأكيد MariaDB 10.4 متوافقة مع كل احتياجات الـ ERD.
 - **2026-09-19** — بداية التنفيذ: قراءة الكتاب كامل، اعتماد الخطة، إنشاء ملف المتابعة.
 

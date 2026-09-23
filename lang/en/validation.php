@@ -183,6 +183,12 @@ return [
         'attribute-name' => [
             'rule-name' => 'custom-message',
         ],
+        'date_of_birth' => [
+            'minimum_age' => 'You must be at least :age years old to use Rafeeq.',
+        ],
+        'full_name' => [
+            'format' => 'Please enter your name using Arabic or English letters only.',
+        ],
     ],
 
     /*

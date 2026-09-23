@@ -53,6 +53,19 @@ final readonly class PhoneNumber implements Stringable
         return $localNumber;
     }
 
+    /**
+     * The only form of a number that may appear on an unauthenticated
+     * screen (Chapter 2 §23.1): enough for the person to confirm they typed
+     * their own number, not enough for someone holding a list of numbers to
+     * confirm anything. Renders `+201012345678` as `+20 10 *** 5678`.
+     */
+    public function masked(): string
+    {
+        $local = substr($this->e164, strlen(self::COUNTRY_CODE) + 1);
+
+        return sprintf('+%s %s *** %s', self::COUNTRY_CODE, substr($local, 0, 2), substr($local, -4));
+    }
+
     public function equals(self $other): bool
     {
         return $this->e164 === $other->e164;

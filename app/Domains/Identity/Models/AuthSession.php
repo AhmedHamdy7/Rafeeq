@@ -10,6 +10,7 @@ use Illuminate\Database\Eloquent\Concerns\HasUlids;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Laravel\Sanctum\PersonalAccessToken;
 
 /**
  * Refresh-token rotation chain (Bible §4, group ①). Table is named
@@ -54,5 +55,31 @@ class AuthSession extends Model
     public function isRevoked(): bool
     {
         return $this->revoked_at !== null;
+    }
+
+    public function isRefreshExpired(): bool
+    {
+        return $this->refresh_expires_at->isPast();
+    }
+
+    /**
+     * Revoking a session has to kill BOTH halves or it is theatre: marking
+     * the row revoked stops future refreshes, but the access token already
+     * in the attacker's hands would keep working until it expired on its
+     * own. Sanctum tokens are named after the session id precisely so this
+     * can find them (scenario G).
+     */
+    public function revoke(SessionRevocationReason $reason): void
+    {
+        if ($this->revoked_at === null) {
+            $this->forceFill([
+                'revoked_at' => now(),
+                'revocation_reason' => $reason->value,
+            ])->save();
+        }
+
+        // Session ids are ULIDs, so the name is globally unique — no need to
+        // scope by user, and no lazy-loaded relation to trip strict mode.
+        PersonalAccessToken::where('name', $this->id)->delete();
     }
 }

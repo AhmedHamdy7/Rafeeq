@@ -2,6 +2,7 @@
 
 namespace App\Http\Responses;
 
+use App\Domains\Shared\Exceptions\DomainException;
 use App\Domains\Shared\Support\ErrorCode;
 use Illuminate\Auth\AuthenticationException;
 use Illuminate\Foundation\Configuration\Exceptions;
@@ -44,6 +45,23 @@ final class ApiExceptionHandler
             }
 
             return ApiResponse::error(ErrorCode::Unauthenticated);
+        });
+
+        // Registered before the catch-all: render callbacks are evaluated in
+        // registration order, and the first matching type wins.
+        $exceptions->render(function (DomainException $e, Request $request): ?JsonResponse {
+            if (! $request->is('api/*')) {
+                return null;
+            }
+
+            return ApiResponse::error(
+                $e->errorCode,
+                // The catalogue message is the default; an Action only passes
+                // its own string when the case genuinely needs one.
+                message: $e->getMessage() === $e->errorCode->value ? null : $e->getMessage(),
+                fields: $e->fields,
+                headers: $e->headers,
+            );
         });
 
         $exceptions->render(function (HttpExceptionInterface $e, Request $request): ?JsonResponse {

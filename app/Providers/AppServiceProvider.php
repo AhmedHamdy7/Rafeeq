@@ -2,12 +2,17 @@
 
 namespace App\Providers;
 
+use App\Domains\Identity\Contracts\OtpSender;
+use App\Domains\Identity\Support\LogOtpSender;
+use App\Http\OpenApi\DescribeErrorResponses;
 use Carbon\CarbonImmutable;
+use Dedoc\Scramble\Scramble;
 use Illuminate\Database\Eloquent\Factories\Factory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Facades\Date;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\ServiceProvider;
+use InvalidArgumentException;
 
 class AppServiceProvider extends ServiceProvider
 {
@@ -16,7 +21,16 @@ class AppServiceProvider extends ServiceProvider
      */
     public function register(): void
     {
-        //
+        // The SMS provider is still undecided (MASTER_PLAN §19, question #2).
+        // Resolving by name keeps that decision to one config line and one
+        // new class; `LogOtpSender` refuses to run in production itself, so
+        // an unconfigured deploy fails loudly instead of losing every code.
+        $this->app->bind(OtpSender::class, fn () => match (config('rafeeq.auth.otp.driver')) {
+            'log' => new LogOtpSender,
+            default => throw new InvalidArgumentException(
+                'Unsupported OTP driver ['.config('rafeeq.auth.otp.driver').'].'
+            ),
+        });
     }
 
     /**
@@ -44,5 +58,11 @@ class AppServiceProvider extends ServiceProvider
         Factory::guessFactoryNamesUsing(
             fn (string $modelName) => 'Database\\Factories\\'.class_basename($modelName).'Factory'
         );
+
+        // The OpenAPI document is a deliverable for the external Flutter team
+        // (MASTER_PLAN §15.4/§18), so its accuracy is wired here rather than
+        // left to whoever runs the export.
+        Scramble::configure()
+            ->withOperationTransformers(DescribeErrorResponses::class);
     }
 }

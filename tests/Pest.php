@@ -1,6 +1,9 @@
 <?php
 
+use App\Domains\Identity\Contracts\OtpSender;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Cache;
+use Tests\Support\FakeOtpSender;
 use Tests\TestCase;
 
 /*
@@ -44,7 +47,50 @@ expect()->extend('toBeOne', function () {
 |
 */
 
-function something()
+/**
+ * Swaps in the capturing OTP transport and hands it back, so a test can
+ * read the code that was "texted". Also clears the rate limiter, which is
+ * cache-backed and therefore survives the database refresh between tests —
+ * without this, a file of OTP tests would start failing partway through for
+ * reasons that have nothing to do with what is under test.
+ */
+function fakeOtpSender(): FakeOtpSender
 {
-    // ..
+    Cache::clear();
+
+    $sender = new FakeOtpSender;
+
+    app()->instance(OtpSender::class, $sender);
+
+    return $sender;
+}
+
+/**
+ * Drives the real endpoints end to end: request a code, read it from the
+ * fake transport, verify it. Returns the decoded `data` payload, so tests
+ * assert against exactly what the app would receive.
+ *
+ * @return array<string, mixed>
+ */
+function signIn(string $phone = '01012345678', string $devicePublicId = 'device-under-test', array $overrides = []): array
+{
+    $sender = $overrides['sender'] ?? fakeOtpSender();
+
+    $device = array_merge([
+        'publicId' => $devicePublicId,
+        'platform' => 'android',
+        'appVersion' => '1.0.0',
+    ], $overrides['device'] ?? []);
+
+    $challenge = test()->postJson('/api/v1/auth/otp/request', [
+        'phone' => $phone,
+        'purpose' => $overrides['purpose'] ?? 'authentication',
+        'device' => $device,
+    ])->assertStatus(202);
+
+    return test()->postJson('/api/v1/auth/otp/verify', [
+        'challengeId' => $challenge->json('data.challengeId'),
+        'code' => $sender->lastCode(),
+        'device' => $device,
+    ])->assertOk()->json('data');
 }
