@@ -86,4 +86,12 @@ return [
     'GROUP_ATTENDANCE_NOT_DECLARABLE' => 'It is too late to change your answer for that day.',
     'GROUP_ABSENCE_OVERLAPS' => 'You already have an absence recorded over those dates.',
     'GROUP_ABSENCE_TOO_LONG' => 'That absence is longer than a planned absence can be.',
+
+    /*
+     * Admin sign-in. One message for a wrong password and a wrong code, on purpose —
+     * see ErrorCode::AdminCredentialsInvalid.
+     */
+    'ADMIN_CREDENTIALS_INVALID' => 'Those sign-in details are not correct.',
+    'ADMIN_MFA_NOT_ENROLLED' => 'Finish setting up two-factor authentication before signing in.',
+    'ADMIN_MFA_REQUIRED' => 'Enter the code from your authenticator app to continue.',
 ];

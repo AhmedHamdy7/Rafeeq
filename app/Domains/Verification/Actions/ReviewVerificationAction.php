@@ -59,10 +59,23 @@ final readonly class ReviewVerificationAction
     }
 
     /**
+     * "Ask info" — the dashboard queue's second button, and the only other verdict.
+     *
+     * Named for what it does. It was called `reject()`, which is what a caller would
+     * reasonably expect to set `Rejected` — it does not, and must not: the level goes
+     * to `action_needed` with something the person can fix.
+     *
+     * 🔴 There is deliberately NO hard reject. The terminal state is reached by
+     * attempt exhaustion (`max_submission_attempts` → `VERIFICATION_ATTEMPTS_EXHAUSTED`),
+     * which is a rule the person can see coming, rather than by a reviewer closing a
+     * door in one click. Obvious fraud is handled by suspending the ACCOUNT — a
+     * different and more honest lever, and the one Chapter 12's User Management
+     * actually lists. `VerificationStatus::Rejected` therefore stays unset.
+     *
      * @param  string  $reason  shown to the person verbatim, so it has to tell
      *                          them what to do differently
      */
-    public function reject(UserVerification $verification, AdminUser $reviewer, string $reason): UserVerification
+    public function requestMoreInfo(UserVerification $verification, AdminUser $reviewer, string $reason): UserVerification
     {
         $this->assertUnderReview($verification);
 

@@ -86,4 +86,12 @@ return [
     'GROUP_ATTENDANCE_NOT_DECLARABLE' => 'الوقت اتأخر على تغيير ردّك لليوم ده.',
     'GROUP_ABSENCE_OVERLAPS' => 'عندك غياب مسجَّل بالفعل في التواريخ دي.',
     'GROUP_ABSENCE_TOO_LONG' => 'الغياب ده أطول من مدة الغياب المخطط المسموح بيها.',
+
+    /*
+     * دخول الأدمن. رسالة واحدة للباسورد الغلط والكود الغلط عن قصد — راجع
+     * ErrorCode::AdminCredentialsInvalid.
+     */
+    'ADMIN_CREDENTIALS_INVALID' => 'بيانات الدخول دي مش صحيحة.',
+    'ADMIN_MFA_NOT_ENROLLED' => 'كمّل إعداد التحقق بخطوتين قبل الدخول.',
+    'ADMIN_MFA_REQUIRED' => 'اكتب الكود من تطبيق المصادقة عشان تكمل.',
 ];

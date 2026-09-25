@@ -31,6 +31,10 @@ class UserVerification extends Model
             'status' => VerificationStatus::class,
             'method' => VerificationMethod::class,
             'reviewed_at' => 'datetime',
+            // When the level joined the review queue. Not fillable: it is stamped by
+            // the submit Action, never supplied, or somebody could claim a place at the
+            // front of the queue.
+            'submitted_at' => 'datetime',
             'expires_at' => 'datetime',
             'attempt_count' => 'integer',
         ];

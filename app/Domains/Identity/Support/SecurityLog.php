@@ -51,9 +51,22 @@ final class SecurityLog
         ];
     }
 
+    /**
+     * 🔒 Keyed with the application key, not a bare digest.
+     *
+     * The reason an address is hashed at all is so that a leaked database does not
+     * say where people were. A plain `sha256($ip)` does not achieve that: IPv4 is
+     * 2^32 values, so the entire space can be enumerated and matched in seconds, and
+     * the "hash" is a reversible encoding with extra steps. Keying it means a
+     * rainbow table is useless without also stealing `APP_KEY`.
+     *
+     * Rows written before this change cannot be compared with rows written after —
+     * which costs nothing, because these columns are written for an audit trail and
+     * never matched against each other.
+     */
     public static function hashIp(?string $ip): ?string
     {
-        return $ip === null ? null : hash('sha256', $ip);
+        return $ip === null ? null : hash_hmac('sha256', $ip, (string) config('app.key'));
     }
 
     /**

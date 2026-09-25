@@ -58,6 +58,13 @@ final readonly class SubmitVerificationAction
             $verification->rejection_reason = null;
             $verification->reviewed_at = null;
             $verification->reviewed_by = null;
+            /*
+             * Stamped on each submission, not only the first: the review queue orders
+             * by it and shows the waiting time from it, so a level that came back after
+             * "ask info" joins the queue at the moment it was resubmitted rather than
+             * keeping a place it left weeks ago.
+             */
+            $verification->submitted_at = now();
             // Counted at submission, not at upload: the limit is on how many
             // times a reviewer's judgement is asked for, not on how many
             // photos someone retakes to get a clear one.

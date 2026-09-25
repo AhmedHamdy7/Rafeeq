@@ -69,7 +69,7 @@ it('shows a submitted level as under review, with nothing to act on', function (
 it('shows a rejected level with the reviewer reason, verbatim', function () {
     submitGovernmentId($this->token);
 
-    rejectVerification(VerificationType::GovernmentId, 'The back of your ID is cut off. Please retake it.');
+    askForVerificationInfo(VerificationType::GovernmentId, 'The back of your ID is cut off. Please retake it.');
 
     $row = collect(centre($this->token)['rows'])->firstWhere('type', 'government_id');
 

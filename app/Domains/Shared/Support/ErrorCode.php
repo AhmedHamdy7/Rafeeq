@@ -101,6 +101,11 @@ enum ErrorCode: string
     case AbsenceOverlaps = 'GROUP_ABSENCE_OVERLAPS';
     case AbsenceTooLong = 'GROUP_ABSENCE_TOO_LONG';
 
+    // ---- Admin dashboard (Chapter 12) ----------------------------------
+    case AdminCredentialsInvalid = 'ADMIN_CREDENTIALS_INVALID';
+    case AdminMfaNotEnrolled = 'ADMIN_MFA_NOT_ENROLLED';
+    case AdminMfaRequired = 'ADMIN_MFA_REQUIRED';
+
     public function defaultStatus(): int
     {
         return match ($this) {
@@ -206,6 +211,18 @@ enum ErrorCode: string
             // 403: the account is fine, this particular person may not do this.
             self::CannotBookOwnCommute,
             self::GroupDriverCannotLeave => 403,
+
+            /*
+             * 401: a staff sign-in that did not succeed. One code for a wrong
+             * password AND a wrong TOTP code, deliberately — distinguishing them
+             * tells an attacker their password was right, which is half the answer.
+             */
+            self::AdminCredentialsInvalid => 401,
+
+            // 403, not 401: these two ARE authenticated as far as the password goes,
+            // and are being stopped by the second factor rather than by identity.
+            self::AdminMfaNotEnrolled,
+            self::AdminMfaRequired => 403,
         };
     }
 

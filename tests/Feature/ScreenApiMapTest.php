@@ -134,21 +134,25 @@ it('maps every section of the admin dashboard', function (string $section) {
 ]);
 
 /**
- * 🔴 The finding that reordered the plan, kept visible until it stops being true.
+ * 🔒 Decision D4: the admin dashboard is Livewire in this project, and there is
+ * deliberately NO API layer for it — "لغة واحدة، مفيش API layer للأدمن".
  *
- * Nobody can approve a verification or a driver application over HTTP, which means
- * nobody can be verified or approved in production at all — the review Actions are
- * reachable only from tests and the seeder. When the admin endpoints land, this test
- * fails and both it and the map's section 9 get rewritten.
+ * So this is a rule, not a reminder. An admin JSON endpoint appearing under `/v1`
+ * means either D4 was overturned (in which case the Master Plan and the map's section
+ * 9 change first) or somebody exposed the admin surface to the internet by accident.
+ * The second is the reason this is a test: the admin side approves drivers and reads
+ * every verification document on the platform, and it authenticates by session
+ * against a separate user table that has no token guard at all.
  */
-it('still has no admin surface, which is why the dashboard slice comes next', function () {
+it('keeps the admin surface off the public API, per decision D4', function () {
     $adminRoutes = array_filter(
         registeredV1Paths(),
         fn (string $path) => str_starts_with($path, '/v1/admin'),
     );
 
     expect($adminRoutes)->toBeEmpty(
-        'Admin endpoints now exist. Update section 9 of the screen map and delete this test — '
-        .'it is a reminder, not a rule.'
+        "Decision D4 says the dashboard is Livewire with no admin API layer, and these \n"
+        ."routes are on the versioned public API: \n- ".implode("\n- ", $adminRoutes)
+        ."\n\nIf D4 was overturned, change the Master Plan and section 9 of the screen map first."
     );
 });

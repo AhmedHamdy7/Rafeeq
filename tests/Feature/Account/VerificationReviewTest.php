@@ -92,11 +92,11 @@ it('locks a level after too many trips through review', function () {
     submitGovernmentId($this->token);
 
     foreach (range(2, $max) as $attempt) {
-        rejectVerification(VerificationType::GovernmentId, "Attempt {$attempt}: still unreadable.");
+        askForVerificationInfo(VerificationType::GovernmentId, "Attempt {$attempt}: still unreadable.");
         submitLevel($this->token)->assertOk();
     }
 
-    rejectVerification(VerificationType::GovernmentId, 'Final rejection.');
+    askForVerificationInfo(VerificationType::GovernmentId, 'Final rejection.');
 
     submitLevel($this->token)
         ->assertStatus(429)
@@ -115,7 +115,7 @@ it('refuses to reopen an approved level by uploading again', function () {
 it('demands an actionable reason for a rejection', function () {
     submitGovernmentId($this->token);
 
-    expect(fn () => app(ReviewVerificationAction::class)->reject(
+    expect(fn () => app(ReviewVerificationAction::class)->requestMoreInfo(
         UserVerification::where('type', 'government_id')->sole(),
         AdminUser::factory()->create(),
         '   ',
@@ -164,7 +164,7 @@ it('refuses to decide a level that was never submitted', function () {
  */
 it('clears the rejection reason when new evidence is uploaded', function () {
     submitGovernmentId($this->token);
-    rejectVerification(VerificationType::GovernmentId, 'The back of your ID is cut off.');
+    askForVerificationInfo(VerificationType::GovernmentId, 'The back of your ID is cut off.');
 
     uploadVerificationDocument($this->token, 'government_id', 'national_id_back')->assertStatus(201);
 

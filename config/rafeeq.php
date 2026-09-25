@@ -132,6 +132,27 @@ return [
         'recurring_horizon_days' => 30,
     ],
 
+    'admin' => [
+        /*
+         * How many 30-second TOTP steps either side of now are accepted.
+         *
+         * 1 means a code stays valid for about 90 seconds, which covers a phone clock
+         * drifting and somebody typing slowly. Larger values widen the window in which
+         * a captured code is still usable — and the replay guard
+         * (`admin_users.mfa_last_used_timestamp`) only stops the SAME code being reused,
+         * not a different code from a wider window.
+         */
+        'mfa_window' => 1,
+
+        /*
+         * Chapter 12 §Security: "session timeout". Much shorter than a member's
+         * session, because an unattended admin browser is a far worse thing to leave
+         * open than an unattended passenger app — it can approve drivers and read
+         * identity documents.
+         */
+        'session_idle_minutes' => 30,
+    ],
+
     'group' => [
         /*
          * How much warning a member owes the group before leaving.

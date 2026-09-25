@@ -46,6 +46,21 @@ function thrownErrorCodes(): array
         ...glob(__DIR__.'/../../app/Http/Controllers/Api/V1/*/*.php'),
     ];
 
+    /*
+     * The Admin domain is excluded, and the reason is decision D4: the dashboard is
+     * Livewire with no API layer, so its Actions are unreachable from `/v1` by design
+     * and their error codes have no endpoint to be documented on. Including them would
+     * make this test demand that the admin surface be published — the opposite of what
+     * `ScreenApiMapTest` enforces.
+     *
+     * Everything else stays in scope. A NEW domain added here is in scope by default,
+     * which is the direction that matters.
+     */
+    $sources = array_filter(
+        $sources,
+        fn (string $file) => ! str_contains(str_replace('\\', '/', $file), '/Domains/Admin/Actions/'),
+    );
+
     $codes = [];
 
     foreach ($sources as $file) {

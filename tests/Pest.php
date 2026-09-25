@@ -1,5 +1,7 @@
 <?php
 
+use App\Domains\Admin\Actions\SyncAdminRolesAction;
+use App\Domains\Admin\Enums\AdminRole;
 use App\Domains\Admin\Models\AdminUser;
 use App\Domains\Driver\Actions\ReviewDriverApplicationAction;
 use App\Domains\Driver\Enums\DriverProfileStatus;
@@ -10,10 +12,12 @@ use App\Domains\Verification\Actions\ReviewVerificationAction;
 use App\Domains\Verification\Enums\VerificationStatus;
 use App\Domains\Verification\Enums\VerificationType;
 use App\Domains\Verification\Models\UserVerification;
+use App\Http\Middleware\EnsureAdminMfaIsConfirmed;
 use Carbon\CarbonImmutable;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Cache;
+use PragmaRX\Google2FA\Google2FA;
 use Tests\Support\FakeOtpSender;
 use Tests\TestCase;
 
@@ -164,9 +168,9 @@ function approveVerification(VerificationType $type, ?DateTimeInterface $expires
     );
 }
 
-function rejectVerification(VerificationType $type, string $reason): void
+function askForVerificationInfo(VerificationType $type, string $reason): void
 {
-    app(ReviewVerificationAction::class)->reject(
+    app(ReviewVerificationAction::class)->requestMoreInfo(
         pendingVerification($type),
         AdminUser::factory()->create(),
         $reason,
@@ -441,4 +445,53 @@ function approveSeat(string $driverToken, string $requestId): string
         ->postJson("/api/v1/driver/seat-requests/{$requestId}/approve")
         ->assertStatus(201)
         ->json('data.bookings.0.id');
+}
+
+/*
+|--------------------------------------------------------------------------
+| Admin dashboard (Chapter 12)
+|--------------------------------------------------------------------------
+*/
+
+/**
+ * A staff account with a role, its permissions synced, and a REAL base32 TOTP secret
+ * so a test can generate a code that actually verifies.
+ *
+ * Returns the model; the secret is readable from it (`$admin->mfa_secret`) because the
+ * cast decrypts on read.
+ */
+function adminWithRole(AdminRole $role, array $attributes = []): AdminUser
+{
+    app(SyncAdminRolesAction::class)->execute();
+
+    $admin = AdminUser::factory()->create($attributes);
+
+    $admin->assignRole($role->value);
+
+    return $admin->refresh();
+}
+
+/**
+ * The code an authenticator app would be showing for this admin right now.
+ */
+function currentTotpCode(AdminUser $admin): string
+{
+    return app(Google2FA::class)->getCurrentOtp($admin->mfa_secret);
+}
+
+/**
+ * Signs an admin in the way the dashboard does — including the session flag
+ * `EnsureAdminMfaIsConfirmed` looks for, so tests exercise pages rather than the login
+ * form.
+ *
+ * Deliberately NOT `actingAs()` alone: that would leave the MFA flag unset and every
+ * page would bounce to the login screen, which is exactly the protection being relied
+ * on elsewhere.
+ */
+function actingAsAdmin(AdminUser $admin): AdminUser
+{
+    test()->actingAs($admin, 'admin')
+        ->withSession([EnsureAdminMfaIsConfirmed::PASSED => true]);
+
+    return $admin;
 }
