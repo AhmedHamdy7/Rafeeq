@@ -157,6 +157,36 @@ it('gives every error code a status that suits what it means', function () {
 });
 
 /**
+ * `toContain($needle, $message)` does not take a message. Every argument after the
+ * first is ANOTHER needle to look for, so a helpful failure message silently becomes
+ * a second assertion that the haystack contains the message itself.
+ *
+ * Written the second time it happened in one sitting. It fails loudly rather than
+ * passing vacuously, so it costs a round trip rather than correctness — but it costs
+ * one every time, and the fix (`expect(str_contains(...))->toBeTrue($message)`) is not
+ * obvious from the error.
+ */
+it('never passes a failure message to toContain', function () {
+    $offenders = [];
+
+    foreach (glob(__DIR__.'/../**/*Test.php') as $file) {
+        $source = (string) file_get_contents($file);
+
+        // A `toContain(` whose first argument is followed by a comma and then a
+        // string long enough to be prose rather than a second needle.
+        if (preg_match('/->toContain\([^)]*,\s*\n?\s*[\'"][^\'"]{25,}/', $source) === 1) {
+            $offenders[] = basename($file);
+        }
+    }
+
+    expect($offenders)->toBeEmpty(
+        'These files pass what looks like a failure message to toContain(), where it is treated as '
+        ."another needle. Use expect(str_contains(...))->toBeTrue('message') instead: \n- "
+        .implode("\n- ", $offenders)
+    );
+});
+
+/**
  * 🔴 Binding standard #47.
  *
  * `bookings.live_booking_key` and `SeatAvailabilityChecker::assertNoDuplicateBooking()`

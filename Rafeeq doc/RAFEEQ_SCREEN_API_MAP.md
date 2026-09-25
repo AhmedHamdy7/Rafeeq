@@ -1,0 +1,214 @@
+# RAFEEQ — خريطة الشاشة ← API
+
+> **الغرض:** الملف ده بيجاوب على سؤال واحد لكل شاشة: **"الشاشة دي تشتغل بأنهي endpoints، وناقصها إيه؟"**
+> فريق الموبايل والداشبورد بيقرا من هنا، مش من الـ progress file.
+>
+> **المصادر:** `Rafeeq Prototype (standalone).html` (47 شاشة) · `rafiq-super-admin-standalone.html` (9 أقسام) ·
+> `RAFEEQ_MASTER_PLAN.md` · `RAFEEQ_ENGINEERING_BIBLE.md` · `RAFEEQ_ERD.md` + فصول الكتاب.
+>
+> **الخريطة دي اتعملت من قراءة كود الشاشات نفسه** — مش من وصفها. الـ bundle مفكوك ومقروء،
+> وكل سطر تحت مبني على حقول وأزرار موجودة فعلًا في الـ prototype.
+
+**آخر تحديث:** 2026-09-25 · **الحالة:** 73 endpoint موجودة · **مفيش ولا endpoint للأدمن**
+
+---
+
+## الرموز
+
+| | المعنى |
+|---|---|
+| ✅ | الشاشة تشتغل بالكامل بالـ endpoints الموجودة |
+| ⚠️ | تشتغل جزئيًا — الناقص مكتوب صريح |
+| ⛔ | مفيش API خالص — المرحلة المسؤولة مكتوبة |
+| 🚫 | مش محتاجة API (حالة محلية أو نص ثابت) |
+
+---
+
+## 1. الدخول والتسجيل (Phase 2 — مبنية)
+
+| # | الشاشة | الـ endpoints | الحالة |
+|---|---|---|---|
+| 1 | SPLASH / WELCOME | — | 🚫 تبديل اللغة محلي |
+| 2 | LOGIN (PIN) | `POST /v1/auth/session/refresh` | ✅ الـ PIN **محلي على الجهاز بالتصميم** — السيرفر عمره ما يشوف قيمته، بيسجّل `devices.has_local_pin` بس. فالشاشة دي فتح محلي + تحديث التوكن |
+| 3 | USE ANOTHER ACCOUNT | — | ✅ قائمة الحسابات وتوكناتهم محلية. `UNIQUE(user_id, device_public_id)` بيسمح بحسابين على نفس الجهاز (فجوة ERD §23.1 #3) |
+| 4 | FORGOT PIN | `POST /v1/auth/otp/request` (`purpose=pin_reset`) → `/verify` → `PATCH /v1/account/devices/current/security` | ✅ `OtpPurpose::PinReset` موجود |
+| 5 | PHONE | `POST /v1/auth/otp/request` | ✅ |
+| 6 | OTP | `POST /v1/auth/otp/verify` | ✅ العدّاد التنازلي من `Retry-After` |
+| 7 | BASIC PROFILE | `PUT /v1/account/profile/basic` | ⚠️ **الشاشة فيها `firstName` و`lastName` منفصلين**، والـ endpoint بياخد `fullName` واحد. وكمان الشاشة فيها جهة العمل/الجامعة + اسمها في **نفس الخطوة**، وعندي دي endpoint توثيق منفصلة |
+| 8 | ROLE | نفس الـ endpoint (`registeredRole`) | ✅ |
+
+---
+
+## 2. البحث والمطابقة (Phase 6 — مبنية)
+
+| # | الشاشة | الـ endpoints | الحالة |
+|---|---|---|---|
+| 9 | **HOME** | `GET /v1/search/commutes` · `GET /v1/my-bookings` · `GET /v1/saved-searches` | ⚠️ **محتاجة تجميع**. الشاشة كارت واحد فيه: الرحلة الجاية + العربية + **رقم اللوحة** + نقطة الالتقاء + `2 of 3 in` (عدد الحضور) + زرار check-in · وأهم المطابقات · والبحوث المحفوظة **بعدد المطابقات لكل واحد**. دلوقتي 3 نداءات، و**رقم اللوحة وعدد الحضور مش موجودين** في الردود |
+| 10 | DISCOVER | `GET /v1/search/commutes` | ⚠️ متغطية لحد كبير: `vehicle.make/model/colour` ✓ · `score` وتفصيله ✓ · `walkMinutes` ✓ · `detourMinutes` ✓ · `reliability` ✓ · `seatsAvailable` ✓ · `rules` ✓. **الناقص:** `⭐ rating` و`m.why[]` (أسباب المطابقة كـ chips) |
+| 11 | FILTERS | محلي + `POST /v1/saved-searches` | ⚠️ فلتر **أقل تقييم** مالوش بيانات — التقييمات Phase 9 |
+| 12 | **MATCH DETAILS** | `GET /v1/search/commutes` | ⚠️ الناقص: `⭐ rating` · شارات `ID verified` / `Same workplace` (عندي `trustLevel` رقم بس، مش **أنهي** مستويات) · **تفصيل السعر** (مساهمة الطريق ÷ عدد الركاب + رسوم المنصة) · **المراجعات** (Phase 9) |
+| 18 | CREATE COMMUTE REQUEST | `POST /v1/commute-demands` | ⚠️ الناقص: `flexibility ± 15 min` · **`wants_return_trip`** (العمود موجود من Phase 1، مؤجّل) · "Monthly ceiling" موجود كـ `budgetPerSeatPiastres` بس الشاشة بتقول **شهري** |
+| 42 | MATCHING SPINNER | — | 🚫 حالة تحميل |
+
+---
+
+## 3. التوثيق (Phase 3 — مبنية)
+
+| # | الشاشة | الـ endpoints | الحالة |
+|---|---|---|---|
+| 15 | **VERIFICATION CENTRE** | `GET /v1/account/verifications` | ⚠️ الناقص: `Trust level 2 of 4` و`50% complete` كأرقام جاهزة · **سبب الرفض كنص للمستخدم** ("صورة الـ badge مش واضحة، صوّرها في نور كويس") — دلوقتي بيترجع كسبب داخلي · و`Pending review · usually under 2 hours` (زمن مراجعة متوقع) |
+| 30 | IDENTITY CAPTURE | `POST /v1/account/verifications/{type}/documents` · `/submit` · `POST /v1/account/consents` | ⚠️ الشاشة فيها **selfie / liveness** كخطوة صريحة — لازم أتأكد إن `selfie` نوع مستند مقبول. والموافقة الصريحة على **البيومترية** موجودة كـ consent ✓ |
+
+---
+
+## 4. السائق والنشر (Phases 4 و5 — مبنية)
+
+| # | الشاشة | الـ endpoints | الحالة |
+|---|---|---|---|
+| 23 | **DRIVER HOME** | `GET /v1/commutes` · `GET /v1/driver/seat-requests` | ⛔ **أكبر تجميع ناقص في الموبايل**. الشاشة عايزة في نداء واحد: مسار النهاردة + `departs in 51 min` + `2 of 3 confirmed` + **`You collect EGP 240`** + طلبات معلّقة ✓ + **الركاب المعتمدين بنقطة كل واحد وحالة حضوره** + `98% reliability` + `+6′ avg detour` + `1 seat open` + مُشغّل **wait timer** (Phase 9) |
+| 24 | PUBLISH ROUTE | `POST /v1/commutes` · `PUT .../route` · `PUT .../schedule` | ⚠️ الناقص: **نطاق السعر المقترح** `Suggested EGP 70–95` (مصدره `platform_settings` حسب ERD §23.3) — مفيش endpoint. وفيه **تعارض فلوس خطير**، القسم 8 تحت |
+| 25 | PUBLISH REVIEW | `GET /v1/commutes/{commute}` · `POST .../publish` | ✅ |
+| 31 | VEHICLE CAPTURE | `POST /v1/driver/vehicles` · `POST .../documents` | ⚠️ الناقص: **صورتين للعربية** (الجدول فيه `photo_path` واحد) · **`Seat belts (all seats)` مش متمودل في أي مكان** · **`Air conditioning`** متمودلة على مستوى الرحلة (`CommuteRuleKey::Ac`) مش العربية — الشاشة حاطتها على العربية |
+
+---
+
+## 5. الحجوزات والمجموعات (Phase 7 — مبنية)
+
+| # | الشاشة | الـ endpoints | الحالة |
+|---|---|---|---|
+| 13 | **SEAT REQUEST** | `POST /v1/commutes/{commute}/seat-requests` | ⚠️ الشاشة بتعرض `DETOUR +4′` **وهي بتألف الطلب، قبل الإرسال**. عندي الانعطاف بيتحسب بعد إنشاء الطلب. **ناقص: endpoint يحسب المعاينة من غير ما ينشئ حاجة** |
+| 14 | REQUEST DONE | من رد الطلب | ✅ |
+| 19 | **TRIPS** | `GET /v1/my-bookings` · `GET /v1/driver/bookings` · `GET /v1/seat-requests` · `GET /v1/driver/seat-requests` · `GET /v1/groups` | ⚠️ 5 تابات × وضعين (سائق/راكب). متغطية لحد كبير. الناقص: **`you collect EGP 240` لكل رحلة** (تجميع مالي للسائق) · التاريخ بالتقييمات (Phase 9) · الملغي بحالة الاسترداد (Phase 8) |
+| 20 | **COMMUTE GROUP** | `GET /v1/groups/{group}` · `/members` · `/attendance` · `/absences` · `POST /leave` · `POST /pickup-request` | ⚠️ overview ✅ · rules ✅ · **members محتاجة `⭐ 4.9`** · **تاب `calendar` متصمّم ومش مبني في الـ prototype — محتاج قرار** · تاب `payments` ⛔ Phase 8 · وتاب الـ overview عايز **حضور الأعضاء لبكرة جوه نفس الـ payload** (دلوقتي نداء تاني) |
+| 28 | **DRIVER REQUEST REVIEW** | `GET /v1/driver/seat-requests` · `POST .../approve` · `.../reject` | ⚠️ الناقص: `⭐ 4.9 · 12 trips · 96% on-time` للراكب · شارات `ID verified` / `Same workplace` · **`Fit for your route 96%`** — درجة مطابقة **من ناحية السائق** (أنا بحسبها لبحث الراكب بس) · سطر توافق القواعد · **زرار `Waitlist`** يعني السائق ينقل طلب معلّق لقائمة الانتظار بإيده — **مفيش endpoint** |
+| 29 | CUSTOM PICKUP APPROVAL | `GET /v1/driver/pickup-requests` · `POST .../approve` · `.../suggest-alternative` · `.../reject` | ⚠️ **التلات أزرار مطابقة بالحرف** ✅✅ و"عنوانها الدقيق يتفتح بس لو قبلت" = نفس الـ fuzzing بالظبط ✅. الناقص: `maxDetourMinutes` في الرد + **الانعطاف التراكمي للرحلة كلها** (`+8 min total for the run`) مش انعطاف الطلب ده لوحده |
+| 46 | BOTTOM SHEET: CANCEL TODAY | — | ⛔ إلغاء الرحلة كلها بسبب — دورة حياة الرحلة، Phase 9 |
+| 47 | BOTTOM SHEET: DIRECTION | — | 🚫 محلي |
+
+---
+
+## 6. الحساب والخصوصية
+
+| # | الشاشة | الـ endpoints | الحالة |
+|---|---|---|---|
+| 21 | **PROFILE** | `GET /v1/auth/me` | ⚠️ `12 trips · ⭐ 4.9 · 96% on-time` — **جدول `user_stats` فيه كل ده فعلًا** (`completed_trips_as_passenger/driver`, `avg_rating_*`, `on_time_rate`) بس **مفيش endpoint بيرجّعه**. وتبديل الدور (راكب ↔ سائق) محتاج قرار |
+| 26 | PRIVACY & BLOCKED | — | ⛔ مفاتيح الخصوصية + قائمة المحظورين + إلغاء الحظر — Phase 10 |
+| 27 | HELP & LEGAL | `GET /v1/account/consents` (نسخ الشروط) | ⚠️ معظمها نص ثابت؛ نسخ الشروط/الخصوصية موجودة في `config` ✓ |
+| 35 | ACCOUNT RESTRICTED | كود `ACCOUNT_SUSPENDED` ✓ | ⚠️ الكود موجود، والشاشة عايزة **رقم القضية** و`Expected update within 24h` — Phase 10 |
+| 22 | NOTIFICATIONS | — | ⛔ Phase 12 |
+
+---
+
+## 7. مؤجّلة بالكامل لمراحلها
+
+| # | الشاشة | المرحلة |
+|---|---|---|
+| 17 · 36 · 39 · 40 · 41 · 43 · 45 | ACTIVE TRIP · PRE-TRIP CHECK-IN · ROUTE CHANGED · NO-SHOW · DRIVER WAIT TIMER · DRIVER CANCELLED→BACKUP · DRIVER CANCEL CONFIRMATION | ⛔ **Phase 9** (دورة حياة الرحلة) |
+| 16 · 32 · 44 | SAFETY CENTRE · SUPPORT / INCIDENT · DISCREET SAFETY ALERT | ⛔ **Phase 10** (الأمان) |
+| 37 | RATING | ⛔ **Phase 9** |
+| 34 | PAYMENT FAILED | ⛔ **Phase 8** |
+| 33 · 38 | OFFLINE · LOCATION DENIED | 🚫 حالات جهاز |
+
+---
+
+## 8. 🔴 تعارضات بين الدايزين وقرارات مأخوذة — محتاجة قرارك
+
+الـ ERD §23.2 حدّد **٤ شاشات** لازم نصّها يتغيّر ويتبلّغ لفريق الموبايل. دي إضافات عليها لقيتها من قراءة الشاشات:
+
+### 8.1 ⚠️⚠️ اتجاه رسوم المنصة — **أخطرهم، وبيمس الفلوس**
+
+| المصدر | اللي بيقوله |
+|---|---|
+| الـ Bible §1525 + قيد `CHECK` في `bookings` من Phase 1 | `price = platform_fee + driver_amount` — **الرسم بيتخصم من سعر السائق** |
+| تنفيذي (`FeeSplit`) | سعر 80 ج.م → المنصة 2.40 → السائق **77.60** |
+| **شاشة 24 (PUBLISH ROUTE)** | *"You keep the full contribution; Rafeeq's fee is charged to passengers separately"* — السائق يقبض **الكامل**، والرسم **يتضاف على الراكب** |
+| **شاشة 12 (MATCH DETAILS)** | سطر `Platform fee EGP 8` منفصل، فوق `EGP 80` للمقعد → الراكب بيدفع 88 |
+
+**والرقم نفسه متعارض:** 8 على 80 = **10%**، والموثّق **3%**.
+
+يعني فيه تلات احتمالات ومحدش يقدر يقرر غيرك:
+
+1. السائق يقبض الكامل والراكب يدفع `سعر + رسم` → **قيد `CHECK` في الداتابيز لازم يتغيّر** (`price` بقى مش المجموع)
+2. الرسم يتخصم من السائق (تنفيذي الحالي) → **نص شاشتين يتغيّر**
+3. رقم تاني خلاص
+
+🔒 **كل حجز بيجمّد توزيعه المالي عند الموافقة**، فالقرار ده مايأثرش على الحجوزات القديمة — بس **لازم يُحسم قبل Phase 8** وقبل أي فلوس حقيقية.
+
+### 8.2 قائمة الانتظار — **اتحسم: الشاشة تتغيّر** ✅
+
+شاشة 20 بتقول *"Waitlist fills empty seats automatically"*. القرار (٢٥ سبتمبر): **الشاشة تتغيّر** — الترقية تروح لـ inbox السائقة وهي تقرر، لأن "السائقة هي اللي بتقرر مين يركب معاها" جوهر المنتج. وزرار `Waitlist` في شاشة 28 يفضل (السائق ينقل طلب للانتظار بإيده) ومحتاج endpoint.
+
+### 8.3 مواعيد الحضور
+
+شاشة 20 بتقول `Attendance by 9 PM` (ساعة ثابتة). تنفيذي: **ساعتين قبل القيام** (`group.attendance_cutoff_hours`). موديلين مختلفين — لازم واحد.
+
+### 8.4 مكان AC والأحزمة
+
+شاشة 31 حاطة `Air conditioning` و`Seat belts` على **العربية**. الـ AC متمودل كقاعدة رحلة (`CommuteRuleKey::Ac`)، والأحزمة **مش متمودلة في أي مكان**.
+
+---
+
+## 9. الداشبورد — ٩ أقسام، **صفر endpoints**
+
+| القسم | الحالة | ملاحظة |
+|---|---|---|
+| DASHBOARD (مؤشرات) | ⛔ | Phase 13 |
+| LIVE TRIPS | ⛔ | محتاج Phase 9 |
+| **VERIFICATION** | ⛔ | 🔴 **`ReviewVerificationAction` موجود ومختبَر — ومحدش بينادي عليه غير الاختبارات** |
+| SAFETY CASES | ⛔ | Phase 10 |
+| **MEMBERS** | ⛔ | 🔴 نفس الحكاية لـ `ReviewDriverApplicationAction` |
+| CORRIDORS | ⛔ | Phase 14 |
+| PAYMENTS | ⛔ | Phase 8 |
+| AUDIT LOG | ⛔ | `admin_actions` جدول append-only موجود |
+| SETTINGS | ⛔ | 🔴 الأرقام القابلة للتعديل (`platform_settings`) — ده اللي المستخدم طلبه من الأول |
+
+### 🔴 اللي ده معناه بالعربي
+
+**في الإنتاج دلوقتي محدش يقدر يوثّق راكب ولا يعتمد سائق.**
+
+الـ Actions موجودة ومختبَرة، بس مفيش سطح HTTP ليها. أنا أجّلت ده لـ Phase 13 وكاتبه في التعليقات — وده **كان قرار غلط في الترتيب**: الموبايل بكل شاشاته الـ٤٧ واقف عند أول خطوة مهمة، مش لأن الموبايل ناقص، لأن نصّه التاني مش موجود.
+
+---
+
+## 10. ملخص الـ endpoints الناقصة (مرتّبة بالأهمية)
+
+### أ. فاتحة للمسار الأساسي — من غيرها المنتج مايعملش
+
+| # | الـ endpoint | لأنهي شاشة |
+|---|---|---|
+| 1 | `GET/POST /v1/admin/verifications` (طابور + موافقة/رفض) | داشبورد VERIFICATION |
+| 2 | `GET/POST /v1/admin/driver-applications` (طابور + موافقة/رفض) | داشبورد MEMBERS |
+
+### ب. ترقيع حقول — بتخلّي ٢٧ شاشة مبنية تتوصل فعلًا
+
+| # | الناقص | لأنهي شاشة |
+|---|---|---|
+| 3 | `GET /v1/account/stats` — من `user_stats` | 21 PROFILE |
+| 4 | التقييم + شارات التوثيق (أنهي مستويات) على الراكب والسائق | 12 · 20 · 28 |
+| 5 | `POST /v1/commutes/{commute}/pickup-preview` — يحسب الانعطاف من غير ما ينشئ حاجة | 13 SEAT REQUEST |
+| 6 | `POST /v1/driver/seat-requests/{id}/waitlist` | 28 DRIVER REQUEST REVIEW |
+| 7 | `maxDetourMinutes` + الانعطاف التراكمي في رد طلب نقطة الالتقاء | 29 |
+| 8 | `GET /v1/driver/home` — تجميع | 23 DRIVER HOME |
+| 9 | `GET /v1/home` — تجميع | 9 HOME |
+| 10 | سبب الرفض كنص للمستخدم + نسبة الإنجاز | 15 VERIFICATION |
+| 11 | نطاق السعر المقترح (§23.3) | 24 PUBLISH ROUTE |
+| 12 | `flexibility` + `wantsReturnTrip` | 18 CREATE COMMUTE REQUEST |
+
+### ج. محتاجة قرار قبل التنفيذ
+
+| # | البند | القرار المطلوب |
+|---|---|---|
+| 13 | اتجاه رسوم المنصة ونسبتها | القسم 8.1 — **قبل Phase 8** |
+| 14 | تاب `calendar` في المجموعة | متصمّم ومش مبني في الـ prototype |
+| 15 | `firstName`/`lastName` منفصلين ولا `fullName` | شاشة 7 |
+| 16 | موعد قطع الحضور: ساعة ثابتة ولا نسبي للقيام | القسم 8.3 |
+| 17 | الأحزمة والـ AC: مستوى العربية ولا الرحلة | القسم 8.4 |
+
+---
+
+## 11. صيانة الملف ده
+
+الملف ده **مش وثيقة تُقرا مرة**. مراجعة §23 في الـ ERD كانت صح على الجداول و**بايتة** على الـ endpoints لأنها اتعملت مرة قبل أي كود — ولازم ده مايتكررش.
+
+- كل مرحلة جديدة **مش خالصة** غير لما شاشاتها تُقرا من الـ prototype وحقولها تتغطى حقل بحقل، والصف بتاعها هنا يتحدّث
+- `tests/Feature/ScreenApiMapTest.php` بيتأكد إن **كل endpoint مذكور هنا موجود فعلًا في قائمة الـ routes**، وإن الـ 47 شاشة والـ 9 أقسام كلهم مذكورين. الخريطة اللي بتعتمد على إن حد يفتكر = خريطة هتبوظ بنفس طريقة §23
