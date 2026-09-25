@@ -1,0 +1,186 @@
+# RAFEEQ — تشغيل ونشر
+
+> الملف ده بيوصف **العمليات اللي لازم تشتغل** عشان المنتج يعمل شغله، والإعدادات
+> اللي من غيرها بيفشل — بعضها بصوت عالي وواحدة منهم **بالسكوت**.
+>
+> الكود كله مختبَر (849 اختبار). الحاجات اللي هنا **مش** بتتغطى باختبار، لأنها
+> عن بيئة التشغيل مش عن المنتج. تفاصيل ليه في `tests/Feature/BackgroundWorkTest.php`.
+
+---
+
+## 1. العمليات المطلوبة
+
+### أ. سيرفر الويب
+```bash
+php artisan serve          # للتطوير
+# أو nginx/apache + php-fpm للإنتاج
+```
+
+### ب. عامل الطابور (Queue worker) — ⚠️ **غيابه فشل صامت**
+```bash
+php artisan queue:work --tries=3
+```
+
+**ليه ده أخطر بند في الملف:** `QUEUE_CONNECTION=database`، فالمهمة بتتكتب في جدول
+`jobs` وتستنى عامل ياخدها. **لو مفيش عامل شغال:**
+
+| اللي بيحصل | اللي المستخدم يشوفه |
+|---|---|
+| راكبة حافظة طلب، وسائقة نشرت رحلة مطابقة | **الإشعار عمره ما يوصل** |
+| الصف بيقعد في `jobs` للأبد | **مفيش أي رسالة خطأ في أي مكان** |
+
+الاختبارات بتعدّي على `QUEUE_CONNECTION=sync` (في `phpunit.xml`)، فالمهمة بتتنفّذ
+فورًا والتأكيدات بتنجح. **ده مش سلوك الإنتاج.**
+
+للمراقبة:
+```sql
+SELECT COUNT(*) FROM jobs;          -- المفروض يقرب من صفر
+SELECT COUNT(*) FROM failed_jobs;   -- المفروض صفر
+```
+
+### ج. المجدول (Scheduler) — ⚠️ **غيابه فشل صامت كمان**
+```cron
+* * * * * cd /path/to/rafeeq && php artisan schedule:run >> /dev/null 2>&1
+```
+
+**من غيره:** `commutes:generate-trips` مابيشتغلش، فالأفق المتدحرج مايتحركش —
+و**الرحلة المتكررة بتتوقف عن كونها قابلة للحجز بعد ٣٠ يوم من نشرها**. محدش بيلاحظ
+لحد ما راكبة تحاول تحجز الشهر الجاي.
+
+الأوامر المجدولة حاليًا (`routes/console.php`):
+
+| الأمر | الوقت | لو ما اشتغلش |
+|---|---|---|
+| `commutes:generate-trips` | 3:00 ص القاهرة | الرحلات المتكررة تنتهي بعد الأفق |
+| `memberships:roll-forward` | 3:30 ص القاهرة | تلات حاجات بتعطب بالسكوت — تحت |
+
+**⚠️ `memberships:roll-forward` غيابه أخطر من اسمه.** تلات حاجات:
+
+| اللي مايحصلش | اللي المستخدم يشوفه |
+|---|---|
+| الطلبات اللي محدش ردّ عليها ما بتنتهيش | الراكبة مش قادرة تطلب تاني على نفس الرحلة، **وهي مستنية رد عمره ما هيجي** |
+| مهل المغادرة ما بتتقفلش | عضو خطر بالمغادرة الشهر اللي فات **لسه في قائمة السائقة** |
+| العضو الملتزم مابيتحجزلوش على الأيام الجديدة | **أخطرهم:** العضوة فاكرة إنها ملتزمة، وشاشة المجموعة بتقول كده، وفي صباح بعد ٣٠ يوم **العربية مابتوقفش لها** — لأن مفيش حجز |
+
+**الترتيب مهم:** لازم `memberships:roll-forward` بعد `commutes:generate-trips` —
+معكوسًا، حد مهلته خلصت الصبح ده هيتحجزله على رحلات الأسبوع الجاي لحظة قبل ما
+يتشال من المجموعة، والحجوزات دي هتعيش أطول من العضوية. الترتيب ده **مختبَر**
+في `BackgroundWorkTest`.
+
+---
+
+## 2. إعدادات لازم تتحدّد قبل الإنتاج
+
+### ⛔ حاجات بتفشل **بصوت عالي** (مقصود)
+
+الاتنين دول بيرموا exception في production عن قصد، عشان النشر من غيرهم مايمشيش
+بالسكوت:
+
+| الإعداد | لو مش مضبوط | السؤال المفتوح |
+|---|---|---|
+| `RAFEEQ_OTP_DRIVER` | **المصادقة كلها متوقفة** | مزوّد SMS لسه ما اتحددش (الخطة §19 سؤال 2) |
+| `RAFEEQ_VIRUS_SCANNER` | **رفع أي مستند متوقف** | محرك فحص لسه ما اتحددش |
+
+### ⚠️ حاجة بتشتغل **بجودة أقل** (قرار واعي)
+
+| الإعداد | الافتراضي | الأثر |
+|---|---|---|
+| `RAFEEQ_GEO_ENGINE` | `straight_line` | كل المسافات والمدد خطوط مستقيمة بسرعة مفترضة (28 كم/س) |
+
+ده **مابيرفضش** يشتغل في production عن قصد: تقدير سفر تقريبي منتج أقل جودة، بس
+انقطاع مزوّد بيوقّف النشر كله أسوأ. لازم يبقى قرار واعي مش مفاجأة.
+
+### التخزين
+
+| الإعداد | الافتراضي | للإنتاج |
+|---|---|---|
+| `RAFEEQ_DOCUMENTS_DISK` | `documents` (محلي خاص) | `s3` |
+| `RAFEEQ_PRESIGNED_DOCUMENT_URLS` | `false` | `true` مع S3 |
+
+قرار D7: bucket خاص، **ممنوع** أي URL عام. المستندات بتتفحص وتُجرّد من الميتاداتا
+قبل التخزين.
+
+### العقد والقانونيات
+
+| الإعداد | ملاحظة |
+|---|---|
+| `API_VERSION` | `1.0.0` — بيتغير بتغيّر `/v1` نفسه، مش بكل إصدار |
+| `API_STAGING_URL` | اللي الفريق الخارجي هيوجّه Stoplight عليه |
+| `RAFEEQ_TERMS_VERSION` / `RAFEEQ_PRIVACY_VERSION` | تغييرهم بيخلّي موافقة كل حساب "مستحقة" ويطلب قبول جديد |
+
+---
+
+## 3. قبل أول نشر
+
+```bash
+composer install --no-dev --optimize-autoloader
+php artisan migrate --force
+php artisan config:cache
+php artisan route:cache
+composer openapi                    # يولّد storage/app/openapi.json
+```
+
+**`config:cache` اتّم اختباره** — كل الإعدادات قابلة للتخزين المؤقت (عشان كده
+`scramble.security_strategy` كلاس مش object، معيار #40).
+
+---
+
+## 4. حاجات لسه ناقصة (موثّقة، مش مسكوت عنها)
+
+| البند | الحالة |
+|---|---|
+| **PHPStan level 8** | ⛔ **عمره ما اشتغل** — بينهار بصمت في البيئة الحالية (exit 1، صفر output). الخطة (Phase 0 بند 6) طالبته. Pint شغال، والحمايات في `ConventionsTest` و`OpenApiDocumentTest` بتغطي حاجات معيّنة بس **مش بديل** |
+| **CI** | ⛔ مفيش. الاختبارات بتشتغل يدويًا بس |
+| **Docker compose** | ⛔ مؤجّل من Phase 0 |
+| **بيئة staging** | ⛔ الخطة كانت بتقولها من نهاية Phase 2 — متأخرة |
+| **مستند OpenAPI منشور** | ⛔ بيتولّد محليًا بس. الفريق الخارجي مش واصل له |
+| **أرشفة `scheduled_trips`** | ⛔ فخ #14: بعد سنة هتبقى ملايين. محتاج job شهري (Phase 15) |
+| **تنظيف المستندات المنتهية** | ⛔ `purge_after` بيتكتب عند الرفع، الـ job مؤجّل |
+| **إنهاء الطلبات المنتهية** | ⛔ `SaveCommuteDemandAction::expireOverdue()` جاهز ومختبَر، محتاج ينضم للجدولة (ملاحظة: طلبات **المقاعد** بقت في `memberships:roll-forward`؛ الناقص هو طلبات **الركوب** المحفوظة) |
+| **الحد الأدنى للسن = 18** | ⚠️ **افتراض** مش قرار موثّق — محتاج تأكيد المنتج/القانوني |
+| **سياسة الإلغاء** | ⚠️ الرسوم = صفر دايمًا. سؤال مفتوح 7 في الخطة §19، مؤجّل لـ Phase 8. **قرار واعي:** رسم مُخمَّن معناه فلوس بتتاخد من شخص حقيقي على أساس افتراض |
+| **`effective_from = specific_date`** | ⚠️ الـ ERD بيذكرها لطلب نقطة الالتقاء، بس **مفيش عمود يحمل أي تاريخ**. منفَّذ `next_trip` بس؛ قبول الكلمة وتجاهلها كان أسوأ. محتاج قرار سكيمة |
+| **إزالة عضو بواسطة السائق** | ⛔ الأعمدة موجودة (`status = removed`, `removal_reason`) بس مفيش endpoint. مش في نطاق Phase 7 حسب §889؛ الحظر في Phase 10 |
+| **`commute_groups.seats_open`** | ⚠️ عدّاد مفكوك من غير كاتب واحد — **مش بيتقرا**. الـ API بيحسب المقاعد من أقرب رحلة جاية. لو احتجناه للسرعة لازم حد يملكه بجد |
+
+---
+
+## 5. مراقبة يستحق الانتباه
+
+```sql
+-- كفاءة كاش المسارات (مؤشر تكلفة المزوّد)
+SELECT AVG(hit_count), COUNT(*) FROM route_cache;
+
+-- الأفق: أي رحلة منشورة أفقها قديم = المجدول مش شغال
+SELECT COUNT(*) FROM commute_schedules
+WHERE generated_until < CURDATE() + INTERVAL 7 DAY;
+
+-- 🔴 أعضاء ملتزمين من غير حجز على أقرب يوم من أيامهم = memberships:roll-forward
+-- مش شغال. الرقم ده المفروض صفر؛ أي حاجة فوق الصفر معناها حد هيستنى عربية
+-- مش جاية له.
+SELECT COUNT(*) FROM group_members gm
+JOIN commute_groups cg ON cg.id = gm.commute_group_id
+WHERE gm.status = 'active' AND gm.role = 'member'
+  AND NOT EXISTS (
+      SELECT 1 FROM bookings b
+      JOIN scheduled_trips st ON st.id = b.scheduled_trip_id
+      WHERE b.passenger_user_id = gm.user_id
+        AND st.commute_offer_id = cg.commute_offer_id
+        AND b.status = 'confirmed'
+        AND st.departure_at > NOW()
+  );
+
+-- مهل مغادرة فاتت ولسه مفتوحة = نفس الأمر مش شغال
+SELECT COUNT(*) FROM group_members gm
+JOIN commute_groups cg ON cg.id = gm.commute_group_id
+WHERE gm.status = 'notice_given'
+  AND DATE_ADD(gm.notice_given_at, INTERVAL cg.notice_period_days DAY) < NOW();
+
+-- طابور التوثيق
+SELECT COUNT(*) FROM user_verifications WHERE status = 'pending';
+
+-- أحداث أمان عالية الخطورة
+SELECT event_type, COUNT(*) FROM security_events
+WHERE risk_level = 'high' AND created_at > NOW() - INTERVAL 1 DAY
+GROUP BY event_type;
+```

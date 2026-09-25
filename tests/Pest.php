@@ -1,11 +1,16 @@
 <?php
 
 use App\Domains\Admin\Models\AdminUser;
+use App\Domains\Driver\Actions\ReviewDriverApplicationAction;
+use App\Domains\Driver\Enums\DriverProfileStatus;
+use App\Domains\Driver\Models\DriverProfile;
 use App\Domains\Identity\Contracts\OtpSender;
+use App\Domains\Shared\ValueObjects\DaysMask;
 use App\Domains\Verification\Actions\ReviewVerificationAction;
 use App\Domains\Verification\Enums\VerificationStatus;
 use App\Domains\Verification\Enums\VerificationType;
 use App\Domains\Verification\Models\UserVerification;
+use Carbon\CarbonImmutable;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Cache;
@@ -109,7 +114,21 @@ function uploadVerificationDocument(string $accessToken, string $type, string $k
  */
 function submitGovernmentId(string $accessToken): void
 {
-    completeBasicProfile($accessToken);
+    /*
+     * Only if the profile is not already complete.
+     *
+     * `completeBasicProfile()` hard-codes `gender => woman`, so calling it
+     * unconditionally here OVERWROTE the gender of anyone set up differently. That
+     * silently turned a test's man into a woman before he requested a seat, which
+     * made a women-only security test exercise nothing at all — the exact shape of
+     * failure the rest of this suite exists to prevent.
+     */
+    $complete = test()->withToken($accessToken)->getJson('/api/v1/auth/me')
+        ->json('data.user.profileStatus') === 'BASIC_COMPLETE';
+
+    if (! $complete) {
+        completeBasicProfile($accessToken);
+    }
 
     uploadVerificationDocument($accessToken, 'government_id', 'national_id_front')->assertStatus(201);
     uploadVerificationDocument($accessToken, 'government_id', 'national_id_back')->assertStatus(201);
@@ -180,12 +199,17 @@ function readyDriverApplicant(string $phone = '01012345678', string $devicePubli
 /**
  * Licence details, both images, a vehicle and its registration — the whole
  * application short of pressing submit.
+ *
+ * `$seed` varies the national id, licence number and plate. A test with two
+ * applicants MUST pass a different one: those three are unique platform-wide, so
+ * a second driver reusing them is refused as a duplicate, which is the system
+ * working correctly and the test setup being wrong.
  */
-function completeDriverApplication(string $token): void
+function completeDriverApplication(string $token, int $seed = 1): void
 {
     test()->withToken($token)->putJson('/api/v1/driver/application/licence', [
-        'nationalId' => '29604120101234',
-        'licenceNumber' => 'DL-9931204',
+        'nationalId' => '2960412010'.str_pad((string) $seed, 4, '0', STR_PAD_LEFT),
+        'licenceNumber' => 'DL-993120'.$seed,
         'licenceExpiry' => now()->addYears(3)->toDateString(),
     ])->assertOk();
 
@@ -197,7 +221,7 @@ function completeDriverApplication(string $token): void
         'model' => 'Corolla',
         'year' => 2019,
         'colour' => 'Silver',
-        'plateNumber' => 'ABC 1234',
+        'plateNumber' => 'ABC '.(1234 + $seed),
         'seats' => 5,
         'fuelType' => 'petrol',
     ])->assertStatus(201)->json('data.id');
@@ -206,6 +230,146 @@ function completeDriverApplication(string $token): void
         'type' => 'registration',
         'file' => UploadedFile::fake()->image('registration.jpg', 1000, 700),
     ])->assertStatus(201);
+}
+
+/**
+ * A driver who has been through the whole of Chapter 3: application submitted,
+ * reviewed, approved, with one approved and active vehicle. This is the state
+ * Chapter 4 opens by assuming.
+ *
+ * Returns the access token.
+ */
+function approvedDriver(string $phone = '01012345678', string $devicePublicId = 'dev-1', int $seed = 1): string
+{
+    $token = readyDriverApplicant($phone, $devicePublicId);
+
+    completeDriverApplication($token, $seed);
+
+    test()->withToken($token)->postJson('/api/v1/driver/application/submit')->assertOk();
+
+    // Scoped to the application awaiting a decision, so a test with two drivers
+    // approves the right one rather than failing on an ambiguous `sole()`.
+    app(ReviewDriverApplicationAction::class)->approve(
+        DriverProfile::query()->where('status', DriverProfileStatus::PendingReview->value)->sole(),
+        AdminUser::factory()->create(),
+    );
+
+    return $token;
+}
+
+/*
+ * Commute helpers. They live here rather than in one test file because more than
+ * one file needs them, and a global function declared in a test file only exists
+ * when THAT file is collected — running a single file would otherwise fail on a
+ * helper it can see in the editor.
+ *
+ * The reference journey is the Bible's: Rehab City to Smart Village, Sunday to
+ * Thursday, 07:05.
+ */
+
+function createCommute(string $token, string $vehicleId, array $overrides = [])
+{
+    return test()->withToken($token)->postJson('/api/v1/commutes', array_merge([
+        'commuteType' => 'recurring',
+        'vehicleId' => $vehicleId,
+        'direction' => 'to_work',
+        'seatsTotal' => 3,
+        'pricePerSeatPiastres' => 8000,
+        'maxDetourMinutes' => 10,
+        'maxWalkMinutes' => 15,
+        'audience' => 'women_only',
+    ], $overrides));
+}
+
+function saveRoute(string $token, string $commuteId, array $overrides = [])
+{
+    return test()->withToken($token)->putJson("/api/v1/commutes/{$commuteId}/route", array_merge([
+        'origin' => ['lat' => 30.0594, 'lng' => 31.4913, 'address' => 'Rehab Gate 2'],
+        'destination' => ['lat' => 30.0714, 'lng' => 30.9716, 'address' => 'Smart Village B6'],
+    ], $overrides));
+}
+
+function saveSchedule(string $token, string $commuteId, array $overrides = [])
+{
+    return test()->withToken($token)->putJson("/api/v1/commutes/{$commuteId}/schedule", array_merge([
+        'daysMask' => DaysMask::weekdaysSunToThu()->value,
+        'departureTime' => '07:05:00',
+        'startDate' => CarbonImmutable::tomorrow()->toDateString(),
+        'endDate' => CarbonImmutable::today()->addMonths(4)->toDateString(),
+    ], $overrides));
+}
+
+/**
+ * A passenger with a complete profile, signed in. `gender` matters: it is what
+ * the hard audience filter reads, and it is read from the ACCOUNT, never from a
+ * search request.
+ */
+function passenger(string $phone, string $gender = 'woman', string $device = 'pax'): string
+{
+    fakeOtpSender();
+
+    $token = signIn(phone: $phone, devicePublicId: $device)['session']['accessToken'];
+
+    test()->withToken($token)->putJson('/api/v1/account/profile/basic', [
+        'fullName' => 'سارة محمود',
+        'gender' => $gender,
+        'registeredRole' => 'passenger',
+        'dateOfBirth' => '1995-03-10',
+    ])->assertOk();
+
+    return $token;
+}
+
+/**
+ * A passenger who has also had their identity verified — what asking for a seat
+ * requires, unlike searching. Getting into a stranger's car is a higher bar than
+ * browsing.
+ */
+function verifiedPassenger(string $phone, string $gender = 'woman', string $device = 'pax'): string
+{
+    $token = passenger($phone, $gender, $device);
+
+    submitGovernmentId($token);
+    approveVerification(VerificationType::GovernmentId);
+
+    return $token;
+}
+
+/**
+ * Searches for the Bible's reference journey — Rehab to Smart Village, Sunday to
+ * Thursday, arriving between 06:45 and 08:00.
+ */
+function search(string $token, array $overrides = [])
+{
+    return test()->withToken($token)->getJson('/api/v1/search/commutes?'.http_build_query(array_merge([
+        'origin' => ['lat' => 30.0594, 'lng' => 31.4913],
+        'destination' => ['lat' => 30.0714, 'lng' => 30.9716],
+        'daysMask' => DaysMask::weekdaysSunToThu()->value,
+        'arrivalWindowStart' => '06:45:00',
+        'arrivalWindowEnd' => '08:00:00',
+        'maxWalkMinutes' => 15,
+        'maxDetourMinutes' => 15,
+    ], $overrides)));
+}
+
+/**
+ * A draft with everything filled in — one step short of pressing publish.
+ */
+/**
+ * A commute with a route and a schedule, ready to publish.
+ *
+ * `$overrides` reaches the commute itself (seats, price, audience,
+ * `allowsCustomPickup` — which defaults to FALSE in the product, so a test about
+ * custom pickup points has to ask for it), and `$schedule` reaches the schedule.
+ */
+function readyCommute(string $token, string $vehicleId, array $overrides = [], array $schedule = []): string
+{
+    $id = createCommute($token, $vehicleId, $overrides)->assertStatus(201)->json('data.id');
+
+    saveRoute($token, $id)->assertOk();
+    saveSchedule($token, $id, $schedule)->assertOk();
+
+    return $id;
 }
 
 /**
@@ -236,4 +400,45 @@ function signIn(string $phone = '01012345678', string $devicePublicId = 'device-
         'code' => $sender->lastCode(),
         'device' => $device,
     ])->assertOk()->json('data');
+}
+
+/*
+|--------------------------------------------------------------------------
+| Seat requests, bookings and groups (Phase 7)
+|--------------------------------------------------------------------------
+*/
+
+/**
+ * A passenger asking a driver for a seat.
+ *
+ * Defaults to a trial on one named day, because that is the shape most tests want;
+ * `commitment` and `requestedDaysMask` in `$overrides` make it a recurring request.
+ */
+function requestSeat(string $token, string $commuteId, array $overrides = [])
+{
+    return test()->withToken($token)->postJson("/api/v1/commutes/{$commuteId}/seat-requests", array_merge([
+        'commitment' => 'trial',
+        'scheduledTripId' => $overrides['scheduledTripId'] ?? null,
+        'seats' => 1,
+        'meetingPreference' => 'gate',
+        'introMessage' => 'أهلاً! بنقل نفس الطريق وحابة أجرب مجموعتك.',
+        'paymentType' => 'cash',
+        'agreedToRules' => true,
+    ], $overrides));
+}
+
+/**
+ * Approves a request and hands back the one booking it produced.
+ *
+ * The endpoint answers with an approval, not a booking: a trial produces one and a
+ * recurring membership produces one per committed day, and one response shape for
+ * both beats two endpoints. Tests about a single trial day want the booking, so it is
+ * unwrapped here rather than in every one of them.
+ */
+function approveSeat(string $driverToken, string $requestId): string
+{
+    return test()->withToken($driverToken)
+        ->postJson("/api/v1/driver/seat-requests/{$requestId}/approve")
+        ->assertStatus(201)
+        ->json('data.bookings.0.id');
 }

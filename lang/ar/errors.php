@@ -52,4 +52,38 @@ return [
     'DRIVER_DUPLICATE_DETECTED' => 'بعض البيانات دي مسجّلة بالفعل. راجع اللي كتبته أو تواصل مع الدعم.',
     'VEHICLE_NOT_ALLOWED' => 'العربية دي مش مستوفية الشروط.',
     'VEHICLE_LIMIT_REACHED' => 'وصلت للحد الأقصى لعدد العربيات.',
+
+    // الرحلات.
+    'COMMUTE_NOT_EDITABLE' => 'الرحلة دي مش ممكن تتعدّل في حالتها الحالية.',
+    'COMMUTE_INCOMPLETE' => 'في بيانات مطلوبة لسه ناقصة.',
+    'COMMUTE_INVALID_TRANSITION' => 'التغيير ده مش ممكن من حالة الرحلة الحالية.',
+    'COMMUTE_ROUTE_INVALID' => 'راجع المسار: نقطة البداية لازم تختلف عن النهاية، ونقاط الالتقاء لازم تكون على الطريق.',
+    'COMMUTE_SEATS_CONFLICT' => 'عندك ركّاب محجوزين أكتر من عدد المقاعد ده.',
+    'COMMUTE_VEHICLE_UNAVAILABLE' => 'العربية دي مش معتمَدة ونشطة، فمش ممكن تُستخدم لرحلة.',
+
+    // طلبات المقاعد والحجوزات.
+    'SEAT_UNAVAILABLE' => 'المقاعد في اليوم ده اتحجزت حالًا.',
+    'BOOKING_RULES_NOT_AGREED' => 'وافق على قواعد المجموعة قبل ما تطلب مقعد.',
+    'BOOKING_ALREADY_REQUESTED' => 'عندك طلب مفتوح على الرحلة دي بالفعل.',
+    'BOOKING_ALREADY_BOOKED' => 'عندك مقعد في اليوم ده بالفعل.',
+    'BOOKING_DEADLINE_PASSED' => 'الحجز على اليوم ده اتقفل.',
+    'SEAT_REQUEST_NOT_PENDING' => 'الطلب ده اترد عليه بالفعل.',
+    'BOOKING_WAITLIST_FULL' => 'قائمة الانتظار للرحلة دي كاملة.',
+    'BOOKING_NOT_CANCELLABLE' => 'الحجز ده مش ممكن يتلغي بعد كده.',
+    'BOOKING_OWN_COMMUTE' => 'مش ممكن تحجز مقعد في رحلتك بنفسك.',
+    'BOOKING_RECURRING_DAYS_NOT_OFFERED' => 'الرحلة دي مش بتمشي في كل الأيام اللي طلبتها.',
+
+    // نقاط الالتقاء المخصصة.
+    'PICKUP_DETOUR_TOO_LONG' => 'نقطة الالتقاء دي بعيدة عن طريق السائق أكتر من اللي بيقبله.',
+    'PICKUP_ALREADY_REQUESTED' => 'عندك نقطة التقاء مستنية رد بالفعل.',
+    'PICKUP_REQUEST_NOT_PENDING' => 'طلب نقطة الالتقاء ده اترد عليه بالفعل.',
+    'PICKUP_NOT_ON_COMMUTE' => 'نقطة الالتقاء دي مش تابعة للرحلة دي.',
+
+    // المجموعات.
+    'GROUP_NOT_ACTIVE' => 'المجموعة دي مش نشطة حاليًا.',
+    'GROUP_NOTICE_ALREADY_GIVEN' => 'إنت خطرت المجموعة بالمغادرة بالفعل.',
+    'GROUP_DRIVER_CANNOT_LEAVE' => 'السائق مش ممكن يسيب مجموعته. أوقف الرحلة أو أرشفها بدل كده.',
+    'GROUP_ATTENDANCE_NOT_DECLARABLE' => 'الوقت اتأخر على تغيير ردّك لليوم ده.',
+    'GROUP_ABSENCE_OVERLAPS' => 'عندك غياب مسجَّل بالفعل في التواريخ دي.',
+    'GROUP_ABSENCE_TOO_LONG' => 'الغياب ده أطول من مدة الغياب المخطط المسموح بيها.',
 ];

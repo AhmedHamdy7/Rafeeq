@@ -1,6 +1,8 @@
 <?php
 
+use App\Domains\Booking\Enums\BookingStatus;
 use App\Domains\Shared\Support\ErrorCode;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 
 /**
@@ -152,6 +154,64 @@ it('gives every error code a status that suits what it means', function () {
             expect($code)->not->toBe(ErrorCode::ServerError);
         }
     }
+});
+
+/**
+ * 🔴 Binding standard #47.
+ *
+ * `bookings.live_booking_key` and `SeatAvailabilityChecker::assertNoDuplicateBooking()`
+ * are two statements of one rule: which booking statuses count as somebody holding a
+ * seat. When they differed, the index refused a rebooking the checker had just
+ * allowed — so the constraint fired AFTER the code said yes, and the passenger got a
+ * 500 instead of a refusal or a seat.
+ *
+ * Read from `information_schema` rather than from the migration file, because the
+ * migration is what was written and this is what the database is actually enforcing.
+ */
+it('keeps the live-booking index and the duplicate check saying the same thing', function () {
+    $expression = DB::table('information_schema.COLUMNS')
+        ->where('TABLE_SCHEMA', DB::getDatabaseName())
+        ->where('TABLE_NAME', 'bookings')
+        ->where('COLUMN_NAME', 'live_booking_key')
+        ->value('GENERATION_EXPRESSION');
+
+    expect($expression)->not->toBeNull('bookings.live_booking_key is missing from the database.');
+
+    // The statuses the application counts as a live booking, read from the source of
+    // truth for that decision.
+    $checked = [];
+
+    preg_match_all(
+        '/BookingStatus::(\w+)->value/',
+        (string) file_get_contents(__DIR__.'/../../app/Domains/Booking/Support/SeatAvailabilityChecker.php'),
+        $matches,
+    );
+
+    foreach ($matches[1] as $case) {
+        $checked[] = constant(BookingStatus::class.'::'.$case)->value;
+    }
+
+    $checked = array_values(array_unique($checked));
+
+    expect($checked)->not->toBeEmpty();
+
+    foreach ($checked as $status) {
+        // `toBeTrue` with a message rather than `toContain`, which treats a second
+        // argument as another needle to look for.
+        expect(str_contains((string) $expression, "'{$status}'"))->toBeTrue(
+            "The duplicate check counts '{$status}' as a live booking but the unique index does not. "
+            .'A rebooking the code allows will hit a constraint violation and return 500.'
+        );
+    }
+
+    // And nothing the index counts that the code does not — the same drift in reverse
+    // silently forbids a booking nobody refused.
+    preg_match_all("/'(\w+)'/", (string) $expression, $indexed);
+
+    expect(array_values(array_diff($indexed[1], $checked)))->toBeEmpty(
+        'The unique index treats statuses as live that the duplicate check does not, so a booking '
+        .'the application allows will be refused by the database with no explanation.'
+    );
 });
 
 /*

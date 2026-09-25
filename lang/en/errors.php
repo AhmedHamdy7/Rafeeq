@@ -52,4 +52,38 @@ return [
     'DRIVER_DUPLICATE_DETECTED' => 'Some of these details are already registered. Please check what you entered, or contact support.',
     'VEHICLE_NOT_ALLOWED' => 'This vehicle does not meet the requirements.',
     'VEHICLE_LIMIT_REACHED' => 'You have reached the maximum number of vehicles.',
+
+    // Commutes.
+    'COMMUTE_NOT_EDITABLE' => 'This commute cannot be changed in its current state.',
+    'COMMUTE_INCOMPLETE' => 'Some required details are still missing.',
+    'COMMUTE_INVALID_TRANSITION' => 'That change is not possible from the commute’s current state.',
+    'COMMUTE_ROUTE_INVALID' => 'Please check the route: the origin and destination must differ, and pickup points must be along the way.',
+    'COMMUTE_SEATS_CONFLICT' => 'You already have more passengers booked than that number of seats.',
+    'COMMUTE_VEHICLE_UNAVAILABLE' => 'That vehicle is not approved and active, so it cannot be used for a commute.',
+
+    // Seat requests and bookings.
+    'SEAT_UNAVAILABLE' => 'The seats on that day have just been taken.',
+    'BOOKING_RULES_NOT_AGREED' => 'Please agree to the group rules before requesting a seat.',
+    'BOOKING_ALREADY_REQUESTED' => 'You already have a request open for this commute.',
+    'BOOKING_ALREADY_BOOKED' => 'You already have a seat on that day.',
+    'BOOKING_DEADLINE_PASSED' => 'Bookings for that day have closed.',
+    'SEAT_REQUEST_NOT_PENDING' => 'That request has already been answered.',
+    'BOOKING_WAITLIST_FULL' => 'The waiting list for this commute is full.',
+    'BOOKING_NOT_CANCELLABLE' => 'That booking can no longer be cancelled.',
+    'BOOKING_OWN_COMMUTE' => 'You cannot book a seat on your own commute.',
+    'BOOKING_RECURRING_DAYS_NOT_OFFERED' => 'This commute does not run on all of the days you asked for.',
+
+    // Custom pickup points.
+    'PICKUP_DETOUR_TOO_LONG' => 'That pickup point is further off the driver’s route than they accept.',
+    'PICKUP_ALREADY_REQUESTED' => 'You already have a pickup point waiting for an answer.',
+    'PICKUP_REQUEST_NOT_PENDING' => 'That pickup request has already been answered.',
+    'PICKUP_NOT_ON_COMMUTE' => 'That pickup point does not belong to this commute.',
+
+    // Groups.
+    'GROUP_NOT_ACTIVE' => 'This group is not active at the moment.',
+    'GROUP_NOTICE_ALREADY_GIVEN' => 'You have already given notice to leave this group.',
+    'GROUP_DRIVER_CANNOT_LEAVE' => 'A driver cannot leave their own group. Pause or archive the commute instead.',
+    'GROUP_ATTENDANCE_NOT_DECLARABLE' => 'It is too late to change your answer for that day.',
+    'GROUP_ABSENCE_OVERLAPS' => 'You already have an absence recorded over those dates.',
+    'GROUP_ABSENCE_TOO_LONG' => 'That absence is longer than a planned absence can be.',
 ];

@@ -2,6 +2,9 @@
 
 namespace App\Providers;
 
+use App\Domains\Geo\Contracts\GeoQueryEngine;
+use App\Domains\Geo\Support\CachingGeoEngine;
+use App\Domains\Geo\Support\StraightLineGeoEngine;
 use App\Domains\Identity\Contracts\OtpSender;
 use App\Domains\Identity\Support\LogOtpSender;
 use App\Domains\Verification\Contracts\VirusScanner;
@@ -33,6 +36,22 @@ class AppServiceProvider extends ServiceProvider
                 'Unsupported OTP driver ['.config('rafeeq.auth.otp.driver').'].'
             ),
         });
+
+        /*
+         * Binding standard #7: every geographic question goes through this one
+         * door, so a later move to PostGIS — or to a different provider — is a
+         * change here and nowhere else. The caching decorator wraps whichever
+         * engine is configured, because a provider is billed per call and the
+         * same commute is looked up over and over.
+         */
+        $this->app->singleton(GeoQueryEngine::class, fn () => new CachingGeoEngine(
+            match (config('rafeeq.geo.engine')) {
+                'straight_line' => new StraightLineGeoEngine,
+                default => throw new InvalidArgumentException(
+                    'Unsupported geo engine ['.config('rafeeq.geo.engine').'].'
+                ),
+            }
+        ));
 
         // Same shape, same reason: the real engine is not chosen yet, and
         // `SignatureVirusScanner` refuses to run in production so a deploy

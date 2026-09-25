@@ -67,6 +67,40 @@ enum ErrorCode: string
     case VehicleNotAllowed = 'VEHICLE_NOT_ALLOWED';
     case VehicleLimitReached = 'VEHICLE_LIMIT_REACHED';
 
+    // ---- Commutes (Phase 5, Chapter 4) ---------------------------------
+    case CommuteNotEditable = 'COMMUTE_NOT_EDITABLE';
+    case CommuteIncomplete = 'COMMUTE_INCOMPLETE';
+    case CommuteInvalidTransition = 'COMMUTE_INVALID_TRANSITION';
+    case CommuteRouteInvalid = 'COMMUTE_ROUTE_INVALID';
+    case CommuteSeatsConflict = 'COMMUTE_SEATS_CONFLICT';
+    case CommuteVehicleUnavailable = 'COMMUTE_VEHICLE_UNAVAILABLE';
+
+    // ---- Seat requests & bookings (Phase 7, Chapter 6) -----------------
+    case SeatUnavailable = 'SEAT_UNAVAILABLE';
+    case RulesNotAgreed = 'BOOKING_RULES_NOT_AGREED';
+    case AlreadyRequested = 'BOOKING_ALREADY_REQUESTED';
+    case AlreadyBooked = 'BOOKING_ALREADY_BOOKED';
+    case BookingDeadlinePassed = 'BOOKING_DEADLINE_PASSED';
+    case SeatRequestNotPending = 'SEAT_REQUEST_NOT_PENDING';
+    case WaitlistFull = 'BOOKING_WAITLIST_FULL';
+    case BookingNotCancellable = 'BOOKING_NOT_CANCELLABLE';
+    case CannotBookOwnCommute = 'BOOKING_OWN_COMMUTE';
+    case RecurringDaysNotOffered = 'BOOKING_RECURRING_DAYS_NOT_OFFERED';
+
+    // ---- Custom pickup points (Phase 7) --------------------------------
+    case PickupDetourTooLong = 'PICKUP_DETOUR_TOO_LONG';
+    case PickupAlreadyRequested = 'PICKUP_ALREADY_REQUESTED';
+    case PickupRequestNotPending = 'PICKUP_REQUEST_NOT_PENDING';
+    case PickupNotOnCommute = 'PICKUP_NOT_ON_COMMUTE';
+
+    // ---- Groups (Phase 7) ----------------------------------------------
+    case GroupNotActive = 'GROUP_NOT_ACTIVE';
+    case GroupNoticeAlreadyGiven = 'GROUP_NOTICE_ALREADY_GIVEN';
+    case GroupDriverCannotLeave = 'GROUP_DRIVER_CANNOT_LEAVE';
+    case AttendanceNotDeclarable = 'GROUP_ATTENDANCE_NOT_DECLARABLE';
+    case AbsenceOverlaps = 'GROUP_ABSENCE_OVERLAPS';
+    case AbsenceTooLong = 'GROUP_ABSENCE_TOO_LONG';
+
     public function defaultStatus(): int
     {
         return match ($this) {
@@ -125,7 +159,53 @@ enum ErrorCode: string
 
             self::DriverApplicationLocked,
             self::DriverDuplicateDetected,
-            self::VehicleLimitReached => 409,
+            self::VehicleLimitReached,
+            self::CommuteNotEditable,
+            self::CommuteInvalidTransition,
+            // A conflict, not a validation error: the request is well formed and
+            // the seat count is legal — it is the already-booked passengers that
+            // make it impossible right now.
+            self::CommuteSeatsConflict => 409,
+
+            self::CommuteIncomplete,
+            self::CommuteRouteInvalid,
+            self::CommuteVehicleUnavailable,
+            self::RulesNotAgreed,
+            self::BookingDeadlinePassed => 422,
+
+            /*
+             * 409, not 422: every one of these is a well-formed request that the
+             * CURRENT state refuses. The client should show what happened and
+             * re-read, not ask the person to correct their input — there is
+             * nothing wrong with what they sent.
+             */
+            self::SeatUnavailable,
+            self::AlreadyRequested,
+            self::AlreadyBooked,
+            self::SeatRequestNotPending,
+            self::WaitlistFull,
+            self::BookingNotCancellable,
+            self::PickupAlreadyRequested,
+            self::PickupRequestNotPending,
+            self::GroupNotActive,
+            self::GroupNoticeAlreadyGiven,
+            self::AttendanceNotDeclarable,
+            self::AbsenceOverlaps => 409,
+
+            /*
+             * 422: unlike the group above, these ARE about what was sent. The
+             * point proposed is too far off the driver's route, the days asked
+             * for are not days this commute runs, the absence is longer than an
+             * absence can be — each is fixed by changing the input.
+             */
+            self::PickupDetourTooLong,
+            self::PickupNotOnCommute,
+            self::RecurringDaysNotOffered,
+            self::AbsenceTooLong => 422,
+
+            // 403: the account is fine, this particular person may not do this.
+            self::CannotBookOwnCommute,
+            self::GroupDriverCannotLeave => 403,
         };
     }
 

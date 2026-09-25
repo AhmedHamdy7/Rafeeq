@@ -83,6 +83,18 @@ return [
         OTP endpoints are limited per phone number, per IP, and per challenge.
         A `429` always carries `Retry-After` in seconds — honour it rather
         than backing off on your own schedule.
+
+        ## Numbers
+
+        A field typed `number` may arrive without a decimal point when its value
+        happens to be whole: `0`, not `0.0`, and `12`, not `12.0`. That is JSON,
+        not a change of type — `onTimePct`, `addedMinutes`, `addedKm` and every
+        coordinate behave this way. In Dart, read them as `num` and call
+        `.toDouble()`; reading them straight as `double` throws on any whole
+        value.
+
+        Money never does this: every amount is an integer field named
+        `*Piastres`, and there are no fractional piastres.
         MARKDOWN,
     ],
 

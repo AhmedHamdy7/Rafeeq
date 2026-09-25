@@ -83,6 +83,174 @@ return [
         'max_submission_attempts' => 5,
     ],
 
+    'booking' => [
+        /*
+         * The platform's share of each seat, as a percentage.
+         *
+         * 3.0 is the figure the Engineering Bible uses throughout (§2014:
+         * `payment.platform_fee_pct = 3.0`). It is ALSO open question #5 in
+         * MASTER_PLAN §19 — "is 3% confirmed, and is it flat or tiered?" —
+         * deferred to Phase 8.
+         *
+         * Building on the documented number is safe because every booking
+         * freezes its own snapshot at approval: changing this later moves
+         * nothing that already exists (pitfall #42).
+         */
+        'platform_fee_percent' => 3.0,
+
+        /*
+         * How long a seat request waits for an answer before expiring. A request
+         * nobody answered is worse than a refusal: the passenger cannot look
+         * elsewhere while it holds their one active request per commute.
+         */
+        'request_expiry_hours' => 48,
+
+        // How many people may wait for a seat on one commute. Beyond this the
+        // queue is long enough that joining it is a false hope.
+        'max_waitlist_size' => 10,
+
+        /*
+         * Cancellation fees are NOT implemented: the policy is open question #7
+         * in MASTER_PLAN §19, deferred to Phase 8, and the chapter itself is
+         * explicit that Chapter 7 is "very general" on it.
+         *
+         * Until it exists, cancelling releases the seat and charges nothing. A
+         * guessed fee would be money taken from a real person on the strength of
+         * an assumption, which is the one kind of guess that must not ship.
+         */
+        'cancellation_fee_piastres' => 0,
+
+        /*
+         * How far ahead a recurring membership is seated.
+         *
+         * Bound to the same horizon as trip generation on purpose: bookings can
+         * only be made for days that exist, and generation only creates 30 days
+         * at a time. A larger number here would silently seat fewer days than it
+         * promised; a smaller one would leave a committed member unseated on days
+         * that were already generated.
+         */
+        'recurring_horizon_days' => 30,
+    ],
+
+    'group' => [
+        /*
+         * How much warning a member owes the group before leaving.
+         *
+         * The point is not to trap anyone — it is that a driver who planned their
+         * month around four passengers should not discover on Sunday night that
+         * one of them is gone. Each group may set its own; this is the default a
+         * new group starts with, and it matches `commute_groups.notice_period_days`.
+         */
+        'default_notice_period_days' => 7,
+
+        /*
+         * How long before departure a member may still change "I'm coming" to
+         * "I'm away". After this the driver is already planning around the answer
+         * they were given, which is the whole reason the declaration exists.
+         */
+        'attendance_cutoff_hours' => 2,
+
+        /*
+         * The longest planned absence. Beyond this it is not an absence, it is
+         * leaving — and calling it an absence would keep a seat nominally held by
+         * someone who is not coming back this term.
+         */
+        'max_absence_days' => 60,
+    ],
+
+    'matching' => [
+        /*
+         * How long a cached result set stays usable. An hour because seats move:
+         * longer, and the cache starts offering days that have filled up.
+         */
+        'score_cache_minutes' => 60,
+
+        /*
+         * How long a saved demand keeps looking for a match. A request nobody
+         * matched for two months is no longer what that person wants, and
+         * notifying them then would be worse than silence.
+         */
+        'demand_expiry_days' => 60,
+
+        /*
+         * The score a newly published commute must reach before its match is
+         * worth interrupting someone for. A notification about a poor match
+         * teaches people to ignore notifications.
+         */
+        'notification_score_threshold' => 60,
+
+        /*
+         * At most one match notification per demand per day, however many
+         * commutes are published. Anti-spam is the point: a passenger who saved
+         * one request should not be woken by a burst.
+         */
+        'notification_cooldown_hours' => 24,
+
+        // Chapter 5: "search requests rate limited".
+        'searches_per_user_per_minute' => 20,
+    ],
+
+    'commute' => [
+        // Chapter 4 §3: "maximum pickup points configurable".
+        'max_pickup_points' => 4,
+        'max_dropoff_points' => 2,
+
+        /*
+         * How far ahead scheduled trips are generated. NOT to the schedule's
+         * end date: 5,000 offers × ~110 workdays would be 550,000 rows on day
+         * one, in the fastest-growing table in the system. A daily job rolls
+         * the horizon forward instead.
+         */
+        'generation_horizon_days' => 30,
+
+        /*
+         * Local hour the night before after which a trip stops taking bookings,
+         * so a driver knows their passenger list before they sleep.
+         */
+        'booking_deadline_hour' => 21,
+
+        // A commute is shared cost, not a fare. The ceiling is what stops the
+        // platform being used as an unlicensed taxi service.
+        'min_price_piastres' => 500,
+        'max_price_piastres' => 50_000,
+
+        // Chapter 4 §4: "no infinite commutes" — an end date is mandatory, and
+        // this bounds how far out it may be.
+        'max_schedule_months' => 12,
+    ],
+
+    'geo' => [
+        /*
+         * DEPLOY-ONLY. Which routing engine answers geographic questions.
+         *
+         * `straight_line` needs no provider and no API key: it draws straight
+         * lines and assumes an average speed. Unlike the OTP and virus-scan
+         * stand-ins it does NOT refuse to run in production — a rough travel
+         * estimate is a degraded product, while a provider outage taking
+         * publishing down entirely would be a broken one.
+         */
+        'engine' => env('RAFEEQ_GEO_ENGINE', 'straight_line'),
+
+        /*
+         * How long a cached route stays usable. The DISTANCE between two places
+         * does not change, so this can be generous; travel time does, which is
+         * why the two are cached separately (see CachingGeoEngine).
+         */
+        'route_cache_days' => 30,
+
+        /*
+         * How far outside a route's own extent the search box reaches, so a
+         * passenger near the road still matches it. Too small is the one error
+         * that cannot be recovered downstream: an offer outside its own box is
+         * invisible to a search standing next to it.
+         */
+        'search_margin_metres' => 2000,
+
+        // How far from a pickup point a corridor's origin may sit and still be
+        // considered the same corridor.
+        'corridor_match_metres' => 3000,
+    ],
+
     'driver' => [
         // Chapter 3 §7: "vehicle year configurable". The floor is a policy
         // decision about what the platform is willing to put passengers in,
