@@ -42,12 +42,15 @@ final class SeatRequestResource extends JsonResource
             'expiresAt' => $this->expires_at?->toIso8601String(),
             'createdAt' => $this->created_at->toIso8601String(),
 
+            /*
+             * The driver deciding who rides in their car reads this. Screen 28 shows a
+             * rating, a trip count, an on-time rate and named verification badges — a
+             * bare first name is not enough to make that decision on, and a full name
+             * is more than it takes.
+             */
             'passenger' => $this->when(
                 $this->resource->relationLoaded('passenger'),
-                fn () => [
-                    'publicFirstName' => $this->passenger->public_first_name,
-                    'trustLevel' => $this->passenger->trust_level,
-                ],
+                fn () => PersonSummary::for($this->passenger, $request->user()),
             ),
         ];
     }

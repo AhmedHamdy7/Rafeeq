@@ -107,6 +107,7 @@ it('generates a document describing every /v1 route', function () {
         'GET /v1/account/consents',
         'POST /v1/account/consents',
         'PUT /v1/account/profile/basic',
+        'GET /v1/account/stats',
         'GET /v1/account/verifications',
         'GET /v1/account/verifications/documents/{document}',
         'POST /v1/account/verifications/organization',

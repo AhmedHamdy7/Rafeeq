@@ -54,10 +54,16 @@ final class MatchResultResource extends JsonResource
             'pricePerSeatPiastres' => $this->trip->price_snapshot_piastres,
             'audience' => $offer->audience->value,
 
+            /*
+             * What members are meant to see, and all of it — see PersonSummary.
+             *
+             * `completedTrips` comes from the DRIVER PROFILE rather than from
+             * `user_stats`, because the profile's counter is the one publishing keeps
+             * current; the stats table is recomputed by a job that does not exist until
+             * Phase 9, so reading it here would show every driver zero trips today.
+             */
             'driver' => [
-                // What members are meant to see, and all of it.
-                'publicFirstName' => $driver->user->public_first_name,
-                'trustLevel' => $driver->user->trust_level,
+                ...PersonSummary::for($driver->user, $request->user(), asDriver: true),
                 'completedTrips' => $driver->completed_trips_count,
             ],
 

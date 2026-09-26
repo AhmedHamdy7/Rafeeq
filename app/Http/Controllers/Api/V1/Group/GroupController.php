@@ -69,8 +69,11 @@ final class GroupController extends Controller
                 ->orderBy('trip_date')
                 ->limit(1),
             // `members.commuteGroup` because the member resource reads the group's
-            // notice period to say when a leaving member's last day is.
+            // notice period to say when a leaving member's last day is; the user's
+            // stats and verifications feed PersonSummary.
             'members.commuteGroup',
+            'members.user.stats',
+            'members.user.verifications',
         ]);
 
         return ApiResponse::success(new CommuteGroupResource($found));
@@ -97,7 +100,7 @@ final class GroupController extends Controller
              * `notice_period_days` to say when a leaving member's last day is, and
              * without this that is one query per member.
              */
-            ->with('user', 'commuteGroup')
+            ->with('user.stats', 'user.verifications', 'commuteGroup')
             // The driver first, then by how long they have been part of it.
             ->orderByRaw("CASE WHEN role = 'driver' THEN 0 ELSE 1 END")
             ->orderBy('joined_at')

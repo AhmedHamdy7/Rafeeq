@@ -97,7 +97,10 @@ final readonly class SearchCommutesAction
                 // would be one query per driver — which is what
                 // `preventLazyLoading` exists to turn into a failure rather than
                 // a slow page nobody notices.
-                'commuteOffer.driverProfile.user',
+                // `.stats` and `.verifications` feed PersonSummary: the rating, the
+                // trip count and the named verification badges the match card shows.
+                'commuteOffer.driverProfile.user.stats',
+                'commuteOffer.driverProfile.user.verifications',
                 'commuteSchedule',
             ])
             ->orderBy('departure_at')

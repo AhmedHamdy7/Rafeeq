@@ -74,7 +74,9 @@ final class SeatRequestController extends Controller
             ->whereIn('commute_offer_id', CommuteOffer::query()
                 ->where('driver_profile_id', $request->user()->id)
                 ->select('id'))
-            ->with('passenger')
+            // PersonSummary needs both: a driver deciding who rides reads the
+            // passenger's rating and badges, not just their name.
+            ->with('passenger.stats', 'passenger.verifications')
             ->latest('created_at')
             ->orderByDesc('id')
             ->paginate(ApiResponse::perPage($request));

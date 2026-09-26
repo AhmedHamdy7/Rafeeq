@@ -3,6 +3,7 @@
 use App\Http\Controllers\Api\V1\Account\ConsentController;
 use App\Http\Controllers\Api\V1\Account\DeviceController;
 use App\Http\Controllers\Api\V1\Account\ProfileController;
+use App\Http\Controllers\Api\V1\Account\StatsController;
 use App\Http\Controllers\Api\V1\Account\VerificationController;
 use App\Http\Controllers\Api\V1\Auth\OtpController;
 use App\Http\Controllers\Api\V1\Auth\SessionController;
@@ -68,6 +69,16 @@ Route::prefix('v1')->group(function (): void {
 
         Route::get('consents', [ConsentController::class, 'index']);
         Route::post('consents', [ConsentController::class, 'store']);
+
+        /*
+         * The caller's own numbers, for the profile screen (ERD §23.1 gap #2 — the
+         * passenger had nowhere for "12 trips · ⭐ 4.9 · 96% on-time" to come from).
+         *
+         * 🔒 Own stats only, and there is no route that returns anybody else's as a
+         * block: what one member may know about another is the narrower summary embedded
+         * in a match card or a member list, where there is a reason to see it.
+         */
+        Route::get('stats', [StatsController::class, 'show']);
 
         // The Verification Centre stays reachable while suspended: scenario H
         // allows an appeal, and seeing what was checked is part of that.

@@ -3,6 +3,7 @@
 namespace App\Http\Resources;
 
 use App\Domains\Group\Actions\LeaveGroupAction;
+use App\Domains\Group\Enums\GroupMemberRole;
 use App\Domains\Group\Enums\GroupMemberStatus;
 use App\Domains\Group\Models\GroupMember;
 use Illuminate\Http\Request;
@@ -46,13 +47,17 @@ final class GroupMemberResource extends JsonResource
                 ? LeaveGroupAction::leavesOn($this->resource)->toDateString()
                 : null,
 
-            // 🔒 A public first name and what has been verified. Nothing else.
+            // 🔒 A public first name, what has been verified, and what the numbers say.
+            // Nothing else — see PersonSummary for where that line sits and why.
             'person' => $this->when(
                 $this->resource->relationLoaded('user'),
-                fn () => [
-                    'publicFirstName' => $this->user->public_first_name,
-                    'trustLevel' => $this->user->trust_level,
-                ],
+                fn () => PersonSummary::for(
+                    $this->user,
+                    $request->user(),
+                    // The driver's own row reads as a driver: their rating and trip count
+                    // are the ones earned behind the wheel.
+                    asDriver: $this->role === GroupMemberRole::Driver,
+                ),
             ),
         ];
     }
