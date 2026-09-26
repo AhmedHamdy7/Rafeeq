@@ -101,6 +101,17 @@ enum ErrorCode: string
     case AbsenceOverlaps = 'GROUP_ABSENCE_OVERLAPS';
     case AbsenceTooLong = 'GROUP_ABSENCE_TOO_LONG';
 
+    // ---- Trip lifecycle (Phase 9, Chapter 8) ---------------------------
+    case TripAlreadyStarted = 'TRIP_ALREADY_STARTED';
+    case TripNotStarted = 'TRIP_NOT_STARTED';
+    case TripInvalidTransition = 'TRIP_INVALID_TRANSITION';
+    case TripNotCancellable = 'TRIP_NOT_CANCELLABLE';
+    case TripTooEarlyToStart = 'TRIP_TOO_EARLY_TO_START';
+    case AttendanceNotConfirmable = 'ATTENDANCE_NOT_CONFIRMABLE';
+    case AttendanceDisputeWindowClosed = 'ATTENDANCE_DISPUTE_WINDOW_CLOSED';
+    case WaitTimerAlreadyRunning = 'WAIT_TIMER_ALREADY_RUNNING';
+    case WaitTimerNotRunning = 'WAIT_TIMER_NOT_RUNNING';
+
     // ---- Admin dashboard (Chapter 12) ----------------------------------
     case AdminCredentialsInvalid = 'ADMIN_CREDENTIALS_INVALID';
     case AdminMfaNotEnrolled = 'ADMIN_MFA_NOT_ENROLLED';
@@ -211,6 +222,29 @@ enum ErrorCode: string
             // 403: the account is fine, this particular person may not do this.
             self::CannotBookOwnCommute,
             self::GroupDriverCannotLeave => 403,
+
+            /*
+             * 409: the same reasoning as the booking group. A driver tapping "start"
+             * twice, or confirming a passenger on a run that has finished, sent a
+             * perfectly good request that the run's current state refuses. There is
+             * nothing for the person to correct.
+             */
+            self::TripAlreadyStarted,
+            self::TripNotStarted,
+            self::TripInvalidTransition,
+            self::TripNotCancellable,
+            self::AttendanceNotConfirmable,
+            self::WaitTimerAlreadyRunning,
+            self::WaitTimerNotRunning => 409,
+
+            /*
+             * 422 for these two, because both are about WHEN: a run started the night
+             * before is a request to fix by waiting, and a dispute raised after the
+             * window has closed is one the client should not have offered. Neither is
+             * resolved by re-reading the state.
+             */
+            self::TripTooEarlyToStart,
+            self::AttendanceDisputeWindowClosed => 422,
 
             /*
              * 401: a staff sign-in that did not succeed. One code for a wrong

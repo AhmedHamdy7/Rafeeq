@@ -22,6 +22,7 @@ use App\Http\Controllers\Api\V1\PlaceController;
 use App\Http\Controllers\Api\V1\Search\CommuteDemandController;
 use App\Http\Controllers\Api\V1\Search\SavedSearchController;
 use App\Http\Controllers\Api\V1\Search\SearchController;
+use App\Http\Controllers\Api\V1\Trip\TripController;
 use Illuminate\Support\Facades\Route;
 
 /*
@@ -296,6 +297,21 @@ Route::prefix('v1')->group(function (): void {
             Route::get('groups/{group}/absences', [GroupAbsenceController::class, 'index']);
             Route::post('groups/{group}/absences', [GroupAbsenceController::class, 'store']);
             Route::delete('groups/{group}/absences/{absence}', [GroupAbsenceController::class, 'destroy']);
+
+            /*
+             * The run itself, while it is happening (Chapter 8).
+             *
+             * 🔒 Reading and acting are scoped differently, and that split is the
+             * chapter's security design: the DRIVER drives the run, so starting,
+             * advancing and completing are hers alone — they are statements about what
+             * the car is doing. A PASSENGER on the run may read it, because the point of
+             * a live trip is that the person waiting can see where it got to. Everybody
+             * else gets a 404, a cancelled booking included.
+             */
+            Route::get('trips/{trip}', [TripController::class, 'show']);
+            Route::post('trips/{trip}/start', [TripController::class, 'start']);
+            Route::post('trips/{trip}/status', [TripController::class, 'advance']);
+            Route::post('trips/{trip}/complete', [TripController::class, 'complete']);
         });
     });
 });

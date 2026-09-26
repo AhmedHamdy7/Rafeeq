@@ -34,6 +34,27 @@ use Tests\TestCase;
 
 pest()->extend(TestCase::class)
     ->use(RefreshDatabase::class)
+    ->beforeEach(function (): void {
+        /*
+         * 🔴 Every test starts at the same moment, and this is not tidiness — the suite
+         * was failing after 9pm.
+         *
+         * A commute stops taking bookings at 21:00 the night before
+         * (`commute.booking_deadline_hour`), so a test that books a seat on the soonest
+         * generated day passed all afternoon and began returning
+         * BOOKING_DEADLINE_PASSED the moment the wall clock crossed nine. Roughly a
+         * hundred tests book a seat; all of them were quietly time-of-day dependent, and
+         * the failures name a deadline rather than a clock, so the evening it first
+         * happened would have been spent looking for a bug in the booking rules.
+         *
+         * A Saturday at 08:00 Cairo, chosen because it is what the suite has been
+         * passing under: the reference commute runs Sunday to Thursday, so the soonest
+         * generated day is tomorrow with its deadline still ahead. Tests that need a
+         * different moment move the clock themselves with `travelTo`, which still works
+         * relative to this one.
+         */
+        test()->travelTo(CarbonImmutable::parse('2026-09-26 08:00:00', 'Africa/Cairo'));
+    })
     ->in('Feature');
 
 /*

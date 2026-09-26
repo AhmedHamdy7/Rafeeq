@@ -9,7 +9,7 @@
 > **الخريطة دي اتعملت من قراءة كود الشاشات نفسه** — مش من وصفها. الـ bundle مفكوك ومقروء،
 > وكل سطر تحت مبني على حقول وأزرار موجودة فعلًا في الـ prototype.
 
-**آخر تحديث:** 2026-09-26 · **الحالة:** 79 endpoint للموبايل · داشبورد Livewire (توثيق + سائقين) شغّالة
+**آخر تحديث:** 2026-09-26 · **الحالة:** 83 endpoint للموبايل · داشبورد Livewire (توثيق + سائقين) شغّالة
 
 ---
 
@@ -30,7 +30,7 @@
 |---|---|---|
 | 0–7 | الأساسات · الداتابيز · المصادقة · التوثيق · السائق · النشر · **البحث والمطابقة** · المقاعد والحجوزات والمجموعات | ✅ |
 | 8 | المدفوعات والمحفظة | ⬜ **محجوزة** بتعارض الفلوس (8.1) |
-| 9 | **دورة حياة الرحلة** — Start trip · check-in · **wait timer** · الموقع المباشر · الإتمام | ⬜ الجاية |
+| 9 | **دورة حياة الرحلة** — Start trip · check-in · **wait timer** · الموقع المباشر · الإتمام | 🔨 **شغّالة** — العمود الفقري خلص (بداية/تقدّم/إتمام) |
 | 10 | التقييمات — double-blind · نجوم و tags · trust score | ⬜ |
 | 11 | الأمان — SOS · live share · الحظر · الحوادث · escort | ⬜ |
 | 12 | الإشعارات والمحادثة | ⬜ |
@@ -83,7 +83,7 @@
 
 | # | الشاشة | الـ endpoints | الحالة |
 |---|---|---|---|
-| 23 | **DRIVER HOME** | **`GET /v1/driver/home`** (تجميعة) · `GET /v1/commutes` · `GET /v1/driver/seat-requests` | ⚠️ التجميعة بقت موجودة: `nextRun` (المسار + `departsInMinutes` + `isToday` + `attendance` + `seatsOpen` + **`collectPiastres` و`keepPiastres`** + الركاب المعتمدين بنقطة كل واحد وحالة حضوره) + `pendingRequests` (العدد الكامل + أول ٥) + `stats` (`onTimeRate` · `completedTrips` · `avgDetourMinutes`). راكب مش سائق بياخد تجميعة فاضية مش 404، عشان زرار تبديل الدور نفسه على الشاشة دي. **الناقص:** زرار **Start trip** و**wait timer** (Phase 9) و**Cancel today** (مفيش endpoint يلغي يوم واحد — القسم 8.5) |
+| 23 | **DRIVER HOME** | **`GET /v1/driver/home`** (تجميعة) · `GET /v1/commutes` · `GET /v1/driver/seat-requests` | ⚠️ التجميعة بقت موجودة: `nextRun` (المسار + `departsInMinutes` + `isToday` + `attendance` + `seatsOpen` + **`collectPiastres` و`keepPiastres`** + الركاب المعتمدين بنقطة كل واحد وحالة حضوره) + `pendingRequests` (العدد الكامل + أول ٥) + `stats` (`onTimeRate` · `completedTrips` · `avgDetourMinutes`). راكب مش سائق بياخد تجميعة فاضية مش 404، عشان زرار تبديل الدور نفسه على الشاشة دي. **زرار Start trip بقى موجود** (`POST /v1/trips/{trip}/start`). **الناقص:** **wait timer** (Phase 9، الشريحة التالتة) و**Cancel today** (مفيش endpoint يلغي يوم واحد — القسم 8.6) |
 | 24 | PUBLISH ROUTE | `POST /v1/commutes` · `PUT .../route` · `PUT .../schedule` · `GET /v1/commutes/{commute}/price-suggestion` | ⚠️ السعر المقترح بقى موجود: الرد فيه `suggestedPiastres` + `min`/`max` للـ slider + `runCostPiastres` و`assumedOccupancy` عشان الشاشة تبيّن السبب. **الحدود اتصححت لـ 5,000–12,000 قرش** (50–120 ج.م) زي الـ slider والـ ERD. الباقي: **تعارض فلوس خطير**، القسم 8 تحت |
 | 25 | PUBLISH REVIEW | `GET /v1/commutes/{commute}` · `POST .../publish` | ✅ |
 | 31 | VEHICLE CAPTURE | `POST /v1/driver/vehicles` · `POST .../documents` | ⚠️ الناقص: **صورتين للعربية** (الجدول فيه `photo_path` واحد) · **`Seat belts (all seats)` مش متمودل في أي مكان** · **`Air conditioning`** متمودلة على مستوى الرحلة (`CommuteRuleKey::Ac`) مش العربية — الشاشة حاطتها على العربية |
@@ -100,7 +100,7 @@
 | 20 | **COMMUTE GROUP** | `GET /v1/groups/{group}` · `/members` · `/attendance` · `/absences` · `POST /leave` · `POST /pickup-request` | ⚠️ overview ✅ · rules ✅ · **members ✅** (بالتقييم والشارات) · **تاب `calendar` متصمّم ومش مبني في الـ prototype — محتاج قرار** · تاب `payments` ⛔ Phase 8 · وتاب الـ overview عايز حضور الأعضاء لبكرة جوه نفس الـ payload (دلوقتي نداء تاني) |
 | 28 | **DRIVER REQUEST REVIEW** | `GET /v1/driver/seat-requests` · `POST .../approve` · `.../reject` · `.../waitlist` | ⚠️ التقييم والرحلات والالتزام والشارات ✅ · زرار **Waitlist** ✅. **الناقص:** **`Fit for your route 96%`** — درجة مطابقة **من ناحية السائق** (بتتحسب لبحث الراكب بس) · سطر توافق القواعد |
 | 29 | CUSTOM PICKUP APPROVAL | `GET /v1/driver/pickup-requests` · `POST .../approve` · `.../suggest-alternative` · `.../reject` | ✅ التلات أزرار مطابقة بالحرف · الـ fuzzing لحد الموافقة · و`maxDetourMinutes` مع **الانعطاف التراكمي** في الرد. و**الحد بقى بيتفحص على الرحلة كلها** مش على الطلب لوحده |
-| 46 | BOTTOM SHEET: CANCEL TODAY | — | ⛔ إلغاء الرحلة كلها بسبب — دورة حياة الرحلة، Phase 9 |
+| 46 | BOTTOM SHEET: CANCEL TODAY | — | ⛔ مفيش endpoint يلغي **يوم واحد** — محتاج قرار فلوس والتزام، القسم 8.6 |
 | 47 | BOTTOM SHEET: DIRECTION | — | 🚫 محلي |
 
 ---
@@ -121,7 +121,9 @@
 
 | # | الشاشة | المرحلة |
 |---|---|---|
-| 17 · 36 · 39 · 40 · 41 · 43 · 45 | ACTIVE TRIP · PRE-TRIP CHECK-IN · ROUTE CHANGED · NO-SHOW · DRIVER WAIT TIMER · DRIVER CANCELLED→BACKUP · DRIVER CANCEL CONFIRMATION | ⛔ **Phase 9** (دورة حياة الرحلة) |
+| 17 | **ACTIVE TRIP** | ⚠️ **العمود الفقري بقى موجود** (Phase 9، الشريحة الأولى): `GET /v1/trips/{trip}` · `POST .../start` · `POST .../status` · `POST .../complete`. الرد فيه وضع الرحلة و`startedAt` و`departedAt` و`isUnderway` و`lastLocationAt`. **الناقص:** الموقع المباشر على الخريطة (Reverb + Redis) و`check-in` — الشريحتين الجايتين |
+| 36 · 40 · 41 | PRE-TRIP CHECK-IN · NO-SHOW · DRIVER WAIT TIMER | ⛔ **Phase 9** — الشريحة التانية (الحضور) والتالتة (عدّاد الانتظار) |
+| 39 · 43 · 45 | ROUTE CHANGED · DRIVER CANCELLED→BACKUP · DRIVER CANCEL CONFIRMATION | ⛔ **Phase 9** — كشف الخروج عن المسار والبحث عن بديل، بعد الموقع المباشر |
 | 16 · 32 · 44 | SAFETY CENTRE · SUPPORT / INCIDENT · DISCREET SAFETY ALERT | ⛔ **Phase 11** (الأمان) |
 | 37 | RATING | ⛔ **Phase 10** |
 | 34 | PAYMENT FAILED | ⛔ **Phase 8** |
@@ -149,6 +151,31 @@
 1. السائق يقبض الكامل والراكب يدفع `سعر + رسم` → **قيد `CHECK` في الداتابيز لازم يتغيّر** (`price` بقى مش المجموع)
 2. الرسم يتخصم من السائق (تنفيذي الحالي) → **نص شاشتين يتغيّر**
 3. رقم تاني خلاص
+
+### 🔎 جديد (٢٦ سبتمبر): الـ Bible بيناقض نفسه، والمثال المحسوب بتاعه **مع الشاشات**
+
+قريت مشهد 8 والجدول بتاع `bookings` في الـ Bible بالأرقام. المثال المكتوب فيهم:
+
+| العمود | قيمة الـ Bible |
+|---|---|
+| `commute_offers.price_per_seat_piastres` | **8,000** (80 ج.م — اللي السائقة طلبته) |
+| `bookings.price_snapshot_piastres` | **8,800** (88 ج.م) |
+| `platform_fee_snapshot_piastres` | 240 |
+| `driver_amount_snapshot_piastres` | 8,560 |
+| إشعار الراكبة | *"تم تسجيل رحلتك · **88 ج.م** كاش"* |
+
+**يعني الـ Bible نفسه بيخلّي الراكبة تدفع 88 على مقعد بـ 80** — الرسم **بيتضاف فوق**، بالظبط زي شاشة 12 (`Platform fee EGP 8` فوق `EGP 80`) وشاشة 24 (*"you keep the full contribution"*). وده **عكس** نص §1525 وعكس التنفيذ الحالي (`price = 8000`، الرسم بيتخصم، السائقة تاخد 7,760).
+
+والصف ده **مش متماسك جوّه نفسه**: 8,560 أكبر من 8,000، يعني السائقة تاخد أكتر من اللي طلبته والمنصة تسيبلها 560 من الـ 800 اللي حصّلتها. مفيش موديل تجاري بيعمل كده. فيه قراءتين متماسكتين بس:
+
+| | الراكبة تدفع | المنصة تاخد | السائقة تاخد | مين بيدعمها |
+|---|---|---|---|---|
+| **أ** | 8,800 | **800** (10%) | **8,000** (كامل طلبها) | شاشة 12 + شاشة 24 + `price_snapshot = 8800` |
+| **ب** | 8,000 | 240 (3%) | 7,760 | نص §1525 + قيد `CHECK` + التنفيذ الحالي + رقم الـ 3% |
+
+**(أ) هي القراءة الوحيدة اللي بتخلّي الشاشتين و`price_snapshot = 8800` صح في نفس الوقت.** الصف المخلوط (8,800 مع 240 مع 8,560) شكله بالظبط شكل حد خد إجمالي (أ) ورسم (ب) وطرح.
+
+**ومع ذلك القرار قرارك** — ده نموذج إيراد المنصة، مش تفصيلة تقنية. لو (أ): **قيد `CHECK` في `bookings` لازم يتغيّر** (`price_snapshot` بقى إجمالي الراكبة مش طلب السائقة) و`FeeSplit` تتقلب. لو (ب): **نص شاشتين يتغيّر** ورقم المثال في الـ Bible يتصحح.
 
 🔒 **كل حجز بيجمّد توزيعه المالي عند الموافقة**، فالقرار ده مايأثرش على الحجوزات القديمة — بس **لازم يُحسم قبل Phase 8** وقبل أي فلوس حقيقية.
 

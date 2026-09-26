@@ -280,6 +280,67 @@ return [
     ],
 
     /*
+     * The trip itself (Chapter 8, Phase 9).
+     */
+    'trip' => [
+        /*
+         * How long before departure a driver may press "start".
+         *
+         * There has to be a window. Starting the night before would put a run "underway"
+         * for twelve hours, which breaks the two things read off that state: the
+         * passenger's live map, and the GPS trail a dispute is settled from. Ninety
+         * minutes is enough for a driver who leaves early and not enough to matter.
+         */
+        'start_window_minutes' => 90,
+
+        /*
+         * How late a run may set off and still count as on time.
+         *
+         * 🔴 This number decides what `on_time_rate` means, and that figure is shown to
+         * strangers deciding whether to get into somebody's car. Ten minutes because
+         * Cairo traffic is not a character flaw: a driver who leaves at 07:12 for an
+         * 07:05 departure kept her promise, and scoring her as late would make the
+         * number measure the city rather than the person.
+         */
+        'on_time_threshold_minutes' => 10,
+
+        /*
+         * The wait timer's grace period — Bible §7, "5 minutes".
+         *
+         * 🔴 A passenger who is two minutes away is not a no-show, and a driver who
+         * waits for everybody is late for four other people. This number is the whole
+         * of that compromise, which is why it belongs in settings the dashboard can
+         * move rather than in the code that enforces it.
+         */
+        'wait_grace_seconds' => 300,
+
+        // The most a driver may add on top, in one extension.
+        'wait_extension_seconds' => 120,
+
+        /*
+         * How long a passenger has to say "that is not right" about a trip they were
+         * marked present for.
+         *
+         * 🔴 This is the safeguard that makes decision D18 acceptable at all. D18 lets
+         * the DRIVER decide whether a passenger travelled — which means one party
+         * decides the other's bill. The Master Plan (§15.6) pairs it with a 24-hour
+         * dispute window and a two-hour delay before any money moves, and without those
+         * two the decision is just an unchecked charge.
+         */
+        'dispute_window_hours' => 24,
+
+        /*
+         * How long after a driver confirms attendance before collection begins
+         * (Master Plan §15.6, safeguard 3). Reduces human error: a driver who taps the
+         * wrong passenger has two hours to notice before anybody is charged.
+         *
+         * Not acted on until Phase 8 — recorded here because the number belongs with
+         * the others it is part of a set with.
+         */
+        'settlement_delay_hours' => 2,
+    ],
+
+    /*
      * "The fair suggested price" on the publish screen (ERD §23.3):
      *
      *     per seat = (km × cost per km) ÷ assumed occupancy, rounded to the step

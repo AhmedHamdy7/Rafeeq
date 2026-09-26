@@ -88,6 +88,21 @@ return [
     'GROUP_ABSENCE_TOO_LONG' => 'That absence is longer than a planned absence can be.',
 
     /*
+     * The trip lifecycle. Each of these is read by a driver standing beside her car at
+     * seven in the morning, so each says what happened and what to do — never the name
+     * of the state that refused.
+     */
+    'TRIP_ALREADY_STARTED' => 'This run has already started.',
+    'TRIP_NOT_STARTED' => 'This run has not started yet.',
+    'TRIP_INVALID_TRANSITION' => 'That step is not possible from where this run is now.',
+    'TRIP_NOT_CANCELLABLE' => 'This run can no longer be cancelled.',
+    'TRIP_TOO_EARLY_TO_START' => 'It is too early to start this run. Start it closer to the departure time.',
+    'ATTENDANCE_NOT_CONFIRMABLE' => 'This passenger cannot be confirmed right now.',
+    'ATTENDANCE_DISPUTE_WINDOW_CLOSED' => 'The window to dispute this trip has closed. Please contact support.',
+    'WAIT_TIMER_ALREADY_RUNNING' => 'A wait timer is already running for this passenger.',
+    'WAIT_TIMER_NOT_RUNNING' => 'There is no wait timer running for this passenger.',
+
+    /*
      * Admin sign-in. One message for a wrong password and a wrong code, on purpose —
      * see ErrorCode::AdminCredentialsInvalid.
      */

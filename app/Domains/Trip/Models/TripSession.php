@@ -22,6 +22,9 @@ class TripSession extends Model
     {
         return [
             'started_at' => 'datetime',
+            // When the car actually moved, as opposed to when the driver opened the
+            // app. The only honest source for the on-time rate — see its migration.
+            'departed_at' => 'datetime',
             'completed_at' => 'datetime',
             'current_status' => TripSessionStatus::class,
             'distance_travelled_meters' => 'integer',
