@@ -12,6 +12,7 @@ use App\Domains\Verification\Support\VerificationQueue as Queue;
 use Illuminate\Support\Facades\Auth;
 use Livewire\Attributes\Layout;
 use Livewire\Component;
+use Livewire\WithPagination;
 
 /**
  * The identity review queue — the dashboard page that unblocks the whole product.
@@ -41,6 +42,14 @@ use Livewire\Component;
 #[Layout('components.layouts.admin')]
 class VerificationQueue extends Component
 {
+    /*
+     * Paging over a queue that is decided FROM, which is unusual enough to state: rows
+     * leave the list as they are approved, so the page under the reviewer shrinks as
+     * they work. Deciding the last item on page 2 would otherwise leave them on an empty
+     * page 2 of a 1-page list — see `keepThePageInRange()`.
+     */
+    use WithPagination;
+
     /** Which card is expanded, if any. */
     public ?string $openId = null;
 
@@ -161,12 +170,39 @@ class VerificationQueue extends Component
         $this->openId = null;
 
         session()->flash('status', $message);
+
+        $this->keepThePageInRange();
+    }
+
+    /**
+     * Steps back a page when the one being read no longer exists.
+     *
+     * Rows leave this queue as they are decided, so clearing the last item on the last
+     * page leaves the reviewer on a page past the end — an empty screen that reads as
+     * "nothing waiting" while people are still queued behind them.
+     */
+    private function keepThePageInRange(): void
+    {
+        $page = Queue::pending($this->perPage());
+
+        if ($page->currentPage() > $page->lastPage()) {
+            $this->setPage($page->lastPage());
+        }
+    }
+
+    /**
+     * How many cards a reviewer sees at once. Smaller than an API page: each card is a
+     * person to read rather than a row to scan.
+     */
+    private function perPage(): int
+    {
+        return 10;
     }
 
     public function render()
     {
         return view('livewire.admin.verification-queue', [
-            'cards' => Queue::pending(),
+            'cards' => Queue::pending($this->perPage()),
             'mayDecide' => Auth::guard('admin')->user()?->can(AdminPermission::VerificationDecide->value) === true,
             'maySeeDocuments' => Auth::guard('admin')->user()?->can(AdminPermission::VerificationViewDocument->value) === true,
         ]);

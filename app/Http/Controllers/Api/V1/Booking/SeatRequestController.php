@@ -59,9 +59,9 @@ final class SeatRequestController extends Controller
             ->where('passenger_user_id', $request->user()->id)
             ->latest('created_at')
             ->orderByDesc('id')
-            ->get();
+            ->paginate(ApiResponse::perPage($request));
 
-        return ApiResponse::success(SeatRequestResource::collection($requests));
+        return ApiResponse::paginated($requests, SeatRequestResource::collection($requests->items()));
     }
 
     /**
@@ -77,9 +77,9 @@ final class SeatRequestController extends Controller
             ->with('passenger')
             ->latest('created_at')
             ->orderByDesc('id')
-            ->get();
+            ->paginate(ApiResponse::perPage($request));
 
-        return ApiResponse::success(SeatRequestResource::collection($requests));
+        return ApiResponse::paginated($requests, SeatRequestResource::collection($requests->items()));
     }
 
     /**

@@ -82,4 +82,11 @@ return [
         'rejected' => 'اترفض :name.',
     ],
 
+    'pager' => [
+        'label' => 'تصفّح',
+        'previous' => 'السابق',
+        'next' => 'التالي',
+        'position' => 'صفحة :page من :last · :total مستني',
+    ],
+
 ];

@@ -1,6 +1,11 @@
 <div>
     <h1 class="rq-h1">{{ __('admin.queue.title') }}</h1>
-    <p class="rq-sub">{{ trans_choice('admin.queue.waiting', $cards->count(), ['count' => $cards->count()]) }}</p>
+    {{--
+        `total()`, not `count()`. On a paginator `count()` is the size of the page being
+        looked at, so the heading would have announced "10 people waiting" to a reviewer
+        with 240 in the queue.
+    --}}
+    <p class="rq-sub">{{ trans_choice('admin.queue.waiting', $cards->total(), ['count' => $cards->total()]) }}</p>
 
     @error('queue') <p class="rq-error" style="margin-bottom:14px">{{ $message }}</p> @enderror
 
@@ -75,4 +80,6 @@
     @empty
         <p class="rq-empty">{{ __('admin.queue.empty') }}</p>
     @endforelse
+
+    <x-rq-pager :page="$cards" />
 </div>

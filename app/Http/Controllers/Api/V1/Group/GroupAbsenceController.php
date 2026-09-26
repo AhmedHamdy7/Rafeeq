@@ -45,9 +45,9 @@ final class GroupAbsenceController extends Controller
             ->with('user')
             ->orderBy('from_date')
             ->orderBy('id')
-            ->get();
+            ->paginate(ApiResponse::perPage($request));
 
-        return ApiResponse::success(GroupAbsenceResource::collection($absences));
+        return ApiResponse::paginated($absences, GroupAbsenceResource::collection($absences->items()));
     }
 
     /**

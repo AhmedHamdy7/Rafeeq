@@ -84,6 +84,28 @@ return [
         A `429` always carries `Retry-After` in seconds — honour it rather
         than backing off on your own schedule.
 
+        ## Paging
+
+        Lists that grow with use are paged: bookings, seat requests, pickup
+        requests, match notifications, group attendance and absences. The items
+        are always in `data`, exactly as on an unpaged list, and the numbers are
+        in `meta`:
+
+        ```
+        "meta": { "page": 1, "perPage": 20, "total": 118, "lastPage": 6, "hasMore": true }
+        ```
+
+        Ask for a page with `?page=2`, and a size with `?perPage=50`. `perPage`
+        is capped server-side, so a larger number is silently reduced rather
+        than refused — read `meta.perPage` to see what you actually got. Stop on
+        `meta.hasMore == false` rather than on a short page.
+
+        A page past the end is an empty `data` and `hasMore: false`, not a 404,
+        so a stale page number after rows were removed is safe to send.
+
+        Lists that cannot grow — your devices, a driver's vehicles, a group's
+        members — are not paged and carry no `meta` at all.
+
         ## Numbers
 
         A field typed `number` may arrive without a decimal point when its value

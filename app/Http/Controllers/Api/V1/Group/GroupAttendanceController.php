@@ -46,9 +46,9 @@ final class GroupAttendanceController extends Controller
             ->with('user')
             ->orderBy('scheduled_trip_id')
             ->orderBy('id')
-            ->get();
+            ->paginate(ApiResponse::perPage($request));
 
-        return ApiResponse::success(GroupAttendanceResource::collection($declarations));
+        return ApiResponse::paginated($declarations, GroupAttendanceResource::collection($declarations->items()));
     }
 
     /**

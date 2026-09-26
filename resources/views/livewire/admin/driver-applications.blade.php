@@ -1,6 +1,7 @@
 <div>
     <h1 class="rq-h1">{{ __('admin.drivers.title') }}</h1>
-    <p class="rq-sub">{{ trans_choice('admin.drivers.waiting', $applications->count(), ['count' => $applications->count()]) }}</p>
+    {{-- `total()`, not `count()` — see the note in the verification queue. --}}
+    <p class="rq-sub">{{ trans_choice('admin.drivers.waiting', $applications->total(), ['count' => $applications->total()]) }}</p>
 
     @error('queue') <p class="rq-error" style="margin-bottom:14px">{{ $message }}</p> @enderror
 
@@ -65,4 +66,6 @@
     @empty
         <p class="rq-empty">{{ __('admin.drivers.empty') }}</p>
     @endforelse
+
+    <x-rq-pager :page="$applications" />
 </div>

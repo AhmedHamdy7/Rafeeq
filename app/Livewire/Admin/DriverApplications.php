@@ -8,9 +8,11 @@ use App\Domains\Driver\Actions\ReviewDriverApplicationAction;
 use App\Domains\Driver\Enums\DriverProfileStatus;
 use App\Domains\Driver\Models\DriverProfile;
 use App\Domains\Shared\Exceptions\DomainException;
+use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Facades\Auth;
 use Livewire\Attributes\Layout;
 use Livewire\Component;
+use Livewire\WithPagination;
 
 /**
  * The driver application queue — the dashboard's MEMBERS section.
@@ -31,6 +33,10 @@ use Livewire\Component;
 #[Layout('components.layouts.admin')]
 class DriverApplications extends Component
 {
+    // Paged for the same reason as the verification queue: a cap on a queue ordered
+    // oldest-first makes everybody past the cap invisible rather than merely later.
+    use WithPagination;
+
     public ?string $openId = null;
 
     public string $reason = '';
@@ -139,18 +145,33 @@ class DriverApplications extends Component
         $this->openId = null;
 
         session()->flash('status', $message);
+
+        // Deciding the last application on the last page would otherwise leave the
+        // reviewer looking at an empty page past the end.
+        $page = $this->pendingPage();
+
+        if ($page->currentPage() > $page->lastPage()) {
+            $this->setPage($page->lastPage());
+        }
+    }
+
+    /**
+     * @return LengthAwarePaginator<int, DriverProfile>
+     */
+    private function pendingPage()
+    {
+        return DriverProfile::query()
+            ->where('status', DriverProfileStatus::PendingReview->value)
+            ->with('user', 'vehicles')
+            ->orderBy('updated_at')
+            ->orderBy('user_id')
+            ->paginate(10);
     }
 
     public function render()
     {
         return view('livewire.admin.driver-applications', [
-            'applications' => DriverProfile::query()
-                ->where('status', DriverProfileStatus::PendingReview->value)
-                ->with('user', 'vehicles')
-                ->orderBy('updated_at')
-                ->orderBy('user_id')
-                ->limit(50)
-                ->get(),
+            'applications' => $this->pendingPage(),
             'mayDecide' => Auth::guard('admin')->user()?->can(AdminPermission::DriverDecide->value) === true,
         ]);
     }

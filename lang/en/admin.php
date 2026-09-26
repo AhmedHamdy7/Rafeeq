@@ -84,4 +84,11 @@ return [
         'rejected' => 'Rejected :name.',
     ],
 
+    'pager' => [
+        'label' => 'Pagination',
+        'previous' => 'Previous',
+        'next' => 'Next',
+        'position' => 'Page :page of :last · :total waiting',
+    ],
+
 ];

@@ -5,7 +5,7 @@ namespace App\Domains\Verification\Support;
 use App\Domains\Driver\Models\DriverProfile;
 use App\Domains\Verification\Enums\VerificationStatus;
 use App\Domains\Verification\Models\UserVerification;
-use Illuminate\Support\Collection;
+use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 
 /**
  * The review queue, shaped the way the dashboard's cards read it.
@@ -35,11 +35,22 @@ final readonly class VerificationQueue
     public const string BAD = 'bad';
 
     /**
-     * Levels waiting for a decision, oldest submission first.
+     * Levels waiting for a decision, oldest submission first, one page at a time.
      *
-     * @return Collection<int, array<string, mixed>>
+     * 🔴 Paged rather than capped, and the difference is not performance.
+     *
+     * This was `limit(50)`. With the queue ordered oldest-first, a cap means that as
+     * soon as more than fifty people are waiting, the fifty-first is not slow to
+     * appear — they are **invisible**, and stay invisible for as long as the queue
+     * stays full. The fairness promise the ordering makes is only kept if every row
+     * is reachable.
+     *
+     * `through()` maps each row into its card while leaving the paging intact, so the
+     * page numbers count verifications rather than whatever the mapping produced.
+     *
+     * @return LengthAwarePaginator<int, array<string, mixed>>
      */
-    public static function pending(int $limit = 50): Collection
+    public static function pending(int $perPage = 20): LengthAwarePaginator
     {
         return UserVerification::query()
             ->where('status', VerificationStatus::Pending->value)
@@ -49,9 +60,8 @@ final readonly class VerificationQueue
             // earlier for a level somebody started and came back to.
             ->orderBy('submitted_at')
             ->orderBy('id')
-            ->limit($limit)
-            ->get()
-            ->map(fn (UserVerification $verification) => self::card($verification));
+            ->paginate($perPage)
+            ->through(fn (UserVerification $verification) => self::card($verification));
     }
 
     /**

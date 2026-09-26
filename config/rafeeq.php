@@ -132,6 +132,22 @@ return [
         'recurring_horizon_days' => 30,
     ],
 
+    'api' => [
+        /*
+         * Paging for every list that grows with use.
+         *
+         * A default is not an optimisation, it is a correctness rule: an unbounded list
+         * endpoint answers a driver's second year with every booking they have ever had,
+         * in one response, and the first time that happens is in production on a phone.
+         *
+         * The ceiling matters as much as the default — `perPage` comes from the client,
+         * so without one a caller can ask for a million rows and the limit is only
+         * advisory.
+         */
+        'default_per_page' => 20,
+        'max_per_page' => 100,
+    ],
+
     'admin' => [
         /*
          * How many 30-second TOTP steps either side of now are accepted.

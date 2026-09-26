@@ -75,6 +75,11 @@ final class CommuteDemandController extends Controller
      */
     public function matches(Request $request): JsonResponse
     {
+        /*
+         * Paged: one row per matching commute per saved demand, written by a background
+         * job every time somebody publishes on the corridor. A passenger who saved a
+         * request on a busy route collects these faster than any other list in the API.
+         */
         $notifications = MatchNotification::query()
             ->whereIn('commute_demand_id', CommuteDemand::query()
                 ->where('passenger_user_id', $request->user()->id)
@@ -82,9 +87,12 @@ final class CommuteDemandController extends Controller
             ->with(['commuteOffer.vehicle', 'commuteOffer.driverProfile.user'])
             ->latest('created_at')
             ->orderByDesc('id')
-            ->get();
+            ->paginate(ApiResponse::perPage($request));
 
-        return ApiResponse::success(MatchNotificationResource::collection($notifications));
+        return ApiResponse::paginated(
+            $notifications,
+            MatchNotificationResource::collection($notifications->items()),
+        );
     }
 
     /**

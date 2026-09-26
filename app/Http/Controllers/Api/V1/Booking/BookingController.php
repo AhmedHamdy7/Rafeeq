@@ -24,7 +24,12 @@ use Illuminate\Http\Request;
 final class BookingController extends Controller
 {
     /**
-     * GET /v1/my-bookings — the caller's own seats.
+     * GET /v1/my-bookings — the caller's own seats, newest first.
+     *
+     * Paged. A recurring member accrues a booking per travelling day, so this list is
+     * hundreds of rows within a term and thousands within a year — and the whole of it
+     * arriving in one response on a phone is the failure that only shows up on the
+     * people who have used the product longest.
      */
     public function mine(Request $request): JsonResponse
     {
@@ -33,13 +38,15 @@ final class BookingController extends Controller
             ->with('scheduledTrip')
             ->latest('created_at')
             ->orderByDesc('id')
-            ->get();
+            ->paginate(ApiResponse::perPage($request));
 
-        return ApiResponse::success(BookingResource::collection($bookings));
+        return ApiResponse::paginated($bookings, BookingResource::collection($bookings->items()));
     }
 
     /**
      * GET /v1/driver/bookings — the seats the caller has approved on their commutes.
+     *
+     * The largest list in the API: every seat on every day of every commute they run.
      */
     public function forDriver(Request $request): JsonResponse
     {
@@ -48,9 +55,9 @@ final class BookingController extends Controller
             ->with('scheduledTrip')
             ->latest('created_at')
             ->orderByDesc('id')
-            ->get();
+            ->paginate(ApiResponse::perPage($request));
 
-        return ApiResponse::success(BookingResource::collection($bookings));
+        return ApiResponse::paginated($bookings, BookingResource::collection($bookings->items()));
     }
 
     /**

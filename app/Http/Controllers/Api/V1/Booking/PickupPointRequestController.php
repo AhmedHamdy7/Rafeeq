@@ -99,9 +99,9 @@ final class PickupPointRequestController extends Controller
             ->whereIn('id', $this->onMyCommutes($request)->select('pickup_point_requests.id'))
             ->latest('created_at')
             ->orderByDesc('id')
-            ->get();
+            ->paginate(ApiResponse::perPage($request));
 
-        return ApiResponse::success(PickupPointRequestResource::collection($requests));
+        return ApiResponse::paginated($requests, PickupPointRequestResource::collection($requests->items()));
     }
 
     /**
@@ -113,9 +113,9 @@ final class PickupPointRequestController extends Controller
             ->where('requested_by_user_id', $request->user()->id)
             ->latest('created_at')
             ->orderByDesc('id')
-            ->get();
+            ->paginate(ApiResponse::perPage($request));
 
-        return ApiResponse::success(PickupPointRequestResource::collection($requests));
+        return ApiResponse::paginated($requests, PickupPointRequestResource::collection($requests->items()));
     }
 
     /**
