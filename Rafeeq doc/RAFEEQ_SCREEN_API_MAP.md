@@ -9,7 +9,7 @@
 > **الخريطة دي اتعملت من قراءة كود الشاشات نفسه** — مش من وصفها. الـ bundle مفكوك ومقروء،
 > وكل سطر تحت مبني على حقول وأزرار موجودة فعلًا في الـ prototype.
 
-**آخر تحديث:** 2026-09-26 · **الحالة:** 76 endpoint للموبايل · داشبورد Livewire (توثيق + سائقين) شغّالة
+**آخر تحديث:** 2026-09-26 · **الحالة:** 79 endpoint للموبايل · داشبورد Livewire (توثيق + سائقين) شغّالة
 
 ---
 
@@ -21,6 +21,24 @@
 | ⚠️ | تشتغل جزئيًا — الناقص مكتوب صريح |
 | ⛔ | مفيش API خالص — المرحلة المسؤولة مكتوبة |
 | 🚫 | مش محتاجة API (حالة محلية أو نص ثابت) |
+
+## المراحل بالاسم
+
+الأرقام تحت بتشير للمراحل دي. حاطينها هنا لأن الخريطة كانت **بتنسب حاجات لمرحلة غلط** — التقييمات كانت مكتوبة Phase 9 والأمان Phase 10، والاتنين متأخرين مرحلة كاملة عن اللي في الـ MASTER_PLAN. رقم مرحلة غلط معناه فريق الموبايل يخطّط لحاجة على ميعاد مش ميعادها.
+
+| # | المرحلة | الحالة |
+|---|---|---|
+| 0–7 | الأساسات · الداتابيز · المصادقة · التوثيق · السائق · النشر · **البحث والمطابقة** · المقاعد والحجوزات والمجموعات | ✅ |
+| 8 | المدفوعات والمحفظة | ⬜ **محجوزة** بتعارض الفلوس (8.1) |
+| 9 | **دورة حياة الرحلة** — Start trip · check-in · **wait timer** · الموقع المباشر · الإتمام | ⬜ الجاية |
+| 10 | التقييمات — double-blind · نجوم و tags · trust score | ⬜ |
+| 11 | الأمان — SOS · live share · الحظر · الحوادث · escort | ⬜ |
+| 12 | الإشعارات والمحادثة | ⬜ |
+| 13 | داشبورد الأدمن (الأقسام الباقية) | 🔨 جزئيًا — التوثيق والسائقين خلصوا |
+| 14 | التحليلات والتوصيات | ⬜ |
+| 15 | الإنتاج | ⬜ |
+
+`tests/Feature/ScreenApiMapTest.php` بيتأكد إن أسماء المراحل هنا مطابقة لعناوين الـ MASTER_PLAN، فالجدول ده مايقدرش يتعفّن.
 
 ---
 
@@ -43,10 +61,10 @@
 
 | # | الشاشة | الـ endpoints | الحالة |
 |---|---|---|---|
-| 9 | **HOME** | **`GET /v1/home`** (تجميعة) · `GET /v1/search/commutes` · `GET /v1/my-bookings` · `GET /v1/saved-searches` | ⚠️ التجميعة بقت موجودة: `greetingName` + بانر التوثيق (نفس الأرقام اللي في مركز التوثيق بالظبط) + `nextJourney` (الحجز كامل + `originLabel`/`destinationLabel` + `departsInMinutes` + السائقة + العربية **برقم اللوحة** + `attendance` + `isTrial`) + `topMatches` (أحسن ٣) + `savedSearches`. **مش paginated بنيّة** — كل جزء مقصوص على حجم الشاشة فالرد مايكبرش مع الاستخدام. **الناقص:** زرار **check-in** (Phase 11) |
+| 9 | **HOME** | **`GET /v1/home`** (تجميعة) · `GET /v1/search/commutes` · `GET /v1/my-bookings` · `GET /v1/saved-searches` | ⚠️ التجميعة بقت موجودة: `greetingName` + بانر التوثيق (نفس الأرقام اللي في مركز التوثيق بالظبط) + `nextJourney` (الحجز كامل + `originLabel`/`destinationLabel` + `departsInMinutes` + السائقة + العربية **برقم اللوحة** + `attendance` + `isTrial`) + `topMatches` (أحسن ٣) + `savedSearches`. **مش paginated بنيّة** — كل جزء مقصوص على حجم الشاشة فالرد مايكبرش مع الاستخدام. **الناقص:** زرار **check-in** (Phase 9) |
 | 10 | DISCOVER | `GET /v1/search/commutes` | ⚠️ متغطية: العربية ✓ · الدرجة وتفصيلها ✓ · المشي والانعطاف ✓ · الالتزام ✓ · المقاعد ✓ · القواعد ✓ · **التقييم والشارات ✅**. **الناقص:** `m.why[]` (أسباب المطابقة كـ chips) |
-| 11 | FILTERS | محلي + `POST /v1/saved-searches` | ⚠️ فلتر **أقل تقييم** مالوش بيانات — التقييمات Phase 9 |
-| 12 | **MATCH DETAILS** | `GET /v1/search/commutes` | ⚠️ التقييم وشارات التوثيق ✅ (`PersonSummary`). **الناقص:** **تفصيل السعر** (مساهمة الطريق ÷ عدد الركاب + رسوم المنصة) — محجوز بتعارض الفلوس، القسم 8.1 · **المراجعات** (Phase 9) |
+| 11 | FILTERS | محلي + `POST /v1/saved-searches` | ⚠️ فلتر **أقل تقييم** مالوش بيانات — التقييمات Phase 10 |
+| 12 | **MATCH DETAILS** | `GET /v1/search/commutes` | ⚠️ التقييم وشارات التوثيق ✅ (`PersonSummary`). **الناقص:** **تفصيل السعر** (مساهمة الطريق ÷ عدد الركاب + رسوم المنصة) — محجوز بتعارض الفلوس، القسم 8.1 · **المراجعات** (Phase 10) |
 | 18 | CREATE COMMUTE REQUEST | `POST /v1/commute-demands` | ✅ `flexibilityMinutes` و`wantsReturnTrip` بيتسجلوا وبيترجعوا. و**`budgetMonthlyPiastres` اتصحح** — كان `budgetPerSeatPiastres` والحقل شهري في الشاشة والعمود والـ ERD، فنقاط السعر كانت كاملة للكل. الباقي: **مطابقة رجلة العودة** نفسها لسه مفتوحة (التسجيل بس) |
 | 42 | MATCHING SPINNER | — | 🚫 حالة تحميل |
 
@@ -65,7 +83,7 @@
 
 | # | الشاشة | الـ endpoints | الحالة |
 |---|---|---|---|
-| 23 | **DRIVER HOME** | **`GET /v1/driver/home`** (تجميعة) · `GET /v1/commutes` · `GET /v1/driver/seat-requests` | ⚠️ التجميعة بقت موجودة: `nextRun` (المسار + `departsInMinutes` + `isToday` + `attendance` + `seatsOpen` + **`collectPiastres` و`keepPiastres`** + الركاب المعتمدين بنقطة كل واحد وحالة حضوره) + `pendingRequests` (العدد الكامل + أول ٥) + `stats` (`onTimeRate` · `completedTrips` · `avgDetourMinutes`). راكب مش سائق بياخد تجميعة فاضية مش 404، عشان زرار تبديل الدور نفسه على الشاشة دي. **الناقص:** زرار **Start trip** و**wait timer** (Phase 11) و**Cancel today** (مفيش endpoint يلغي يوم واحد — القسم 8.5) |
+| 23 | **DRIVER HOME** | **`GET /v1/driver/home`** (تجميعة) · `GET /v1/commutes` · `GET /v1/driver/seat-requests` | ⚠️ التجميعة بقت موجودة: `nextRun` (المسار + `departsInMinutes` + `isToday` + `attendance` + `seatsOpen` + **`collectPiastres` و`keepPiastres`** + الركاب المعتمدين بنقطة كل واحد وحالة حضوره) + `pendingRequests` (العدد الكامل + أول ٥) + `stats` (`onTimeRate` · `completedTrips` · `avgDetourMinutes`). راكب مش سائق بياخد تجميعة فاضية مش 404، عشان زرار تبديل الدور نفسه على الشاشة دي. **الناقص:** زرار **Start trip** و**wait timer** (Phase 9) و**Cancel today** (مفيش endpoint يلغي يوم واحد — القسم 8.5) |
 | 24 | PUBLISH ROUTE | `POST /v1/commutes` · `PUT .../route` · `PUT .../schedule` · `GET /v1/commutes/{commute}/price-suggestion` | ⚠️ السعر المقترح بقى موجود: الرد فيه `suggestedPiastres` + `min`/`max` للـ slider + `runCostPiastres` و`assumedOccupancy` عشان الشاشة تبيّن السبب. **الحدود اتصححت لـ 5,000–12,000 قرش** (50–120 ج.م) زي الـ slider والـ ERD. الباقي: **تعارض فلوس خطير**، القسم 8 تحت |
 | 25 | PUBLISH REVIEW | `GET /v1/commutes/{commute}` · `POST .../publish` | ✅ |
 | 31 | VEHICLE CAPTURE | `POST /v1/driver/vehicles` · `POST .../documents` | ⚠️ الناقص: **صورتين للعربية** (الجدول فيه `photo_path` واحد) · **`Seat belts (all seats)` مش متمودل في أي مكان** · **`Air conditioning`** متمودلة على مستوى الرحلة (`CommuteRuleKey::Ac`) مش العربية — الشاشة حاطتها على العربية |
@@ -78,7 +96,7 @@
 |---|---|---|---|
 | 13 | **SEAT REQUEST** | `POST /v1/commutes/{commute}/seat-requests` · `POST .../pickup-preview` | ✅ المعاينة بترجّع `addedMinutes` و`runTotalMinutes` و`maxDetourMinutes` و`withinLimit` من غير ما تنشئ حاجة |
 | 14 | REQUEST DONE | من رد الطلب | ✅ |
-| 19 | **TRIPS** | `GET /v1/my-bookings` · `GET /v1/driver/bookings` · `GET /v1/seat-requests` · `GET /v1/driver/seat-requests` · `GET /v1/groups` | ⚠️ 5 تابات × وضعين (سائق/راكب). متغطية لحد كبير. الناقص: **`you collect EGP 240` لكل رحلة** (تجميع مالي للسائق) · التاريخ بالتقييمات (Phase 9) · الملغي بحالة الاسترداد (Phase 8) |
+| 19 | **TRIPS** | `GET /v1/my-bookings` · `GET /v1/driver/bookings` · `GET /v1/seat-requests` · `GET /v1/driver/seat-requests` · `GET /v1/groups` | ⚠️ 5 تابات × وضعين (سائق/راكب). متغطية لحد كبير. الناقص: **`you collect EGP 240` لكل رحلة** (تجميع مالي للسائق) · التاريخ بالتقييمات (Phase 10) · الملغي بحالة الاسترداد (Phase 8) |
 | 20 | **COMMUTE GROUP** | `GET /v1/groups/{group}` · `/members` · `/attendance` · `/absences` · `POST /leave` · `POST /pickup-request` | ⚠️ overview ✅ · rules ✅ · **members ✅** (بالتقييم والشارات) · **تاب `calendar` متصمّم ومش مبني في الـ prototype — محتاج قرار** · تاب `payments` ⛔ Phase 8 · وتاب الـ overview عايز حضور الأعضاء لبكرة جوه نفس الـ payload (دلوقتي نداء تاني) |
 | 28 | **DRIVER REQUEST REVIEW** | `GET /v1/driver/seat-requests` · `POST .../approve` · `.../reject` · `.../waitlist` | ⚠️ التقييم والرحلات والالتزام والشارات ✅ · زرار **Waitlist** ✅. **الناقص:** **`Fit for your route 96%`** — درجة مطابقة **من ناحية السائق** (بتتحسب لبحث الراكب بس) · سطر توافق القواعد |
 | 29 | CUSTOM PICKUP APPROVAL | `GET /v1/driver/pickup-requests` · `POST .../approve` · `.../suggest-alternative` · `.../reject` | ✅ التلات أزرار مطابقة بالحرف · الـ fuzzing لحد الموافقة · و`maxDetourMinutes` مع **الانعطاف التراكمي** في الرد. و**الحد بقى بيتفحص على الرحلة كلها** مش على الطلب لوحده |
@@ -92,9 +110,9 @@
 | # | الشاشة | الـ endpoints | الحالة |
 |---|---|---|---|
 | 21 | **PROFILE** | `GET /v1/auth/me` · `GET /v1/account/stats` | ✅ الأرقام التلاتة بترجع من `user_stats`. كل نسبة **null** لما ما تُحسبش مش صفر (Phase 9 بتحسبها). الباقي: تبديل الدور (راكب ↔ سائق) محتاج قرار منتج |
-| 26 | PRIVACY & BLOCKED | — | ⛔ مفاتيح الخصوصية + قائمة المحظورين + إلغاء الحظر — Phase 10 |
+| 26 | PRIVACY & BLOCKED | — | ⛔ مفاتيح الخصوصية + قائمة المحظورين + إلغاء الحظر — Phase 11 |
 | 27 | HELP & LEGAL | `GET /v1/account/consents` (نسخ الشروط) | ⚠️ معظمها نص ثابت؛ نسخ الشروط/الخصوصية موجودة في `config` ✓ |
-| 35 | ACCOUNT RESTRICTED | كود `ACCOUNT_SUSPENDED` ✓ | ⚠️ الكود موجود، والشاشة عايزة **رقم القضية** و`Expected update within 24h` — Phase 10 |
+| 35 | ACCOUNT RESTRICTED | كود `ACCOUNT_SUSPENDED` ✓ | ⚠️ الكود موجود، والشاشة عايزة **رقم القضية** و`Expected update within 24h` — Phase 11 |
 | 22 | NOTIFICATIONS | — | ⛔ Phase 12 |
 
 ---
@@ -104,8 +122,8 @@
 | # | الشاشة | المرحلة |
 |---|---|---|
 | 17 · 36 · 39 · 40 · 41 · 43 · 45 | ACTIVE TRIP · PRE-TRIP CHECK-IN · ROUTE CHANGED · NO-SHOW · DRIVER WAIT TIMER · DRIVER CANCELLED→BACKUP · DRIVER CANCEL CONFIRMATION | ⛔ **Phase 9** (دورة حياة الرحلة) |
-| 16 · 32 · 44 | SAFETY CENTRE · SUPPORT / INCIDENT · DISCREET SAFETY ALERT | ⛔ **Phase 10** (الأمان) |
-| 37 | RATING | ⛔ **Phase 9** |
+| 16 · 32 · 44 | SAFETY CENTRE · SUPPORT / INCIDENT · DISCREET SAFETY ALERT | ⛔ **Phase 11** (الأمان) |
+| 37 | RATING | ⛔ **Phase 10** |
 | 34 | PAYMENT FAILED | ⛔ **Phase 8** |
 | 33 · 38 | OFFLINE · LOCATION DENIED | 🚫 حالات جهاز |
 
@@ -179,7 +197,7 @@
 | — | ✅ | **دخول أدمن بـ MFA إجباري** · **٦ أدوار بصلاحيات في الكود** · **سجل تدقيق على كل قرار** · مهلة جلسة · أمر `admin:create` لأول حساب |
 | DASHBOARD (مؤشرات) | ⬜ | Phase 13 |
 | LIVE TRIPS | ⬜ | محتاج Phase 9 |
-| SAFETY CASES | ⬜ | Phase 10 |
+| SAFETY CASES | ⬜ | Phase 11 |
 | CORRIDORS | ⬜ | Phase 14 |
 | PAYMENTS | ⬜ | Phase 8 |
 | AUDIT LOG | ⬜ | `admin_actions` جدول append-only موجود بالفعل |
@@ -223,7 +241,7 @@
 | — | `GET /v1/commutes/{commute}/price-suggestion` (§23.3) + تصحيح حدود السعر لـ 50–120 ج.م | 24 | ✅ |
 | — | `GET /v1/home` و`GET /v1/driver/home` — تجميعتين | 9 · 23 | ✅ |
 
-**الترقيع خلص.** الباقي محتاج مرحلة جديدة مش ترقيع: `check-in` و`Start trip` والـ wait timer (Phase 11) · التقييمات والمراجعات (Phase 9) · تفصيل السعر في شاشة 12 (محجوز بتعارض الفلوس 8.1).
+**الترقيع خلص.** الباقي محتاج مرحلة جديدة مش ترقيع: `check-in` و`Start trip` والـ wait timer (Phase 9) · التقييمات والمراجعات (Phase 10) · تفصيل السعر في شاشة 12 (محجوز بتعارض الفلوس 8.1).
 
 ### ج. محتاجة قرار قبل التنفيذ
 

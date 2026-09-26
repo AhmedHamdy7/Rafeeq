@@ -156,3 +156,66 @@ it('keeps the admin surface off the public API, per decision D4', function () {
         ."\n\nIf D4 was overturned, change the Master Plan and section 9 of the screen map first."
     );
 });
+
+/**
+ * The map's phase legend, against the Master Plan's own headings.
+ *
+ * 🔴 This exists because the drift already happened: the map attributed ratings to
+ * Phase 9 and safety to Phase 10 throughout, when the Master Plan puts the TRIP
+ * LIFECYCLE at 9, ratings at 10 and safety at 11 — everything after Phase 9 was off by
+ * one. A wrong phase number is not a cosmetic error in a document another team plans
+ * against: it tells them a screen is coming a whole phase before it is.
+ *
+ * Checked against the headings rather than a copy of them, so the legend cannot drift
+ * from the plan it summarises. Only the phases the legend names individually are
+ * checked — it groups 0–7 as "done" on one row, and spelling those out would be a test
+ * of the legend's formatting rather than of its facts.
+ */
+it('names each phase the way the Master Plan does', function () {
+    $plan = (string) file_get_contents(__DIR__.'/../../Rafeeq doc/RAFEEQ_MASTER_PLAN.md');
+
+    preg_match_all('/^## Phase (\d+) — (.+)$/mu', $plan, $matches, PREG_SET_ORDER);
+
+    expect($matches)->not->toBeEmpty('No "## Phase N — title" headings found in the Master Plan.');
+
+    /**
+     * The word from each phase's title that the legend has to carry, so a legend row
+     * pointing at the wrong phase fails. Taken from the title rather than invented:
+     * these are the words the Master Plan itself uses.
+     */
+    $keywords = [
+        8 => 'المدفوعات',
+        9 => 'دورة حياة الرحلة',
+        10 => 'التقييمات',
+        11 => 'الأمان',
+        12 => 'الإشعارات',
+        13 => 'داشبورد الأدمن',
+        14 => 'التحليلات',
+        15 => 'الإنتاج',
+    ];
+
+    $map = screenApiMap();
+
+    foreach ($matches as [, $number, $title]) {
+        $keyword = $keywords[(int) $number] ?? null;
+
+        if ($keyword === null) {
+            continue;
+        }
+
+        // The plan really does describe this phase with the word the legend uses —
+        // otherwise this test would be comparing the map against my own assumption.
+        expect(str_contains($title, $keyword))->toBeTrue(
+            "Phase {$number} in the Master Plan is titled \"{$title}\", which does not contain "
+            ."\"{$keyword}\". Update the keyword here and the legend in the screen map together."
+        );
+
+        // And the legend's row for that number says the same thing.
+        expect(preg_match('/^\| '.$number.' \| .*'.preg_quote($keyword, '/').'/mu', $map))->toBe(
+            1,
+            "The screen map's phase legend has no row for Phase {$number} naming \"{$keyword}\". "
+            .'The Master Plan calls it "'.$title.'". A wrong phase number tells the mobile team a '
+            .'screen is coming a whole phase before it is.'
+        );
+    }
+});
