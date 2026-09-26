@@ -88,15 +88,30 @@ it('scores nothing for timing half an hour out', function () {
     expect($score)->toBe(0);
 });
 
+/**
+ * The budget is a MONTHLY ceiling, so these figures are months and the per-ride ceiling is
+ * derived from them.
+ *
+ * The commute costs 8,000 piastres a ride, and the search asks for five days a week one
+ * way — about 21.7 rides a month (5 × 52/12). So a month's budget divided by 21.7 is what
+ * the 8,000 is actually compared against:
+ *
+ *   200,000 ÷ 21.7 ≈ 9,200 → under the price, full marks
+ *   130,000 ÷ 21.7 ≈ 6,000 → a third over, so it tapers
+ *    87,000 ÷ 21.7 ≈ 4,000 → double the ceiling, worth nothing
+ *
+ * These used to be per-ride figures (10,000 / 5,000 / 2,000), which is the bug the monthly
+ * correction fixed: read as months they are a few hundred piastres a ride, so every
+ * commute was hopelessly over budget rather than comfortably under it.
+ */
 it('loses price points when the commute costs more than the budget', function () {
-    $within = search($this->paxToken, ['budgetPerSeatPiastres' => 10000])
+    $within = search($this->paxToken, ['budgetMonthlyPiastres' => 200000])
         ->assertOk()->json('data.0.score.price');
 
-    // The commute costs 8000; a 5000 budget is 60% over.
-    $over = search($this->paxToken, ['budgetPerSeatPiastres' => 5000])
+    $over = search($this->paxToken, ['budgetMonthlyPiastres' => 130000])
         ->assertOk()->json('data.0.score.price');
 
-    $wayOver = search($this->paxToken, ['budgetPerSeatPiastres' => 2000])
+    $wayOver = search($this->paxToken, ['budgetMonthlyPiastres' => 87000])
         ->assertOk()->json('data.0.score.price');
 
     expect($within)->toBe(5)
@@ -105,6 +120,20 @@ it('loses price points when the commute costs more than the budget', function ()
         // ranks above one at double.
         ->and($wayOver)->toBe(0)
         ->and($over)->toBeGreaterThan($wayOver);
+});
+
+/**
+ * 🔴 The bug the monthly correction fixed, pinned so it cannot come back.
+ *
+ * Read as a per-ride figure, a monthly budget is enormous — so every commute came in under
+ * it and the five points for price were full marks for everybody, whatever they cost.
+ */
+it('does not hand out full price marks to a commute nobody could afford', function () {
+    // 900 EGP a month over five days is about 41 a ride. The commute costs 80.
+    $score = search($this->paxToken, ['budgetMonthlyPiastres' => 90000])
+        ->assertOk()->json('data.0.score.price');
+
+    expect($score)->toBeLessThan(5);
 });
 
 it('scores comfort by how many of the requested rules the commute actually has', function () {

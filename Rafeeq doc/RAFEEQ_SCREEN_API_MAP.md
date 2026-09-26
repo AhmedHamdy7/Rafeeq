@@ -47,7 +47,7 @@
 | 10 | DISCOVER | `GET /v1/search/commutes` | ⚠️ متغطية: العربية ✓ · الدرجة وتفصيلها ✓ · المشي والانعطاف ✓ · الالتزام ✓ · المقاعد ✓ · القواعد ✓ · **التقييم والشارات ✅**. **الناقص:** `m.why[]` (أسباب المطابقة كـ chips) |
 | 11 | FILTERS | محلي + `POST /v1/saved-searches` | ⚠️ فلتر **أقل تقييم** مالوش بيانات — التقييمات Phase 9 |
 | 12 | **MATCH DETAILS** | `GET /v1/search/commutes` | ⚠️ التقييم وشارات التوثيق ✅ (`PersonSummary`). **الناقص:** **تفصيل السعر** (مساهمة الطريق ÷ عدد الركاب + رسوم المنصة) — محجوز بتعارض الفلوس، القسم 8.1 · **المراجعات** (Phase 9) |
-| 18 | CREATE COMMUTE REQUEST | `POST /v1/commute-demands` | ⚠️ الناقص: `flexibility ± 15 min` · **`wants_return_trip`** (العمود موجود من Phase 1، مؤجّل) · "Monthly ceiling" موجود كـ `budgetPerSeatPiastres` بس الشاشة بتقول **شهري** |
+| 18 | CREATE COMMUTE REQUEST | `POST /v1/commute-demands` | ✅ `flexibilityMinutes` و`wantsReturnTrip` بيتسجلوا وبيترجعوا. و**`budgetMonthlyPiastres` اتصحح** — كان `budgetPerSeatPiastres` والحقل شهري في الشاشة والعمود والـ ERD، فنقاط السعر كانت كاملة للكل. الباقي: **مطابقة رجلة العودة** نفسها لسه مفتوحة (التسجيل بس) |
 | 42 | MATCHING SPINNER | — | 🚫 حالة تحميل |
 
 ---
@@ -203,9 +203,9 @@
 | — | `POST /v1/commutes/{commute}/pickup-preview` (انعطاف من غير إنشاء) **+** `maxDetourMinutes` والانعطاف التراكمي في الرد | 13 · 29 | ✅ |
 | — | `POST /v1/driver/seat-requests/{id}/waitlist` | 28 | ✅ |
 | — | سبب الرفض كنص + نسبة الإنجاز + زمن المراجعة المتوقع | 15 | ✅ |
-| **1** | `flexibility` + `wantsReturnTrip` | 18 | ⬜ |
-| **2** | نطاق السعر المقترح (§23.3) | 24 | ⬜ |
-| **3** | `GET /v1/home` و`GET /v1/driver/home` — تجميعتين | 9 · 23 | ⬜ |
+| — | `flexibility` + `wantsReturnTrip` + تصحيح الميزانية لشهرية | 18 | ✅ |
+| **1** | نطاق السعر المقترح (§23.3) | 24 | ⬜ |
+| **2** | `GET /v1/home` و`GET /v1/driver/home` — تجميعتين | 9 · 23 | ⬜ |
 
 ### ج. محتاجة قرار قبل التنفيذ
 

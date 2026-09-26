@@ -39,9 +39,23 @@ final class CommuteDemandResource extends JsonResource
             'daysMask' => $this->days_mask,
             'arrivalWindowStart' => $this->preferred_arrival_start,
             'arrivalWindowEnd' => $this->preferred_arrival_end,
+            // Screen 18's "Flexibility ± 15 min" — how far outside the window still works.
+            'flexibilityMinutes' => $this->flexibility_minutes,
             'maxWalkMinutes' => $this->max_walk_minutes,
             'maxDetourMinutes' => $this->max_detour_minutes,
             'audiencePreference' => $this->audience_preference->value,
+
+            /*
+             * A MONTHLY ceiling, which is the number screen 18 asks for and the number a
+             * passenger actually knows about their own budget. The per-ride ceiling the
+             * scoring uses is derived from it and the committed days — see
+             * `SearchCriteria::perSeatCeilingPiastres()`.
+             */
+            'budgetMonthlyPiastres' => $this->budget_monthly_piastres,
+
+            // Screen 18's "Add a return ride (~5:00 PM)". Recorded; matching the evening
+            // leg itself is still open (the column has been here since Phase 1).
+            'wantsReturnTrip' => $this->wants_return_trip,
             // When this stops looking for a match. A request nobody matched for
             // two months is no longer what the person wants.
             'expiresAt' => $this->expires_at?->toIso8601String(),

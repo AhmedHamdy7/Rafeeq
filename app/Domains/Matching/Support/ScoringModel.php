@@ -170,20 +170,28 @@ final class ScoringModel
     /**
      * Within budget scores full; over it falls away. A passenger who named no
      * budget is not disappointed by any price.
+     *
+     * 🔴 Compared against the per-seat ceiling DERIVED from the monthly budget, not
+     * against the monthly figure itself. The passenger states a month's ceiling (screen
+     * 18's stepper runs 800–3000 EGP) and a trip costs 70–95, so comparing the two
+     * directly made every commute "under budget" and these five points full marks for
+     * everybody — a scoring component that silently did nothing.
      */
     private static function price(ScheduledTrip $trip, SearchCriteria $criteria): int
     {
-        if ($criteria->budgetPerSeatPiastres === null || $criteria->budgetPerSeatPiastres <= 0) {
+        $ceiling = $criteria->perSeatCeilingPiastres();
+
+        if ($ceiling === null || $ceiling <= 0) {
             return self::PRICE_WEIGHT;
         }
 
-        if ($trip->price_snapshot_piastres <= $criteria->budgetPerSeatPiastres) {
+        if ($trip->price_snapshot_piastres <= $ceiling) {
             return self::PRICE_WEIGHT;
         }
 
         // Twice the budget is worth nothing. Between the two it tapers, so a
         // commute slightly over budget still ranks above one at double.
-        $over = $trip->price_snapshot_piastres / $criteria->budgetPerSeatPiastres - 1;
+        $over = $trip->price_snapshot_piastres / $ceiling - 1;
 
         return (int) round(self::PRICE_WEIGHT * max(0.0, 1 - $over));
     }

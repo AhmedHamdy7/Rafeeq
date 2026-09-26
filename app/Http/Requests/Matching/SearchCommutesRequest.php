@@ -68,7 +68,15 @@ final class SearchCommutesRequest extends FormRequest
             'audiencePreference' => ['nullable', 'string', Rule::enum(CommuteAudience::class)],
 
             // What you would rather not pay more than per seat, in piastres.
-            'budgetPerSeatPiastres' => ['nullable', 'integer', 'min:0'],
+            // What you can spend on commuting in a MONTH. The per-ride ceiling is
+            // derived from it and the days you chose, so a month is the number you know.
+            'budgetMonthlyPiastres' => ['nullable', 'integer', 'min:0'],
+
+            // How much earlier or later than your window still works for you.
+            'flexibilityMinutes' => ['nullable', 'integer', 'min:0', 'max:60'],
+
+            // Whether you want an evening leg home as well.
+            'wantsReturnTrip' => ['nullable', 'boolean'],
 
             // House preferences you would like, for example `["nonsmoking",
             // "quiet"]`. These raise a commute's score; they do not exclude.

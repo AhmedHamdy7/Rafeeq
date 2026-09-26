@@ -117,7 +117,9 @@ final readonly class NotifyMatchingDemandsAction
             maxWalk: WalkTime::fromMinutes($demand->max_walk_minutes),
             maxDetourMinutes: $demand->max_detour_minutes,
             audiencePreference: $demand->audience_preference,
-            budgetPerSeatPiastres: $demand->budget_monthly_piastres,
+            budgetMonthlyPiastres: $demand->budget_monthly_piastres,
+            flexibilityMinutes: $demand->flexibility_minutes,
+            wantsReturnTrip: $demand->wants_return_trip,
         );
 
         foreach ($this->search->execute($demand->passenger, $criteria) as $result) {
