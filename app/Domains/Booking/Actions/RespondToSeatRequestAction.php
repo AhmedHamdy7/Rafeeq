@@ -7,6 +7,7 @@ use App\Domains\Booking\Models\SeatRequest;
 use App\Domains\Identity\Models\User;
 use App\Domains\Shared\Exceptions\DomainException;
 use App\Domains\Shared\Support\ErrorCode;
+use Illuminate\Support\Facades\DB;
 
 /**
  * The answers to a seat request that are not an approval: a refusal by the driver,
@@ -42,6 +43,71 @@ final readonly class RespondToSeatRequestAction
         $this->closeTheirPlaceInTheQueue($request, $wasWaiting);
 
         return $request;
+    }
+
+    /**
+     * "Waitlist" — the driver's third answer, and screen 28's third button.
+     *
+     * Not a yes and not a no: "I would take you, but not this week." A driver whose car is
+     * full today should be able to keep somebody rather than refuse them, and refusing was
+     * the only option this Action offered — so the passenger's alternative was to be
+     * declined and have to ask again, on a commute they had already been judged suitable
+     * for.
+     *
+     * Different from the automatic waitlisting at request time, which happens because the
+     * DAY was full. This is the driver choosing, so it works even on a day with a free
+     * seat.
+     */
+    public function waitlist(SeatRequest $request, User $driver, ?string $note = null): SeatRequest
+    {
+        if ($request->status !== SeatRequestStatus::Pending) {
+            // Only a pending request can be parked. One already waiting has nowhere to go,
+            // and an answered one is not a conversation any more.
+            throw DomainException::of(ErrorCode::SeatRequestNotPending);
+        }
+
+        return DB::transaction(function () use ($request, $driver, $note): SeatRequest {
+            /*
+             * The position is taken here rather than left null: the queue's order is what
+             * the passenger is shown ("you are second in line"), and a member of it with
+             * no place in it would sort unpredictably against the ones that have.
+             */
+            $position = $this->waitlistPositionFor($request);
+
+            $request->forceFill([
+                'status' => SeatRequestStatus::Waitlisted->value,
+                'waitlist_position' => $position,
+                'responded_by' => $driver->id,
+                'responded_at' => now(),
+                'response_note' => $note,
+                /*
+                 * The clock restarts. The 48 hours it had were for the driver to answer,
+                 * and they just did — expiring it on the old deadline would drop somebody
+                 * out of a queue they were only put in a moment ago.
+                 */
+                'expires_at' => now()->addHours((int) config('rafeeq.booking.request_expiry_hours')),
+            ])->save();
+
+            return $request;
+        });
+    }
+
+    /**
+     * The back of the queue, taken from the highest place in use rather than from how many
+     * are waiting — see {@see RequestSeatAction::nextWaitlistPosition()} for why a count
+     * hands out a position somebody is already standing in.
+     */
+    private function waitlistPositionFor(SeatRequest $request): int
+    {
+        $waiting = SeatRequest::query()
+            ->where('commute_offer_id', $request->commute_offer_id)
+            ->where('status', SeatRequestStatus::Waitlisted->value);
+
+        if ($waiting->clone()->count() >= (int) config('rafeeq.booking.max_waitlist_size')) {
+            throw DomainException::of(ErrorCode::WaitlistFull);
+        }
+
+        return (int) $waiting->max('waitlist_position') + 1;
     }
 
     /**

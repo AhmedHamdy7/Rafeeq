@@ -29,6 +29,26 @@ final class PickupPointRequestResource extends JsonResource
     /** ~110m. Coarse enough not to identify a building. */
     private const int FUZZ_DECIMALS = 3;
 
+    /**
+     * The driver's limit and what the whole run would cost — screen 29's "Your limit is
+     * 10 min detour. This request keeps you at +8 min total for the run."
+     *
+     * Set by the caller rather than derived here: the run total needs a routing call and
+     * a query across the commute's other approved pickups, and a Resource that reached
+     * for either would do it once per row in a list.
+     */
+    public ?int $maxDetourMinutes = null;
+
+    public ?float $runTotalMinutes = null;
+
+    public function withDetourContext(int $maxDetourMinutes, float $runTotalMinutes): static
+    {
+        $this->maxDetourMinutes = $maxDetourMinutes;
+        $this->runTotalMinutes = $runTotalMinutes;
+
+        return $this;
+    }
+
     public function toArray(Request $request): array
     {
         return [
@@ -42,6 +62,14 @@ final class PickupPointRequestResource extends JsonResource
             // What the stop costs the driver, as measured by us.
             'addedMinutes' => (float) $this->added_minutes,
             'addedKm' => (float) $this->added_km,
+
+            /*
+             * What the WHOLE run costs against the limit the driver set. Null on the
+             * passenger's own list, where it is the driver's business rather than theirs,
+             * and present on the driver's inbox where the decision is made.
+             */
+            'runTotalMinutes' => $this->runTotalMinutes,
+            'maxDetourMinutes' => $this->maxDetourMinutes,
 
             // From when an approval applies. `next_trip` is the only value the
             // schema can record, since there is no column for a specific date.

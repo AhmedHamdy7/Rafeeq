@@ -126,6 +126,24 @@ final class SeatRequestController extends Controller
     }
 
     /**
+     * POST /v1/driver/seat-requests/{seatRequest}/waitlist — screen 28's third button.
+     *
+     * "I would take you, but not this week." Without it the driver's only alternative to
+     * yes was no, so a full week meant refusing somebody they had already judged suitable.
+     */
+    #[ApiErrors(ErrorCode::SeatRequestNotPending, ErrorCode::WaitlistFull, ErrorCode::NotFound)]
+    public function waitlist(Request $request, string $seatRequest, RespondToSeatRequestAction $action): JsonResponse
+    {
+        $parked = $action->waitlist(
+            $this->forMyCommute($request, $seatRequest),
+            $request->user(),
+            $request->input('note'),
+        );
+
+        return ApiResponse::success(new SeatRequestResource($parked));
+    }
+
+    /**
      * DELETE /v1/seat-requests/{seatRequest} — the passenger withdrawing.
      *
      * Withdrawn rather than rejected, so a driver's refusal rate is not inflated by

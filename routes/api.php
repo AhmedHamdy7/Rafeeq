@@ -9,6 +9,7 @@ use App\Http\Controllers\Api\V1\Auth\OtpController;
 use App\Http\Controllers\Api\V1\Auth\SessionController;
 use App\Http\Controllers\Api\V1\Booking\BookingController;
 use App\Http\Controllers\Api\V1\Booking\PickupPointRequestController;
+use App\Http\Controllers\Api\V1\Booking\PickupPreviewController;
 use App\Http\Controllers\Api\V1\Booking\SeatRequestController;
 use App\Http\Controllers\Api\V1\Driver\CommuteController;
 use App\Http\Controllers\Api\V1\Driver\DriverApplicationController;
@@ -221,6 +222,7 @@ Route::prefix('v1')->group(function (): void {
             Route::get('driver/seat-requests', [SeatRequestController::class, 'inbox']);
             Route::post('driver/seat-requests/{seatRequest}/approve', [SeatRequestController::class, 'approve']);
             Route::post('driver/seat-requests/{seatRequest}/reject', [SeatRequestController::class, 'reject']);
+            Route::post('driver/seat-requests/{seatRequest}/waitlist', [SeatRequestController::class, 'waitlist']);
             Route::get('driver/bookings', [BookingController::class, 'forDriver']);
 
             /*
@@ -233,6 +235,14 @@ Route::prefix('v1')->group(function (): void {
              * accepted from the request, and checked against the driver's own
              * `max_detour_minutes` before the proposal is even recorded.
              */
+            /*
+             * What a meeting point would cost, before anything is created. Screen 13 shows
+             * the detour beside the pin while the passenger is still composing the
+             * request — the figure is what tells them whether to propose that point at
+             * all.
+             */
+            Route::post('commutes/{commute}/pickup-preview', [PickupPreviewController::class, 'show']);
+
             Route::post('seat-requests/{seatRequest}/pickup-request', [PickupPointRequestController::class, 'storeForSeatRequest']);
             Route::post('groups/{group}/pickup-request', [PickupPointRequestController::class, 'storeForMember']);
             Route::get('pickup-requests', [PickupPointRequestController::class, 'mine']);

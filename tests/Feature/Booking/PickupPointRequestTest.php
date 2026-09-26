@@ -33,15 +33,6 @@ beforeEach(function () {
         ->assertStatus(201)->json('data.id');
 });
 
-/**
- * Almost exactly on the straight line between Rehab and Smart Village, so the test
- * engine measures a detour of about nothing.
- */
-function onTheWay(): array
-{
-    return ['lat' => 30.0654, 'lng' => 31.2314, 'label' => 'أمام صيدلية العبور'];
-}
-
 function proposePickup(string $token, string $seatRequestId, array $overrides = [])
 {
     return test()->withToken($token)

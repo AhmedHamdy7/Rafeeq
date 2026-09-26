@@ -6,7 +6,9 @@ use App\Domains\Booking\Actions\RequestPickupPointAction;
 use App\Domains\Booking\Actions\RespondToPickupPointAction;
 use App\Domains\Booking\Models\PickupPointRequest;
 use App\Domains\Booking\Models\SeatRequest;
+use App\Domains\Booking\Support\PickupDetour;
 use App\Domains\Commute\Models\CommuteOffer;
+use App\Domains\Geo\Contracts\GeoQueryEngine;
 use App\Domains\Geo\Models\Place;
 use App\Domains\Group\Models\CommuteGroup;
 use App\Domains\Group\Models\GroupMember;
@@ -93,15 +95,55 @@ final class PickupPointRequestController extends Controller
     /**
      * GET /v1/driver/pickup-requests — waiting for the caller's answer, as a driver.
      */
-    public function inbox(Request $request): JsonResponse
+    public function inbox(Request $request, GeoQueryEngine $geo): JsonResponse
     {
         $requests = PickupPointRequest::query()
             ->whereIn('id', $this->onMyCommutes($request)->select('pickup_point_requests.id'))
+            ->with('seatRequest.commuteOffer.locations', 'groupMember.commuteGroup.commuteOffer.locations')
             ->latest('created_at')
             ->orderByDesc('id')
             ->paginate(ApiResponse::perPage($request));
 
-        return ApiResponse::paginated($requests, PickupPointRequestResource::collection($requests->items()));
+        /*
+         * The run total is computed per COMMUTE, not per request, and memoised across the
+         * page. It costs a routing call and a query over the commute's other approved
+         * pickups, and a driver's inbox is usually several requests against one or two
+         * commutes — so measuring per row would pay for the same answer repeatedly.
+         */
+        $runTotals = [];
+
+        $cards = [];
+
+        foreach ($requests->items() as $pickup) {
+            $offer = $this->offerOf($pickup);
+
+            if ($offer === null) {
+                $cards[] = new PickupPointRequestResource($pickup);
+
+                continue;
+            }
+
+            $runTotals[$offer->id] ??= PickupDetour::runTotalFor($geo, $offer);
+
+            $cards[] = (new PickupPointRequestResource($pickup))->withDetourContext(
+                $offer->max_detour_minutes,
+                // The request's own cost is included, because the driver is deciding
+                // whether to ADD it: screen 29 asks "does this keep me within my limit".
+                round($runTotals[$offer->id] + (float) $pickup->added_minutes, 1),
+            );
+        }
+
+        return ApiResponse::paginated($requests, $cards);
+    }
+
+    /**
+     * The commute a pickup request belongs to, through whichever of its two keys is set.
+     */
+    private function offerOf(PickupPointRequest $pickup): ?CommuteOffer
+    {
+        return $pickup->seat_request_id !== null
+            ? $pickup->seatRequest?->commuteOffer
+            : $pickup->groupMember?->commuteGroup?->commuteOffer;
     }
 
     /**

@@ -254,3 +254,96 @@ it('lets the driver approve a promoted request like any other', function () {
         ->toBe(User::query()->where('phone_e164', '+201222220001')->sole()->id)
         ->and($this->trip->refresh()->seats_taken)->toBe(3);
 });
+
+/**
+ * 🔴 The driver's third answer — screen 28's `Waitlist` button.
+ *
+ * Not a yes and not a no: "I would take you, but not this week." Before it, the driver's
+ * only alternative to approving was declining, so a full week meant refusing somebody they
+ * had already judged suitable — and that person's only way back was to ask again.
+ */
+it('lets the driver park a request instead of refusing it', function () {
+    // A day with room, so this is the driver choosing rather than the day being full.
+    $this->trip->forceFill(['seats_taken' => 0])->save();
+
+    $token = verifiedPassenger('01222220009', device: 'pax-9');
+
+    $requestId = requestSeat($token, $this->commuteId, ['scheduledTripId' => $this->trip->id])
+        ->assertStatus(201)
+        ->assertJsonPath('data.status', 'PENDING')
+        ->json('data.id');
+
+    test()->withToken($this->driverToken)
+        ->postJson("/api/v1/driver/seat-requests/{$requestId}/waitlist", ['note' => 'Full this week — first next week.'])
+        ->assertOk()
+        ->assertJsonPath('data.status', 'WAITLISTED')
+        // A place in the queue, not a null: the position is what the passenger is shown.
+        ->assertJsonPath('data.waitlistPosition', 1)
+        ->assertJsonPath('data.responseNote', 'Full this week — first next week.');
+
+    // Parked, not booked.
+    expect(Booking::query()->where('seat_request_id', $requestId)->exists())->toBeFalse();
+});
+
+it('gives a parked request a fresh window, since the driver just answered', function () {
+    $this->trip->forceFill(['seats_taken' => 0])->save();
+
+    $token = verifiedPassenger('01222220009', device: 'pax-9');
+
+    $requestId = requestSeat($token, $this->commuteId, ['scheduledTripId' => $this->trip->id])
+        ->assertStatus(201)->json('data.id');
+
+    SeatRequest::query()->whereKey($requestId)->update(['expires_at' => now()->addHour()]);
+
+    test()->withToken($this->driverToken)
+        ->postJson("/api/v1/driver/seat-requests/{$requestId}/waitlist")->assertOk();
+
+    // The 48 hours it had were for the driver to answer, and they did.
+    expect(SeatRequest::query()->whereKey($requestId)->sole()->expires_at
+        ->isAfter(now()->addHours((int) config('rafeeq.booking.request_expiry_hours') - 1)))->toBeTrue();
+});
+
+it('refuses to park a request that is already answered', function () {
+    $first = joinWaitlist('01222220001', 'pax-2', $this->commuteId, $this->trip->id);
+
+    // Already waiting — there is nowhere to park it.
+    test()->withToken($this->driverToken)
+        ->postJson("/api/v1/driver/seat-requests/{$first['id']}/waitlist")
+        ->assertStatus(409)
+        ->assertJsonPath('error.code', 'SEAT_REQUEST_NOT_PENDING');
+});
+
+it('refuses to park a request on somebody else commute', function () {
+    $this->trip->forceFill(['seats_taken' => 0])->save();
+
+    $token = verifiedPassenger('01222220009', device: 'pax-9');
+
+    $requestId = requestSeat($token, $this->commuteId, ['scheduledTripId' => $this->trip->id])
+        ->assertStatus(201)->json('data.id');
+
+    fakeOtpSender();
+    $otherDriver = approvedDriver(phone: '01223339999', devicePublicId: 'driver-2', seed: 2);
+
+    // 404, not 403: a 403 would confirm the request exists.
+    test()->withToken($otherDriver)
+        ->postJson("/api/v1/driver/seat-requests/{$requestId}/waitlist")
+        ->assertStatus(404);
+});
+
+it('refuses to park anybody once the queue is full', function () {
+    config(['rafeeq.booking.max_waitlist_size' => 1]);
+
+    joinWaitlist('01222220001', 'pax-2', $this->commuteId, $this->trip->id);
+
+    $this->trip->forceFill(['seats_taken' => 0])->save();
+
+    $token = verifiedPassenger('01222220009', device: 'pax-9');
+
+    $requestId = requestSeat($token, $this->commuteId, ['scheduledTripId' => $this->trip->id])
+        ->assertStatus(201)->json('data.id');
+
+    test()->withToken($this->driverToken)
+        ->postJson("/api/v1/driver/seat-requests/{$requestId}/waitlist")
+        ->assertStatus(409)
+        ->assertJsonPath('error.code', 'BOOKING_WAITLIST_FULL');
+});

@@ -156,6 +156,8 @@ it('generates a document describing every /v1 route', function () {
         'POST /v1/driver/seat-requests/{seatRequest}/reject',
         'GET /v1/driver/bookings',
 
+        'POST /v1/commutes/{commute}/pickup-preview',
+        'POST /v1/driver/seat-requests/{seatRequest}/waitlist',
         'POST /v1/seat-requests/{seatRequest}/pickup-request',
         'POST /v1/groups/{group}/pickup-request',
         'GET /v1/pickup-requests',

@@ -495,3 +495,18 @@ function actingAsAdmin(AdminUser $admin): AdminUser
 
     return $admin;
 }
+
+/**
+ * A point almost exactly on the straight line between Rehab and Smart Village, so the
+ * straight-line test engine measures a detour of about nothing.
+ *
+ * In Pest.php rather than one test file because three files now measure against it, and a
+ * helper defined in a test file only exists when that file happens to be compiled
+ * (standard #43).
+ *
+ * @return array<string, mixed>
+ */
+function onTheWay(): array
+{
+    return ['lat' => 30.0654, 'lng' => 31.2314, 'label' => 'أمام صيدلية العبور'];
+}

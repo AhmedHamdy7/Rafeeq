@@ -9,7 +9,7 @@
 > **الخريطة دي اتعملت من قراءة كود الشاشات نفسه** — مش من وصفها. الـ bundle مفكوك ومقروء،
 > وكل سطر تحت مبني على حقول وأزرار موجودة فعلًا في الـ prototype.
 
-**آخر تحديث:** 2026-09-25 · **الحالة:** 73 endpoint موجودة · **مفيش ولا endpoint للأدمن**
+**آخر تحديث:** 2026-09-26 · **الحالة:** 76 endpoint للموبايل · داشبورد Livewire (توثيق + سائقين) شغّالة
 
 ---
 
@@ -44,9 +44,9 @@
 | # | الشاشة | الـ endpoints | الحالة |
 |---|---|---|---|
 | 9 | **HOME** | `GET /v1/search/commutes` · `GET /v1/my-bookings` · `GET /v1/saved-searches` | ⚠️ **محتاجة تجميع**. الشاشة كارت واحد فيه: الرحلة الجاية + العربية + **رقم اللوحة** + نقطة الالتقاء + `2 of 3 in` (عدد الحضور) + زرار check-in · وأهم المطابقات · والبحوث المحفوظة **بعدد المطابقات لكل واحد**. دلوقتي 3 نداءات، و**رقم اللوحة وعدد الحضور مش موجودين** في الردود |
-| 10 | DISCOVER | `GET /v1/search/commutes` | ⚠️ متغطية لحد كبير: `vehicle.make/model/colour` ✓ · `score` وتفصيله ✓ · `walkMinutes` ✓ · `detourMinutes` ✓ · `reliability` ✓ · `seatsAvailable` ✓ · `rules` ✓. **الناقص:** `⭐ rating` و`m.why[]` (أسباب المطابقة كـ chips) |
+| 10 | DISCOVER | `GET /v1/search/commutes` | ⚠️ متغطية: العربية ✓ · الدرجة وتفصيلها ✓ · المشي والانعطاف ✓ · الالتزام ✓ · المقاعد ✓ · القواعد ✓ · **التقييم والشارات ✅**. **الناقص:** `m.why[]` (أسباب المطابقة كـ chips) |
 | 11 | FILTERS | محلي + `POST /v1/saved-searches` | ⚠️ فلتر **أقل تقييم** مالوش بيانات — التقييمات Phase 9 |
-| 12 | **MATCH DETAILS** | `GET /v1/search/commutes` | ⚠️ الناقص: `⭐ rating` · شارات `ID verified` / `Same workplace` (عندي `trustLevel` رقم بس، مش **أنهي** مستويات) · **تفصيل السعر** (مساهمة الطريق ÷ عدد الركاب + رسوم المنصة) · **المراجعات** (Phase 9) |
+| 12 | **MATCH DETAILS** | `GET /v1/search/commutes` | ⚠️ التقييم وشارات التوثيق ✅ (`PersonSummary`). **الناقص:** **تفصيل السعر** (مساهمة الطريق ÷ عدد الركاب + رسوم المنصة) — محجوز بتعارض الفلوس، القسم 8.1 · **المراجعات** (Phase 9) |
 | 18 | CREATE COMMUTE REQUEST | `POST /v1/commute-demands` | ⚠️ الناقص: `flexibility ± 15 min` · **`wants_return_trip`** (العمود موجود من Phase 1، مؤجّل) · "Monthly ceiling" موجود كـ `budgetPerSeatPiastres` بس الشاشة بتقول **شهري** |
 | 42 | MATCHING SPINNER | — | 🚫 حالة تحميل |
 
@@ -76,12 +76,12 @@
 
 | # | الشاشة | الـ endpoints | الحالة |
 |---|---|---|---|
-| 13 | **SEAT REQUEST** | `POST /v1/commutes/{commute}/seat-requests` | ⚠️ الشاشة بتعرض `DETOUR +4′` **وهي بتألف الطلب، قبل الإرسال**. عندي الانعطاف بيتحسب بعد إنشاء الطلب. **ناقص: endpoint يحسب المعاينة من غير ما ينشئ حاجة** |
+| 13 | **SEAT REQUEST** | `POST /v1/commutes/{commute}/seat-requests` · `POST .../pickup-preview` | ✅ المعاينة بترجّع `addedMinutes` و`runTotalMinutes` و`maxDetourMinutes` و`withinLimit` من غير ما تنشئ حاجة |
 | 14 | REQUEST DONE | من رد الطلب | ✅ |
 | 19 | **TRIPS** | `GET /v1/my-bookings` · `GET /v1/driver/bookings` · `GET /v1/seat-requests` · `GET /v1/driver/seat-requests` · `GET /v1/groups` | ⚠️ 5 تابات × وضعين (سائق/راكب). متغطية لحد كبير. الناقص: **`you collect EGP 240` لكل رحلة** (تجميع مالي للسائق) · التاريخ بالتقييمات (Phase 9) · الملغي بحالة الاسترداد (Phase 8) |
-| 20 | **COMMUTE GROUP** | `GET /v1/groups/{group}` · `/members` · `/attendance` · `/absences` · `POST /leave` · `POST /pickup-request` | ⚠️ overview ✅ · rules ✅ · **members محتاجة `⭐ 4.9`** · **تاب `calendar` متصمّم ومش مبني في الـ prototype — محتاج قرار** · تاب `payments` ⛔ Phase 8 · وتاب الـ overview عايز **حضور الأعضاء لبكرة جوه نفس الـ payload** (دلوقتي نداء تاني) |
-| 28 | **DRIVER REQUEST REVIEW** | `GET /v1/driver/seat-requests` · `POST .../approve` · `.../reject` | ⚠️ الناقص: `⭐ 4.9 · 12 trips · 96% on-time` للراكب · شارات `ID verified` / `Same workplace` · **`Fit for your route 96%`** — درجة مطابقة **من ناحية السائق** (أنا بحسبها لبحث الراكب بس) · سطر توافق القواعد · **زرار `Waitlist`** يعني السائق ينقل طلب معلّق لقائمة الانتظار بإيده — **مفيش endpoint** |
-| 29 | CUSTOM PICKUP APPROVAL | `GET /v1/driver/pickup-requests` · `POST .../approve` · `.../suggest-alternative` · `.../reject` | ⚠️ **التلات أزرار مطابقة بالحرف** ✅✅ و"عنوانها الدقيق يتفتح بس لو قبلت" = نفس الـ fuzzing بالظبط ✅. الناقص: `maxDetourMinutes` في الرد + **الانعطاف التراكمي للرحلة كلها** (`+8 min total for the run`) مش انعطاف الطلب ده لوحده |
+| 20 | **COMMUTE GROUP** | `GET /v1/groups/{group}` · `/members` · `/attendance` · `/absences` · `POST /leave` · `POST /pickup-request` | ⚠️ overview ✅ · rules ✅ · **members ✅** (بالتقييم والشارات) · **تاب `calendar` متصمّم ومش مبني في الـ prototype — محتاج قرار** · تاب `payments` ⛔ Phase 8 · وتاب الـ overview عايز حضور الأعضاء لبكرة جوه نفس الـ payload (دلوقتي نداء تاني) |
+| 28 | **DRIVER REQUEST REVIEW** | `GET /v1/driver/seat-requests` · `POST .../approve` · `.../reject` · `.../waitlist` | ⚠️ التقييم والرحلات والالتزام والشارات ✅ · زرار **Waitlist** ✅. **الناقص:** **`Fit for your route 96%`** — درجة مطابقة **من ناحية السائق** (بتتحسب لبحث الراكب بس) · سطر توافق القواعد |
+| 29 | CUSTOM PICKUP APPROVAL | `GET /v1/driver/pickup-requests` · `POST .../approve` · `.../suggest-alternative` · `.../reject` | ✅ التلات أزرار مطابقة بالحرف · الـ fuzzing لحد الموافقة · و`maxDetourMinutes` مع **الانعطاف التراكمي** في الرد. و**الحد بقى بيتفحص على الرحلة كلها** مش على الطلب لوحده |
 | 46 | BOTTOM SHEET: CANCEL TODAY | — | ⛔ إلغاء الرحلة كلها بسبب — دورة حياة الرحلة، Phase 9 |
 | 47 | BOTTOM SHEET: DIRECTION | — | 🚫 محلي |
 
@@ -91,7 +91,7 @@
 
 | # | الشاشة | الـ endpoints | الحالة |
 |---|---|---|---|
-| 21 | **PROFILE** | `GET /v1/auth/me` | ⚠️ `12 trips · ⭐ 4.9 · 96% on-time` — **جدول `user_stats` فيه كل ده فعلًا** (`completed_trips_as_passenger/driver`, `avg_rating_*`, `on_time_rate`) بس **مفيش endpoint بيرجّعه**. وتبديل الدور (راكب ↔ سائق) محتاج قرار |
+| 21 | **PROFILE** | `GET /v1/auth/me` · `GET /v1/account/stats` | ✅ الأرقام التلاتة بترجع من `user_stats`. كل نسبة **null** لما ما تُحسبش مش صفر (Phase 9 بتحسبها). الباقي: تبديل الدور (راكب ↔ سائق) محتاج قرار منتج |
 | 26 | PRIVACY & BLOCKED | — | ⛔ مفاتيح الخصوصية + قائمة المحظورين + إلغاء الحظر — Phase 10 |
 | 27 | HELP & LEGAL | `GET /v1/account/consents` (نسخ الشروط) | ⚠️ معظمها نص ثابت؛ نسخ الشروط/الخصوصية موجودة في `config` ✓ |
 | 35 | ACCOUNT RESTRICTED | كود `ACCOUNT_SUSPENDED` ✓ | ⚠️ الكود موجود، والشاشة عايزة **رقم القضية** و`Expected update within 24h` — Phase 10 |
@@ -193,18 +193,19 @@
 
 ### ب. ترقيع حقول — بتخلّي ٢٧ شاشة مبنية تتوصل فعلًا
 
-| # | الناقص | لأنهي شاشة |
-|---|---|---|
-| 3 | `GET /v1/account/stats` — من `user_stats` | 21 PROFILE |
-| 4 | التقييم + شارات التوثيق (أنهي مستويات) على الراكب والسائق | 12 · 20 · 28 |
-| 5 | `POST /v1/commutes/{commute}/pickup-preview` — يحسب الانعطاف من غير ما ينشئ حاجة | 13 SEAT REQUEST |
-| 6 | `POST /v1/driver/seat-requests/{id}/waitlist` | 28 DRIVER REQUEST REVIEW |
-| 7 | `maxDetourMinutes` + الانعطاف التراكمي في رد طلب نقطة الالتقاء | 29 |
-| 8 | `GET /v1/driver/home` — تجميع | 23 DRIVER HOME |
-| 9 | `GET /v1/home` — تجميع | 9 HOME |
-| 10 | سبب الرفض كنص للمستخدم + نسبة الإنجاز | 15 VERIFICATION |
-| 11 | نطاق السعر المقترح (§23.3) | 24 PUBLISH ROUTE |
-| 12 | `flexibility` + `wantsReturnTrip` | 18 CREATE COMMUTE REQUEST |
+الترتيب تحت مش ترتيب القائمة — مرتّب بالتقارب: الحاجات اللي في نفس الكود تتعمل مع بعض،
+والتجميعات آخر حاجة لأنها بتجمّع اللي فوقها.
+
+| ترتيب | البند | لأنهي شاشة | الحالة |
+|---|---|---|---|
+| — | `GET /v1/account/stats` — من `user_stats` | 21 PROFILE | ✅ |
+| — | التقييم + شارات التوثيق (أنهي مستويات) — `PersonSummary` | 12 · 20 · 28 | ✅ |
+| — | `POST /v1/commutes/{commute}/pickup-preview` (انعطاف من غير إنشاء) **+** `maxDetourMinutes` والانعطاف التراكمي في الرد | 13 · 29 | ✅ |
+| — | `POST /v1/driver/seat-requests/{id}/waitlist` | 28 | ✅ |
+| **1** | سبب الرفض كنص للمستخدم + نسبة الإنجاز | 15 | ⬜ |
+| **2** | `flexibility` + `wantsReturnTrip` | 18 | ⬜ |
+| **3** | نطاق السعر المقترح (§23.3) | 24 | ⬜ |
+| **4** | `GET /v1/home` و`GET /v1/driver/home` — تجميعتين | 9 · 23 | ⬜ |
 
 ### ج. محتاجة قرار قبل التنفيذ
 
