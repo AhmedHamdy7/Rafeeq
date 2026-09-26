@@ -1,43 +1,178 @@
-{{-- The dashboard shell. Everything inside it is behind auth + MFA + a fresh session. --}}
+{{--
+    The dashboard shell. Everything inside it is behind auth + MFA + a fresh session.
+
+    Layout follows `rafiq-super-admin-standalone.html`: a desk, a rounded surface card,
+    a 224px rail of sections, and the content beside it. On a phone the rail becomes a
+    drawer — see the responsive block in public/css/admin.css.
+
+    Navigation uses `wire:navigate`, so moving between pages swaps the content over AJAX
+    and keeps the rail, the scroll position and the theme. Nothing here does a full page
+    load, and neither does any action: Livewire posts and re-renders in place.
+--}}
+@php
+    use App\Domains\Admin\Enums\AdminPermission;
+
+    $admin = auth('admin')->user();
+@endphp
 <!DOCTYPE html>
-<html lang="{{ str_replace('_', '-', app()->getLocale()) }}" dir="{{ in_array(app()->getLocale(), ['ar'], true) ? 'rtl' : 'ltr' }}">
+<html
+    lang="{{ str_replace('_', '-', app()->getLocale()) }}"
+    dir="{{ app()->getLocale() === 'ar' ? 'rtl' : 'ltr' }}"
+    {{-- Set before paint by the script below; the attribute here is the no-JS default. --}}
+    data-theme="light"
+>
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
+    {{-- 🔒 Staff pages must never be indexed. --}}
     <meta name="robots" content="noindex, nofollow">
     <title>{{ __('admin.title') }}</title>
+    <link rel="stylesheet" href="{{ asset('css/admin.css') }}">
+
+    {{--
+        Applied before the first paint, in the head, on purpose: doing it after render
+        means a dark-mode user sees a white flash on every navigation. Remembered per
+        browser, falling back to the operating system's own setting.
+
+        Wrapped in try/catch because localStorage throws in a private window with site
+        data blocked, and a theme preference is not worth a blank page.
+    --}}
+    <script>
+        (function () {
+            try {
+                var saved = localStorage.getItem('rq-theme');
+                var system = window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+                document.documentElement.dataset.theme = saved || system;
+            } catch (e) {
+                document.documentElement.dataset.theme = 'light';
+            }
+        })();
+    </script>
     @livewireStyles
 </head>
-<body style="margin:0;background:#faf9f5;font-family:system-ui,-apple-system,sans-serif;color:#1a1612">
-    <header style="display:flex;align-items:center;justify-content:space-between;gap:16px;padding:14px 22px;background:#fff;border-bottom:1px solid #e8e4dc">
-        <strong style="font-size:15px">{{ __('admin.title') }}</strong>
-        <nav style="display:flex;gap:14px;font-size:13.5px">
-            {{--
-                Each link is rendered only if the signed-in admin may use the page.
-                A hidden link is NOT the permission check — the component re-checks —
-                but showing somebody a door that 403s is its own small cruelty.
-            --}}
-            @can(\App\Domains\Admin\Enums\AdminPermission::VerificationView->value)
-                <a href="{{ route('admin.verifications') }}" wire:navigate>{{ __('admin.nav.verifications') }}</a>
-            @endcan
-            @can(\App\Domains\Admin\Enums\AdminPermission::DriverView->value)
-                <a href="{{ route('admin.drivers') }}" wire:navigate>{{ __('admin.nav.drivers') }}</a>
-            @endcan
-        </nav>
-        <form method="POST" action="{{ route('admin.logout') }}" style="margin:0">
-            @csrf
-            <button type="submit" style="border:1px solid #e8e4dc;background:#faf9f5;border-radius:999px;padding:6px 14px;font-size:13px;cursor:pointer">
-                {{ __('admin.nav.sign_out') }}
-            </button>
-        </form>
-    </header>
+<body>
+<div class="rq-desk" x-data="{ rail: false }">
+    <div class="rq-shell">
 
-    <main style="max-width:940px;margin:0 auto;padding:22px">
-        @if (session('status'))
-            <p style="margin:0 0 16px;padding:11px 14px;border-radius:10px;background:#e7f5ee;color:#1d6b4a;font-size:13.5px">{{ session('status') }}</p>
-        @endif
-        {{ $slot }}
-    </main>
-    @livewireScripts
+        {{-- The scrim only exists while the drawer is open, and closes it on tap. --}}
+        <div class="rq-scrim" x-show="rail" x-on:click="rail = false" x-cloak></div>
+
+        <aside class="rq-rail" x-bind:data-open="rail ? 'true' : 'false'">
+            <div class="rq-brand">
+                <span class="rq-brand__mark" aria-hidden="true">ر</span>
+                <span class="rq-brand__name">{{ __('admin.title') }}</span>
+                <button
+                    type="button"
+                    class="rq-btn rq-btn--icon rq-rail__close"
+                    x-on:click="rail = false"
+                    style="margin-inline-start:auto"
+                >
+                    <span aria-hidden="true">&times;</span>
+                    <span class="rq-sr">{{ __('admin.nav.close') }}</span>
+                </button>
+            </div>
+
+            <div class="rq-rail__section">{{ __('admin.nav.operations') }}</div>
+            <nav style="display:flex;flex-direction:column;gap:3px">
+                {{--
+                    Each link is rendered only if this admin may use the page. A hidden
+                    link is NOT the permission check — every component re-checks — but
+                    showing somebody a door that 403s is its own small cruelty.
+                --}}
+                @can(AdminPermission::VerificationView->value)
+                    <a
+                        href="{{ route('admin.verifications') }}"
+                        wire:navigate
+                        class="rq-nav"
+                        @if (request()->routeIs('admin.verifications')) aria-current="page" @endif
+                    >
+                        <span class="rq-nav__tile" aria-hidden="true">✓</span>
+                        <span class="rq-nav__label">{{ __('admin.nav.verifications') }}</span>
+                        @if ($pendingVerifications ?? 0)
+                            <span class="rq-pill rq-pill--warn">{{ $pendingVerifications }}</span>
+                        @endif
+                    </a>
+                @endcan
+
+                @can(AdminPermission::DriverView->value)
+                    <a
+                        href="{{ route('admin.drivers') }}"
+                        wire:navigate
+                        class="rq-nav"
+                        @if (request()->routeIs('admin.drivers')) aria-current="page" @endif
+                    >
+                        <span class="rq-nav__tile" aria-hidden="true">⌘</span>
+                        <span class="rq-nav__label">{{ __('admin.nav.drivers') }}</span>
+                        @if ($pendingDrivers ?? 0)
+                            <span class="rq-pill rq-pill--count">{{ $pendingDrivers }}</span>
+                        @endif
+                    </a>
+                @endcan
+            </nav>
+
+            <div style="flex:1"></div>
+
+            <div class="rq-rail__section">{{ __('admin.nav.signed_in_as') }}</div>
+            <div style="padding:0 9px 10px;font-size:13px">
+                <div style="font-weight:600">{{ $admin?->name }}</div>
+                <div class="rq-note">{{ $admin?->getRoleNames()->first() }}</div>
+            </div>
+
+            <form method="POST" action="{{ route('admin.logout') }}" style="margin:0;padding:0 9px">
+                @csrf
+                <button type="submit" class="rq-btn rq-btn--quiet" style="width:100%">
+                    {{ __('admin.nav.sign_out') }}
+                </button>
+            </form>
+        </aside>
+
+        <div class="rq-main">
+            <header class="rq-topbar">
+                <button
+                    type="button"
+                    class="rq-btn rq-btn--icon rq-rail__open"
+                    x-on:click="rail = true"
+                >
+                    <span aria-hidden="true">☰</span>
+                    <span class="rq-sr">{{ __('admin.nav.menu') }}</span>
+                </button>
+
+                <span class="rq-topbar__title">{{ $title ?? __('admin.title') }}</span>
+
+                {{--
+                    Theme toggle. Writes the choice and flips the attribute in the same
+                    click, so nothing re-renders and nothing round-trips to the server —
+                    the whole page is already themed from CSS variables.
+                --}}
+                <button
+                    type="button"
+                    class="rq-btn rq-btn--icon"
+                    x-data="{
+                        theme: document.documentElement.dataset.theme,
+                        flip() {
+                            this.theme = this.theme === 'dark' ? 'light' : 'dark';
+                            document.documentElement.dataset.theme = this.theme;
+                            try { localStorage.setItem('rq-theme', this.theme); } catch (e) {}
+                        },
+                    }"
+                    x-on:click="flip()"
+                >
+                    <span x-text="theme === 'dark' ? '☀' : '☾'" aria-hidden="true"></span>
+                    <span class="rq-sr">{{ __('admin.nav.theme') }}</span>
+                </button>
+            </header>
+
+            <main class="rq-content">
+                @if (session('status'))
+                    {{-- `wire:key` so a flash from one action is not reused by the next render. --}}
+                    <p class="rq-flash" wire:key="flash-{{ md5(session('status')) }}">{{ session('status') }}</p>
+                @endif
+
+                {{ $slot }}
+            </main>
+        </div>
+    </div>
+</div>
+@livewireScripts
 </body>
 </html>

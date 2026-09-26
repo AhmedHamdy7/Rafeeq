@@ -7,6 +7,11 @@ return [
     'nav' => [
         'verifications' => 'Verification',
         'drivers' => 'Drivers',
+        'operations' => 'Operations',
+        'signed_in_as' => 'Signed in as',
+        'menu' => 'Open menu',
+        'close' => 'Close menu',
+        'theme' => 'Switch light or dark',
         'sign_out' => 'Sign out',
     ],
 
@@ -15,8 +20,15 @@ return [
         'email' => 'Work email',
         'password' => 'Password',
         'continue' => 'Continue',
-        'code' => 'Authenticator code',
-        'code_hint' => 'Enter the six-digit code from your authenticator app.',
+        'code' => '6-digit code',
+        /*
+         * Spells out the distinction because the first person to use this page typed the
+         * SECRET into the code box. The secret is a key installed in the app once; the
+         * code is what the app then displays and rotates. Both are strings of capital
+         * letters and digits from the reader's point of view, so the difference has to be
+         * said rather than implied.
+         */
+        'code_hint' => 'Open your authenticator app and enter the 6-digit code it is showing — not the setup key you added to it.',
         'verify' => 'Verify and sign in',
     ],
 
@@ -44,6 +56,8 @@ return [
         'risk_ok' => 'Standard',
         'risk_warn' => 'Review',
         'risk_bad' => 'Needs care',
+        'working' => 'Working…',
+        'cancel' => 'Cancel',
         'approve' => 'Approve',
         'ask_info' => 'Ask for more',
         'reason' => 'message to the member',
@@ -60,6 +74,7 @@ return [
         'title' => 'Driver applications',
         'waiting' => '{0} No applications waiting.|{1} :count application waiting.|[2,*] :count applications waiting.',
         'empty' => 'No applications waiting.',
+        'licence_expired' => 'Licence expired',
         'licence_until' => 'Licence valid to :date',
         'seats' => '{1} :count seat|[2,*] :count seats',
         'approve' => 'Approve driver',

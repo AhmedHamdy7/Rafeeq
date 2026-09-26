@@ -1,22 +1,42 @@
 {{--
     The shell for pages a signed-OUT admin sees. Separate from the dashboard layout
-    because it must not render a navigation bar, the current admin's name, or anything
-    else that assumes somebody is authenticated.
+    because it must not render the rail, the current admin's name, or the queue counts —
+    all three assume somebody is authenticated, and two of them would leak.
 --}}
 <!DOCTYPE html>
-<html lang="{{ str_replace('_', '-', app()->getLocale()) }}" dir="{{ in_array(app()->getLocale(), ['ar'], true) ? 'rtl' : 'ltr' }}">
+<html
+    lang="{{ str_replace('_', '-', app()->getLocale()) }}"
+    dir="{{ app()->getLocale() === 'ar' ? 'rtl' : 'ltr' }}"
+    data-theme="light"
+>
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     {{-- 🔒 Staff pages must never be indexed. --}}
     <meta name="robots" content="noindex, nofollow">
     <title>{{ __('admin.title') }}</title>
+    <link rel="stylesheet" href="{{ asset('css/admin.css') }}">
+
+    {{-- Before first paint, so a dark-mode user never sees a white flash. --}}
+    <script>
+        (function () {
+            try {
+                var saved = localStorage.getItem('rq-theme');
+                var system = window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+                document.documentElement.dataset.theme = saved || system;
+            } catch (e) {
+                document.documentElement.dataset.theme = 'light';
+            }
+        })();
+    </script>
     @livewireStyles
 </head>
-<body style="margin:0;min-height:100vh;display:grid;place-items:center;background:#faf9f5;font-family:system-ui,-apple-system,sans-serif;color:#1a1612">
-    <main style="width:100%;max-width:380px;padding:24px">
+<body>
+<div class="rq-guest">
+    <main class="rq-guest__card">
         {{ $slot }}
     </main>
-    @livewireScripts
+</div>
+@livewireScripts
 </body>
 </html>

@@ -2,12 +2,17 @@
 
 namespace App\Providers;
 
+use App\Domains\Admin\Enums\AdminPermission;
+use App\Domains\Driver\Enums\DriverProfileStatus;
+use App\Domains\Driver\Models\DriverProfile;
 use App\Domains\Geo\Contracts\GeoQueryEngine;
 use App\Domains\Geo\Support\CachingGeoEngine;
 use App\Domains\Geo\Support\StraightLineGeoEngine;
 use App\Domains\Identity\Contracts\OtpSender;
 use App\Domains\Identity\Support\LogOtpSender;
 use App\Domains\Verification\Contracts\VirusScanner;
+use App\Domains\Verification\Enums\VerificationStatus;
+use App\Domains\Verification\Models\UserVerification;
 use App\Domains\Verification\Support\SignatureVirusScanner;
 use App\Http\OpenApi\DescribeErrorResponses;
 use Carbon\CarbonImmutable;
@@ -16,6 +21,7 @@ use Illuminate\Database\Eloquent\Factories\Factory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Facades\Date;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\View;
 use Illuminate\Support\ServiceProvider;
 use InvalidArgumentException;
 
@@ -69,6 +75,8 @@ class AppServiceProvider extends ServiceProvider
      */
     public function boot(): void
     {
+        $this->composeAdminQueueCounts();
+
         // Engineering Bible §3.8 — enforced everywhere except production, where
         // a lazy-load or mass-assignment bug should degrade rather than 500.
         Model::preventLazyLoading(! $this->app->isProduction());
@@ -95,5 +103,35 @@ class AppServiceProvider extends ServiceProvider
         // left to whoever runs the export.
         Scramble::configure()
             ->withOperationTransformers(DescribeErrorResponses::class);
+    }
+
+    /**
+     * The count badges on the dashboard's rail.
+     *
+     * A view composer rather than data passed from each Livewire component, because the
+     * rail is drawn on every admin page and the alternative is the same two queries
+     * copied into every component that will ever exist — where the first one to forget
+     * them shows a rail with the badges silently missing.
+     *
+     * 🔒 Each count is gated on the same permission as the page it links to. A count is
+     * small but it is still information: telling a Finance admin that 24 people are
+     * waiting on identity review is telling them something about a queue they have no
+     * business seeing.
+     */
+    private function composeAdminQueueCounts(): void
+    {
+        View::composer('components.layouts.admin', function ($view): void {
+            $admin = auth('admin')->user();
+
+            $view->with([
+                'pendingVerifications' => $admin?->can(AdminPermission::VerificationView->value)
+                    ? UserVerification::query()->where('status', VerificationStatus::Pending->value)->count()
+                    : 0,
+
+                'pendingDrivers' => $admin?->can(AdminPermission::DriverView->value)
+                    ? DriverProfile::query()->where('status', DriverProfileStatus::PendingReview->value)->count()
+                    : 0,
+            ]);
+        });
     }
 }

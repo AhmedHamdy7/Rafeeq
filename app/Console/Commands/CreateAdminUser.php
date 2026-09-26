@@ -91,30 +91,53 @@ final class CreateAdminUser extends Command
 
         $secret = $google2fa->generateSecretKey();
 
+        $this->newLine();
+        $this->warn('Add this to an authenticator app now — it is not shown again:');
+        $this->newLine();
+        $this->line("  Secret:  {$secret}");
+        // The standard enrolment URI, so an app can take it as a QR code or a link
+        // instead of the operator typing base32 by hand and mistyping it.
+        $this->line('  URI:     '.$google2fa->getQRCodeUrl(
+            (string) config('app.name'),
+            $email,
+            $secret,
+        ));
+        $this->newLine();
+
+        /*
+         * 🔒 Enrolment is PROVEN here, not assumed.
+         *
+         * `mfa_confirmed_at` means "somebody has demonstrated they can generate codes
+         * from this secret", and `AuthenticateAdminAction` refuses an account where it
+         * is null. Setting it without checking would make the second factor a
+         * formality for exactly the accounts created in a hurry; leaving it null with
+         * no way to confirm — which is what this command did at first — creates an
+         * account that can never sign in at all.
+         *
+         * So the operator types a code from the app before the account exists.
+         */
+        $code = (string) $this->ask('Enter the 6-digit code from the app to confirm enrolment');
+
+        if ($google2fa->verifyKey($secret, $code) === false) {
+            $this->error('That code did not match the secret. Nothing was created — run the command again.');
+
+            return self::FAILURE;
+        }
+
         $admin = new AdminUser;
 
         $admin->fill(['name' => $name, 'email' => $email]);
         $admin->password_hash = Hash::make($password);
         $admin->mfa_secret = $secret;
         $admin->status = AdminStatus::Active->value;
-        /*
-         * NOT confirmed. The account cannot sign in until somebody proves they can
-         * generate codes from this secret — which is what `mfa_confirmed_at` means and
-         * why `AuthenticateAdminAction` refuses an unenrolled admin. Marking it here
-         * would make MFA a formality for exactly the accounts created in a hurry.
-         */
-        $admin->mfa_confirmed_at = null;
+        $admin->mfa_confirmed_at = now();
         $admin->save();
 
         $admin->assignRole($role);
 
         $this->newLine();
-        $this->info("Created {$email} as {$role}.");
-        $this->newLine();
-        $this->warn('Enrol this secret in an authenticator app now — it is not shown again:');
-        $this->line("  {$secret}");
-        $this->newLine();
-        $this->comment('Then confirm enrolment (sets mfa_confirmed_at) before first sign-in.');
+        $this->info("Created {$email} as {$role}, with the authenticator enrolled.");
+        $this->comment('Sign in at '.route('admin.login'));
 
         return self::SUCCESS;
     }
