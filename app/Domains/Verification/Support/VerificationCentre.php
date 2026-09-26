@@ -152,8 +152,29 @@ final class VerificationCentre
             'actionNeededReason' => $status === VerificationStatus::ActionNeeded
                 ? $verification?->rejection_reason
                 : null,
+            /*
+             * `submitted_at`, not `updated_at`.
+             *
+             * This read `updated_at` because there was no better column — and then the
+             * admin slice added one, which the review QUEUE was switched to and this was
+             * not. The person and the reviewer were reading two different clocks for the
+             * same moment, and `updated_at` moves on any write, so what the person was
+             * told about their own wait drifted quietly away from the truth.
+             */
             'submittedAt' => $status === VerificationStatus::Pending
-                ? $verification?->updated_at?->toIso8601String()
+                ? $verification?->submitted_at?->toIso8601String()
+                : null,
+
+            /*
+             * "Pending review · usually under 2 hours" — the screen's own line.
+             *
+             * A target, not a promise, and only sent while something is actually waiting.
+             * Configurable because it is exactly the kind of figure operations will want
+             * to change without a deploy (standard #11), and a target nobody can adjust
+             * becomes a lie the first busy week.
+             */
+            'expectedReviewMinutes' => $status === VerificationStatus::Pending
+                ? (int) config('rafeeq.verification.expected_review_minutes')
                 : null,
             'verifiedAt' => $status === VerificationStatus::Approved
                 ? $verification?->reviewed_at?->toIso8601String()

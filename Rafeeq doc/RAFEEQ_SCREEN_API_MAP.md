@@ -56,7 +56,7 @@
 
 | # | الشاشة | الـ endpoints | الحالة |
 |---|---|---|---|
-| 15 | **VERIFICATION CENTRE** | `GET /v1/account/verifications` | ⚠️ الناقص: `Trust level 2 of 4` و`50% complete` كأرقام جاهزة · **سبب الرفض كنص للمستخدم** ("صورة الـ badge مش واضحة، صوّرها في نور كويس") — دلوقتي بيترجع كسبب داخلي · و`Pending review · usually under 2 hours` (زمن مراجعة متوقع) |
+| 15 | **VERIFICATION CENTRE** | `GET /v1/account/verifications` | ✅ `level`/`of`/`percentage` · `actionNeededReason` بيوصل للشخص **بالحرف** (والـ Action بترفض سبب فاضي) · `expectedReviewMinutes` · `attemptsRemaining`. **تصحيح:** الصف ده كان بيقول إن الأرقام والسبب ناقصين — ماكانوش، كتبته قبل ما أقرا `VerificationCentre` كويس |
 | 30 | IDENTITY CAPTURE | `POST /v1/account/verifications/{type}/documents` · `/submit` · `POST /v1/account/consents` | ⚠️ الشاشة فيها **selfie / liveness** كخطوة صريحة — لازم أتأكد إن `selfie` نوع مستند مقبول. والموافقة الصريحة على **البيومترية** موجودة كـ consent ✓ |
 
 ---
@@ -202,10 +202,10 @@
 | — | التقييم + شارات التوثيق (أنهي مستويات) — `PersonSummary` | 12 · 20 · 28 | ✅ |
 | — | `POST /v1/commutes/{commute}/pickup-preview` (انعطاف من غير إنشاء) **+** `maxDetourMinutes` والانعطاف التراكمي في الرد | 13 · 29 | ✅ |
 | — | `POST /v1/driver/seat-requests/{id}/waitlist` | 28 | ✅ |
-| **1** | سبب الرفض كنص للمستخدم + نسبة الإنجاز | 15 | ⬜ |
-| **2** | `flexibility` + `wantsReturnTrip` | 18 | ⬜ |
-| **3** | نطاق السعر المقترح (§23.3) | 24 | ⬜ |
-| **4** | `GET /v1/home` و`GET /v1/driver/home` — تجميعتين | 9 · 23 | ⬜ |
+| — | سبب الرفض كنص + نسبة الإنجاز + زمن المراجعة المتوقع | 15 | ✅ |
+| **1** | `flexibility` + `wantsReturnTrip` | 18 | ⬜ |
+| **2** | نطاق السعر المقترح (§23.3) | 24 | ⬜ |
+| **3** | `GET /v1/home` و`GET /v1/driver/home` — تجميعتين | 9 · 23 | ⬜ |
 
 ### ج. محتاجة قرار قبل التنفيذ
 

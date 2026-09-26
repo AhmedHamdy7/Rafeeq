@@ -81,6 +81,20 @@ return [
         // reopen it — an upload loop is the cheapest way to probe what a
         // reviewer accepts.
         'max_submission_attempts' => 5,
+
+        /*
+         * What the Verification Centre tells somebody to expect while they wait —
+         * the screen's "Pending review · usually under 2 hours".
+         *
+         * ⚠️ A TARGET, not a guarantee, and nothing enforces it: no alert fires when the
+         * queue runs past it. It is here rather than hard-coded because operations will
+         * want to change it without a deploy the first busy week (standard #11), and a
+         * number nobody can adjust becomes a lie instead of an estimate.
+         *
+         * Deriving it from how long the queue has actually been taking would be better,
+         * and needs review timings the platform has not collected yet.
+         */
+        'expected_review_minutes' => 120,
     ],
 
     'booking' => [

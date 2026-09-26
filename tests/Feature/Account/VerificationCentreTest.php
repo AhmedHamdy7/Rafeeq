@@ -175,3 +175,76 @@ it('keeps the phone level and phone_verified_at in step across sign-ins', functi
         ->and(UserVerification::where('type', VerificationType::Phone->value)->count())->toBe(1)
         ->and(User::sole()->phone_verified_at)->not->toBeNull();
 });
+
+/**
+ * 🔴 The person and the reviewer must read the SAME clock.
+ *
+ * This screen showed `updated_at` because no better column existed — then the admin slice
+ * added `submitted_at`, the review queue was switched to it, and this was not. Two clocks
+ * for one moment, and `updated_at` moves on any write, so what somebody was told about
+ * their own wait drifted quietly away from what the reviewer was measured against.
+ */
+it('reports the moment it was submitted, not the last time the row changed', function () {
+    submitGovernmentId($this->token);
+
+    $verification = UserVerification::query()->where('type', 'government_id')->sole();
+    $submittedAt = $verification->submitted_at;
+
+    expect($submittedAt)->not->toBeNull();
+
+    // Something unrelated touches the row, as a reviewer opening it or a job would.
+    $verification->forceFill(['attempt_count' => $verification->attempt_count])->save();
+    $verification->touch();
+
+    $row = test()->withToken($this->token)->getJson('/api/v1/account/verifications')
+        ->assertOk()
+        ->json('data.rows.1');
+
+    expect($row['status'])->toBe('PENDING')
+        // Still the submission moment, unmoved by the touch.
+        ->and($row['submittedAt'])->toBe($submittedAt->toIso8601String());
+});
+
+it('tells somebody waiting how long to expect, and nobody else', function () {
+    $before = test()->withToken($this->token)->getJson('/api/v1/account/verifications')
+        ->assertOk()->json('data.rows.1');
+
+    // Nothing submitted yet, so there is nothing to wait for.
+    expect($before['expectedReviewMinutes'])->toBeNull();
+
+    submitGovernmentId($this->token);
+
+    $waiting = test()->withToken($this->token)->getJson('/api/v1/account/verifications')
+        ->assertOk()->json('data.rows.1');
+
+    expect($waiting['expectedReviewMinutes'])
+        ->toBe((int) config('rafeeq.verification.expected_review_minutes'));
+
+    approveVerification(VerificationType::GovernmentId);
+
+    $done = test()->withToken($this->token)->getJson('/api/v1/account/verifications')
+        ->assertOk()->json('data.rows.1');
+
+    // Approved, so the estimate would be noise.
+    expect($done['expectedReviewMinutes'])->toBeNull();
+});
+
+/**
+ * The reviewer's message is written FOR the person and shown to them verbatim — the
+ * Action refuses an empty one for exactly this reason.
+ */
+it('shows the reviewer message to the person word for word', function () {
+    submitGovernmentId($this->token);
+
+    $message = 'The back of your ID is cut off. Retake it with all four corners visible.';
+
+    askForVerificationInfo(VerificationType::GovernmentId, $message);
+
+    $row = test()->withToken($this->token)->getJson('/api/v1/account/verifications')
+        ->assertOk()->json('data.rows.1');
+
+    expect($row['status'])->toBe('ACTION_NEEDED')
+        ->and($row['actionNeededReason'])->toBe($message)
+        // And the row says what to do next, which is what makes it actionable.
+        ->and($row['attemptsRemaining'])->toBeGreaterThan(0);
+});
