@@ -33,36 +33,6 @@ beforeEach(function () {
     $this->tripId = $this->trip->id;
 });
 
-/**
- * Brings a generated day forward so it leaves in `$minutesUntilDeparture` minutes —
- * negative for a run that should already have gone.
- *
- * 🔴 The DAY is moved rather than the clock, and this matters. The soonest generated day
- * is up to a week out, and an access token lives fifteen minutes; travelling to next
- * Sunday morning expires it, so every request after the jump came back 401 and each test
- * "failed" for a reason that had nothing to do with the run. Moving the row keeps the
- * real start-window rule under test — the window is measured against `departure_at`,
- * which is exactly the column being set.
- */
-function runLeavingIn(string $tripId, int $minutesUntilDeparture, int $dayOffset = 0): ScheduledTrip
-{
-    $at = now()->addMinutes($minutesUntilDeparture);
-
-    ScheduledTrip::query()->whereKey($tripId)->update([
-        'departure_at' => $at,
-        'departure_local' => $at,
-        /*
-         * `$dayOffset` exists for a test that needs TWO runs both leaving around now:
-         * `(commute_offer_id, trip_date)` is unique, so they cannot share a date. The
-         * on-time rule reads `departure_at` and nothing else, so nudging the date apart
-         * changes nothing it measures — it only keeps the index satisfied.
-         */
-        'trip_date' => $at->copy()->addDays($dayOffset)->toDateString(),
-    ]);
-
-    return ScheduledTrip::query()->whereKey($tripId)->sole();
-}
-
 function startRun(string $token, string $tripId)
 {
     return test()->withToken($token)->postJson("/api/v1/trips/{$tripId}/start");

@@ -22,6 +22,7 @@ use App\Http\Controllers\Api\V1\PlaceController;
 use App\Http\Controllers\Api\V1\Search\CommuteDemandController;
 use App\Http\Controllers\Api\V1\Search\SavedSearchController;
 use App\Http\Controllers\Api\V1\Search\SearchController;
+use App\Http\Controllers\Api\V1\Trip\AttendanceController;
 use App\Http\Controllers\Api\V1\Trip\TripController;
 use Illuminate\Support\Facades\Route;
 
@@ -312,6 +313,21 @@ Route::prefix('v1')->group(function (): void {
             Route::post('trips/{trip}/start', [TripController::class, 'start']);
             Route::post('trips/{trip}/status', [TripController::class, 'advance']);
             Route::post('trips/{trip}/complete', [TripController::class, 'complete']);
+
+            /*
+             * Who actually travelled (decision D18).
+             *
+             * 🔒 The two halves are deliberately asymmetric and neither side can do the
+             * other's. The DRIVER records, because she is the only one who knows who got
+             * in. The PASSENGER contests, and that is not a courtesy — it is what makes
+             * one party deciding the other's bill acceptable at all (§15.6), which is why
+             * the dispute route ships alongside the confirmation and not a phase later.
+             */
+            Route::get('trips/{trip}/attendance', [AttendanceController::class, 'index']);
+            Route::post('trips/{trip}/check-in', [AttendanceController::class, 'checkIn']);
+            Route::post('trips/{trip}/no-show', [AttendanceController::class, 'noShow']);
+
+            Route::post('bookings/{booking}/dispute', [AttendanceController::class, 'dispute']);
         });
     });
 });
