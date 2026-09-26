@@ -136,6 +136,8 @@ it('generates a document describing every /v1 route', function () {
         'POST /v1/commutes/{commute}/pause',
         'POST /v1/commutes/{commute}/resume',
         'GET /v1/commutes/{commute}/price-suggestion',
+        'GET /v1/home',
+        'GET /v1/driver/home',
         'GET /v1/search/commutes',
         'GET /v1/commute-demands',
         'POST /v1/commute-demands',

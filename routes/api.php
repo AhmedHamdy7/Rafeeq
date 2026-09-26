@@ -17,6 +17,7 @@ use App\Http\Controllers\Api\V1\Driver\VehicleController;
 use App\Http\Controllers\Api\V1\Group\GroupAbsenceController;
 use App\Http\Controllers\Api\V1\Group\GroupAttendanceController;
 use App\Http\Controllers\Api\V1\Group\GroupController;
+use App\Http\Controllers\Api\V1\HomeController;
 use App\Http\Controllers\Api\V1\PlaceController;
 use App\Http\Controllers\Api\V1\Search\CommuteDemandController;
 use App\Http\Controllers\Api\V1\Search\SavedSearchController;
@@ -180,6 +181,21 @@ Route::prefix('v1')->group(function (): void {
      */
     Route::middleware('auth:sanctum')->group(function (): void {
         Route::get('places', [PlaceController::class, 'index']);
+
+        /*
+         * The two screens the app opens on.
+         *
+         * Signed in and nothing more, deliberately — these are the screens that TELL a
+         * person what is still missing (the verification banner on one, "publish a
+         * route" on the other). Gating them behind a complete profile or a verified
+         * identity would hide the instructions behind the requirement they explain.
+         *
+         * `driver/home` is outside the driver group below for the same reason: it is
+         * reachable by anyone, because the role switch lives on it and a passenger who
+         * taps "drive" needs an answer rather than a 403.
+         */
+        Route::get('home', [HomeController::class, 'passenger']);
+        Route::get('driver/home', [HomeController::class, 'driver']);
     });
 
     /*

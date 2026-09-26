@@ -29,6 +29,18 @@ final class MatchNotificationResource extends JsonResource
             'score' => $this->score,
             'audience' => $offer->audience->value,
             'pricePerSeatPiastres' => $offer->price_per_seat_piastres,
+
+            /*
+             * Where it goes and when it leaves. Without these the notification says a
+             * commute was found and not which one, so the only way to tell two apart is
+             * to open both — and the home screen shows the route on the card itself.
+             *
+             * The origin and destination only; the intermediate stops are other
+             * passengers' meeting points. See JourneyCard::route().
+             */
+            ...JourneyCard::route($offer),
+            'departureTimeLocal' => $offer->schedule?->departure_time,
+            'timezone' => $offer->schedule?->timezone,
             'driver' => [
                 'publicFirstName' => $offer->driverProfile->user->public_first_name,
                 'trustLevel' => $offer->driverProfile->user->trust_level,

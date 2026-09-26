@@ -340,12 +340,17 @@ function verifiedPassenger(string $phone, string $gender = 'woman', string $devi
 }
 
 /**
- * Searches for the Bible's reference journey — Rehab to Smart Village, Sunday to
- * Thursday, arriving between 06:45 and 08:00.
+ * The Bible's reference journey as a set of search criteria — Rehab to Smart Village,
+ * Sunday to Thursday, arriving between 06:45 and 08:00.
+ *
+ * Its own helper because three endpoints take this same shape: the search itself, a
+ * saved search, and a saved commute request.
+ *
+ * @return array<string, mixed>
  */
-function search(string $token, array $overrides = [])
+function searchCriteria(array $overrides = []): array
 {
-    return test()->withToken($token)->getJson('/api/v1/search/commutes?'.http_build_query(array_merge([
+    return array_merge([
         'origin' => ['lat' => 30.0594, 'lng' => 31.4913],
         'destination' => ['lat' => 30.0714, 'lng' => 30.9716],
         'daysMask' => DaysMask::weekdaysSunToThu()->value,
@@ -353,7 +358,16 @@ function search(string $token, array $overrides = [])
         'arrivalWindowEnd' => '08:00:00',
         'maxWalkMinutes' => 15,
         'maxDetourMinutes' => 15,
-    ], $overrides)));
+    ], $overrides);
+}
+
+/**
+ * Searches for the reference journey.
+ */
+function search(string $token, array $overrides = [])
+{
+    return test()->withToken($token)
+        ->getJson('/api/v1/search/commutes?'.http_build_query(searchCriteria($overrides)));
 }
 
 /**

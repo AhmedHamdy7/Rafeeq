@@ -2,7 +2,6 @@
 
 namespace App\Http\Resources;
 
-use App\Domains\Booking\Enums\BookingStatus;
 use App\Domains\Booking\Models\Booking;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
@@ -78,8 +77,9 @@ final class BookingResource extends JsonResource
             return null;
         }
 
-        $confirmed = $this->status === BookingStatus::Confirmed
-            || $this->status === BookingStatus::Completed;
+        // The rule itself lives on the enum, because the home screen's next-journey
+        // card answers the same question about the plate number.
+        $confirmed = $this->status->grantsExactDetails();
 
         return [
             'lat' => $confirmed ? $point->lat : round($point->lat, self::FUZZ_DECIMALS),

@@ -28,6 +28,24 @@ enum BookingStatus: string
     }
 
     /**
+     * 🔒 Whether this booking has earned the details that identify a person's car and
+     * front door: the EXACT meeting point, and the vehicle's plate.
+     *
+     * Lives on the enum because two different payloads answer it — the booking itself
+     * and the home screen's next-journey card — and a privacy rule written twice is a
+     * rule that will one day disagree with itself.
+     *
+     * A pickup point is often somebody's front door and a plate identifies the car
+     * outside it; a pending or cancelled booking is not a relationship that has earned
+     * either. Before confirmation the client gets a coarse point and no plate, which
+     * is enough to show the right neighbourhood and not enough to wait outside a house.
+     */
+    public function grantsExactDetails(): bool
+    {
+        return $this === self::Confirmed || $this === self::Completed;
+    }
+
+    /**
      * @return list<self>
      */
     private function allowedTransitions(): array

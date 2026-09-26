@@ -84,7 +84,14 @@ final class CommuteDemandController extends Controller
             ->whereIn('commute_demand_id', CommuteDemand::query()
                 ->where('passenger_user_id', $request->user()->id)
                 ->select('id'))
-            ->with(['commuteOffer.vehicle', 'commuteOffer.driverProfile.user'])
+            ->with([
+                'commuteOffer.vehicle',
+                'commuteOffer.driverProfile.user',
+                // The route and the departure time — see MatchNotificationResource for
+                // why a notification without them names no commute in particular.
+                'commuteOffer.locations',
+                'commuteOffer.schedule',
+            ])
             ->latest('created_at')
             ->orderByDesc('id')
             ->paginate(ApiResponse::perPage($request));
