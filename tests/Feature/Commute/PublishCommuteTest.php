@@ -298,7 +298,7 @@ it('keeps the price a booked day was generated with', function () {
     $before = ScheduledTrip::orderBy('trip_date')->first()->price_snapshot_piastres;
 
     $this->withToken($this->token)->patchJson("/api/v1/commutes/{$id}", [
-        'pricePerSeatPiastres' => 15000,
+        'pricePerSeatPiastres' => 11000,
     ])->assertOk();
 
     expect(ScheduledTrip::orderBy('trip_date')->first()->price_snapshot_piastres)->toBe($before);

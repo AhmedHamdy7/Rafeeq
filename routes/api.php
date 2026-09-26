@@ -161,6 +161,13 @@ Route::prefix('v1')->group(function (): void {
             Route::put('{commute}/route', [CommuteController::class, 'saveRoute']);
             Route::put('{commute}/schedule', [CommuteController::class, 'saveSchedule']);
 
+            /*
+             * "The fair suggested price" (ERD §23.3) — what the journey costs to drive,
+             * split by the assumed occupancy. Advice beside the slider on screen 24, not
+             * a rule: validation still accepts anything between the bounds.
+             */
+            Route::get('{commute}/price-suggestion', [CommuteController::class, 'priceSuggestion']);
+
             Route::post('{commute}/publish', [CommuteController::class, 'publish']);
             Route::post('{commute}/pause', [CommuteController::class, 'pause']);
             Route::post('{commute}/resume', [CommuteController::class, 'resume']);

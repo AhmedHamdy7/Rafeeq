@@ -187,7 +187,7 @@ it('keeps the frozen money when the commute price changes afterwards', function 
         ->postJson("/api/v1/driver/seat-requests/{$requestId}/approve")->assertStatus(201);
 
     test()->withToken($this->driverToken)
-        ->patchJson("/api/v1/commutes/{$this->commuteId}", ['pricePerSeatPiastres' => 20000])
+        ->patchJson("/api/v1/commutes/{$this->commuteId}", ['pricePerSeatPiastres' => 11000])
         ->assertOk();
 
     expect(Booking::sole()->price_snapshot_piastres)->toBe(8000);

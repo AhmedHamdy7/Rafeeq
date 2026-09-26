@@ -66,7 +66,7 @@
 | # | الشاشة | الـ endpoints | الحالة |
 |---|---|---|---|
 | 23 | **DRIVER HOME** | `GET /v1/commutes` · `GET /v1/driver/seat-requests` | ⛔ **أكبر تجميع ناقص في الموبايل**. الشاشة عايزة في نداء واحد: مسار النهاردة + `departs in 51 min` + `2 of 3 confirmed` + **`You collect EGP 240`** + طلبات معلّقة ✓ + **الركاب المعتمدين بنقطة كل واحد وحالة حضوره** + `98% reliability` + `+6′ avg detour` + `1 seat open` + مُشغّل **wait timer** (Phase 9) |
-| 24 | PUBLISH ROUTE | `POST /v1/commutes` · `PUT .../route` · `PUT .../schedule` | ⚠️ الناقص: **نطاق السعر المقترح** `Suggested EGP 70–95` (مصدره `platform_settings` حسب ERD §23.3) — مفيش endpoint. وفيه **تعارض فلوس خطير**، القسم 8 تحت |
+| 24 | PUBLISH ROUTE | `POST /v1/commutes` · `PUT .../route` · `PUT .../schedule` · `GET /v1/commutes/{commute}/price-suggestion` | ⚠️ السعر المقترح بقى موجود: الرد فيه `suggestedPiastres` + `min`/`max` للـ slider + `runCostPiastres` و`assumedOccupancy` عشان الشاشة تبيّن السبب. **الحدود اتصححت لـ 5,000–12,000 قرش** (50–120 ج.م) زي الـ slider والـ ERD. الباقي: **تعارض فلوس خطير**، القسم 8 تحت |
 | 25 | PUBLISH REVIEW | `GET /v1/commutes/{commute}` · `POST .../publish` | ✅ |
 | 31 | VEHICLE CAPTURE | `POST /v1/driver/vehicles` · `POST .../documents` | ⚠️ الناقص: **صورتين للعربية** (الجدول فيه `photo_path` واحد) · **`Seat belts (all seats)` مش متمودل في أي مكان** · **`Air conditioning`** متمودلة على مستوى الرحلة (`CommuteRuleKey::Ac`) مش العربية — الشاشة حاطتها على العربية |
 
@@ -204,8 +204,8 @@
 | — | `POST /v1/driver/seat-requests/{id}/waitlist` | 28 | ✅ |
 | — | سبب الرفض كنص + نسبة الإنجاز + زمن المراجعة المتوقع | 15 | ✅ |
 | — | `flexibility` + `wantsReturnTrip` + تصحيح الميزانية لشهرية | 18 | ✅ |
-| **1** | نطاق السعر المقترح (§23.3) | 24 | ⬜ |
-| **2** | `GET /v1/home` و`GET /v1/driver/home` — تجميعتين | 9 · 23 | ⬜ |
+| — | `GET /v1/commutes/{commute}/price-suggestion` (§23.3) + تصحيح حدود السعر لـ 50–120 ج.م | 24 | ✅ |
+| **1** | `GET /v1/home` و`GET /v1/driver/home` — تجميعتين | 9 · 23 | ⬜ |
 
 ### ج. محتاجة قرار قبل التنفيذ
 

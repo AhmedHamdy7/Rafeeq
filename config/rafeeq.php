@@ -260,14 +260,53 @@ return [
          */
         'booking_deadline_hour' => 21,
 
-        // A commute is shared cost, not a fare. The ceiling is what stops the
-        // platform being used as an unlicensed taxi service.
-        'min_price_piastres' => 500,
-        'max_price_piastres' => 50_000,
+        /*
+         * A commute is shared cost, not a fare. The ceiling is what stops the platform
+         * being used as an unlicensed taxi service, so it is a legal boundary rather
+         * than a preference.
+         *
+         * 50–120 EGP, per ERD §23.3 and screen 24's own slider, which runs from EGP 50
+         * to EGP 120. These were 5–500, which is not a shared-cost range: at the bottom
+         * it let somebody price a fifty-kilometre commute at five pounds, and at the top
+         * it allowed five hundred — a fare, and the exact thing the ceiling exists to
+         * prevent. Three sources said 50–120 and the config was the outlier.
+         */
+        'min_price_piastres' => 5_000,
+        'max_price_piastres' => 12_000,
 
         // Chapter 4 §4: "no infinite commutes" — an end date is mandatory, and
         // this bounds how far out it may be.
         'max_schedule_months' => 12,
+    ],
+
+    /*
+     * "The fair suggested price" on the publish screen (ERD §23.3):
+     *
+     *     per seat = (km × cost per km) ÷ assumed occupancy, rounded to the step
+     *
+     * Every one of these is a policy figure the dashboard must be able to move
+     * (standard #11), and `cost_per_km_piastres` most of all — it tracks the fuel price,
+     * so it changes on somebody else's schedule, and the ERD notes the dashboard has a
+     * "fuel index update" broadcast that tells drivers when it does. A suggestion built
+     * on a hard-coded fuel cost would quietly advise people to undercharge the week
+     * petrol goes up.
+     */
+    'pricing' => [
+        'cost_per_km_piastres' => 750,
+
+        /*
+         * How many passengers the cost is split between when suggesting a price.
+         *
+         * An assumption by necessity: the suggestion is made while the driver is still
+         * filling in the form, before anybody has booked. Splitting by seats actually
+         * sold would change the advice every time somebody joined — and the price is
+         * frozen per booking anyway, because a fixed price per seat is a decision
+         * (ERD §23.2: the amount does not move with the number of passengers).
+         */
+        'assumed_occupancy' => 3,
+
+        // Suggestions land on round numbers, because they are meant to be typed in.
+        'rounding_step_piastres' => 500,
     ],
 
     'geo' => [
