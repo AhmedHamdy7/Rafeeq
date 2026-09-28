@@ -48,6 +48,36 @@ final class TripSettings
         return max(1, (int) self::get('trip.dispute_window_hours'));
     }
 
+    /** How many positions one request may carry. */
+    public static function locationBatchMax(): int
+    {
+        return max(1, (int) self::get('trip.location_batch_max'));
+    }
+
+    /** How far ahead of us a device's clock may be and still be believed. */
+    public static function locationClockSkewSeconds(): int
+    {
+        return max(0, (int) self::get('trip.location_clock_skew_seconds'));
+    }
+
+    /** The worst accuracy worth keeping, in metres. */
+    public static function locationMaxAccuracyMeters(): int
+    {
+        return max(1, (int) self::get('trip.location_max_accuracy_meters'));
+    }
+
+    /**
+     * 🔒 How long a GPS trail is kept (ERD §23.4: 90 days).
+     *
+     * Readable from settings like the rest, but it is a legal boundary rather than a tuning
+     * knob — a minute-by-minute record of where somebody was, kept only because a no-show
+     * dispute has no other evidence.
+     */
+    public static function locationRetentionDays(): int
+    {
+        return max(1, (int) self::get('trip.location_retention_days'));
+    }
+
     private static function get(string $key): mixed
     {
         return PlatformSetting::value($key, config("rafeeq.{$key}"));

@@ -48,6 +48,8 @@ use Illuminate\Support\Facades\DB;
  */
 final readonly class CompleteTripAction
 {
+    public function __construct(private RecordTripLocationAction $locations) {}
+
     public function execute(TripSession $session): TripSession
     {
         AdvanceTripAction::assertCanTransitionTo($session, TripSessionStatus::Completed);
@@ -78,6 +80,17 @@ final readonly class CompleteTripAction
             $this->recordStatistics($session, $trip->commute_offer_id, $bookings);
 
             $trip->forceFill(['status' => ScheduledTripStatus::Completed->value])->save();
+
+            /*
+             * 🔒 The live position goes with the journey it belonged to. Left behind, "where
+             * is the car" would keep answering with wherever it was when everybody got out —
+             * which for a commute is an office car park at the same time every weekday, and
+             * then the driver's street.
+             *
+             * The TRAIL stays: that is the evidence a dispute needs, and it is deleted on its
+             * own schedule after ninety days.
+             */
+            $this->locations->clearCurrent($session);
 
             return $session;
         });

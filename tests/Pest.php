@@ -579,6 +579,28 @@ function checkIn(string $driverToken, string $tripId, array $payload)
 }
 
 /**
+ * Every `/v1/...` path the application actually serves.
+ *
+ * @return array<int, string>
+ */
+function registeredV1Paths(): array
+{
+    $paths = [];
+
+    foreach (Route::getRoutes() as $route) {
+        $uri = '/'.ltrim($route->uri(), '/');
+
+        if (! str_starts_with($uri, '/api/v1/')) {
+            continue;
+        }
+
+        $paths[] = substr($uri, 4);
+    }
+
+    return array_values(array_unique($paths));
+}
+
+/**
  * A point almost exactly on the straight line between Rehab and Smart Village, so the
  * straight-line test engine measures a detour of about nothing.
  *

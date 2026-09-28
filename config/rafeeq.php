@@ -338,6 +338,52 @@ return [
          * the others it is part of a set with.
          */
         'settlement_delay_hours' => 2,
+
+        /*
+         * Live location (Chapter 8, pitfall #46).
+         */
+
+        /*
+         * How many positions one request may carry.
+         *
+         * A client buffers while it has no signal, so a batch after a tunnel is legitimately
+         * large — but the cap is what stops a single request queueing a hundred thousand rows
+         * for insert. Sixty is ten minutes of pings at five-second intervals, which is longer
+         * than any tunnel on the Ring Road.
+         */
+        'location_batch_max' => 60,
+
+        /*
+         * How far in the future a device's clock may be and still be believed.
+         *
+         * `recorded_at` is the DEVICE's time, which is not ours. Phone clocks are routinely a
+         * few seconds out, so rejecting those would throw away honest data — but a point
+         * timestamped an hour from now is either a broken clock or a fabrication, and either
+         * would poison the trail a dispute is read from.
+         */
+        'location_clock_skew_seconds' => 120,
+
+        /*
+         * The worst accuracy worth keeping, in metres.
+         *
+         * A phone with no satellite fix guesses from cell towers and can be kilometres out.
+         * Drawing those puts the car in the wrong district on a passenger's map, and storing
+         * them makes the dispute trail worse rather than better. 500m is generous: a real GPS
+         * fix in a city is 5–50m, and the loose readings this rejects are the ones that were
+         * never about this street.
+         */
+        'location_max_accuracy_meters' => 500,
+
+        /*
+         * 🔒 How long a GPS trail is kept — ERD §23.4: **90 days**.
+         *
+         * A legal and ethical boundary, not a tuning knob. `trip_locations` is a
+         * minute-by-minute record of where a real person was, kept for one reason: a no-show
+         * dispute has no other evidence. The dispute window is 24 hours and a support case
+         * takes days, not months — so anything past this is a record with no purpose left,
+         * which is the definition of data that should not exist.
+         */
+        'location_retention_days' => 90,
     ],
 
     /*

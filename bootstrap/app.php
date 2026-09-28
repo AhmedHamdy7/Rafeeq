@@ -19,6 +19,19 @@ return Application::configure(basePath: dirname(__DIR__))
         commands: __DIR__.'/../routes/console.php',
         health: '/up',
     )
+    /*
+     * 🔒 Channel authorisation for the live trip, and the guard matters: `auth:sanctum`,
+     * because the mobile app holds a bearer token and not a session cookie. Left on the
+     * default web guard, every subscription attempt from the app would be rejected as a
+     * guest — and the failure would look like a broken WebSocket rather than a wrong guard.
+     *
+     * Registered here rather than through `withRouting(channels: ...)`, which takes no
+     * middleware: doing both would register the same channels twice.
+     */
+    ->withBroadcasting(
+        __DIR__.'/../routes/channels.php',
+        attributes: ['middleware' => ['auth:sanctum']],
+    )
     ->withMiddleware(function (Middleware $middleware): void {
         $middleware->api(append: [
             SetLocaleFromHeader::class,

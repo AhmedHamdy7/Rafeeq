@@ -149,6 +149,8 @@ it('generates a document describing every /v1 route', function () {
         'GET /v1/trips/{trip}/wait-timers',
         'POST /v1/trips/{trip}/wait-timers',
         'POST /v1/trips/{trip}/wait-timers/{timer}/extend',
+        'POST /v1/trips/{trip}/location',
+        'GET /v1/trips/{trip}/location',
         'GET /v1/search/commutes',
         'GET /v1/commute-demands',
         'POST /v1/commute-demands',

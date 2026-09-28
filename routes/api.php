@@ -24,6 +24,7 @@ use App\Http\Controllers\Api\V1\Search\SavedSearchController;
 use App\Http\Controllers\Api\V1\Search\SearchController;
 use App\Http\Controllers\Api\V1\Trip\AttendanceController;
 use App\Http\Controllers\Api\V1\Trip\TripController;
+use App\Http\Controllers\Api\V1\Trip\TripLocationController;
 use App\Http\Controllers\Api\V1\Trip\WaitTimerController;
 use Illuminate\Support\Facades\Route;
 
@@ -342,6 +343,21 @@ Route::prefix('v1')->group(function (): void {
             Route::get('trips/{trip}/wait-timers', [WaitTimerController::class, 'index']);
             Route::post('trips/{trip}/wait-timers', [WaitTimerController::class, 'store']);
             Route::post('trips/{trip}/wait-timers/{timer}/extend', [WaitTimerController::class, 'extend']);
+
+            /*
+             * Where the car is (Chapter 8, Live Location).
+             *
+             * 🔒 The driver REPORTS and a passenger on the run READS the current position.
+             * Nobody reads the trail: `trip_locations` is a minute-by-minute record of where
+             * a real person was, kept solely because a no-show dispute has no other evidence,
+             * and no endpoint at any access level returns it.
+             *
+             * 🔴 A polling endpoint beside the WebSocket on purpose. The broadcast is the
+             * fast path and this is the fallback — a phone on a bad connection at a bus stop
+             * is exactly what a live map is for, and exactly where a socket fails to open.
+             */
+            Route::post('trips/{trip}/location', [TripLocationController::class, 'store']);
+            Route::get('trips/{trip}/location', [TripLocationController::class, 'show']);
         });
     });
 });

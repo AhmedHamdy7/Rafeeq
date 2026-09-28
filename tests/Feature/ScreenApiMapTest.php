@@ -31,28 +31,6 @@ function screenApiMap(): string
     return $contents ??= (string) file_get_contents(__DIR__.'/../../Rafeeq doc/RAFEEQ_SCREEN_API_MAP.md');
 }
 
-/**
- * Every `/v1/...` path the application actually serves.
- *
- * @return array<int, string>
- */
-function registeredV1Paths(): array
-{
-    $paths = [];
-
-    foreach (Route::getRoutes() as $route) {
-        $uri = '/'.ltrim($route->uri(), '/');
-
-        if (! str_starts_with($uri, '/api/v1/')) {
-            continue;
-        }
-
-        $paths[] = substr($uri, 4);
-    }
-
-    return array_values(array_unique($paths));
-}
-
 it('names only endpoints that really exist', function () {
     $registered = registeredV1Paths();
 
