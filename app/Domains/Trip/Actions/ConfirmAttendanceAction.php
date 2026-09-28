@@ -45,7 +45,10 @@ final readonly class ConfirmAttendanceAction
      */
     private const int CORROBORATION_RADIUS_METERS = 250;
 
-    public function __construct(private GeoQueryEngine $geo) {}
+    public function __construct(
+        private GeoQueryEngine $geo,
+        private WaitTimerAction $waitTimers,
+    ) {}
 
     /**
      * The passenger is in the car.
@@ -112,7 +115,7 @@ final readonly class ConfirmAttendanceAction
             ]);
         }
 
-        return DB::transaction(function () use ($attendance, $booking, $status, $confirmedBy, $at): Attendance {
+        return DB::transaction(function () use ($session, $attendance, $booking, $status, $confirmedBy, $at): Attendance {
             $changes = [
                 'status' => $status->value,
                 // 'driver', per D18. A column rather than an assumption, because the day
@@ -147,6 +150,19 @@ final readonly class ConfirmAttendanceAction
             // mass-assignable (pitfall #51).
             $attendance->forceFill($changes)->save();
 
+            /*
+             * The same act closes any timer that was running for this passenger — one call
+             * from the driver, both records consistent.
+             *
+             * 🔒 A separate "stop the timer" endpoint would mean the two could disagree,
+             * and the disagreement would always land the same way: a timer left running on
+             * a passenger who was marked present reads, months later, as somebody the
+             * driver abandoned at a gate.
+             */
+            $status->travelled()
+                ? $this->waitTimers->arrived($session, $booking)
+                : $this->waitTimers->departedWithout($session, $booking);
+
             return $attendance;
         });
     }
@@ -166,12 +182,9 @@ final readonly class ConfirmAttendanceAction
      */
     private function arrivalStatus(TripSession $session, Booking $booking): AttendanceStatus
     {
-        $waited = $session->waitTimers()
-            ->where('booking_id', $booking->id)
-            ->whereNull('outcome')
-            ->exists();
-
-        return $waited ? AttendanceStatus::Late : AttendanceStatus::Present;
+        return $this->waitTimers->running($session, $booking->id) === null
+            ? AttendanceStatus::Present
+            : AttendanceStatus::Late;
     }
 
     /**

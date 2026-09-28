@@ -35,22 +35,6 @@ beforeEach(function () {
     ])->assertStatus(201)->json('data.id'));
 });
 
-/**
- * Gets the run out on the road, which is the only state a check-in means anything in.
- */
-function underway(string $driverToken, string $tripId): void
-{
-    runLeavingIn($tripId, 10);
-
-    test()->withToken($driverToken)->postJson("/api/v1/trips/{$tripId}/start")->assertStatus(201);
-    test()->withToken($driverToken)->postJson("/api/v1/trips/{$tripId}/status", ['status' => 'EN_ROUTE'])->assertOk();
-}
-
-function checkIn(string $driverToken, string $tripId, array $payload)
-{
-    return test()->withToken($driverToken)->postJson("/api/v1/trips/{$tripId}/check-in", $payload);
-}
-
 /*
 |--------------------------------------------------------------------------
 | The driver records

@@ -9,7 +9,7 @@
 > **الخريطة دي اتعملت من قراءة كود الشاشات نفسه** — مش من وصفها. الـ bundle مفكوك ومقروء،
 > وكل سطر تحت مبني على حقول وأزرار موجودة فعلًا في الـ prototype.
 
-**آخر تحديث:** 2026-09-26 · **الحالة:** 87 endpoint للموبايل · داشبورد Livewire (توثيق + سائقين) شغّالة
+**آخر تحديث:** 2026-09-26 · **الحالة:** 90 endpoint للموبايل · داشبورد Livewire (توثيق + سائقين) شغّالة
 
 ---
 
@@ -30,7 +30,7 @@
 |---|---|---|
 | 0–7 | الأساسات · الداتابيز · المصادقة · التوثيق · السائق · النشر · **البحث والمطابقة** · المقاعد والحجوزات والمجموعات | ✅ |
 | 8 | المدفوعات والمحفظة | ⬜ **محجوزة** بتعارض الفلوس (8.1) |
-| 9 | **دورة حياة الرحلة** — Start trip · check-in · **wait timer** · الموقع المباشر · الإتمام | 🔨 **شغّالة** — العمود الفقري والحضور خلصوا · فاضل عدّاد الانتظار والموقع المباشر |
+| 9 | **دورة حياة الرحلة** — Start trip · check-in · wait timer · **الموقع المباشر** · الإتمام | 🔨 **شغّالة** — العمود الفقري والحضور والعدّاد خلصوا · فاضل **الموقع المباشر** وكشف الخروج عن المسار |
 | 10 | التقييمات — double-blind · نجوم و tags · trust score | ⬜ |
 | 11 | الأمان — SOS · live share · الحظر · الحوادث · escort | ⬜ |
 | 12 | الإشعارات والمحادثة | ⬜ |
@@ -83,7 +83,7 @@
 
 | # | الشاشة | الـ endpoints | الحالة |
 |---|---|---|---|
-| 23 | **DRIVER HOME** | **`GET /v1/driver/home`** (تجميعة) · `GET /v1/commutes` · `GET /v1/driver/seat-requests` | ⚠️ التجميعة بقت موجودة: `nextRun` (المسار + `departsInMinutes` + `isToday` + `attendance` + `seatsOpen` + **`collectPiastres` و`keepPiastres`** + الركاب المعتمدين بنقطة كل واحد وحالة حضوره) + `pendingRequests` (العدد الكامل + أول ٥) + `stats` (`onTimeRate` · `completedTrips` · `avgDetourMinutes`). راكب مش سائق بياخد تجميعة فاضية مش 404، عشان زرار تبديل الدور نفسه على الشاشة دي. **زرار Start trip بقى موجود** (`POST /v1/trips/{trip}/start`). **الناقص:** **wait timer** (Phase 9، الشريحة التالتة) و**Cancel today** (مفيش endpoint يلغي يوم واحد — القسم 8.6) |
+| 23 | **DRIVER HOME** | **`GET /v1/driver/home`** (تجميعة) · `GET /v1/commutes` · `GET /v1/driver/seat-requests` | ⚠️ التجميعة بقت موجودة: `nextRun` (المسار + `departsInMinutes` + `isToday` + `attendance` + `seatsOpen` + **`collectPiastres` و`keepPiastres`** + الركاب المعتمدين بنقطة كل واحد وحالة حضوره) + `pendingRequests` (العدد الكامل + أول ٥) + `stats` (`onTimeRate` · `completedTrips` · `avgDetourMinutes`). راكب مش سائق بياخد تجميعة فاضية مش 404، عشان زرار تبديل الدور نفسه على الشاشة دي. **زرار Start trip بقى موجود** (`POST /v1/trips/{trip}/start`). و**عدّاد الانتظار** بقى موجود (`POST /v1/trips/{trip}/wait-timers`). **الناقص:** **Cancel today** (مفيش endpoint يلغي يوم واحد — القسم 8.6) |
 | 24 | PUBLISH ROUTE | `POST /v1/commutes` · `PUT .../route` · `PUT .../schedule` · `GET /v1/commutes/{commute}/price-suggestion` | ⚠️ السعر المقترح بقى موجود: الرد فيه `suggestedPiastres` + `min`/`max` للـ slider + `runCostPiastres` و`assumedOccupancy` عشان الشاشة تبيّن السبب. **الحدود اتصححت لـ 5,000–12,000 قرش** (50–120 ج.م) زي الـ slider والـ ERD. الباقي: **تعارض فلوس خطير**، القسم 8 تحت |
 | 25 | PUBLISH REVIEW | `GET /v1/commutes/{commute}` · `POST .../publish` | ✅ |
 | 31 | VEHICLE CAPTURE | `POST /v1/driver/vehicles` · `POST .../documents` | ⚠️ الناقص: **صورتين للعربية** (الجدول فيه `photo_path` واحد) · **`Seat belts (all seats)` مش متمودل في أي مكان** · **`Air conditioning`** متمودلة على مستوى الرحلة (`CommuteRuleKey::Ac`) مش العربية — الشاشة حاطتها على العربية |
@@ -124,7 +124,7 @@
 | 17 | **ACTIVE TRIP** | ⚠️ **العمود الفقري بقى موجود** (Phase 9، الشريحة الأولى): `GET /v1/trips/{trip}` · `POST .../start` · `POST .../status` · `POST .../complete`. الرد فيه وضع الرحلة و`startedAt` و`departedAt` و`isUnderway` و`lastLocationAt`. **الناقص:** الموقع المباشر على الخريطة (Reverb + Redis) و`check-in` — الشريحتين الجايتين |
 | 36 | **PRE-TRIP CHECK-IN** | ✅ الشاشة دي هي **الحضور المُعلَن** مش تأكيد الركوب: `GET`/`POST /v1/groups/{group}/attendance` مبنيين من Phase 7. `I'm coming — check in` = `coming` · `Can't make it` = `away`. **الناقص: `5 min late`** — حالة إعلان تالتة مش متمودلة (`GroupAttendanceStatus` فيه `coming`/`away`/`no_response` بس)، القسم 8.8. ومشاركة الرحلة Phase 11 |
 | 40 | **NO-SHOW** | ⚠️ **الحضور بقى موجود** (Phase 9، الشريحة التانية): `GET /v1/trips/{trip}/attendance` · `POST .../check-in` · `POST .../no-show` · **`POST /v1/bookings/{booking}/dispute`**. السائقة بتسجّل (قرار D18) والراكب بيعترض خلال ٢٤ ساعة — والاعتراض **نزل مع التأكيد مش بعده بمرحلة**، لأنه هو اللي بيخلّي D18 مقبول أصلًا (§15.6). الـ GPS بيتسجّل كـ**دليل مساعد بدرجة ثقة** ومش شرط للتأكيد. **الناقص:** طرق الـ check-in التانية (QR / PIN) لو الشاشة محتاجاها |
-| 41 | DRIVER WAIT TIMER | ⛔ **Phase 9** — الشريحة التالتة |
+| 41 | **DRIVER WAIT TIMER** | ⚠️ **العدّاد بقى موجود** (Phase 9، الشريحة التالتة): `GET`/`POST /v1/trips/{trip}/wait-timers` · `POST .../wait-timers/{timer}/extend`. **مفيش endpoint بيوقف العدّاد** — `She's here` هو الـ check-in و`Mark no-show & depart` هو الـ no-show، والاتنين بيقفلوا العدّاد في نفس النداء. و**`late` بقى له مصدر**: راكبة العربية استنّتها = `late` مش `present`. والنتيجة بتتحدد **بالساعة مش بكلام السائقة**: `no_show` لو المهلة خلصت، و`driver_left` لو ماخلصتش. **الناقص:** `Stop 2 of 3` (ترتيب نقاط الالتقاء) · `notified twice` (Phase 12) · `Call`/`Message` (Phase 12) |
 | 39 · 43 · 45 | ROUTE CHANGED · DRIVER CANCELLED→BACKUP · DRIVER CANCEL CONFIRMATION | ⛔ **Phase 9** — كشف الخروج عن المسار والبحث عن بديل، بعد الموقع المباشر |
 | 16 · 32 · 44 | SAFETY CENTRE · SUPPORT / INCIDENT · DISCREET SAFETY ALERT | ⛔ **Phase 11** (الأمان) |
 | 37 | RATING | ⛔ **Phase 10** |

@@ -563,6 +563,22 @@ function runLeavingIn(string $tripId, int $minutesUntilDeparture, int $dayOffset
 }
 
 /**
+ * Gets the run out on the road, which is the only state a check-in means anything in.
+ */
+function underway(string $driverToken, string $tripId): void
+{
+    runLeavingIn($tripId, 10);
+
+    test()->withToken($driverToken)->postJson("/api/v1/trips/{$tripId}/start")->assertStatus(201);
+    test()->withToken($driverToken)->postJson("/api/v1/trips/{$tripId}/status", ['status' => 'EN_ROUTE'])->assertOk();
+}
+
+function checkIn(string $driverToken, string $tripId, array $payload)
+{
+    return test()->withToken($driverToken)->postJson("/api/v1/trips/{$tripId}/check-in", $payload);
+}
+
+/**
  * A point almost exactly on the straight line between Rehab and Smart Village, so the
  * straight-line test engine measures a detour of about nothing.
  *

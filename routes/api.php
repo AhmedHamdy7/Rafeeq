@@ -24,6 +24,7 @@ use App\Http\Controllers\Api\V1\Search\SavedSearchController;
 use App\Http\Controllers\Api\V1\Search\SearchController;
 use App\Http\Controllers\Api\V1\Trip\AttendanceController;
 use App\Http\Controllers\Api\V1\Trip\TripController;
+use App\Http\Controllers\Api\V1\Trip\WaitTimerController;
 use Illuminate\Support\Facades\Route;
 
 /*
@@ -328,6 +329,19 @@ Route::prefix('v1')->group(function (): void {
             Route::post('trips/{trip}/no-show', [AttendanceController::class, 'noShow']);
 
             Route::post('bookings/{booking}/dispute', [AttendanceController::class, 'dispute']);
+
+            /*
+             * Waiting at a gate for somebody who is not there yet (screen 41).
+             *
+             * 🔴 Nothing here ENDS a wait. "She's here" is a check-in and "Mark no-show &
+             * depart" is a no-show — both above, and both close the timer as part of the
+             * same call. A separate stop route would let the two records disagree, and the
+             * disagreement always lands the same way: a timer left running on a passenger
+             * who was marked present reads, months later, as somebody abandoned at a gate.
+             */
+            Route::get('trips/{trip}/wait-timers', [WaitTimerController::class, 'index']);
+            Route::post('trips/{trip}/wait-timers', [WaitTimerController::class, 'store']);
+            Route::post('trips/{trip}/wait-timers/{timer}/extend', [WaitTimerController::class, 'extend']);
         });
     });
 });
