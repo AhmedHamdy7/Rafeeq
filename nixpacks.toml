@@ -1,0 +1,25 @@
+# Build configuration for Nixpacks (Railway, Coolify, and anything else using it).
+#
+# 🔴 PHP only. Nixpacks detects `package.json` and adds a whole Node phase — install,
+# build, prune — and on a small builder the prune step gets OOM-killed with exit 137.
+# That is the error this file exists to remove.
+#
+# And it removes it by not doing the work, rather than by finding more memory, because
+# the work buys nothing. This project is an API plus a Livewire dashboard:
+#
+#   - the API returns JSON and has no assets at all
+#   - the dashboard loads `public/css/admin.css`, a hand-written file that is committed
+#     to the repo and needs no bundler (see resources/views/components/layouts/admin)
+#
+# The only thing that ever needed Vite was Laravel's default landing page, and that is
+# not part of the product. `routes/web.php` now serves a page with no assets instead.
+#
+# ⚠️ If a real front-end is ever added — a marketing site, a Blade app with Tailwind —
+# delete this file and fix the memory instead. Leaving it in place would silently ship
+# an unbuilt asset bundle.
+providers = ["php"]
+
+[phases.build]
+# Nothing to build. Named explicitly so the PHP provider's default does not quietly
+# reintroduce a step later.
+cmds = []
