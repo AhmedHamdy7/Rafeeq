@@ -86,7 +86,7 @@ sudo apt update && sudo apt install -y nginx
 
 ## ٣. البرامج الأساسية
 
-PHP 8.3 من الـ PPA بتاع ondrej (نسخة Ubuntu الافتراضية أقدم من اللي المشروع محتاجه):
+PHP 8.4 من الـ PPA بتاع ondrej (نسخة Ubuntu الافتراضية أقدم من اللي المشروع محتاجه):
 
 ```bash
 sudo apt update && sudo apt upgrade -y
@@ -94,8 +94,8 @@ sudo apt install -y software-properties-common
 sudo add-apt-repository -y ppa:ondrej/php
 sudo apt update
 
-sudo apt install -y php8.3-fpm php8.3-cli php8.3-mysql php8.3-mbstring \
-  php8.3-xml php8.3-curl php8.3-zip php8.3-bcmath php8.3-gd php8.3-intl \
+sudo apt install -y php8.4-fpm php8.4-cli php8.4-mysql php8.4-mbstring \
+  php8.4-xml php8.4-curl php8.4-zip php8.4-bcmath php8.4-gd php8.4-intl \
   mariadb-server nginx git unzip
 
 # Composer
@@ -103,12 +103,12 @@ curl -sS https://getcomposer.org/installer | php
 sudo mv composer.phar /usr/local/bin/composer
 ```
 
-> **عن `php8.3-gd`:** مش اختيارية. رفع المستندات بيعيد ترميز الصورة عشان يشيل الميتاداتا (فخ #24 — صور البطاقات بتحمل مكان التصوير)، وده محتاج GD.
+> **عن `php8.4-gd`:** مش اختيارية. رفع المستندات بيعيد ترميز الصورة عشان يشيل الميتاداتا (فخ #24 — صور البطاقات بتحمل مكان التصوير)، وده محتاج GD.
 
 تأكد:
 
 ```bash
-php -v          # لازم 8.3 أو أعلى
+php -v          # لازم 8.4 أو أعلى
 php -m | grep -E "gd|intl|bcmath|pdo_mysql"
 ```
 
@@ -288,7 +288,7 @@ sudo -u www-data git pull
 sudo -u www-data composer install --no-dev --optimize-autoloader
 sudo -u www-data php artisan migrate --force
 sudo -u www-data php artisan config:cache && sudo -u www-data php artisan route:cache
-sudo systemctl restart rafeeq-queue rafeeq-reverb php8.3-fpm
+sudo systemctl restart rafeeq-queue rafeeq-reverb php8.4-fpm
 ```
 
 > **`restart rafeeq-queue` مش اختيارية.** عامل الطابور عملية PHP طويلة العمر بتمسك الكود اللي قامت بيه — من غير restart بيفضل شغّال بالكود القديم لحد ما حد يفتكر.
@@ -300,7 +300,7 @@ sudo systemctl restart rafeeq-queue rafeeq-reverb php8.3-fpm
 | الأعراض | السبب الأغلب |
 |---|---|
 | المتصفح بيعمل timeout على `http://$IP` | خطوة ٢ — واحد من المكانين الاتنين ناقص. `sudo iptables -L INPUT -n --line-numbers` |
-| 502 Bad Gateway | PHP-FPM واقف أو الـ socket بمسار غلط. `systemctl status php8.3-fpm` و`ls /run/php/` |
+| 502 Bad Gateway | PHP-FPM واقف أو الـ socket بمسار غلط. `systemctl status php8.4-fpm` و`ls /run/php/` |
 | 500 وصفحة فاضية | `sudo tail -50 /var/www/rafeeq/storage/logs/laravel.log` · وأغلب الوقت صلاحيات: `sudo chown -R www-data:www-data storage bootstrap/cache` |
 | الترحيل بيفشل على عمود spatial | نسخة MariaDB قديمة. `mysql -V` — محتاج ١٠.٤+ |
 | الرحلة الحيّة مش بتتحدّث | Reverb واقف، أو nginx مش بيوجّه `/app`. الـ polling (`GET /v1/trips/{trip}/location`) بيفضل شغّال فبيبان إن كله تمام |

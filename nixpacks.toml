@@ -23,3 +23,14 @@ providers = ["php"]
 # Nothing to build. Named explicitly so the PHP provider's default does not quietly
 # reintroduce a step later.
 cmds = []
+
+[phases.install]
+# 🔴 `--no-dev`. Without it the builder installs pest, paratest and larastan on a
+# production image — and paratest requires PHP 8.4/8.5 in a way that made the install
+# fail outright on a lock file resolved elsewhere.
+#
+# This only works because `dedoc/scramble` moved to `require`: it is imported from
+# `app/Http/OpenApi` and called in `AppServiceProvider::boot()`, so a --no-dev install
+# used to fatal on every request. That was a real production bug, found by this build
+# failing rather than by anybody in production.
+cmds = ["composer install --no-dev --optimize-autoloader --no-interaction"]
