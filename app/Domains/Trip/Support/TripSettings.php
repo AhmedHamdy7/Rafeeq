@@ -78,6 +78,18 @@ final class TripSettings
         return max(1, (int) self::get('trip.location_retention_days'));
     }
 
+    /**
+     * How far off the published route counts as a deviation.
+     *
+     * 🔴 Settings rather than code because both mistakes are expensive and only real mornings will
+     * say where the line is: fire too easily and everybody learns to dismiss the alert, including
+     * on the day it matters.
+     */
+    public static function deviationThresholdMeters(): int
+    {
+        return max(1, (int) self::get('trip.deviation_threshold_meters'));
+    }
+
     private static function get(string $key): mixed
     {
         return PlatformSetting::value($key, config("rafeeq.{$key}"));

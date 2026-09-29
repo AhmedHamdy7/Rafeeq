@@ -114,7 +114,7 @@ final class TripLocationController extends Controller
             ->whereIn('commute_offer_id', CommuteOffer::query()
                 ->where('driver_profile_id', $request->user()->id)
                 ->select('id'))
-            ->with('tripSession.scheduledTrip')
+            ->with('tripSession.scheduledTrip.commuteOffer')
             ->first()
             ?? throw DomainException::of(ErrorCode::NotFound);
     }
@@ -131,7 +131,7 @@ final class TripLocationController extends Controller
     {
         $trip = ScheduledTrip::query()
             ->whereKey($tripId)
-            ->with(['commuteOffer', 'tripSession.scheduledTrip'])
+            ->with(['commuteOffer', 'tripSession.scheduledTrip.commuteOffer'])
             ->first();
 
         if ($trip === null) {

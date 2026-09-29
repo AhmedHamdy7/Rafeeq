@@ -103,6 +103,17 @@ return [
     'WAIT_TIMER_NOT_RUNNING' => 'There is no wait timer running for this passenger.',
 
     /*
+     * Safety. Each of these is read by somebody who may be in a bad situation, so each says
+     * what happened and what to do — no jargon, no state names.
+     */
+    'SOS_ALREADY_RESOLVED' => 'This emergency has already been dealt with.',
+    'EMERGENCY_CONTACT_LIMIT_REACHED' => 'You have as many emergency contacts as we allow. Remove one to add another.',
+    'EMERGENCY_CONTACT_DUPLICATE' => 'That number is already one of your emergency contacts.',
+    'CANNOT_BLOCK_SELF' => 'You cannot block yourself.',
+    'ALREADY_BLOCKED' => 'You have already blocked this person.',
+    'INCIDENT_NOT_REPORTABLE' => 'That trip cannot be reported.',
+
+    /*
      * Admin sign-in. One message for a wrong password and a wrong code, on purpose —
      * see ErrorCode::AdminCredentialsInvalid.
      */

@@ -112,6 +112,14 @@ enum ErrorCode: string
     case WaitTimerAlreadyRunning = 'WAIT_TIMER_ALREADY_RUNNING';
     case WaitTimerNotRunning = 'WAIT_TIMER_NOT_RUNNING';
 
+    // ---- Safety (Phase 11, Chapter 10) ---------------------------------
+    case SosAlreadyResolved = 'SOS_ALREADY_RESOLVED';
+    case EmergencyContactLimitReached = 'EMERGENCY_CONTACT_LIMIT_REACHED';
+    case EmergencyContactDuplicate = 'EMERGENCY_CONTACT_DUPLICATE';
+    case CannotBlockSelf = 'CANNOT_BLOCK_SELF';
+    case AlreadyBlocked = 'ALREADY_BLOCKED';
+    case IncidentNotReportable = 'INCIDENT_NOT_REPORTABLE';
+
     // ---- Admin dashboard (Chapter 12) ----------------------------------
     case AdminCredentialsInvalid = 'ADMIN_CREDENTIALS_INVALID';
     case AdminMfaNotEnrolled = 'ADMIN_MFA_NOT_ENROLLED';
@@ -245,6 +253,22 @@ enum ErrorCode: string
              */
             self::TripTooEarlyToStart,
             self::AttendanceDisputeWindowClosed => 422,
+
+            /*
+             * 409: each of these is a well-formed request the current state refuses — an SOS
+             * already answered, a contact already on the list, somebody already blocked. Nothing
+             * for the person to correct.
+             */
+            self::SosAlreadyResolved,
+            self::EmergencyContactDuplicate,
+            self::AlreadyBlocked => 409,
+
+            // 422: about what was sent. The list is full, or the report has nothing to attach to.
+            self::EmergencyContactLimitReached,
+            self::IncidentNotReportable => 422,
+
+            // 403: blocking yourself is not a state, it is a mistake about who you are.
+            self::CannotBlockSelf => 403,
 
             /*
              * 401: a staff sign-in that did not succeed. One code for a wrong

@@ -44,4 +44,17 @@ interface GeoQueryEngine
      * route-overlap component of the match score.
      */
     public function overlapPercent(Route $a, Route $b): float;
+
+    /**
+     * How far a point lies from the nearest part of a route.
+     *
+     * Not the distance to the nearest of its POINTS — the distance to the nearest
+     * point on the line between them. A route encoded every few hundred metres
+     * would otherwise report a car driving exactly along it as hundreds of
+     * metres off, which is the difference between a working deviation alert and
+     * one nobody can trust.
+     *
+     * Feeds route-deviation detection on a live trip.
+     */
+    public function distanceFromRoute(Route $route, Coordinate $point): Distance;
 }

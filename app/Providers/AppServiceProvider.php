@@ -10,6 +10,7 @@ use App\Domains\Geo\Support\CachingGeoEngine;
 use App\Domains\Geo\Support\StraightLineGeoEngine;
 use App\Domains\Identity\Contracts\OtpSender;
 use App\Domains\Identity\Support\LogOtpSender;
+use App\Domains\Safety\Support\SafetySettings;
 use App\Domains\Verification\Contracts\VirusScanner;
 use App\Domains\Verification\Enums\VerificationStatus;
 use App\Domains\Verification\Models\UserVerification;
@@ -17,10 +18,13 @@ use App\Domains\Verification\Support\SignatureVirusScanner;
 use App\Http\OpenApi\DescribeErrorResponses;
 use Carbon\CarbonImmutable;
 use Dedoc\Scramble\Scramble;
+use Illuminate\Cache\RateLimiting\Limit;
 use Illuminate\Database\Eloquent\Factories\Factory;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Date;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Support\Facades\View;
 use Illuminate\Support\ServiceProvider;
 use InvalidArgumentException;
@@ -98,11 +102,35 @@ class AppServiceProvider extends ServiceProvider
             fn (string $modelName) => 'Database\\Factories\\'.class_basename($modelName).'Factory'
         );
 
+        $this->defineRateLimiters();
+
         // The OpenAPI document is a deliverable for the external Flutter team
         // (MASTER_PLAN §15.4/§18), so its accuracy is wired here rather than
         // left to whoever runs the export.
         Scramble::configure()
             ->withOperationTransformers(DescribeErrorResponses::class);
+    }
+
+    /**
+     * Named limiters used by route middleware.
+     */
+    private function defineRateLimiters(): void
+    {
+        /*
+         * Reports (Chapter 10 §Security: "prevent false incident spam", "rate-limit reports").
+         *
+         * 🔴 Deliberately generous, and the limit is read from settings so a safety team can change
+         * it the first week they watch it. The failure to avoid here is refusing a REAL report:
+         * somebody in a genuinely bad situation may file two or three in quick succession, and a
+         * spurious one costs a human two minutes to read and close. Those two costs are nowhere near
+         * equal, so the limit sits well above normal use and exists only to stop a script.
+         *
+         * Per user rather than per IP: a family sharing a connection must not throttle each other,
+         * and the endpoint requires a token anyway.
+         */
+        RateLimiter::for('safety-reports', fn (Request $request) => Limit::perHour(
+            SafetySettings::reportsPerHour()
+        )->by($request->user()?->id ?? $request->ip()));
     }
 
     /**

@@ -75,6 +75,17 @@ final readonly class CachingGeoEngine implements GeoQueryEngine
     }
 
     /**
+     * Passed straight through, and deliberately not cached: it is pure arithmetic on data already
+     * in memory, so there is no provider call to save. Caching it would spend a cache round trip
+     * to avoid a few dozen multiplications, and the key — a route plus a position that changes
+     * every five seconds — would never be hit twice.
+     */
+    public function distanceFromRoute(Route $route, Coordinate $point): Distance
+    {
+        return $this->engine->distanceFromRoute($route, $point);
+    }
+
+    /**
      * @param  array<int, Coordinate>  $via
      */
     public static function cacheKey(Coordinate $from, Coordinate $to, array $via = []): string

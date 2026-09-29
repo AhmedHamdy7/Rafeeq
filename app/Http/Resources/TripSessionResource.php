@@ -54,6 +54,18 @@ final class TripSessionResource extends JsonResource
              */
             'lastLocationAt' => $this->last_location_at?->toIso8601String(),
 
+            /*
+             * Screen 39, "Route changed". The moment the run FIRST went off its published route,
+             * and the furthest it got — when it started and how far it went, which are the two
+             * things anybody asking about it wants to know.
+             *
+             * Null on the overwhelming majority of runs, which is the point: this is an exception
+             * report, not a measurement. Checked only while the run is in progress, because on the
+             * way to collect people being off the direct line is the job.
+             */
+            'deviationDetectedAt' => $this->deviation_detected_at?->toIso8601String(),
+            'deviationDistanceMeters' => $this->deviation_distance_meters,
+
             'trip' => new ScheduledTripResource($this->whenLoaded('scheduledTrip')),
         ];
     }

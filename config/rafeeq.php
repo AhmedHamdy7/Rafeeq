@@ -384,6 +384,67 @@ return [
          * which is the definition of data that should not exist.
          */
         'location_retention_days' => 90,
+
+        /*
+         * How far off the published route counts as a deviation, in metres.
+         *
+         * 🔴 This number decides when the platform says something is wrong, so both mistakes it
+         * can make are expensive. Too small and it fires on a diversion round roadworks, a
+         * one-way system, or a phone's own error — and an alert that cries wolf is an alert
+         * everybody learns to dismiss, including on the morning it matters. Too large and a car
+         * genuinely going the wrong way is never flagged.
+         *
+         * A kilometre, because a driver choosing a different street is not a deviation and a
+         * driver a kilometre off the corridor is. Checked only while the run is IN PROGRESS: on
+         * the way to collect people, being off the direct line is the job.
+         */
+        'deviation_threshold_meters' => 1_000,
+    ],
+
+    /*
+     * Safety (Chapter 10, Phase 11).
+     */
+    'safety' => [
+        /*
+         * How long somebody has to take back an SOS before it is treated as real.
+         *
+         * 🔴 The countdown runs on the PHONE and the row is written the instant the button is
+         * pressed — see TriggerSosAction for why that order is deliberate. This number is what the
+         * client counts down and what gets copied onto the row, so a review months later can ask
+         * "how long did she have to cancel" and get the answer that was true then.
+         *
+         * Ten seconds: long enough to notice a pocket press, short enough that somebody who meant
+         * it is not watching a progress bar while it matters.
+         */
+        'sos_countdown_seconds' => 10,
+
+        /*
+         * How many emergency contacts one person may keep.
+         *
+         * A limit because this list is who gets told where somebody is, and an unbounded one is a
+         * way to broadcast a person's movements to a crowd. Five is more than anybody needs and
+         * fewer than an abuser could use.
+         */
+        'max_emergency_contacts' => 5,
+
+        /*
+         * How many reports one person may file in an hour.
+         *
+         * Chapter 10 §Security asks for this by name ("prevent false incident spam",
+         * "rate-limit reports"). Deliberately generous: somebody in a genuinely bad situation may
+         * file two or three in quick succession, and the failure mode to avoid is refusing a real
+         * report — not admitting a spurious one, which a human reads and closes.
+         */
+        'reports_per_hour' => 10,
+
+        /*
+         * 🔒 How long evidence attached to a report is kept, in days.
+         *
+         * Longer than a GPS trail because a report can become a legal matter and the file IS the
+         * evidence, but still bounded: photographs of an incident involving identifiable people are
+         * not something to hold for ever by default.
+         */
+        'evidence_retention_days' => 365,
     ],
 
     /*

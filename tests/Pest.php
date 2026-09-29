@@ -601,6 +601,31 @@ function registeredV1Paths(): array
 }
 
 /**
+ * One position on the Rehab → Smart Village road, `$agoSeconds` in the past.
+ *
+ * @return array<string, mixed>
+ */
+function position(float $lat = 30.0654, float $lng = 31.2314, int $agoSeconds = 5, ?int $accuracy = 12): array
+{
+    return [
+        'lat' => $lat,
+        'lng' => $lng,
+        'recordedAt' => now()->subSeconds($agoSeconds)->toIso8601String(),
+        'accuracyMeters' => $accuracy,
+        'speedKmh' => 48,
+    ];
+}
+
+/**
+ * NOT `report()` — Laravel has a global helper of that name, and redeclaring it is a fatal
+ * error before a single test runs.
+ */
+function reportPosition(string $token, string $tripId, array $points)
+{
+    return test()->withToken($token)->postJson("/api/v1/trips/{$tripId}/location", ['points' => $points]);
+}
+
+/**
  * A point almost exactly on the straight line between Rehab and Smart Village, so the
  * straight-line test engine measures a detour of about nothing.
  *

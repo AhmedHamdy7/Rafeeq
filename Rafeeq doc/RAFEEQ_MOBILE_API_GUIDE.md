@@ -14,7 +14,7 @@
 >
 > **Base URL:** `{host}/api/v1` · **Auth:** bearer token · **Format:** JSON only.
 
-**Last updated:** 2026-09-28 · **92 endpoints live** · Phases 0–7 complete, Phase 9 in progress
+**Last updated:** 2026-09-29 · **104 endpoints live** · Phases 0–7 complete, Phase 9 in progress
 
 ---
 
@@ -22,7 +22,7 @@
 
 ### إيه الجاهز دلوقتي
 
-**٩٢ endpoint شغّالين ومختبَرين** (1,151 اختبار كلهم خضرا). يعني من الـ٤٧ شاشة:
+**١٠٤ endpoint شغّالين ومختبَرين** (1,151 اختبار كلهم خضرا). يعني من الـ٤٧ شاشة:
 
 | | عدد | التفاصيل |
 |---|---|---|
@@ -293,11 +293,12 @@ Status: ✅ fully served · ⚠️ served, something named missing · ⛔ no API
 
 | # | Screen | Endpoints | Status |
 |---|---|---|---|
-| 17 | **Active trip** | `GET /trips/{trip}` · `GET /trips/{trip}/location` · channel `private-trip.{sessionId}` | ⚠️ Status, timings, `isUnderway`, `lastLocationAt` and the live position ✅. **Missing: route-deviation detection** (screen 39). |
+| 17 | **Active trip** | `GET /trips/{trip}` · `GET /trips/{trip}/location` · channel `private-trip.{sessionId}` | ✅ Status, timings, `isUnderway`, `lastLocationAt`, the live position, and **route deviation** (`deviationDetectedAt`). |
 | 36 | **Pre-trip check-in** | `GET`/`POST /groups/{group}/attendance` | ✅ This screen is the **declared** attendance, not boarding confirmation. `I'm coming` = `coming`, `Can't make it` = `away`. **Missing: `5 min late`** — a third declared state that does not exist yet. Section 8. |
 | 40 | No-show | `POST /trips/{trip}/no-show` · `POST /bookings/{booking}/dispute` | ✅ The driver records it; the passenger has 24 hours to contest it. |
 | 41 | **Driver wait timer** | `GET`/`POST /trips/{trip}/wait-timers` · `POST .../extend` | ⚠️ **There is deliberately no endpoint that stops a timer** — "She's here" is the check-in and "Mark no-show & depart" is the no-show, and both close it. **Missing: `Stop 2 of 3`** (needs an ordered pickup sequence) and `notified twice`, Call, Message (Phase 12). |
-| 39 · 43 · 45 | Route changed · driver cancelled → backup · cancel confirmation | — | ⛔ Phase 9, remaining slice. |
+| 39 | **Route changed** | `GET /trips/{trip}` | ⚠️ The deviation is **detected and reported** on the trip session. **Missing: the push that tells you about it** (Phase 12) — today you learn of it by reading the trip. |
+| 43 · 45 | Driver cancelled → backup · cancel confirmation | — | ⛔ Phase 9, blocked on section 8 #3. |
 
 ### Account
 
@@ -305,7 +306,7 @@ Status: ✅ fully served · ⚠️ served, something named missing · ⛔ no API
 |---|---|---|---|
 | 21 | **Profile** | `GET /auth/me` · `GET /account/stats` | ✅ The three numbers come from `user_stats`. **Every rate is `null` until it has been computed — show a dash, not a zero.** Role switching needs a product decision. |
 | 22 | Notifications | — | ⛔ Phase 12. |
-| 26 | Privacy & blocked | — | ⛔ Phase 11 (blocking is part of safety). |
+| 26 | **Privacy & blocked** | `GET`/`POST /safety/blocked-users` · `DELETE .../{user}` | ✅ Blocking works in **both directions** from the next search. 🔒 Nothing tells the blocked person, and the list is one-directional — who I blocked, never who blocked me. Privacy toggles themselves are yours/local. |
 | 27 | Help & legal | `GET /account/consents` for versions | ⚠️ Static content is yours; the consent versions in force come from the API. |
 | 35 | Account restricted | code `ACCOUNT_SUSPENDED` | ⚠️ The code exists. **Missing: a case number and "expected update within 24h"** — Phase 11. |
 
@@ -314,7 +315,8 @@ Status: ✅ fully served · ⚠️ served, something named missing · ⛔ no API
 | # | Screen | Phase |
 |---|---|---|
 | 37 | Rating | ⛔ **10** — ratings |
-| 16 · 32 · 44 | Safety centre · support / incident · discreet alert | ⛔ **11** — safety |
+| 16 · 44 | **Safety centre · discreet alert** | ⚠️ `POST /sos` (with `isDiscreet`) · `POST /sos/{sos}/cancel` · `GET`/`POST /safety/emergency-contacts`. **Missing: Share Live Trip** and Contact Support — section 7. |
+| 32 | **Support / incident** | ⚠️ `POST /incidents` · `GET /incidents` · `GET /incidents/{incident}`. **Missing: evidence upload** — section 7. |
 | 34 | Payment failed | ⛔ **8** — payments |
 | 33 · 38 | Offline · location denied | 🚫 Device states |
 
@@ -424,6 +426,18 @@ fails if this list and the running routes ever disagree in either direction.
 | `GET /groups/{group}/members` | 4.10 Groups |
 | `GET /driver/home` | 4.11 Home aggregates |
 | `GET /home` | 4.11 Home aggregates |
+| `GET /incidents` | 4.12 Safety |
+| `POST /incidents` | 4.12 Safety |
+| `GET /incidents/{incident}` | 4.12 Safety |
+| `GET /safety/blocked-users` | 4.12 Safety |
+| `POST /safety/blocked-users` | 4.12 Safety |
+| `DELETE /safety/blocked-users/{user}` | 4.12 Safety |
+| `GET /safety/emergency-contacts` | 4.12 Safety |
+| `POST /safety/emergency-contacts` | 4.12 Safety |
+| `PATCH /safety/emergency-contacts/{contact}` | 4.12 Safety |
+| `DELETE /safety/emergency-contacts/{contact}` | 4.12 Safety |
+| `POST /sos` | 4.12 Safety |
+| `POST /sos/{sos}/cancel` | 4.12 Safety |
 
 ### 4.1 Auth and session
 
@@ -1157,6 +1171,151 @@ role switch lives on this screen, and a 404 would make tapping "drive" look brok
 | `stats.completedTrips` | |
 | `stats.avgDetourMinutes` | Averaged over approved custom pickups. `0` is true and means nobody has one; `null` means she has no commutes at all. |
 
+### 4.12 Safety (screens 16, 26, 32, 44)
+
+🔴 **Everything in this section is reachable by a signed-in account and nothing more.** No
+verification gate, no complete-profile requirement, no active trip. That is deliberate and it is the
+most important thing to know before you build these screens: somebody in trouble at a roadside will
+not finish uploading a national ID first, and a 403 at that moment would be the worst answer this
+platform could give. These routes sit in the same tier as "see that I am suspended" and "revoke a
+stolen phone".
+
+So **do not gate the Safety button in your own navigation either.** It should be reachable from a
+half-finished sign-up.
+
+#### `POST /sos` — the emergency button
+
+**Request — every field optional.** An empty body is a valid SOS.
+
+| Field | Meaning |
+|---|---|
+| `isDiscreet` | 🔒 A **silent** alert: no sound, no vibration. For the situation where being seen to ask for help is itself the danger. **The server cannot enforce this — your client must.** |
+| `lat` / `lng` | Where they are, if the phone knows. Both or neither. |
+| `tripSessionId` | The run they are on, if you happen to know it. **The server looks it up otherwise**, and an id it does not recognise is ignored rather than refused — a stale session must not turn an emergency into a 404. |
+
+🔴 **The record is written the instant you call this, before any countdown finishes.** The countdown
+guards against an accidental tap and runs on the phone; it does not gate the record. If the phone is
+taken or its battery dies during those ten seconds, a design that waited for confirmation would have
+no trace that anything happened. So: call this first, then show the countdown, then offer cancel.
+
+Answers `201` with the SOS.
+
+| Response field | Meaning |
+|---|---|
+| `id` | Pass to the cancel endpoint. |
+| `countdownSeconds` | How long to count down. Copied onto the row when it was raised, so it is the window actually in force — do not hard-code 10. |
+| `isDiscreet` | Echoed back. |
+| `cancelledAt` | `null` unless it was taken back. |
+| `respondedAt` | When a human first picked it up. `null` until then. **Show this** — it is what tells the person somebody is actually looking. |
+| `resolution` | `false_alarm` · `resolved` · `escalated_police`, once decided. `null` while open. |
+
+🔒 The responder's identity is deliberately **not** returned. An operator handling an emergency is a
+member of staff doing their job, and naming them gives an angry or unwell caller a human target.
+
+#### `POST /sos/{sos}/cancel` — "it was an accident"
+
+🔒 **Nothing is deleted.** The row stays with a cancellation time on it, because a pattern of presses
+cancelled seconds later — same route, same driver — is exactly the signal a safety team needs, and it
+is invisible if each one erases itself. Your copy should not promise deletion.
+
+Refuses with `SOS_ALREADY_RESOLVED` (409) if it was already cancelled, or **if an operator has
+already picked it up** — `error.fields.respondedAt` says when. Show that differently: "I cancelled
+it" and "somebody is calling me" are different situations to be in.
+
+#### `GET` / `POST /safety/emergency-contacts` · `PATCH` / `DELETE .../{contact}`
+
+Trusted contacts. **Request:** `name`, `phone`, `relationship`, `autoShareTrips`, `isGuardian`.
+
+| Response field | Meaning |
+|---|---|
+| `id`, `name`, `relationship` | As entered. |
+| `phone` | The **full** number, because this is the owner reading their own list and a masked number cannot be checked for a typo. |
+| `autoShareTrips` | 🔴 **The most consequential field in this screen.** On, this contact sees EVERY trip automatically. Somebody may not remember turning it on, so show it prominently — a contact with this enabled has a standing feed of where its owner goes each morning. |
+| `isGuardian` | Elevated access during an emergency. |
+| `verifiedAt` | Whether the number has been confirmed to actually receive messages. **`null` for everybody today** — confirming it needs an OTP to that number (Phase 12). Say "unconfirmed" rather than implying the contact works. |
+
+Rules you will hit:
+
+- **Capped at 5** (`EMERGENCY_CONTACT_LIMIT_REACHED`, 422, with the limit in `error.fields`). This
+  list is who receives somebody's location; an unbounded one is a way to broadcast their movements.
+- **The number is normalised**, so the same contact cannot be added twice in two formats
+  (`EMERGENCY_CONTACT_DUPLICATE`, 409).
+- **Changing the number clears `verifiedAt`.** Carrying it across would mean a "verified" badge on a
+  number nobody ever reached.
+- **Removal is immediate and unconditional.** Do not add a confirmation dialog: somebody removing a
+  contact may be doing it quickly and quietly, and every extra step is a step taken while they may be
+  watched.
+
+🔒 There is no endpoint that returns anybody else's contacts. Another person's list is a 404, and an
+empty list for a stranger is genuinely empty.
+
+#### `POST /incidents` — file a report
+
+**Request:** `category` (required), `description`, `bookingId`.
+
+| Category | |
+|---|---|
+| `harassment` · `identity_mismatch` | Treated as **critical** |
+| `unsafe_driving` | **high** |
+| `other` | **medium** |
+| `no_show` · `payment` · `lost_item` | **low** |
+
+🔴 **There is no `severity` field and there must not be.** It is decided from the category by the
+server. A reporter cannot be asked to rate their own emergency — somebody who has just been harassed
+is not in a position to choose between "medium" and "high" — and a client that could set it would own
+the ordering of the safety queue.
+
+🔴 **There is no `reportedUserId` field either.** Who the report is about is derived from the booking.
+Accepting it would be a way to put a mark against a stranger.
+
+Both `description` and `bookingId` are **optional**. A report about somebody impersonating a Rafeeq
+driver has no booking, and that is exactly the report the platform most needs to receive; somebody
+shaken may not want to type at all.
+
+Rate-limited per user per hour, generously — a `429` carries `Retry-After`. `INCIDENT_NOT_REPORTABLE`
+(422) means the `bookingId` is not one of theirs.
+
+#### `GET /incidents` — paginated · `GET /incidents/{incident}`
+
+| Response field | Meaning |
+|---|---|
+| `category`, `description` | As filed. |
+| `severity` | The platform's judgement. See above. |
+| `status` | `OPEN` · `UNDER_REVIEW` · `ESCALATED` · `RESOLVED` · `CLOSED`. |
+| `slaDueAt` | When the platform has undertaken to respond by, written when the report was filed. Fixed rather than recomputed — a deadline that can be recalculated is one that can be quietly moved. |
+| `resolution` / `resolvedAt` | Once decided. |
+| `bookingId` | The journey, when one was named. |
+| `evidenceCount` | How many files are attached. **Evidence upload is not built yet** — see section 7. |
+
+🔒 **Own reports only, and that includes the person a report is about.** Showing the subject what was
+said about them, in the reporter's own words, is how a report becomes a reason for a confrontation.
+The reviewer's identity and the reported person's id are not returned either.
+
+#### `GET` / `POST /safety/blocked-users` · `DELETE .../{user}`
+
+**POST request:** `userId`, `reason` (optional, **never shown to the blocked person**).
+
+| Response field | Meaning |
+|---|---|
+| `id` | The block. |
+| `userId` | Who was blocked. |
+| `person` | Their public summary (5.1), so the list is recognisable without naming anybody fully. |
+| `reason` | What the blocker wrote, to themselves. |
+
+🔴 **The block works in both directions immediately.** Neither of you will appear in the other's
+search results from the next search on. Blocking one-directionally would mean somebody who blocks a
+person they are afraid of still showing up in *that person's* results — the protection would run the
+wrong way.
+
+🔒 **Nothing tells the blocked person.** No notification, no marker in any payload they can read, and
+the list is one-directional: **who I blocked, never who blocked me.** Somebody blocking a person they
+are frightened of must not thereby inform them of it. Your UI must not leak it either.
+
+**Existing bookings are untouched.** A block is about the future; unwinding this week's arrangement is
+a cancellation, which is a separate act with consequences for the other people in the car.
+
+`CANNOT_BLOCK_SELF` (403) · `ALREADY_BLOCKED` (409).
+
 ---
 
 ## 5. Shared shapes
@@ -1356,6 +1515,8 @@ figures you are given.
 | `distanceTravelledMeters` | `null` until there are GPS points to measure it from. **Not** the route's planned distance — that would present a figure we did not observe as one we did. |
 | `isUnderway` | Stated rather than left for you to infer which statuses count. |
 | `lastLocationAt` | When the last GPS reading arrived. **A client showing a live map needs this** — without it you draw a car that stopped reporting twenty minutes ago as though it were still there. |
+| `deviationDetectedAt` | **Screen 39.** When the run FIRST went off its published route. `null` on the overwhelming majority of runs — this is an exception report, not a measurement, so do not render "0 m off route" on a normal morning. Checked only while the run is `IN_PROGRESS`: on the way to collect people, being off the direct line is the job. |
+| `deviationDistanceMeters` | The FURTHEST it got, not where it is now. Together with the moment above, that is when it started and how far it went. `null` when there was no deviation. |
 | `trip` | The scheduled trip, when loaded. |
 
 🔒 **No GPS trail.** A passenger needs the car's position now, not the history of where it has
@@ -1397,9 +1558,9 @@ Nothing below exists. Build the screen shells if you like, but there is no endpo
 | Area | Screens | Phase | What is missing |
 |---|---|---|---|
 | **Payments and wallet** | 34, group `payments` tab | **8** | Payment methods, online capture, driver balance and payouts, refunds, cancellation fees. `paymentStatus` exists and stays `NOT_DUE` for cash. **Blocked on the fee-direction decision, section 8.** |
-| **Route deviation, driver cancellation** | 39, 43, 45 | **9** | Deviation detection off the route, a driver cancelling a single day, and the backup search that follows. |
+| **Driver cancelling one day** | 43, 45, 46 | **9** | A driver cancelling a single day and the backup search that follows. **Blocked on an open decision** — refunds and reliability, section 8 #3. Route deviation itself is now detected and reported (see `deviationDetectedAt`); the ops ALERT it should trigger needs Phase 12/13. |
 | **Ratings and reviews** | 37, filter on 11, reviews on 12, history on 19 | **10** | Double-blind ratings, stars and tags, trust scores. Until then every `rating` and `onTimeRate` is `null`. |
-| **Safety** | 16, 32, 44, 26, case number on 35 | **11** | SOS with countdown, discreet alert, live share links, trusted contacts, the 5-step incident wizard, blocking. |
+| **Live share, evidence** | part of 16 and 32 | **11** | 🔴 **Share Live Trip** (a temporary tokenised link a trusted contact opens) and **evidence upload on a report** are the two pieces of Chapter 10 still missing. SOS, contacts, reports and blocking are done — section 4.12. Also missing: the case number on screen 35, and escort mode. |
 | **Notifications and chat** | 22 | **12** | Push, in-app notifications, preferences, trip chat. **Everything today is pull-only** — no server-initiated message of any kind reaches the app. Plan for polling in the interim, and tell us what you need first. |
 
 ---
@@ -1430,4 +1591,6 @@ exist, and every live endpoint must be named here.
 
 | Date | Change |
 |---|---|
+| 2026-09-29 | **Safety Centre** — 12 endpoints: SOS (and its cancel), trusted contacts, reports, blocking. Section 4.12. All in the **signed-in** tier: no verification gate, no complete profile. Screens 16, 26, 32 and 44 move from ⛔ to ⚠️/✅. |
+| 2026-09-29 | **Route deviation** detected and reported on the trip session — `deviationDetectedAt` and `deviationDistanceMeters` on `GET /trips/{trip}` (screen 39). No new endpoint. |
 | 2026-09-28 | **First version.** 92 endpoints. Phases 0–7 complete. Phase 9 (trip lifecycle) through its fourth slice: start/advance/complete, attendance with the dispute window, wait timers, live location with the Reverb channel. |

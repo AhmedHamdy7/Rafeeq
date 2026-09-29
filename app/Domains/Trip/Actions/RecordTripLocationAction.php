@@ -2,8 +2,12 @@
 
 namespace App\Domains\Trip\Actions;
 
+use App\Domains\Geo\Contracts\GeoQueryEngine;
+use App\Domains\Geo\ValueObjects\Route;
 use App\Domains\Shared\Exceptions\DomainException;
 use App\Domains\Shared\Support\ErrorCode;
+use App\Domains\Shared\ValueObjects\Coordinate;
+use App\Domains\Shared\ValueObjects\Distance;
 use App\Domains\Trip\Enums\TripSessionStatus;
 use App\Domains\Trip\Events\TripLocationUpdated;
 use App\Domains\Trip\Models\TripSession;
@@ -27,7 +31,10 @@ use App\Domains\Trip\ValueObjects\TripPosition;
  */
 final readonly class RecordTripLocationAction
 {
-    public function __construct(private LiveLocationStore $store) {}
+    public function __construct(
+        private LiveLocationStore $store,
+        private GeoQueryEngine $geo,
+    ) {}
 
     /**
      * @param  array<int, TripPosition>  $reported
@@ -67,7 +74,11 @@ final readonly class RecordTripLocationAction
          * indexed update per batch, not per point — and it is what lets a client say "this
          * dot is four minutes old" instead of drawing a car that stopped reporting.
          */
-        $session->forceFill(['last_location_at' => $latest->recordedAt])->save();
+        $changes = ['last_location_at' => $latest->recordedAt];
+
+        $changes = [...$changes, ...$this->deviation($session, $latest)];
+
+        $session->forceFill($changes)->save();
 
         /*
          * Broadcast after the cache is written, so a listener that immediately re-reads gets
@@ -137,6 +148,58 @@ final readonly class RecordTripLocationAction
         }
 
         return $accepted;
+    }
+
+    /**
+     * Whether this position is far enough off the published route to be worth saying so (screen 39,
+     * "Route changed").
+     *
+     * 🔴 Only while the run is IN PROGRESS. On the way to collect people, being off the direct line
+     * is the job — a driver detouring to an approved custom pickup added after the route was
+     * published is doing exactly what she agreed to, and flagging her for it would make the alert
+     * fire most often on the drivers being most accommodating.
+     *
+     * 🔴 The FIRST detection is kept and never overwritten, while the distance keeps the WORST
+     * reading. Those are the two useful facts: when it started, and how far it went. Overwriting
+     * the moment on every ping would answer "when did this begin" with "a second ago", for a
+     * diversion that started twenty minutes back.
+     *
+     * Recording only. No alert is sent and no safety event is written: notifications are Phase 12,
+     * the ops queue is Phase 13, and `safety_events` is Phase 11. What exists now is the evidence
+     * those three will read, which is the part that cannot be reconstructed afterwards.
+     *
+     * @return array<string, mixed>
+     */
+    private function deviation(TripSession $session, TripPosition $latest): array
+    {
+        if ($session->current_status !== TripSessionStatus::InProgress) {
+            return [];
+        }
+
+        $polyline = $session->scheduledTrip->commuteOffer->route_polyline;
+
+        if ($polyline === null || $polyline === '') {
+            // No published route to measure against. Silence rather than a guess.
+            return [];
+        }
+
+        $metres = $this->geo->distanceFromRoute(
+            new Route(
+                polyline: $polyline,
+                distance: Distance::fromMetres($session->scheduledTrip->commuteOffer->route_distance_meters ?? 0),
+                durationSeconds: $session->scheduledTrip->commuteOffer->route_duration_seconds ?? 0,
+            ),
+            new Coordinate($latest->lat, $latest->lng),
+        )->metres;
+
+        if ($metres <= TripSettings::deviationThresholdMeters()) {
+            return [];
+        }
+
+        return [
+            'deviation_detected_at' => $session->deviation_detected_at ?? now(),
+            'deviation_distance_meters' => max($metres, $session->deviation_distance_meters ?? 0),
+        ];
     }
 
     /**

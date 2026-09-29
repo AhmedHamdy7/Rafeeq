@@ -105,4 +105,93 @@ final class StraightLineGeoEngine implements GeoQueryEngine
 
         return round($near / count($bPoints) * 100, 2);
     }
+
+    /**
+     * Shortest distance from the point to the route's line, segment by segment.
+     *
+     * 🔴 To the SEGMENTS, not to the vertices. A polyline from a provider has a vertex every few
+     * hundred metres on a straight stretch, so measuring to the nearest vertex would report a car
+     * driving exactly down the middle of the road as hundreds of metres off it. That is the
+     * difference between a deviation alert somebody acts on and one they learn to ignore.
+     *
+     * Each segment is solved on a local flat plane rather than on the sphere. Over the few hundred
+     * metres of one segment the curvature is far below the error in a phone's own fix, and the flat
+     * version is a handful of multiplications where the spherical one is several trigonometric
+     * calls — which matters when this runs on every position report from every live run.
+     */
+    public function distanceFromRoute(Route $route, Coordinate $point): Distance
+    {
+        $points = $route->points();
+
+        if ($points === []) {
+            // No route to be off. Zero rather than a huge number, because "we do not know" must
+            // not read as "she has driven into the desert".
+            return Distance::fromMetres(0);
+        }
+
+        if (count($points) === 1) {
+            return Haversine::between($points[0], $point);
+        }
+
+        /*
+         * Metres per degree, taken at the point's own latitude. One cosine for the whole
+         * calculation instead of one per segment.
+         */
+        $metresPerDegreeLat = 111_320.0;
+        $metresPerDegreeLng = 111_320.0 * cos(deg2rad($point->lat));
+
+        $px = $point->lng * $metresPerDegreeLng;
+        $py = $point->lat * $metresPerDegreeLat;
+
+        $shortest = null;
+
+        for ($i = 0; $i < count($points) - 1; $i++) {
+            $ax = $points[$i]->lng * $metresPerDegreeLng;
+            $ay = $points[$i]->lat * $metresPerDegreeLat;
+            $bx = $points[$i + 1]->lng * $metresPerDegreeLng;
+            $by = $points[$i + 1]->lat * $metresPerDegreeLat;
+
+            $metres = self::distanceToSegment($px, $py, $ax, $ay, $bx, $by);
+
+            if ($shortest === null || $metres < $shortest) {
+                $shortest = $metres;
+            }
+        }
+
+        return Distance::fromMetres((int) round($shortest ?? 0));
+    }
+
+    /**
+     * Point-to-segment distance on a plane.
+     *
+     * The projection is clamped to the segment, which is the whole point: an unclamped projection
+     * measures to the infinite LINE through the two vertices, so a car sitting beside the start of
+     * a route would be reported as on it.
+     */
+    private static function distanceToSegment(
+        float $px,
+        float $py,
+        float $ax,
+        float $ay,
+        float $bx,
+        float $by,
+    ): float {
+        $dx = $bx - $ax;
+        $dy = $by - $ay;
+
+        $lengthSquared = $dx * $dx + $dy * $dy;
+
+        if ($lengthSquared === 0.0) {
+            // A zero-length segment: two identical vertices, which real polylines do contain.
+            return sqrt(($px - $ax) ** 2 + ($py - $ay) ** 2);
+        }
+
+        $t = (($px - $ax) * $dx + ($py - $ay) * $dy) / $lengthSquared;
+        $t = max(0.0, min(1.0, $t));
+
+        $closestX = $ax + $t * $dx;
+        $closestY = $ay + $t * $dy;
+
+        return sqrt(($px - $closestX) ** 2 + ($py - $closestY) ** 2);
+    }
 }

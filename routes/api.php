@@ -19,6 +19,7 @@ use App\Http\Controllers\Api\V1\Group\GroupAttendanceController;
 use App\Http\Controllers\Api\V1\Group\GroupController;
 use App\Http\Controllers\Api\V1\HomeController;
 use App\Http\Controllers\Api\V1\PlaceController;
+use App\Http\Controllers\Api\V1\Safety\SafetyController;
 use App\Http\Controllers\Api\V1\Search\CommuteDemandController;
 use App\Http\Controllers\Api\V1\Search\SavedSearchController;
 use App\Http\Controllers\Api\V1\Search\SearchController;
@@ -200,6 +201,40 @@ Route::prefix('v1')->group(function (): void {
          */
         Route::get('home', [HomeController::class, 'passenger']);
         Route::get('driver/home', [HomeController::class, 'driver']);
+
+        /*
+         * The Safety Centre (Chapter 10).
+         *
+         * 🔴 In the SIGNED-IN tier on purpose, alongside "see that I am suspended" and "revoke a
+         * stolen phone" — not behind `account.active`, not behind a verification gate. Somebody in
+         * trouble at a roadside will not finish uploading a national ID first, and a 403 at that
+         * moment is the worst answer this platform could give. The only thing that may fail on the
+         * SOS path is the database.
+         *
+         * 🔒 Every route is scoped to the caller. Nothing here reads another person's contacts,
+         * reports, or blocks — and the blocked list is one-directional: who I blocked, never who
+         * blocked me, because the second would tell somebody they have been blocked.
+         */
+        Route::post('sos', [SafetyController::class, 'triggerSos']);
+        Route::post('sos/{sos}/cancel', [SafetyController::class, 'cancelSos']);
+
+        Route::get('safety/emergency-contacts', [SafetyController::class, 'contacts']);
+        Route::post('safety/emergency-contacts', [SafetyController::class, 'addContact']);
+        Route::patch('safety/emergency-contacts/{contact}', [SafetyController::class, 'updateContact']);
+        Route::delete('safety/emergency-contacts/{contact}', [SafetyController::class, 'removeContact']);
+
+        Route::get('safety/blocked-users', [SafetyController::class, 'blocked']);
+        Route::post('safety/blocked-users', [SafetyController::class, 'block']);
+        Route::delete('safety/blocked-users/{user}', [SafetyController::class, 'unblock']);
+
+        /*
+         * Reports. Rate-limited per Chapter 10 §Security, generously: the failure to avoid is
+         * refusing a real report, not admitting a spurious one that a human reads and closes.
+         */
+        Route::get('incidents', [SafetyController::class, 'incidents']);
+        Route::get('incidents/{incident}', [SafetyController::class, 'showIncident']);
+        Route::post('incidents', [SafetyController::class, 'reportIncident'])
+            ->middleware('throttle:safety-reports');
     });
 
     /*
