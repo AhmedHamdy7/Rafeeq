@@ -1,0 +1,16 @@
+# RAFEEQ — the scheduler
+#
+# ⚠️ Without this line, FOUR things silently stop:
+#
+#   commutes:generate-trips    daily   — bookable days stop being created, so a
+#                                        commute quietly becomes unbookable about a
+#                                        month after it was published
+#   memberships:roll-forward   daily   — recurring members stop being seated
+#   trips:flush-locations      30s     — every GPS trail is lost (buffers expire
+#                                        after an hour), so a no-show dispute has no
+#                                        evidence
+#   trips:purge-locations      daily   — the 90-day retention promise is not kept
+#
+# None of them reports an error. Install with `sudo crontab -u www-data -e`:
+
+* * * * * cd /var/www/rafeeq && /usr/bin/php artisan schedule:run >> /dev/null 2>&1

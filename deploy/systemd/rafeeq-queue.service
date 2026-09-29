@@ -1,0 +1,31 @@
+# RAFEEQ — queue worker
+#
+# ⚠️ The most dangerous process to forget, because its absence is SILENT. With
+# QUEUE_CONNECTION=database a job is written to the `jobs` table and waits. No worker
+# means a passenger who saved a request never hears that a matching commute was
+# published — and nothing anywhere reports an error. See DEPLOYMENT.md §1-ب.
+#
+#   sudo cp deploy/systemd/*.service /etc/systemd/system/
+#   sudo systemctl daemon-reload
+#   sudo systemctl enable --now rafeeq-queue rafeeq-reverb
+
+[Unit]
+Description=RAFEEQ queue worker
+After=network.target mariadb.service
+
+[Service]
+User=www-data
+Group=www-data
+Restart=always
+RestartSec=5
+
+# `--max-time` recycles the worker every hour: a long-lived PHP process holds the
+# code it booted with, so without this a deploy leaves the old code running the
+# queue until somebody restarts it by hand.
+ExecStart=/usr/bin/php /var/www/rafeeq/artisan queue:work --tries=3 --max-time=3600 --sleep=3
+
+# A job that cannot finish must not take the worker down with it forever.
+TimeoutStopSec=30
+
+[Install]
+WantedBy=multi-user.target

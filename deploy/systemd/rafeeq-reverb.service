@@ -1,0 +1,23 @@
+# RAFEEQ — Reverb (WebSockets for live trip positions, decision D6)
+#
+# Without this the live map simply never updates. It fails QUIETLY from the app's
+# side: positions are still recorded and `GET /v1/trips/{trip}/location` still
+# answers, so the polling fallback keeps working and nothing looks broken — which is
+# exactly why it is easy to leave stopped for a week.
+
+[Unit]
+Description=RAFEEQ Reverb WebSocket server
+After=network.target
+
+[Service]
+User=www-data
+Group=www-data
+Restart=always
+RestartSec=5
+
+# 127.0.0.1 only: nginx proxies /app and terminates TLS. Bound to 0.0.0.0 this would
+# be a plaintext WebSocket open to the internet, carrying people's live positions.
+ExecStart=/usr/bin/php /var/www/rafeeq/artisan reverb:start --host=127.0.0.1 --port=8080
+
+[Install]
+WantedBy=multi-user.target
