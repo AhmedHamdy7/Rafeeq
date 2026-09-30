@@ -13,7 +13,9 @@ use App\Domains\Shared\Exceptions\DomainException;
 use App\Domains\Shared\Support\ErrorCode;
 use App\Domains\Shared\ValueObjects\PhoneNumber;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\RateLimiter;
+use RuntimeException;
 
 /**
  * Issues a one-time code for a phone number.
@@ -199,6 +201,71 @@ final readonly class RequestOtpAction
     {
         $length = AuthSettings::otpLength();
 
+        if (($fixed = $this->developmentFixedCode($length)) !== null) {
+            return $fixed;
+        }
+
         return str_pad((string) random_int(0, 10 ** $length - 1), $length, '0', STR_PAD_LEFT);
+    }
+
+    /**
+     * A fixed code, for a shared server that has no SMS provider yet.
+     *
+     * 🔴 Why it exists: the only transport writes the code to a log, and an external team
+     * working against a deployed instance cannot read a log. Without this they reach the OTP
+     * screen and stop — so the real choice is between a fixed code on a staging box and the
+     * team being blocked entirely.
+     *
+     * 🔒 The guard is on the ENVIRONMENT, not on the config value, for the same reason
+     * `LogOtpSender` refuses to run in production: config is exactly what a wrong deploy gets
+     * wrong. A `RAFEEQ_DEV_OTP_CODE` left in a production `.env` by mistake does nothing at
+     * all — which is the only version of this feature worth having.
+     *
+     * Logged as a warning every time it is used, because a server where every code is `123456`
+     * is a server anybody can sign into as anybody, and that fact should be impossible to
+     * forget while reading its logs.
+     */
+    private function developmentFixedCode(int $length): ?string
+    {
+        $fixed = config('rafeeq.auth.otp.dev_fixed_code');
+
+        if ($fixed === null || $fixed === '') {
+            return null;
+        }
+
+        /*
+         * 🔒 The refusal, and it is deliberately absolute rather than "ignore it in
+         * production". A fixed OTP reaching production would mean every account on the
+         * platform is accessible to anybody who read the repository — so a deploy that
+         * somehow has both production and this value set must fail loudly, not quietly do
+         * the safe thing. Quietly doing the safe thing is how it stays configured.
+         */
+        if (app()->isProduction()) {
+            throw new RuntimeException(
+                'rafeeq.auth.otp.dev_fixed_code is set in production. A fixed OTP would make '
+                .'every account signable into by anybody. Remove RAFEEQ_DEV_OTP_CODE.'
+            );
+        }
+
+        $fixed = (string) $fixed;
+
+        /*
+         * Wrong length is a misconfiguration that would otherwise present as "nobody can sign
+         * in and there is no error anywhere": the code is issued fine, and then verification
+         * rejects it because the request rule demands exactly `otpLength()` digits.
+         */
+        if (! preg_match('/^\d{'.$length.'}$/', $fixed)) {
+            throw new RuntimeException(
+                "rafeeq.auth.otp.dev_fixed_code must be exactly {$length} digits to match "
+                .'auth.otp.length. Anything else is issued and then refused at verification, '
+                .'with nothing reporting why.'
+            );
+        }
+
+        Log::warning('[dev] fixed OTP code in use — every code on this instance is the same', [
+            'environment' => app()->environment(),
+        ]);
+
+        return $fixed;
     }
 }

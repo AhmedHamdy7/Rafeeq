@@ -252,3 +252,110 @@ it('keeps the live-booking index and the duplicate check saying the same thing',
  * in OpenApiDocumentTest — "describes every field concretely" — which cannot
  * be fooled by a clever refactor the way a source-scan could.
  */
+
+/**
+ * Every `*Test.php` under `tests/`.
+ *
+ * @return array<int, string>
+ */
+function testFilePaths(): array
+{
+    $paths = [];
+
+    $files = new RecursiveIteratorIterator(
+        new RecursiveDirectoryIterator(__DIR__.'/..', FilesystemIterator::SKIP_DOTS)
+    );
+
+    foreach ($files as $file) {
+        if ($file->getExtension() === 'php' && str_ends_with($file->getFilename(), 'Test.php')) {
+            $paths[] = $file->getPathname();
+        }
+    }
+
+    return $paths;
+}
+
+/**
+ * The global functions one file declares at top level.
+ *
+ * @return array<int, string>
+ */
+function globalFunctionsDeclaredIn(string $path): array
+{
+    preg_match_all(
+        '/^function\s+([a-zA-Z_][a-zA-Z0-9_]*)\s*\(/m',
+        (string) file_get_contents($path),
+        $matches
+    );
+
+    return $matches[1];
+}
+
+/**
+ * 🔴 Two test files must never declare a global function with the same name.
+ *
+ * PHP has one global function namespace, and a `function foo()` inside a test file is declared
+ * the moment that file is compiled. Two files declaring the same name is a FATAL error that
+ * happens before a single test runs — so the whole suite reports nothing useful, and the file
+ * that broke it passes perfectly well on its own.
+ *
+ * That shape of failure cost time four times in one phase, in both directions: a helper defined
+ * in one test file and called from another (which works until the first file is not collected),
+ * and a helper whose name a second file then reused. The rule the project already follows for the
+ * first case is "shared helpers live in Pest.php"; this catches the second, which is the one that
+ * takes the whole suite down at once.
+ */
+it('never declares the same test helper in two files', function () {
+    $declarations = [];
+
+    foreach (testFilePaths() as $path) {
+        foreach (globalFunctionsDeclaredIn($path) as $name) {
+            $declarations[$name][] = basename($path);
+        }
+    }
+
+    $collisions = [];
+
+    foreach ($declarations as $name => $files) {
+        $files = array_unique($files);
+
+        if (count($files) > 1) {
+            $collisions[] = $name.'() in '.implode(' and ', $files);
+        }
+    }
+
+    // `toBeTrue` with a message rather than `toBeEmpty`, so the failure names every collision
+    // instead of printing an array.
+    expect($collisions === [])->toBeTrue(
+        "These test helpers are declared in more than one file, which is a fatal error before\n"
+        ."any test runs:\n- ".implode("\n- ", $collisions)
+        ."\n\nRename one, or move the shared version to tests/Pest.php."
+    );
+});
+
+/**
+ * And the same collision against the shared file, which is the more likely one to introduce: a
+ * new test file writes a helper whose name `Pest.php` already provides, and the suite dies before
+ * anything runs.
+ *
+ * Checked by name rather than by resolving every call. A full call-graph check would need the
+ * whole suite loaded, and this catches the case that actually happens.
+ */
+it('keeps shared test helpers in Pest.php rather than shadowed elsewhere', function () {
+    $shared = globalFunctionsDeclaredIn(__DIR__.'/../Pest.php');
+
+    expect($shared)->not->toBeEmpty('Pest.php declares no helpers — this check proved nothing.');
+
+    $shadowed = [];
+
+    foreach (testFilePaths() as $path) {
+        foreach (array_intersect(globalFunctionsDeclaredIn($path), $shared) as $name) {
+            $shadowed[] = $name.'() in '.basename($path);
+        }
+    }
+
+    expect($shadowed === [])->toBeTrue(
+        "These test files redeclare a helper that Pest.php already provides, which is fatal:\n- "
+        .implode("\n- ", $shadowed)
+    );
+});

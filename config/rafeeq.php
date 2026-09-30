@@ -565,6 +565,27 @@ return [
              */
             'driver' => env('RAFEEQ_OTP_DRIVER', 'log'),
 
+            /*
+             * DEPLOY-ONLY. A fixed code, so a shared server can be signed into while there
+             * is still no SMS provider.
+             *
+             * 🔴 Why this exists at all: the only transport writes the code to the log, and
+             * an external team working against a deployed instance cannot read a log. Without
+             * this they reach the OTP screen and stop — so the choice is between a fixed code
+             * and the team being blocked entirely.
+             *
+             * 🔒 And why it is safe to have in the codebase: `RequestOtpAction` refuses it in
+             * production, checking the ENVIRONMENT rather than this value. Config is exactly
+             * what a wrong deploy gets wrong, so a forgotten `RAFEEQ_DEV_OTP_CODE` in a
+             * production `.env` changes nothing. Same guard, same reasoning, as
+             * `LogOtpSender` refusing to run there.
+             *
+             * Null disables it and every code is random again. It must be exactly
+             * `auth.otp.length` digits — anything else and nobody could sign in, which is
+             * why the Action throws rather than letting it through.
+             */
+            'dev_fixed_code' => env('RAFEEQ_DEV_OTP_CODE'),
+
             // Chapter 2 §23.2 shows a six-digit code. This is the OTP, not the
             // local PIN (which is four digits per MASTER_PLAN §13).
             'length' => 6,
