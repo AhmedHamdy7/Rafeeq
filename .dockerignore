@@ -1,0 +1,44 @@
+# What must NOT go into the build context.
+#
+# 🔴 `.env` first, and it is not a tidiness point. `COPY . .` would bake the local file — database
+# password, APP_KEY, any API credential — into an image layer, where it survives every later
+# instruction and is readable by anybody who can pull the image. Platform variables replace it at
+# runtime; the file itself must never travel.
+.env
+.env.*
+!.env.production.example
+
+# 🔒 And the second one for the same reason: local storage holds identity documents, GPS trails and
+# incident evidence from development. Copying them in would ship real-shaped personal data inside a
+# container image. The directory structure is recreated by the framework; its contents must not
+# travel.
+storage/app/*
+!storage/app/.gitignore
+!storage/app/public/.gitignore
+storage/logs/*
+storage/framework/cache/*
+storage/framework/sessions/*
+storage/framework/views/*
+storage/framework/testing/*
+
+# A locally generated config cache would override every runtime variable — the container would boot
+# on this machine's settings. The entrypoint builds it fresh instead.
+bootstrap/cache/*.php
+
+# Rebuilt in the image, and copying them makes the context enormous and the layer cache useless.
+vendor
+node_modules
+
+.git
+.github
+.idea
+.vscode
+.phpunit.result.cache
+.phpunit.cache
+
+# Not needed to run the application.
+tests
+"Rafeeq doc"
+deploy
+*.md
+!README.md

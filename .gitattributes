@@ -1,11 +1,9 @@
-* text=auto eol=lf
-
-*.blade.php diff=html
-*.css diff=css
-*.html diff=html
-*.md diff=markdown
-*.php diff=php
-
-/.github export-ignore
-CHANGELOG.md export-ignore
-.styleci.yml export-ignore
+# 🔴 Shell scripts stay LF, always.
+#
+# This repository is developed on Windows. Without this, git checks `entrypoint.sh` out with CRLF,
+# Docker copies it in unchanged, and the container dies with `/bin/sh^M: bad interpreter` — an error
+# that says nothing about line endings and sends you looking at the script's logic.
+*.sh text eol=lf
+docker/entrypoint.sh text eol=lf
+Dockerfile text eol=lf
+*.conf text eol=lf
