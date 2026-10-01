@@ -57,6 +57,23 @@ final class SafetySettings
         return max(1, (int) self::get('safety.evidence_retention_days'));
     }
 
+    /** How long after a journey ends a share link keeps working. */
+    public static function liveShareGraceMinutes(): int
+    {
+        return max(1, (int) self::get('safety.live_share_grace_minutes'));
+    }
+
+    /**
+     * 🔒 The ceiling on a share whose journey has not finished.
+     *
+     * The link has to expire even if the driver never taps "complete", and that point is the
+     * difference between a safety feature and a standing window onto wherever somebody goes next.
+     */
+    public static function liveShareMaxMinutes(): int
+    {
+        return max(1, (int) self::get('safety.live_share_max_minutes'));
+    }
+
     private static function get(string $key): mixed
     {
         return PlatformSetting::value($key, config("rafeeq.{$key}"));

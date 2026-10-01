@@ -93,11 +93,17 @@ it('documents no endpoint that does not exist', function () {
     $live = liveEndpointsAsGuideWritesThem();
 
     /*
-     * The guide also mentions two paths that are not `/v1` routes: the broadcasting auth endpoint
-     * and the docs page. Both are real and both are outside the versioned API, so they are named
-     * here rather than silently skipped by a loose pattern.
+     * The guide also mentions three paths that are not `/v1` routes: the broadcasting auth
+     * endpoint, the docs page, and the live-share page a trusted contact opens. All three are real
+     * and all three are outside the versioned API, so they are named here rather than silently
+     * skipped by a loose pattern.
+     *
+     * 🔒 `/s/{token}` is the one the mobile team must NOT call, and the guide says so — it returns
+     * HTML to a person and its token is a credential. It is listed here so the guide can document
+     * what the page shows (which is the reassurance that makes somebody willing to share at all)
+     * without this test reading it as a promise of an endpoint.
      */
-    $outsideV1 = ['POST /broadcasting/auth', 'GET /docs/api'];
+    $outsideV1 = ['POST /broadcasting/auth', 'GET /docs/api', 'GET /s/{token}'];
 
     $promised = array_diff(guideEndpoints(), $outsideV1);
 

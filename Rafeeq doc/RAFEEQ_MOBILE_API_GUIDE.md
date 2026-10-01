@@ -14,7 +14,7 @@
 >
 > **Base URL:** `{host}/api/v1` · **Auth:** bearer token · **Format:** JSON only.
 
-**Last updated:** 2026-09-29 · **104 endpoints live** · Phases 0–7 complete, Phase 9 in progress
+**Last updated:** 2026-10-02 · **107 endpoints live** · Phases 0–7 complete, Phase 9 in progress
 
 ---
 
@@ -22,13 +22,13 @@
 
 ### إيه الجاهز دلوقتي
 
-**١٠٤ endpoint شغّالين ومختبَرين** (1,151 اختبار كلهم خضرا). يعني من الـ٤٧ شاشة:
+**١٠٧ endpoint شغّالين ومختبَرين** (1,299 اختبار كلهم خضرا). يعني من الـ٤٧ شاشة:
 
 | | عدد | التفاصيل |
 |---|---|---|
-| ✅ **جاهزة بالكامل** | ~٢٤ شاشة | الدخول والتسجيل كله · التوثيق · السائق والعربيات · نشر الرحلة · البحث والمطابقة · طلب المقعد · المجموعة · الرحلة الحيّة |
+| ✅ **جاهزة بالكامل** | ~٢٦ شاشة | الدخول والتسجيل كله · التوثيق · السائق والعربيات · نشر الرحلة · البحث والمطابقة · طلب المقعد · المجموعة · الرحلة الحيّة · **مركز الأمان** (SOS · جهات الطوارئ · البلاغات · الحظر · مشاركة الرحلة) |
 | ⚠️ **جاهزة وناقصها حقل أو حقلين** | ~٨ شاشات | مكتوب تحت بالظبط الناقص إيه في كل واحدة |
-| ⛔ **مش جاهزة** | ~١١ شاشة | التقييمات · الأمان والـ SOS · الإشعارات · المدفوعات — كل واحدة مكتوب جنبها المرحلة |
+| ⛔ **مش جاهزة** | ~١١ شاشة | التقييمات · الإشعارات · المدفوعات · إلغاء السائقة ليوم واحد — كل واحدة مكتوب جنبها المرحلة. **الأمان بقى جاهز** (SOS · جهات الطوارئ · البلاغات · الحظر · مشاركة الرحلة المباشرة) |
 | 🚫 **مش محتاجة API** | ٤ شاشات | حالات جهاز أو نص ثابت |
 
 ### ابدأ منين
@@ -315,7 +315,7 @@ Status: ✅ fully served · ⚠️ served, something named missing · ⛔ no API
 | # | Screen | Phase |
 |---|---|---|
 | 37 | Rating | ⛔ **10** — ratings |
-| 16 · 44 | **Safety centre · discreet alert** | ⚠️ `POST /sos` (with `isDiscreet`) · `POST /sos/{sos}/cancel` · `GET`/`POST /safety/emergency-contacts`. **Missing: Share Live Trip** and Contact Support — section 7. |
+| 16 · 44 | **Safety centre · discreet alert** | ✅ `POST /sos` (with `isDiscreet`) · `POST /sos/{sos}/cancel` · `GET`/`POST /safety/emergency-contacts` · **Share Live Trip**: `POST /trips/{trip}/live-share` · `GET /safety/live-shares` · `DELETE /safety/live-shares/{share}`. Missing: Contact Support — section 7. |
 | 32 | **Support / incident** | ⚠️ `POST /incidents` · `GET /incidents` · `GET /incidents/{incident}`. **Missing: evidence upload** — section 7. |
 | 34 | Payment failed | ⛔ **8** — payments |
 | 33 · 38 | Offline · location denied | 🚫 Device states |
@@ -436,8 +436,16 @@ fails if this list and the running routes ever disagree in either direction.
 | `POST /safety/emergency-contacts` | 4.12 Safety |
 | `PATCH /safety/emergency-contacts/{contact}` | 4.12 Safety |
 | `DELETE /safety/emergency-contacts/{contact}` | 4.12 Safety |
+| `GET /safety/live-shares` | 4.12 Safety |
+| `DELETE /safety/live-shares/{share}` | 4.12 Safety |
+| `POST /trips/{trip}/live-share` | 4.12 Safety |
 | `POST /sos` | 4.12 Safety |
 | `POST /sos/{sos}/cancel` | 4.12 Safety |
+
+One route is deliberately **not** in this index and **not** in the OpenAPI document: `/s/{token}`,
+the page a trusted contact opens. It is not under `/v1`, it takes no auth token, and it returns HTML
+rather than the envelope — a web page for a person, not an endpoint for the app. You never call it;
+you hand the URL the server gives you to the operating system's share sheet. See 4.12.
 
 ### 4.1 Auth and session
 
@@ -1316,6 +1324,76 @@ a cancellation, which is a separate act with consequences for the other people i
 
 `CANNOT_BLOCK_SELF` (403) · `ALREADY_BLOCKED` (409).
 
+#### `POST /trips/{trip}/live-share` — Share Live Trip
+
+A temporary link somebody sends a trusted contact: "this is the car I am in, here is where it is."
+
+🔴 **The response carries `url` and `token` exactly once.** Nothing can reproduce them afterwards —
+only a hash is stored, and re-reading the share gives its view count rather than its link. So **pass
+`url` to the share sheet in the same breath**: if your client drops it, the only recovery is to
+create a new share. Do not cache it, do not log it, do not put it in analytics.
+
+**Request:** `contactId` only, and it is optional. A share with no contact named is a link the person
+sends themselves, which is how it will mostly be used — pasted into whichever chat they wanted. A
+`contactId` must be one of **their own** emergency contacts; anything else is a `404`.
+
+There is **no `expiresAt` field and there must not be.** How long a link lives is policy: a share
+that outlived its journey would be a standing window onto wherever that person goes next, and
+letting the client choose would put that one API call away.
+
+Answers `201`.
+
+| Response field | Meaning |
+|---|---|
+| `url` | 🔴 **The whole thing. Shown once.** Hand it to the share sheet. Shape: `https://<host>/s/<token>`. |
+| `token` | The same credential on its own, for a client that wants to build its own copy string. Treat it exactly like `url`. |
+| `id` | The share, for revoking it later. **This is safe to keep**; the token is not. |
+| `tripSessionId` | The run it describes. |
+| `sharedWithContactId` | The contact, when one was named. |
+| `expiresAt` | When the link stops working. **Show it** — the person should know how long they have exposed. |
+| `isActive` | Whether it works right now. |
+| `viewCount` / `lastViewedAt` | Whether anybody opened it. See below. |
+
+Refuses with `TRIP_NOT_STARTED` (409) **until the car is actually out** — `error.fields.tripStatus`
+says where it is instead. A link made before the run starts would be a page saying nothing, and one
+made after it finishes is a window onto a journey that is over. A `404` means the caller is not on
+this run: only the driver, or a passenger holding a live seat, may share it.
+
+#### `GET /safety/live-shares` — paginated · `DELETE /safety/live-shares/{share}`
+
+The caller's own links. 🔒 **Without tokens, and that is not an oversight** — being able to re-read
+them would mean a stolen access token could harvest every link a person ever made. The list gives
+`isActive`, `expiresAt`, `viewCount` and `lastViewedAt`.
+
+🔴 **`viewCount` is not analytics, so put it on the screen.** For somebody who shared a link because
+they felt uneasy, "did they actually look?" is the question they opened the screen to answer.
+
+`DELETE` ends it now rather than at its expiry, and takes effect on the next view. `200` with
+`isActive: false`; `LIVE_SHARE_ALREADY_ENDED` (409) if it was already revoked, `404` for somebody
+else's.
+
+#### `GET /s/{token}` — the page the contact opens. **Not yours to call.**
+
+Not under `/v1`, no auth token, returns HTML, absent from the OpenAPI document. The only route in
+the platform that serves real data with no authentication, and it is written as if the URL were
+public — because in practice it is: it gets forwarded and screenshotted.
+
+What the page shows is deliberately narrow, and it is worth telling the user, because it is the
+reassurance that makes them willing to share at all:
+
+- **shown** — the driver's public first name, the car (colour, make, model, plate), where it is now,
+  where it is going, when it is due
+- **not shown** — anybody's phone number, full name or address · the other passengers, who did not
+  consent to being named to this viewer at all · the GPS history · any id
+
+🔒 The reason is that the viewer is a stranger to the **driver**. She never agreed to share anything
+with this person, and the passenger cannot consent on her behalf. So the page carries what somebody
+needs to act in an emergency and nothing that is still useful to them tomorrow.
+
+Expired, revoked and never-existed all render the **same** page with the same `404`. Do not write
+copy that distinguishes them: a page that said "this link has expired" would confirm that a guessed
+token was once real.
+
 ---
 
 ## 5. Shared shapes
@@ -1560,7 +1638,7 @@ Nothing below exists. Build the screen shells if you like, but there is no endpo
 | **Payments and wallet** | 34, group `payments` tab | **8** | Payment methods, online capture, driver balance and payouts, refunds, cancellation fees. `paymentStatus` exists and stays `NOT_DUE` for cash. **Blocked on the fee-direction decision, section 8.** |
 | **Driver cancelling one day** | 43, 45, 46 | **9** | A driver cancelling a single day and the backup search that follows. **Blocked on an open decision** — refunds and reliability, section 8 #3. Route deviation itself is now detected and reported (see `deviationDetectedAt`); the ops ALERT it should trigger needs Phase 12/13. |
 | **Ratings and reviews** | 37, filter on 11, reviews on 12, history on 19 | **10** | Double-blind ratings, stars and tags, trust scores. Until then every `rating` and `onTimeRate` is `null`. |
-| **Live share, evidence** | part of 16 and 32 | **11** | 🔴 **Share Live Trip** (a temporary tokenised link a trusted contact opens) and **evidence upload on a report** are the two pieces of Chapter 10 still missing. SOS, contacts, reports and blocking are done — section 4.12. Also missing: the case number on screen 35, and escort mode. |
+| **Evidence, escort mode** | part of 32 | **11** | **Evidence upload on a report** and **escort mode** (a window during which a contact is watching) are what is left of Chapter 10. SOS, contacts, reports, blocking and **Share Live Trip** are done — section 4.12. Also missing: the case number on screen 35. |
 | **Notifications and chat** | 22 | **12** | Push, in-app notifications, preferences, trip chat. **Everything today is pull-only** — no server-initiated message of any kind reaches the app. Plan for polling in the interim, and tell us what you need first. |
 
 ---
@@ -1591,6 +1669,7 @@ exist, and every live endpoint must be named here.
 
 | Date | Change |
 |---|---|
+| 2026-10-02 | **Share Live Trip** — 3 endpoints (`POST /trips/{trip}/live-share`, `GET /safety/live-shares`, `DELETE /safety/live-shares/{share}`) plus the public page `GET /s/{token}`, which is **not** in the OpenAPI document and is not yours to call. Section 4.12. 🔴 **`url` and `token` are returned once and are unrecoverable** — read that subsection before you write the share button. |
 | 2026-09-29 | **Safety Centre** — 12 endpoints: SOS (and its cancel), trusted contacts, reports, blocking. Section 4.12. All in the **signed-in** tier: no verification gate, no complete profile. Screens 16, 26, 32 and 44 move from ⛔ to ⚠️/✅. |
 | 2026-09-29 | **Route deviation** detected and reported on the trip session — `deviationDetectedAt` and `deviationDistanceMeters` on `GET /trips/{trip}` (screen 39). No new endpoint. |
 | 2026-09-28 | **First version.** 92 endpoints. Phases 0–7 complete. Phase 9 (trip lifecycle) through its fourth slice: start/advance/complete, attendance with the dispute window, wait timers, live location with the Reverb channel. |

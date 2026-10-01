@@ -5,10 +5,12 @@ namespace App\Http\Controllers\Api\V1\Safety;
 use App\Domains\Safety\Actions\BlockUserAction;
 use App\Domains\Safety\Actions\ManageEmergencyContactsAction;
 use App\Domains\Safety\Actions\ReportIncidentAction;
+use App\Domains\Safety\Actions\ShareLiveTripAction;
 use App\Domains\Safety\Actions\TriggerSosAction;
 use App\Domains\Safety\Models\BlockedUser;
 use App\Domains\Safety\Models\EmergencyContact;
 use App\Domains\Safety\Models\Incident;
+use App\Domains\Safety\Models\LiveShare;
 use App\Domains\Safety\Models\SosEvent;
 use App\Domains\Shared\Exceptions\DomainException;
 use App\Domains\Shared\Support\ErrorCode;
@@ -18,10 +20,12 @@ use App\Http\Controllers\Controller;
 use App\Http\OpenApi\ApiErrors;
 use App\Http\Requests\Safety\BlockUserRequest;
 use App\Http\Requests\Safety\ReportIncidentRequest;
+use App\Http\Requests\Safety\ShareLiveTripRequest;
 use App\Http\Requests\Safety\StoreEmergencyContactRequest;
 use App\Http\Requests\Safety\TriggerSosRequest;
 use App\Http\Resources\EmergencyContactResource;
 use App\Http\Resources\IncidentResource;
+use App\Http\Resources\LiveShareResource;
 use App\Http\Resources\PersonSummary;
 use App\Http\Resources\SosEventResource;
 use App\Http\Responses\ApiResponse;
@@ -189,6 +193,83 @@ final class SafetyController extends Controller
             ?? throw DomainException::of(ErrorCode::NotFound);
 
         return ApiResponse::success(new IncidentResource($own));
+    }
+
+    /**
+     * POST /v1/trips/{trip}/live-share — "Share Live Trip".
+     *
+     * 🔴 The response carries the token and the URL **once**. Nothing can reproduce them
+     * afterwards: only a hash is stored, and re-reading the share gives its view count rather
+     * than its link. A client that loses the URL creates a new share.
+     */
+    #[ApiErrors(
+        ErrorCode::TripNotStarted,
+        ErrorCode::NotFound,
+    )]
+    public function shareLiveTrip(ShareLiveTripRequest $request, string $trip, ShareLiveTripAction $action): JsonResponse
+    {
+        $session = TripSession::query()->where('scheduled_trip_id', $trip)->first()
+            ?? throw DomainException::of(ErrorCode::TripNotStarted);
+
+        $contactId = $request->input('contactId');
+
+        /*
+         * 🔒 Looked up UNSCOPED and handed over, so the Action makes the ownership call in one
+         * place — and a named id that matches nothing is a 404 rather than a share quietly created
+         * with no contact on it, which would tell the caller the id was wrong just as clearly
+         * while leaving a link behind.
+         */
+        $contact = $contactId === null
+            ? null
+            : EmergencyContact::query()->whereKey($contactId)->first()
+                ?? throw DomainException::of(ErrorCode::NotFound);
+
+        $result = $action->create($request->user(), $session, $contact);
+
+        return ApiResponse::success([
+            ...(new LiveShareResource($result['share']))->toArray($request),
+            /*
+             * 🔒 The only time either of these is ever sent. The URL is built here rather than
+             * handed over as a bare token, so every client produces the same link and none of
+             * them invents a path.
+             */
+            'url' => url('/s/'.$result['token']),
+            'token' => $result['token'],
+        ], status: 201);
+    }
+
+    /**
+     * GET /v1/safety/live-shares — the caller's own share links.
+     *
+     * 🔒 Without tokens. See LiveShareResource: being able to re-read them would mean a stolen
+     * access token could harvest every link a person ever made.
+     */
+    public function liveShares(Request $request): JsonResponse
+    {
+        $shares = LiveShare::query()
+            ->where('user_id', $request->user()->id)
+            ->latest('created_at')
+            ->orderByDesc('id')
+            ->paginate(ApiResponse::perPage($request));
+
+        return ApiResponse::paginated($shares, LiveShareResource::collection($shares->items()));
+    }
+
+    /**
+     * DELETE /v1/safety/live-shares/{share} — stop it now.
+     *
+     * Takes effect on the next view rather than waiting for the expiry, because somebody revoking
+     * a share has usually just decided they do not want it open any more.
+     */
+    #[ApiErrors(ErrorCode::LiveShareAlreadyEnded, ErrorCode::NotFound)]
+    public function revokeLiveShare(Request $request, string $share, ShareLiveTripAction $action): JsonResponse
+    {
+        $own = LiveShare::query()->whereKey($share)->first()
+            ?? throw DomainException::of(ErrorCode::NotFound);
+
+        return ApiResponse::success(new LiveShareResource(
+            $action->revoke($request->user(), $own)
+        ));
     }
 
     /**

@@ -160,6 +160,15 @@ it('generates a document describing every /v1 route', function () {
         'GET /v1/safety/blocked-users',
         'POST /v1/safety/blocked-users',
         'DELETE /v1/safety/blocked-users/{user}',
+        /*
+         * Share Live Trip — the authenticated side only. The page a contact opens is `GET /s/{token}`
+         * on the WEB router, and it must never appear in this document: it is a page for a person,
+         * and listing it in the API contract would invite a client to call it with a token it
+         * invented.
+         */
+        'POST /v1/trips/{trip}/live-share',
+        'GET /v1/safety/live-shares',
+        'DELETE /v1/safety/live-shares/{share}',
         'GET /v1/incidents',
         'GET /v1/incidents/{incident}',
         'POST /v1/incidents',

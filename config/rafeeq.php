@@ -445,6 +445,25 @@ return [
          * not something to hold for ever by default.
          */
         'evidence_retention_days' => 365,
+
+        /*
+         * How long after a journey ends a live-share link keeps working, in minutes.
+         *
+         * A grace rather than an instant cut-off: a contact who opens the link as the car pulls
+         * in should see it arrive rather than an expired page, and "the trip ended" is a moment
+         * the driver chooses — which can be a few minutes after everybody is actually home.
+         */
+        'live_share_grace_minutes' => 15,
+
+        /*
+         * 🔒 The ceiling on a share whose journey has not finished yet.
+         *
+         * The link has to expire at SOME point even if the driver never taps "complete" — and
+         * that point is the difference between a safety feature and a standing window onto
+         * wherever somebody goes next. Three hours is longer than any commute in the product and
+         * short enough that a forgotten run does not leave a live link open all evening.
+         */
+        'live_share_max_minutes' => 180,
     ],
 
     /*

@@ -223,6 +223,17 @@ Route::prefix('v1')->group(function (): void {
         Route::patch('safety/emergency-contacts/{contact}', [SafetyController::class, 'updateContact']);
         Route::delete('safety/emergency-contacts/{contact}', [SafetyController::class, 'removeContact']);
 
+        /*
+         * "Share Live Trip" — a temporary tokenised link a trusted contact opens.
+         *
+         * 🔒 The public page itself is NOT here: it is `GET /s/{token}` in routes/web.php, because
+         * it is a page for a person and the token is its whole credential. These three are the
+         * authenticated side — make a link, see whether anybody opened it, stop it.
+         */
+        Route::post('trips/{trip}/live-share', [SafetyController::class, 'shareLiveTrip']);
+        Route::get('safety/live-shares', [SafetyController::class, 'liveShares']);
+        Route::delete('safety/live-shares/{share}', [SafetyController::class, 'revokeLiveShare']);
+
         Route::get('safety/blocked-users', [SafetyController::class, 'blocked']);
         Route::post('safety/blocked-users', [SafetyController::class, 'block']);
         Route::delete('safety/blocked-users/{user}', [SafetyController::class, 'unblock']);

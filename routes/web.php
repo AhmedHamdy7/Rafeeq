@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\LiveShareController;
 use App\Livewire\Admin\DriverApplications;
 use App\Livewire\Admin\Login;
 use App\Livewire\Admin\VerificationQueue;
@@ -10,6 +11,27 @@ use Illuminate\Support\Facades\Route;
 Route::get('/', function () {
     return view('welcome');
 });
+
+/*
+|--------------------------------------------------------------------------
+| Live trip share (Chapter 10)
+|--------------------------------------------------------------------------
+|
+| 🔴 The only route in the application that serves real data with NO authentication. The token IS
+| the credential, so the controller is written as if the URL were public — because for practical
+| purposes it is: it gets pasted into WhatsApp, forwarded and screenshotted.
+|
+| 🔒 Short path on purpose (`/s/`), because the link is read aloud and retyped. And outside `/v1`
+| on purpose: this is a web page for a person, not an endpoint for the app, and it must never
+| appear in the API contract the mobile team builds against.
+|
+| Rate-limited by IP: the token is 32 random bytes, so guessing is not a practical attack, but an
+| unthrottled public route is a free amplifier for anybody who wants one.
+|
+*/
+Route::get('/s/{token}', [LiveShareController::class, 'show'])
+    ->middleware('throttle:60,1')
+    ->name('live-share.show');
 
 /*
 |--------------------------------------------------------------------------

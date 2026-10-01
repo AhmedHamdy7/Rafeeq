@@ -119,6 +119,7 @@ enum ErrorCode: string
     case CannotBlockSelf = 'CANNOT_BLOCK_SELF';
     case AlreadyBlocked = 'ALREADY_BLOCKED';
     case IncidentNotReportable = 'INCIDENT_NOT_REPORTABLE';
+    case LiveShareAlreadyEnded = 'LIVE_SHARE_ALREADY_ENDED';
 
     // ---- Admin dashboard (Chapter 12) ----------------------------------
     case AdminCredentialsInvalid = 'ADMIN_CREDENTIALS_INVALID';
@@ -261,7 +262,8 @@ enum ErrorCode: string
              */
             self::SosAlreadyResolved,
             self::EmergencyContactDuplicate,
-            self::AlreadyBlocked => 409,
+            self::AlreadyBlocked,
+            self::LiveShareAlreadyEnded => 409,
 
             // 422: about what was sent. The list is full, or the report has nothing to attach to.
             self::EmergencyContactLimitReached,
