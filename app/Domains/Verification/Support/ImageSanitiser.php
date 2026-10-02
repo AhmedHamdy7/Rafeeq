@@ -22,6 +22,10 @@ use GdImage;
  *
  * Alpha is flattened onto white rather than preserved: a document photo has
  * no use for transparency, and JPEG cannot express it.
+ *
+ * 🔒 And the dimensions are bounded before anything is decoded — see `sanitise()`. A compressed
+ * image says nothing about what it costs to open, so a file small enough to pass every size limit
+ * can still ask for a gigabyte of bitmap.
  */
 final class ImageSanitiser
 {
@@ -39,11 +43,45 @@ final class ImageSanitiser
      */
     public function sanitise(string $contents): array
     {
+        /*
+         * 🔒 The dimensions are checked BEFORE anything is decoded, and this order is the whole
+         * point.
+         *
+         * A compressed image says nothing about what it costs to open. A few hundred kilobytes of
+         * JPEG can declare 20000 × 15000 pixels, and `imagecreatefromstring` would try to allocate
+         * four bytes for every one of them — 1.2 GB — and take the worker down with it. That is a
+         * decompression bomb, it is reachable by any signed-in account through the evidence and
+         * document endpoints, and a size limit in the FormRequest does not stop it: the file is
+         * small. It is the bitmap that is not.
+         *
+         * `getimagesizefromstring` reads the header only, so this costs nothing and turns a dead
+         * worker into a 422 the person can act on.
+         */
+        $declared = @getimagesizefromstring($contents);
+
+        if ($declared === false) {
+            // Not an image at all, which includes a file that merely starts with an image
+            // signature. Caught here rather than by the decoder below, for the same cost.
+            throw DomainException::of(ErrorCode::DocumentUnreadable);
+        }
+
+        $megapixels = ($declared[0] * $declared[1]) / 1_000_000;
+        $limit = (float) config('rafeeq.verification.max_document_megapixels');
+
+        if ($megapixels > $limit) {
+            throw DomainException::of(ErrorCode::DocumentDimensionsTooLarge, fields: [
+                'megapixels' => [(string) round($megapixels, 1)],
+                'maxMegapixels' => [(string) $limit],
+            ]);
+        }
+
         $source = @imagecreatefromstring($contents);
 
         if (! $source instanceof GdImage) {
-            // Reached when the bytes are not a decodable image at all, which
-            // includes a file that merely starts with an image signature.
+            /*
+             * Still reachable with a valid header: a truncated or corrupt body decodes to nothing.
+             * The header check above does not make this branch dead.
+             */
             throw DomainException::of(ErrorCode::DocumentUnreadable);
         }
 

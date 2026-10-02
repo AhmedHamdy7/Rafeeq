@@ -44,6 +44,7 @@ final class VerificationController extends Controller
         ErrorCode::DocumentKindNotAccepted,
         ErrorCode::DocumentRejectedByScanner,
         ErrorCode::DocumentUnreadable,
+        ErrorCode::DocumentDimensionsTooLarge,
         ErrorCode::VerificationAlreadyApproved,
         ErrorCode::VerificationAttemptsExhausted,
         ErrorCode::NotFound,

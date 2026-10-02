@@ -43,6 +43,14 @@ function thrownErrorCodes(): array
 {
     $sources = [
         ...glob(__DIR__.'/../../app/Domains/*/Actions/*.php'),
+        /*
+         * 🔴 `Support/` as well, and this was a real gap. `ImageSanitiser` and `DocumentIntake`
+         * both throw — they are what refuse an unreadable file, a failed virus scan and an image
+         * too large to open — and none of it was in scope here, so a code thrown from a Support
+         * class could reach a client without ever entering the contract. Found when
+         * DOCUMENT_DIMENSIONS_TOO_LARGE was added and nothing asked for it.
+         */
+        ...glob(__DIR__.'/../../app/Domains/*/Support/*.php'),
         ...glob(__DIR__.'/../../app/Http/Controllers/Api/V1/*/*.php'),
     ];
 
@@ -58,7 +66,7 @@ function thrownErrorCodes(): array
      */
     $sources = array_filter(
         $sources,
-        fn (string $file) => ! str_contains(str_replace('\\', '/', $file), '/Domains/Admin/Actions/'),
+        fn (string $file) => ! str_contains(str_replace('\\', '/', $file), '/Domains/Admin/'),
     );
 
     $codes = [];
@@ -172,6 +180,8 @@ it('generates a document describing every /v1 route', function () {
         'GET /v1/incidents',
         'GET /v1/incidents/{incident}',
         'POST /v1/incidents',
+        'GET /v1/incidents/{incident}/evidence',
+        'POST /v1/incidents/{incident}/evidence',
         'GET /v1/search/commutes',
         'GET /v1/commute-demands',
         'POST /v1/commute-demands',

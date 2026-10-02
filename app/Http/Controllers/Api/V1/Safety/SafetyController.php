@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Api\V1\Safety;
 
+use App\Domains\Safety\Actions\AttachIncidentEvidenceAction;
 use App\Domains\Safety\Actions\BlockUserAction;
 use App\Domains\Safety\Actions\ManageEmergencyContactsAction;
 use App\Domains\Safety\Actions\ReportIncidentAction;
@@ -18,12 +19,14 @@ use App\Domains\Shared\ValueObjects\Coordinate;
 use App\Domains\Trip\Models\TripSession;
 use App\Http\Controllers\Controller;
 use App\Http\OpenApi\ApiErrors;
+use App\Http\Requests\Safety\AttachIncidentEvidenceRequest;
 use App\Http\Requests\Safety\BlockUserRequest;
 use App\Http\Requests\Safety\ReportIncidentRequest;
 use App\Http\Requests\Safety\ShareLiveTripRequest;
 use App\Http\Requests\Safety\StoreEmergencyContactRequest;
 use App\Http\Requests\Safety\TriggerSosRequest;
 use App\Http\Resources\EmergencyContactResource;
+use App\Http\Resources\IncidentEvidenceResource;
 use App\Http\Resources\IncidentResource;
 use App\Http\Resources\LiveShareResource;
 use App\Http\Resources\PersonSummary;
@@ -185,14 +188,58 @@ final class SafetyController extends Controller
     #[ApiErrors(ErrorCode::NotFound)]
     public function showIncident(Request $request, string $incident): JsonResponse
     {
-        $own = Incident::query()
-            ->whereKey($incident)
-            ->where('reporter_user_id', $request->user()->id)
-            ->with('evidence')
-            ->first()
-            ?? throw DomainException::of(ErrorCode::NotFound);
+        $own = $this->ownIncident($request, $incident);
 
-        return ApiResponse::success(new IncidentResource($own));
+        return ApiResponse::success(new IncidentResource($own->load('evidence')));
+    }
+
+    /**
+     * POST /v1/incidents/{incident}/evidence — attach a photograph.
+     *
+     * 🔒 The file is scanned, then re-encoded to strip its metadata, then stored on the private
+     * disk — in that order, through the same intake identity documents use. A photograph taken at
+     * the scene carries the GPS of where the person was standing when they were frightened, and
+     * they photographed a car, not their own position.
+     *
+     * 🔴 **Nothing can be un-attached.** `incident_evidence` is never deleted — it is chain of
+     * custody — so a client must confirm before uploading rather than offering a remove button it
+     * cannot honour.
+     */
+    #[ApiErrors(
+        ErrorCode::IncidentClosed,
+        ErrorCode::IncidentEvidenceLimitReached,
+        ErrorCode::DocumentRejectedByScanner,
+        ErrorCode::DocumentUnreadable,
+        ErrorCode::DocumentDimensionsTooLarge,
+        ErrorCode::NotFound,
+    )]
+    public function attachEvidence(
+        AttachIncidentEvidenceRequest $request,
+        string $incident,
+        AttachIncidentEvidenceAction $action,
+    ): JsonResponse {
+        $evidence = $action->execute(
+            $request->user(),
+            $this->ownIncident($request, $incident),
+            $request->file('file'),
+            $request->kind(),
+        );
+
+        return ApiResponse::success(new IncidentEvidenceResource($evidence), status: 201);
+    }
+
+    /**
+     * GET /v1/incidents/{incident}/evidence — what is attached to one of the caller's own reports.
+     *
+     * 🔒 Metadata only. See `IncidentEvidenceResource`: no path, no URL, no hash.
+     */
+    public function evidence(Request $request, string $incident): JsonResponse
+    {
+        $own = $this->ownIncident($request, $incident);
+
+        return ApiResponse::success(IncidentEvidenceResource::collection(
+            $own->evidence()->oldest('created_at')->orderBy('id')->get()
+        ));
     }
 
     /**
@@ -352,6 +399,21 @@ final class SafetyController extends Controller
         $id = $request->input('tripSessionId');
 
         return $id === null ? null : TripSession::query()->whereKey($id)->first();
+    }
+
+    /**
+     * 🔒 One of the caller's OWN reports, or a 404 — including for the person the report is about.
+     *
+     * The same scoping `showIncident` uses, in one place because three endpoints now need it and a
+     * second copy is a second place the `reporter_user_id` clause can be left off.
+     */
+    private function ownIncident(Request $request, string $incidentId): Incident
+    {
+        return Incident::query()
+            ->whereKey($incidentId)
+            ->where('reporter_user_id', $request->user()->id)
+            ->first()
+            ?? throw DomainException::of(ErrorCode::NotFound);
     }
 
     private function ownContact(Request $request, string $contactId): EmergencyContact

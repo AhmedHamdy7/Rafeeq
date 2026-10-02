@@ -246,6 +246,21 @@ Route::prefix('v1')->group(function (): void {
         Route::get('incidents/{incident}', [SafetyController::class, 'showIncident']);
         Route::post('incidents', [SafetyController::class, 'reportIncident'])
             ->middleware('throttle:safety-reports');
+
+        /*
+         * Evidence on a report.
+         *
+         * 🔒 Metadata out, bytes in. There is no route at any access level on this API that returns
+         * a file, a URL or a stored path — the reviewer reads evidence through the dashboard, which
+         * authenticates against a separate user table. Pitfall #23.
+         *
+         * The upload shares the reports' rate limiter rather than running unthrottled: an
+         * authenticated image-processing endpoint is the most expensive thing a signed-in account
+         * can reach, and the cap per report bounds storage but not the work of being refused.
+         */
+        Route::get('incidents/{incident}/evidence', [SafetyController::class, 'evidence']);
+        Route::post('incidents/{incident}/evidence', [SafetyController::class, 'attachEvidence'])
+            ->middleware('throttle:safety-reports');
     });
 
     /*

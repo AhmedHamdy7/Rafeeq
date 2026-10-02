@@ -18,6 +18,17 @@
         </include>
     </source>
     <php>
+        <!--
+            The suite runs in one process and PHPUnit holds every result in it, so by the time
+            1,300+ tests have run there is very little of PHP's default 128M left. The image tests
+            then ask GD for a bitmap and the run dies with "Allowed memory size exhausted" pointing
+            at ImageSanitiser — which reads as a bug in the sanitiser and is not one.
+
+            This is the TEST process only. It says nothing about what the application needs: that
+            limit is bounded by `verification.max_document_megapixels` and is written down in
+            DEPLOYMENT.md.
+        -->
+        <ini name="memory_limit" value="512M"/>
         <env name="APP_ENV" value="testing"/>
         <env name="APP_MAINTENANCE_DRIVER" value="file"/>
         <env name="BCRYPT_ROUNDS" value="4"/>

@@ -49,6 +49,7 @@ enum ErrorCode: string
     case DocumentUnreadable = 'DOCUMENT_UNREADABLE';
     case DocumentRejectedByScanner = 'DOCUMENT_REJECTED_BY_SCANNER';
     case DocumentKindNotAccepted = 'DOCUMENT_KIND_NOT_ACCEPTED';
+    case DocumentDimensionsTooLarge = 'DOCUMENT_DIMENSIONS_TOO_LARGE';
     case OrganizationEmailMismatch = 'ORGANIZATION_EMAIL_MISMATCH';
 
     // ---- Driver & vehicles (Phase 4, Chapter 3) ------------------------
@@ -119,6 +120,8 @@ enum ErrorCode: string
     case CannotBlockSelf = 'CANNOT_BLOCK_SELF';
     case AlreadyBlocked = 'ALREADY_BLOCKED';
     case IncidentNotReportable = 'INCIDENT_NOT_REPORTABLE';
+    case IncidentEvidenceLimitReached = 'INCIDENT_EVIDENCE_LIMIT_REACHED';
+    case IncidentClosed = 'INCIDENT_CLOSED';
     case LiveShareAlreadyEnded = 'LIVE_SHARE_ALREADY_ENDED';
 
     // ---- Admin dashboard (Chapter 12) ----------------------------------
@@ -174,6 +177,12 @@ enum ErrorCode: string
             self::DocumentUnreadable,
             self::DocumentRejectedByScanner,
             self::DocumentKindNotAccepted,
+            /*
+             * 422 rather than 413. A 413 is about the number of bytes, and these bytes are fine —
+             * it is the picture inside them that is too many pixels to open. The person's move is
+             * to send a smaller image, and the limit is in `error.fields` so a client can say so.
+             */
+            self::DocumentDimensionsTooLarge,
             self::OrganizationEmailMismatch,
             self::DriverApplicationIncomplete,
             self::LicenceExpired,
@@ -263,10 +272,17 @@ enum ErrorCode: string
             self::SosAlreadyResolved,
             self::EmergencyContactDuplicate,
             self::AlreadyBlocked,
-            self::LiveShareAlreadyEnded => 409,
+            self::LiveShareAlreadyEnded,
+            /*
+             * 409 rather than 403: the case is finished, which is a state and not a permission. The
+             * client's move is to file a new report, not to retry with different credentials — and
+             * that distinction is the whole reason this is not a generic Forbidden.
+             */
+            self::IncidentClosed => 409,
 
             // 422: about what was sent. The list is full, or the report has nothing to attach to.
             self::EmergencyContactLimitReached,
+            self::IncidentEvidenceLimitReached,
             self::IncidentNotReportable => 422,
 
             // 403: blocking yourself is not a state, it is a mistake about who you are.

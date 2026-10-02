@@ -157,6 +157,41 @@ it('gives every error code a status that suits what it means', function () {
 });
 
 /**
+ * 🔴 Every code must have real wording in BOTH languages.
+ *
+ * Written after it had already happened: `LIVE_SHARE_ALREADY_ENDED` shipped with a status and no
+ * translation, so `__('errors.X')` fell back to returning the key — and the API answered a person
+ * with the literal string `errors.LIVE_SHARE_ALREADY_ENDED`. Nothing failed, because a missing
+ * translation is not an error in Laravel; it is a string that happens to be the key.
+ *
+ * That is the worst shape of bug for this particular file. The envelope's `message` is what a
+ * client shows when it has no case for the `code`, which is exactly the situation a NEW code
+ * creates — so the first person to see a new error is the most likely to be shown a machine name.
+ * And in the safety codes, that person may be in a bad situation.
+ */
+it('gives every error code real wording in Arabic and in English', function () {
+    $untranslated = [];
+
+    foreach (ErrorCode::cases() as $code) {
+        foreach (['en', 'ar'] as $locale) {
+            $key = 'errors.'.$code->value;
+
+            // `__()` returns the KEY when there is no line, so comparing against it is the check.
+            // `Lang::has()` would do, but this is the exact value a client would be shown.
+            if (__($key, locale: $locale) === $key) {
+                $untranslated[] = "{$code->value} ({$locale})";
+            }
+        }
+    }
+
+    expect($untranslated)->toBeEmpty(
+        "These error codes have no wording, so the API answers with the key itself: \n- "
+        .implode("\n- ", $untranslated)
+        ."\n\nAdd a line to lang/en/errors.php AND lang/ar/errors.php."
+    );
+});
+
+/**
  * `toContain($needle, $message)` does not take a message. Every argument after the
  * first is ANOTHER needle to look for, so a helpful failure message silently becomes
  * a second assertion that the haystack contains the message itself.

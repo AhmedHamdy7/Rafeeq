@@ -14,7 +14,7 @@
 >
 > **Base URL:** `{host}/api/v1` · **Auth:** bearer token · **Format:** JSON only.
 
-**Last updated:** 2026-10-02 · **107 endpoints live** · Phases 0–7 complete, Phase 9 in progress
+**Last updated:** 2026-10-02 · **109 endpoints live** · Phases 0–7 complete, Phase 9 in progress
 
 ---
 
@@ -22,7 +22,7 @@
 
 ### إيه الجاهز دلوقتي
 
-**١٠٧ endpoint شغّالين ومختبَرين** (1,299 اختبار كلهم خضرا). يعني من الـ٤٧ شاشة:
+**١٠٩ endpoint شغّالين ومختبَرين** (1,325 اختبار كلهم خضرا). يعني من الـ٤٧ شاشة:
 
 | | عدد | التفاصيل |
 |---|---|---|
@@ -308,7 +308,7 @@ Status: ✅ fully served · ⚠️ served, something named missing · ⛔ no API
 | 22 | Notifications | — | ⛔ Phase 12. |
 | 26 | **Privacy & blocked** | `GET`/`POST /safety/blocked-users` · `DELETE .../{user}` | ✅ Blocking works in **both directions** from the next search. 🔒 Nothing tells the blocked person, and the list is one-directional — who I blocked, never who blocked me. Privacy toggles themselves are yours/local. |
 | 27 | Help & legal | `GET /account/consents` for versions | ⚠️ Static content is yours; the consent versions in force come from the API. |
-| 35 | Account restricted | code `ACCOUNT_SUSPENDED` | ⚠️ The code exists. **Missing: a case number and "expected update within 24h"** — Phase 11. |
+| 35 | Account restricted | code `ACCOUNT_SUSPENDED` (403) | ⚠️ The code exists and the screen can be built on it. **The case number and "expected update within 24h" are Phase 13, not 11** — see below. |
 
 ### Not built yet
 
@@ -429,6 +429,8 @@ fails if this list and the running routes ever disagree in either direction.
 | `GET /incidents` | 4.12 Safety |
 | `POST /incidents` | 4.12 Safety |
 | `GET /incidents/{incident}` | 4.12 Safety |
+| `GET /incidents/{incident}/evidence` | 4.12 Safety |
+| `POST /incidents/{incident}/evidence` | 4.12 Safety |
 | `GET /safety/blocked-users` | 4.12 Safety |
 | `POST /safety/blocked-users` | 4.12 Safety |
 | `DELETE /safety/blocked-users/{user}` | 4.12 Safety |
@@ -1238,7 +1240,7 @@ Trusted contacts. **Request:** `name`, `phone`, `relationship`, `autoShareTrips`
 |---|---|
 | `id`, `name`, `relationship` | As entered. |
 | `phone` | The **full** number, because this is the owner reading their own list and a masked number cannot be checked for a typo. |
-| `autoShareTrips` | 🔴 **The most consequential field in this screen.** On, this contact sees EVERY trip automatically. Somebody may not remember turning it on, so show it prominently — a contact with this enabled has a standing feed of where its owner goes each morning. |
+| `autoShareTrips` | 🔴 **Stored, and nothing acts on it yet. Do not label it as working.** See the note below — this corrects an earlier version of this table, which said it already shared every trip. |
 | `isGuardian` | Elevated access during an emergency. |
 | `verifiedAt` | Whether the number has been confirmed to actually receive messages. **`null` for everybody today** — confirming it needs an OTP to that number (Phase 12). Say "unconfirmed" rather than implying the contact works. |
 
@@ -1256,6 +1258,22 @@ Rules you will hit:
 
 🔒 There is no endpoint that returns anybody else's contacts. Another person's list is a 404, and an
 empty list for a stranger is genuinely empty.
+
+> 🔴 **`autoShareTrips` does not yet do anything, and this is the one field in the API where that
+> gap could hurt somebody.** A person who switches it on believes their sister will see every trip.
+> Nobody will, until the notification channel exists.
+>
+> The reason it cannot be built first is in the live-share design, two subsections down: an auto-made
+> share link has to be **delivered at the moment it is created**, because the token is returned once
+> and is unrecoverable afterwards. Creating the share now and delivering it later is not an option —
+> it would write links nobody on earth can open. So the feature needs Phase 12's SMS or push, and
+> the flag is stored meanwhile so that nobody's stated intent is lost when it lands.
+>
+> **What this means for your screen:** keep the switch, keep what it is called, and say plainly that
+> it starts when automatic sharing is available — do not write copy in the present tense. If you
+> would rather hide it until then, that is a reasonable choice and we will tell you when it works.
+
+
 
 #### `POST /incidents` — file a report
 
@@ -1293,11 +1311,62 @@ Rate-limited per user per hour, generously — a `429` carries `Retry-After`. `I
 | `slaDueAt` | When the platform has undertaken to respond by, written when the report was filed. Fixed rather than recomputed — a deadline that can be recalculated is one that can be quietly moved. |
 | `resolution` / `resolvedAt` | Once decided. |
 | `bookingId` | The journey, when one was named. |
-| `evidenceCount` | How many files are attached. **Evidence upload is not built yet** — see section 7. |
+| `evidenceCount` | How many files are attached. |
 
 🔒 **Own reports only, and that includes the person a report is about.** Showing the subject what was
 said about them, in the reporter's own words, is how a report becomes a reason for a confrontation.
 The reviewer's identity and the reported person's id are not returned either.
+
+#### `POST /incidents/{incident}/evidence` — attach a photograph
+
+`multipart/form-data`. **Request:** `kind` and `file`.
+
+| Field | |
+|---|---|
+| `kind` | `photo` for a picture taken at the scene, `screenshot` for a capture of messages or of the app. |
+| `file` | JPEG, PNG or WebP, up to 6 MB. |
+
+🔒 **Images only, and the other kinds are refused rather than quietly accepted.** `video`, `audio`
+and `document` exist in the schema and are a `422` here. The reason is worth passing on: stripping a
+file's metadata is done by re-encoding it, and there is no equivalent for a video or an audio
+container. Accepting one would mean either storing it unsanitised — handing over the GPS and device
+identifiers inside it — or claiming a protection that is not there. If your users need to send
+video, tell us and we will build the pipeline rather than widen this rule.
+
+🔒 **The GPS in the photograph is stripped server-side**, along with all other metadata, and the
+image is re-encoded as JPEG. This matters more here than anywhere else in the product: a photograph
+taken at the scene of an incident carries the coordinates of **where the person was standing when
+they were frightened**, and they meant to photograph a car. Do not rely on stripping it on the
+device — but do tell the person what they are sending.
+
+🔴 **Nothing can be un-attached.** The table is chain of custody and is never deleted, at any access
+level, by anybody. So **confirm before uploading** rather than offering a remove button you cannot
+honour. This is the one place in the API where a client-side mistake is permanent.
+
+Answers `201` with the attachment's metadata. Errors:
+
+| | |
+|---|---|
+| `INCIDENT_EVIDENCE_LIMIT_REACHED` (422) | Five files per report. `error.fields.limit` carries the number — read it rather than hard-coding five. |
+| `INCIDENT_CLOSED` (409) | The case is finished. The message tells the person to file a new report, which is the right move: a file on a closed case is a file nobody will read. |
+| `DOCUMENT_REJECTED_BY_SCANNER` · `DOCUMENT_UNREADABLE` (422) | The bytes failed the scan, or are not a decodable image however they were named. |
+| `DOCUMENT_DIMENSIONS_TOO_LARGE` (422) | 🔴 **The picture is too many pixels, which is not the same as the file being too big.** 16 megapixels; `error.fields.maxMegapixels` carries the limit. A modern phone shooting at full resolution will hit this, so **downscale before uploading** — nothing here needs more than 2400px on the longest side and we resize to that anyway. The same limit applies to every image endpoint in the API (identity documents and vehicle documents included). |
+| `404` | Not the caller's report. |
+
+#### `GET /incidents/{incident}/evidence` — what is attached
+
+| Response field | Meaning |
+|---|---|
+| `id`, `kind` | As attached. |
+| `purgeAfter` | The date the file may be destroyed, fixed when it was uploaded. **Show it.** Somebody who sends a photograph of a bad moment is owed the answer to "how long do you keep this", and a date on the screen is a better answer than a policy page. |
+| `createdAt` | When it arrived. |
+
+🔒 **No path, no URL and no hash — not now and not later.** A stored path never appears in a payload;
+the reporter knows what they sent, and the reviewer reads it through the dashboard, which
+authenticates against a different user table entirely. So there is nothing here to forward and
+nothing to adjust into a guess at somebody else's file. The flip side, and you should design around
+it: **your client cannot show the user a thumbnail of what they attached.** Keep your own local copy
+if the screen needs one.
 
 #### `GET` / `POST /safety/blocked-users` · `DELETE .../{user}`
 
@@ -1638,7 +1707,9 @@ Nothing below exists. Build the screen shells if you like, but there is no endpo
 | **Payments and wallet** | 34, group `payments` tab | **8** | Payment methods, online capture, driver balance and payouts, refunds, cancellation fees. `paymentStatus` exists and stays `NOT_DUE` for cash. **Blocked on the fee-direction decision, section 8.** |
 | **Driver cancelling one day** | 43, 45, 46 | **9** | A driver cancelling a single day and the backup search that follows. **Blocked on an open decision** — refunds and reliability, section 8 #3. Route deviation itself is now detected and reported (see `deviationDetectedAt`); the ops ALERT it should trigger needs Phase 12/13. |
 | **Ratings and reviews** | 37, filter on 11, reviews on 12, history on 19 | **10** | Double-blind ratings, stars and tags, trust scores. Until then every `rating` and `onTimeRate` is `null`. |
-| **Evidence, escort mode** | part of 32 | **11** | **Evidence upload on a report** and **escort mode** (a window during which a contact is watching) are what is left of Chapter 10. SOS, contacts, reports, blocking and **Share Live Trip** are done — section 4.12. Also missing: the case number on screen 35. |
+| **Auto-share trips** | 26 | **12** | 🔴 **`autoShareTrips` on an emergency contact is stored and nothing acts on it yet.** See 4.12 — read that before you build the toggle. |
+| **Case number on a restricted account** | 35 | **13** | `ACCOUNT_SUSPENDED` carries no `error.fields` today, so there is no case reference and no "expected update" time. **Nothing in the platform suspends an account yet** — only an admin can, and that is the Phase 13 dashboard, which is also where the case reference and the response deadline would be written. Build the screen on the code alone and leave room for two strings. (This row said Phase 11 in earlier versions of this file. It was wrong: the data has no source until the act that creates it exists.) |
+| **Night escort mode** | none | **13** | Not a mobile feature at all, and this corrects an earlier line in this file. It is a **corridor-level night window armed by the ops team** (or automatically, 9pm–5am) with staff monitoring — a dashboard control, not something an app shows or calls. There will be no endpoint for it. |
 | **Notifications and chat** | 22 | **12** | Push, in-app notifications, preferences, trip chat. **Everything today is pull-only** — no server-initiated message of any kind reaches the app. Plan for polling in the interim, and tell us what you need first. |
 
 ---
@@ -1669,6 +1740,8 @@ exist, and every live endpoint must be named here.
 
 | Date | Change |
 |---|---|
+| 2026-10-02 | **Two corrections to this file, both mine.** (1) `autoShareTrips` was described as already sharing every trip. It is stored and acted on by nothing — section 4.12 now says why it needs Phase 12 and what to put on the screen meanwhile. (2) Escort mode was described as a contact watching a journey. Reading the sources, it is a **corridor night window armed by the ops team** — a dashboard control with no mobile surface and no endpoint coming. |
+| 2026-10-02 | **Evidence on a report** — 2 endpoints (`POST`/`GET /incidents/{incident}/evidence`). Section 4.12. 🔴 **Images only** (video and audio are refused, with the reason given) and **nothing can be un-attached** — confirm before uploading. No path, URL or hash is ever returned, so keep your own local copy if the screen needs a thumbnail. |
 | 2026-10-02 | **Share Live Trip** — 3 endpoints (`POST /trips/{trip}/live-share`, `GET /safety/live-shares`, `DELETE /safety/live-shares/{share}`) plus the public page `GET /s/{token}`, which is **not** in the OpenAPI document and is not yours to call. Section 4.12. 🔴 **`url` and `token` are returned once and are unrecoverable** — read that subsection before you write the share button. |
 | 2026-09-29 | **Safety Centre** — 12 endpoints: SOS (and its cancel), trusted contacts, reports, blocking. Section 4.12. All in the **signed-in** tier: no verification gate, no complete profile. Screens 16, 26, 32 and 44 move from ⛔ to ⚠️/✅. |
 | 2026-09-29 | **Route deviation** detected and reported on the trip session — `deviationDetectedAt` and `deviationDistanceMeters` on `GET /trips/{trip}` (screen 39). No new endpoint. |

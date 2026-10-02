@@ -77,6 +77,25 @@ return [
 
         'max_document_size_kilobytes' => 8192,
 
+        /*
+         * 🔒 The largest PICTURE we will open, in megapixels — which is a different limit from the
+         * one above and is the one that matters.
+         *
+         * A compressed image says nothing about what it costs to decode. A few hundred kilobytes
+         * of JPEG can declare 20000 × 15000 pixels, and GD allocates four bytes per pixel — 1.2 GB
+         * — before anything else gets a say. That is a decompression bomb, and it is reachable by
+         * any signed-in account through the document and evidence endpoints. A byte limit does not
+         * stop it, because the file really is small.
+         *
+         * 16 megapixels covers every mainstream phone camera (12 MP is typical) with room above
+         * it, and bounds the decoded bitmap at about 64 MB, which fits inside a 128 MB process.
+         * Raising this means raising `memory_limit` with it — see DEPLOYMENT.md.
+         *
+         * Clients should downscale before uploading anyway: nothing here needs more than 2400px on
+         * its longest side, and the image is resized to that regardless.
+         */
+        'max_document_megapixels' => 16,
+
         // Attempts before a verification type is locked and needs an admin to
         // reopen it — an upload loop is the cheapest way to probe what a
         // reviewer accepts.
@@ -445,6 +464,27 @@ return [
          * not something to hold for ever by default.
          */
         'evidence_retention_days' => 365,
+
+        /*
+         * 🔒 How many files one report may carry.
+         *
+         * A cap at all, because `incident_evidence` is never deleted: anything written there is
+         * written for a year, so an unbounded upload path is an unbounded commitment. Five is more
+         * than any real report needs — a photo of the damage, a screenshot of the messages — and
+         * few enough that a bored client cannot fill a bucket.
+         *
+         * Generous on purpose about which five: the limit refuses the sixth file, never the report.
+         */
+        'max_evidence_per_incident' => 5,
+
+        /*
+         * The largest single evidence file, in kilobytes.
+         *
+         * Smaller than an identity document's allowance, because this is a photograph taken in the
+         * moment rather than a scan a reviewer has to read small print on — and the bytes are
+         * re-encoded and downscaled before storage anyway.
+         */
+        'max_evidence_size_kilobytes' => 6144,
 
         /*
          * How long after a journey ends a live-share link keeps working, in minutes.

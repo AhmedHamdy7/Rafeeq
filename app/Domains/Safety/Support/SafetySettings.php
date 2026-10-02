@@ -57,6 +57,17 @@ final class SafetySettings
         return max(1, (int) self::get('safety.evidence_retention_days'));
     }
 
+    /**
+     * 🔒 How many files one report may carry.
+     *
+     * A cap at all, because `incident_evidence` is never deleted: anything written there is written
+     * for the whole retention period, so an unbounded upload path is an unbounded commitment.
+     */
+    public static function maxEvidencePerIncident(): int
+    {
+        return max(1, (int) self::get('safety.max_evidence_per_incident'));
+    }
+
     /** How long after a journey ends a share link keeps working. */
     public static function liveShareGraceMinutes(): int
     {

@@ -90,6 +90,7 @@ final class VehicleController extends Controller
         ErrorCode::DriverApplicationLocked,
         ErrorCode::DocumentRejectedByScanner,
         ErrorCode::DocumentUnreadable,
+        ErrorCode::DocumentDimensionsTooLarge,
         ErrorCode::NotFound,
     )]
     public function storeDocument(

@@ -39,6 +39,7 @@ return [
     'VERIFICATION_ALREADY_APPROVED' => 'This step is already verified.',
     'VERIFICATION_ATTEMPTS_EXHAUSTED' => 'You have tried this too many times. Our team will take a look.',
     'DOCUMENT_UNREADABLE' => 'We could not read that image. Please take a clear, uncropped photo and try again.',
+    'DOCUMENT_DIMENSIONS_TOO_LARGE' => 'That image is too large for us to process. Please send a smaller one.',
     'DOCUMENT_REJECTED_BY_SCANNER' => 'That file could not be accepted. Please upload a photo taken with your camera.',
     'DOCUMENT_KIND_NOT_ACCEPTED' => 'That document is not part of this step.',
     'ORGANIZATION_EMAIL_MISMATCH' => 'That email does not belong to the organization you selected.',
@@ -112,6 +113,9 @@ return [
     'CANNOT_BLOCK_SELF' => 'You cannot block yourself.',
     'ALREADY_BLOCKED' => 'You have already blocked this person.',
     'INCIDENT_NOT_REPORTABLE' => 'That trip cannot be reported.',
+    'INCIDENT_EVIDENCE_LIMIT_REACHED' => 'You have attached as many files to this report as we allow.',
+    'INCIDENT_CLOSED' => 'This report has been closed, so nothing more can be added to it. Please file a new report.',
+    'LIVE_SHARE_ALREADY_ENDED' => 'That share link has already been stopped.',
 
     /*
      * Admin sign-in. One message for a wrong password and a wrong code, on purpose —
