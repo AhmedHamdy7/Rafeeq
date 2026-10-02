@@ -104,6 +104,15 @@ return [
     'WAIT_TIMER_NOT_RUNNING' => 'There is no wait timer running for this passenger.',
 
     /*
+     * Ratings. Double-blind, so the wording must not hint at whether the other person has
+     * rated — "already closed" says the same thing however the other side behaved.
+     */
+    'RATING_WINDOW_CLOSED' => 'The time to rate this trip has passed.',
+    'RATING_ALREADY_SUBMITTED' => 'You have already rated this trip.',
+    'RATING_NOT_EDITABLE' => 'This rating can no longer be changed.',
+    'TRIP_NOT_RATEABLE' => 'This trip cannot be rated.',
+
+    /*
      * Safety. Each of these is read by somebody who may be in a bad situation, so each says
      * what happened and what to do — no jargon, no state names.
      */

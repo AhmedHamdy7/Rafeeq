@@ -177,6 +177,11 @@ it('generates a document describing every /v1 route', function () {
         'POST /v1/trips/{trip}/live-share',
         'GET /v1/safety/live-shares',
         'DELETE /v1/safety/live-shares/{share}',
+        // Ratings (Phase 10). Nothing here returns somebody else's rating — see RatingController.
+        'GET /v1/ratings/pending',
+        'GET /v1/ratings/mine',
+        'POST /v1/bookings/{booking}/rating',
+        'PATCH /v1/ratings/{rating}',
         'GET /v1/incidents',
         'GET /v1/incidents/{incident}',
         'POST /v1/incidents',

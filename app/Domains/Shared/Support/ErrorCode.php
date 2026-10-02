@@ -113,6 +113,12 @@ enum ErrorCode: string
     case WaitTimerAlreadyRunning = 'WAIT_TIMER_ALREADY_RUNNING';
     case WaitTimerNotRunning = 'WAIT_TIMER_NOT_RUNNING';
 
+    // ---- Ratings (Phase 10, Chapter 9) ---------------------------------
+    case RatingWindowClosed = 'RATING_WINDOW_CLOSED';
+    case RatingAlreadySubmitted = 'RATING_ALREADY_SUBMITTED';
+    case RatingNotEditable = 'RATING_NOT_EDITABLE';
+    case TripNotRateable = 'TRIP_NOT_RATEABLE';
+
     // ---- Safety (Phase 11, Chapter 10) ---------------------------------
     case SosAlreadyResolved = 'SOS_ALREADY_RESOLVED';
     case EmergencyContactLimitReached = 'EMERGENCY_CONTACT_LIMIT_REACHED';
@@ -269,6 +275,14 @@ enum ErrorCode: string
              * already answered, a contact already on the list, somebody already blocked. Nothing
              * for the person to correct.
              */
+            /*
+             * 409: the rating already exists, or the moment for it has gone. Nothing for the
+             * person to correct in what they sent — the state answers for itself.
+             */
+            self::RatingAlreadySubmitted,
+            self::RatingWindowClosed,
+            self::RatingNotEditable,
+
             self::SosAlreadyResolved,
             self::EmergencyContactDuplicate,
             self::AlreadyBlocked,
@@ -283,7 +297,9 @@ enum ErrorCode: string
             // 422: about what was sent. The list is full, or the report has nothing to attach to.
             self::EmergencyContactLimitReached,
             self::IncidentEvidenceLimitReached,
-            self::IncidentNotReportable => 422,
+            self::IncidentNotReportable,
+            // 422: the journey itself cannot be rated — it was cancelled, or it has not happened.
+            self::TripNotRateable => 422,
 
             // 403: blocking yourself is not a state, it is a mistake about who you are.
             self::CannotBlockSelf => 403,

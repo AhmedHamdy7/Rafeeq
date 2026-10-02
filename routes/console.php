@@ -52,6 +52,21 @@ Schedule::command('memberships:roll-forward')
  * `withoutOverlapping` because two flushes racing over the same buffer would each take half
  * of it — `Cache::pull` is read-and-clear, so the loser writes nothing and reports success.
  */
+/*
+ * Reveals one-sided ratings whose window has run out (Bible §9).
+ *
+ * 🔴 The half that stops silence from being a veto: without it, a passenger who never rates keeps
+ * her driver's rating hidden for ever, and not writing a review becomes the quietest way to
+ * suppress one.
+ *
+ * Hourly rather than daily, because the window is measured in days and a daily pass would make the
+ * reveal land up to 24 hours late — long enough for somebody watching for it to notice the pattern
+ * of WHEN things appear, which is a weaker version of the leak the design closes.
+ */
+Schedule::command('ratings:reveal-due')
+    ->hourly()
+    ->withoutOverlapping();
+
 Schedule::command('trips:flush-locations')
     ->everyThirtySeconds()
     ->withoutOverlapping();

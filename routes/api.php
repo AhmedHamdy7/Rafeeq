@@ -19,6 +19,7 @@ use App\Http\Controllers\Api\V1\Group\GroupAttendanceController;
 use App\Http\Controllers\Api\V1\Group\GroupController;
 use App\Http\Controllers\Api\V1\HomeController;
 use App\Http\Controllers\Api\V1\PlaceController;
+use App\Http\Controllers\Api\V1\Rating\RatingController;
 use App\Http\Controllers\Api\V1\Safety\SafetyController;
 use App\Http\Controllers\Api\V1\Search\CommuteDemandController;
 use App\Http\Controllers\Api\V1\Search\SavedSearchController;
@@ -237,6 +238,23 @@ Route::prefix('v1')->group(function (): void {
         Route::get('safety/blocked-users', [SafetyController::class, 'blocked']);
         Route::post('safety/blocked-users', [SafetyController::class, 'block']);
         Route::delete('safety/blocked-users/{user}', [SafetyController::class, 'unblock']);
+
+        /*
+         * Ratings (Chapter 9, screen 37).
+         *
+         * 🔴 Double-blind, and enforced in the data rather than in the screen (pitfall #26). Every
+         * route here is about the caller's OWN rating — the one thing they may read before the
+         * reveal. There is deliberately no route that returns somebody else's: that needs the
+         * `visible()` filter, and mixing the two in one controller is how the filter gets
+         * forgotten on the convenient path.
+         *
+         * In the signed-in tier rather than behind `account.active`: a suspended account still has
+         * journeys it travelled on, and the other person is owed the rating as much as before.
+         */
+        Route::get('ratings/pending', [RatingController::class, 'pending']);
+        Route::get('ratings/mine', [RatingController::class, 'mine']);
+        Route::post('bookings/{booking}/rating', [RatingController::class, 'store']);
+        Route::patch('ratings/{rating}', [RatingController::class, 'update']);
 
         /*
          * Reports. Rate-limited per Chapter 10 §Security, generously: the failure to avoid is

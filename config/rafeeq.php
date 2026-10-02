@@ -423,6 +423,34 @@ return [
     /*
      * Safety (Chapter 10, Phase 11).
      */
+    /*
+    |--------------------------------------------------------------------------
+    | Ratings (Phase 10, Bible §9)
+    |--------------------------------------------------------------------------
+    */
+    'rating' => [
+        /*
+         * 🔴 How long a completed journey stays rateable — and the same window after which a
+         * one-sided rating is revealed anyway.
+         *
+         * ONE number, not two. The Bible says a rating becomes visible when both parties have
+         * rated "or seven days pass". If submission outlived that window, somebody could wait for
+         * the reveal, read what the other person wrote, and only then write theirs — double-blind
+         * defeated through the front door. So the window that reveals is the window that closes.
+         */
+        'window_days' => 7,
+
+        /*
+         * How long somebody may still change what they wrote, in minutes.
+         *
+         * 🔒 This is for fixing a typo, and nothing more. It is bounded by something stronger than
+         * its own length: an edit is refused the moment the rating becomes visible, whatever the
+         * clock says — otherwise "rate, wait for the reveal, read theirs, revise mine" would be a
+         * legitimate API call.
+         */
+        'edit_window_minutes' => 15,
+    ],
+
     'safety' => [
         /*
          * How long somebody has to take back an SOS before it is treated as real.

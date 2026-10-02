@@ -14,7 +14,7 @@
 >
 > **Base URL:** `{host}/api/v1` · **Auth:** bearer token · **Format:** JSON only.
 
-**Last updated:** 2026-10-02 · **109 endpoints live** · Phases 0–7 complete, Phase 9 in progress
+**Last updated:** 2026-10-02 · **113 endpoints live** · Phases 0–7 complete, Phase 9 in progress
 
 ---
 
@@ -22,7 +22,7 @@
 
 ### إيه الجاهز دلوقتي
 
-**١٠٩ endpoint شغّالين ومختبَرين** (1,325 اختبار كلهم خضرا). يعني من الـ٤٧ شاشة:
+**١١٣ endpoint شغّالين ومختبَرين** (1,325 اختبار كلهم خضرا). يعني من الـ٤٧ شاشة:
 
 | | عدد | التفاصيل |
 |---|---|---|
@@ -314,7 +314,7 @@ Status: ✅ fully served · ⚠️ served, something named missing · ⛔ no API
 
 | # | Screen | Phase |
 |---|---|---|
-| 37 | Rating | ⛔ **10** — ratings |
+| 37 | Rating | ✅ `GET /ratings/pending` · `POST /bookings/{booking}/rating` · `PATCH /ratings/{rating}` · `GET /ratings/mine`. 🔴 **Double-blind** — nothing tells you whether the other person has rated. Section 4.13. |
 | 16 · 44 | **Safety centre · discreet alert** | ✅ `POST /sos` (with `isDiscreet`) · `POST /sos/{sos}/cancel` · `GET`/`POST /safety/emergency-contacts` · **Share Live Trip**: `POST /trips/{trip}/live-share` · `GET /safety/live-shares` · `DELETE /safety/live-shares/{share}`. Missing: Contact Support — section 7. |
 | 32 | **Support / incident** | ⚠️ `POST /incidents` · `GET /incidents` · `GET /incidents/{incident}`. **Missing: evidence upload** — section 7. |
 | 34 | Payment failed | ⛔ **8** — payments |
@@ -426,6 +426,10 @@ fails if this list and the running routes ever disagree in either direction.
 | `GET /groups/{group}/members` | 4.10 Groups |
 | `GET /driver/home` | 4.11 Home aggregates |
 | `GET /home` | 4.11 Home aggregates |
+| `GET /ratings/pending` | 4.13 Ratings |
+| `GET /ratings/mine` | 4.13 Ratings |
+| `POST /bookings/{booking}/rating` | 4.13 Ratings |
+| `PATCH /ratings/{rating}` | 4.13 Ratings |
 | `GET /incidents` | 4.12 Safety |
 | `POST /incidents` | 4.12 Safety |
 | `GET /incidents/{incident}` | 4.12 Safety |
@@ -1465,6 +1469,88 @@ token was once real.
 
 ---
 
+### 4.13 Ratings (screen 37)
+
+🔴 **Double-blind.** Neither person can see what the other wrote until **both have rated, or seven
+days pass.** This is not a UI rule you are being asked to honour — the API does not return the other
+person's rating at all until then, and there is no endpoint that would. Build the screen knowing the
+data is simply not there yet.
+
+Three consequences you will meet, each of which exists to close a way round the design:
+
+1. **The rating window closes when the reveal happens.** One window, not two. If you could still
+   rate on day eight, you could wait for day seven, read what they said, and answer it.
+   `RATING_WINDOW_CLOSED` (409).
+2. **An edit is refused the moment the rating becomes visible**, whatever `editableUntil` said. The
+   edit window is for fixing a typo in the minute after writing; without this rule, "rate five
+   stars, wait for the reveal, read theirs, revise mine to one" would be two ordinary API calls.
+   `RATING_NOT_EDITABLE` (409).
+3. **Nothing tells you whether the other person has rated.** Not a field, not a count, not an
+   average that moved. **Do not write copy that implies it** — "waiting for them" is precisely the
+   fact being withheld.
+
+#### `GET /ratings/pending` — what screen 37 is launched from
+
+Not paginated: this is the handful of journeys somebody still owes a rating on.
+
+| Response field | Meaning |
+|---|---|
+| `bookingId` | Pass to the submit endpoint. |
+| `tripDate` | Which journey, so the screen can name the day. |
+| `person` | Who it is about — the public summary (5.1), the same shape as everywhere else. |
+| `direction` | `passenger_to_driver` or `driver_to_passenger`. Decides which tags your screen offers. |
+| `rateableUntil` | When the chance goes. **Show it**; a rating that silently becomes impossible is worse than a countdown. |
+
+A journey drops off this list when it is rated **or** when its window closes. It never carries the
+other person's rating or whether one exists.
+
+#### `POST /bookings/{booking}/rating`
+
+| Field | |
+|---|---|
+| `stars` | **Required**, 1–5, whole stars. There are no halves in the design. |
+| `comment` | Optional, ≤1000 characters. **Keep it optional in your UI too** — somebody who had an uncomfortable ride may well give three stars and not want to write about it, and requiring a reason is how a rating screen becomes a form people abandon. |
+| `tags` | Optional, any of six: `safe_driving` · `on_time` · `clean_car` · `great_company` · `comfortable` · `would_ride_again`. Repeats collapsed. |
+
+🔒 **There is no `userId` and no `direction` in the request, and there will not be.** Who the rating
+is about is read from the booking. A field naming the subject is a way to put stars — or a comment —
+against a stranger, which is why `reportedUserId` is absent from the incident request for the same
+reason.
+
+Answers `201` with **your own** rating, which is the one thing you may read before the reveal.
+
+| Response field | Meaning |
+|---|---|
+| `stars`, `comment`, `tags` | What you wrote. |
+| `isVisible` | Whether anybody else can see it yet. 🔴 **`false` says nothing about whether they have rated** — it is also false when nobody has. |
+| `editableUntil` | Until when you may change it, or `null` once you cannot. Null covers both reasons — the clock ran out, or it became visible — because your behaviour is the same either way and distinguishing them would hint at theirs. |
+| `editedAt` | Set if it was changed. |
+
+Errors: `TRIP_NOT_RATEABLE` (422 — the journey was cancelled or has not happened;
+`error.fields.bookingStatus` says which) · `RATING_WINDOW_CLOSED` (409) · `RATING_ALREADY_SUBMITTED`
+(409) · `404` for a journey the caller was not on.
+
+#### `PATCH /ratings/{rating}` · `GET /ratings/mine` — paginated
+
+The same body as submitting; every field optional. `404` for somebody else's rating — **not a 403**,
+because confirming that one exists would itself say they had rated.
+
+`GET /ratings/mine` returns what the caller wrote, visible or not. No filter applies to your own: a
+person may always read what they said.
+
+#### What ratings switch on elsewhere
+
+Once a rating is revealed it feeds `rating` in the **public summary (5.1)**, which search results,
+match details, group members and the driver's request review all already carry. Those have been
+returning `null` since Phase 6 for want of ratings; they will start carrying numbers with no change
+on your side.
+
+🔒 Separate averages per direction — a person's rating as a driver and as a passenger are different
+numbers on the same account. `null` still means "not rated yet" and **must not be drawn as nought
+stars**.
+
+---
+
 ## 5. Shared shapes
 
 These appear inside many responses. Each is described once here.
@@ -1706,7 +1792,7 @@ Nothing below exists. Build the screen shells if you like, but there is no endpo
 |---|---|---|---|
 | **Payments and wallet** | 34, group `payments` tab | **8** | Payment methods, online capture, driver balance and payouts, refunds, cancellation fees. `paymentStatus` exists and stays `NOT_DUE` for cash. **Blocked on the fee-direction decision, section 8.** |
 | **Driver cancelling one day** | 43, 45, 46 | **9** | A driver cancelling a single day and the backup search that follows. **Blocked on an open decision** — refunds and reliability, section 8 #3. Route deviation itself is now detected and reported (see `deviationDetectedAt`); the ops ALERT it should trigger needs Phase 12/13. |
-| **Ratings and reviews** | 37, filter on 11, reviews on 12, history on 19 | **10** | Double-blind ratings, stars and tags, trust scores. Until then every `rating` and `onTimeRate` is `null`. |
+| **Reviews on a profile, trust tier** | reviews on 12, `minRating` filter on 11, history on 19 | **10** | 🔴 **Rating itself is done** — section 4.13 — and the `rating` in every public summary now carries a number once a rating is revealed. Still to come: the list of **other people's** visible reviews on a profile, reporting an abusive review, and the public trust tier (`new` / `trusted` / `highly_trusted`). The underlying score is deliberately internal and will never be returned. |
 | **Auto-share trips** | 26 | **12** | 🔴 **`autoShareTrips` on an emergency contact is stored and nothing acts on it yet.** See 4.12 — read that before you build the toggle. |
 | **Case number on a restricted account** | 35 | **13** | `ACCOUNT_SUSPENDED` carries no `error.fields` today, so there is no case reference and no "expected update" time. **Nothing in the platform suspends an account yet** — only an admin can, and that is the Phase 13 dashboard, which is also where the case reference and the response deadline would be written. Build the screen on the code alone and leave room for two strings. (This row said Phase 11 in earlier versions of this file. It was wrong: the data has no source until the act that creates it exists.) |
 | **Night escort mode** | none | **13** | Not a mobile feature at all, and this corrects an earlier line in this file. It is a **corridor-level night window armed by the ops team** (or automatically, 9pm–5am) with staff monitoring — a dashboard control, not something an app shows or calls. There will be no endpoint for it. |
@@ -1740,6 +1826,7 @@ exist, and every live endpoint must be named here.
 
 | Date | Change |
 |---|---|
+| 2026-10-02 | **Ratings** — 4 endpoints. Section 4.13. 🔴 **Double-blind:** nothing in any payload says whether the other person has rated, the rating window closes when the reveal happens, and an edit is refused the moment the rating becomes visible. Side effect you get for free: `rating` in the public summary (5.1) starts carrying numbers on search, match details, group members and the driver's request review. |
 | 2026-10-02 | **Two corrections to this file, both mine.** (1) `autoShareTrips` was described as already sharing every trip. It is stored and acted on by nothing — section 4.12 now says why it needs Phase 12 and what to put on the screen meanwhile. (2) Escort mode was described as a contact watching a journey. Reading the sources, it is a **corridor night window armed by the ops team** — a dashboard control with no mobile surface and no endpoint coming. |
 | 2026-10-02 | **Evidence on a report** — 2 endpoints (`POST`/`GET /incidents/{incident}/evidence`). Section 4.12. 🔴 **Images only** (video and audio are refused, with the reason given) and **nothing can be un-attached** — confirm before uploading. No path, URL or hash is ever returned, so keep your own local copy if the screen needs a thumbnail. |
 | 2026-10-02 | **Share Live Trip** — 3 endpoints (`POST /trips/{trip}/live-share`, `GET /safety/live-shares`, `DELETE /safety/live-shares/{share}`) plus the public page `GET /s/{token}`, which is **not** in the OpenAPI document and is not yours to call. Section 4.12. 🔴 **`url` and `token` are returned once and are unrecoverable** — read that subsection before you write the share button. |
