@@ -56,6 +56,7 @@ use App\Domains\Verification\Models\TrustScore;
 use App\Domains\Verification\Models\UserVerification;
 use Illuminate\Database\Console\Seeds\WithoutModelEvents;
 use Illuminate\Database\Seeder;
+use RuntimeException;
 use Spatie\Permission\Models\Role;
 
 /**
@@ -71,6 +72,8 @@ class DatabaseSeeder extends Seeder
 
     public function run(): void
     {
+        $this->assertDatabaseIsEmpty();
+
         $this->seedAdminRoles();
 
         $admin = $this->seedAdmin();
@@ -90,6 +93,70 @@ class DatabaseSeeder extends Seeder
         $this->seedMariamsBooking($mariam, $offer, $trip, $group);
         $this->seedVerificationQueue($admin);
         $this->seedOpenSafetyCase($mariam, $nour);
+
+        $this->announceCredentials($admin, $nour, $mariam);
+    }
+
+    /**
+     * 🔴 Refuses to run on a database that already has people in it.
+     *
+     * Nothing below uses `firstOrCreate` — it is twelve `create()` calls building one interlinked
+     * story, and making all of it idempotent would mean inventing a natural key for every row. So a
+     * second run collides on the first unique column it reaches (a phone number, a plate, the
+     * admin's email) and stops **halfway**, leaving a partly-built scenario that looks like a bug
+     * in the application rather than a seeder that was run twice.
+     *
+     * Refusing up front, by name, costs nothing and says what to do instead.
+     */
+    private function assertDatabaseIsEmpty(): void
+    {
+        if (! User::query()->exists() && ! AdminUser::query()->exists()) {
+            return;
+        }
+
+        throw new RuntimeException(
+            'This database already has accounts in it, and the seeder is not idempotent — '
+            ."a second run would collide on a unique column and stop halfway.\n\n"
+            ."  · To rebuild a disposable environment:  php artisan migrate:fresh --seed --force\n"
+            ."  · To keep what is there:                do nothing; the scenario is already seeded.\n\n"
+            .'⚠️  `migrate:fresh` DROPS EVERY TABLE. It is refused on APP_ENV=production, and '
+            .'nothing stops it on staging — so be certain which database this is first.'
+        );
+    }
+
+    /**
+     * What somebody needs to actually sign in after seeding.
+     *
+     * 🔴 Printed because without it the dashboard is unreachable. The admin guard requires a second
+     * factor, the factory generates a REAL base32 TOTP secret, and it is random on every run — so
+     * the only way in was to read `mfa_secret` out of the database by hand. A demo environment
+     * nobody can open is not a demo environment.
+     *
+     * 🔒 Console output only, and only ever for a seeded demo account. This must never grow into
+     * printing a real admin's secret.
+     */
+    private function announceCredentials(AdminUser $admin, User $nour, User $mariam): void
+    {
+        $command = $this->command;
+
+        if ($command === null) {
+            return;
+        }
+
+        $command->newLine();
+        $command->info('Seeded. Dashboard sign-in (/admin/login):');
+        $command->line("  email    {$admin->email}");
+        $command->line('  password password');
+        $command->line("  TOTP     {$admin->mfa_secret}");
+        $command->line('           add that secret to an authenticator app, or generate a code with:');
+        $command->line("           php artisan tinker --execute=\"echo app(PragmaRX\\Google2FA\\Google2FA::class)->getCurrentOtp('{$admin->mfa_secret}');\"");
+        $command->newLine();
+        $command->line('Mobile test accounts — request an OTP for either phone:');
+        $command->line("  {$nour->phone_e164}  Nour    approved driver, published commute");
+        $command->line("  {$mariam->phone_e164}  Mariam  verified passenger, trial booking");
+        $command->line('           the OTP goes to the LOG, not to the phone. Set RAFEEQ_DEV_OTP_CODE');
+        $command->line('           to a fixed 6-digit code to sign in without reading logs.');
+        $command->newLine();
     }
 
     /** The 6 RBAC roles from Bible §Group 13 — must exist before assignRole() works. */
@@ -168,6 +235,13 @@ class DatabaseSeeder extends Seeder
     private function seedNour(Organization $organization, AdminUser $admin): User
     {
         $nour = User::factory()->woman()->create([
+            /*
+             * 🔴 A FIXED number, not the factory's random one. These two accounts exist so the
+             * mobile team has something to sign in as, and a phone that changes on every seed
+             * means looking it up in the database first — which is the moment a demo environment
+             * stops being used.
+             */
+            'phone_e164' => '+201011112222',
             'full_name' => 'نور حسن محمد',
             'public_first_name' => 'نور',
             'org_type' => OrgType::Work,
@@ -219,6 +293,8 @@ class DatabaseSeeder extends Seeder
     private function seedMariam(Organization $organization): User
     {
         $mariam = User::factory()->woman()->create([
+            // Fixed, like Nour's — see the note there.
+            'phone_e164' => '+201033334444',
             'full_name' => 'مريم أحمد سيد',
             'public_first_name' => 'مريم',
             'org_type' => OrgType::Work,
