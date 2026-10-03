@@ -1,16 +1,14 @@
 <?php
 
+use App\Http\Controllers\Admin\LogoutController;
 use App\Http\Controllers\LiveShareController;
 use App\Livewire\Admin\DriverApplications;
 use App\Livewire\Admin\Login;
 use App\Livewire\Admin\VerificationQueue;
-use Illuminate\Http\RedirectResponse;
-use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Route;
 
-Route::get('/', function () {
-    return view('welcome');
-});
+// A view with no logic behind it, so `Route::view` says that in one line.
+Route::view('/', 'welcome');
 
 /*
 |--------------------------------------------------------------------------
@@ -69,14 +67,8 @@ Route::prefix('admin')->name('admin.')->group(function (): void {
          * POST, and therefore CSRF-protected. A GET sign-out can be triggered by any
          * page that can make the browser load a URL, which is a nuisance here and a
          * real problem on the actions next door.
+         *
          */
-        Route::post('logout', function (): RedirectResponse {
-            Auth::guard('admin')->logout();
-
-            request()->session()->invalidate();
-            request()->session()->regenerateToken();
-
-            return redirect()->route('admin.login');
-        })->name('logout');
+        Route::post('logout', LogoutController::class)->name('logout');
     });
 });
