@@ -32,6 +32,7 @@ use App\Domains\Geo\Enums\CorridorStatus;
 use App\Domains\Geo\Enums\PlaceType;
 use App\Domains\Geo\Models\Corridor;
 use App\Domains\Geo\Models\Place;
+use App\Domains\Geo\ValueObjects\BoundingBox;
 use App\Domains\Group\Enums\CommuteGroupStatus;
 use App\Domains\Group\Enums\GroupMemberRole;
 use App\Domains\Group\Enums\GroupMemberStatus;
@@ -49,6 +50,7 @@ use App\Domains\Safety\Enums\SafetySeverity;
 use App\Domains\Safety\Models\Incident;
 use App\Domains\Shared\ValueObjects\Coordinate;
 use App\Domains\Shared\ValueObjects\DaysMask;
+use App\Domains\Shared\ValueObjects\Distance;
 use App\Domains\Verification\Enums\PublicTrustTier;
 use App\Domains\Verification\Enums\VerificationStatus;
 use App\Domains\Verification\Enums\VerificationType;
@@ -56,6 +58,8 @@ use App\Domains\Verification\Models\TrustScore;
 use App\Domains\Verification\Models\UserVerification;
 use Illuminate\Database\Console\Seeds\WithoutModelEvents;
 use Illuminate\Database\Seeder;
+use Illuminate\Support\Facades\Hash;
+use PragmaRX\Google2FA\Google2FA;
 use RuntimeException;
 use Spatie\Permission\Models\Role;
 
@@ -145,11 +149,16 @@ class DatabaseSeeder extends Seeder
 
         $command->newLine();
         $command->info('Seeded. Dashboard sign-in (/admin/login):');
-        $command->line("  email    {$admin->email}");
-        $command->line('  password password');
-        $command->line("  TOTP     {$admin->mfa_secret}");
-        $command->line('           add that secret to an authenticator app, or generate a code with:');
-        $command->line("           php artisan tinker --execute=\"echo app(PragmaRX\\Google2FA\\Google2FA::class)->getCurrentOtp('{$admin->mfa_secret}');\"");
+        $command->line("  email     {$admin->email}");
+        $command->line('  password  '.self::DEMO_ADMIN_PASSWORD);
+        $command->line('  TOTP      '.self::DEMO_ADMIN_TOTP_SECRET);
+        $command->line('  enrol     '.app(Google2FA::class)->getQRCodeUrl(
+            (string) config('app.name'),
+            $admin->email,
+            self::DEMO_ADMIN_TOTP_SECRET,
+        ));
+        $command->line('            paste that URI into an authenticator app, or get a code now with:');
+        $command->line('            php artisan rafeeq:admin-code');
         $command->newLine();
         $command->line('Mobile test accounts — request an OTP for either phone:');
         $command->line("  {$nour->phone_e164}  Nour    approved driver, published commute");
@@ -167,13 +176,51 @@ class DatabaseSeeder extends Seeder
         }
     }
 
+    /**
+     * 🔴 FIXED credentials, and a FIXED authenticator secret.
+     *
+     * The factory generates a random base32 secret, which is right for a test and wrong for a demo
+     * environment: the dashboard requires a second factor, so a secret nobody can predict meant
+     * reading `mfa_secret` out of the database after every seed before anybody could sign in.
+     *
+     * 🔒 These are public, well-known credentials — a known email, the password `password`, and a
+     * secret written down in a source file. On an instance holding real data that is a complete
+     * dashboard takeover: this surface approves drivers and reads every identity document on the
+     * platform. So it refuses to exist in production rather than relying on anybody remembering.
+     * The same shape of guard as `RAFEEQ_DEV_OTP_CODE`, for the same reason.
+     *
+     * For a real deployment use `php artisan admin:create`, which prompts for a password and
+     * prints a freshly generated secret once.
+     */
+    private const DEMO_ADMIN_EMAIL = 'admin@admin';
+
+    private const DEMO_ADMIN_PASSWORD = 'password';
+
+    /** Base32, so an authenticator app can take it. Shared with the team on purpose. */
+    private const DEMO_ADMIN_TOTP_SECRET = 'UDCLQGYXRTMI24GLWCEI2WV6GUA5R235';
+
     private function seedAdmin(): AdminUser
     {
+        if (app()->isProduction()) {
+            throw new RuntimeException(
+                'This seeder creates a well-known admin account ('.self::DEMO_ADMIN_EMAIL.' / '
+                ."password, with a published authenticator secret) and will not do that in production.\n\n"
+                .'Use `php artisan admin:create` instead — it prompts for a password and prints a '
+                .'fresh secret once.'
+            );
+        }
+
         $admin = AdminUser::factory()->create([
-            'name' => 'Omar — Verification Lead',
-            'email' => 'omar@rafeeq.example',
+            'name' => 'Rafeeq Admin',
+            'email' => self::DEMO_ADMIN_EMAIL,
+            'password_hash' => Hash::make(self::DEMO_ADMIN_PASSWORD),
+            // Encrypted at rest by the model's cast; assigned here in the clear.
+            'mfa_secret' => self::DEMO_ADMIN_TOTP_SECRET,
         ]);
-        $admin->assignRole(AdminRole::Verification->value);
+
+        // Super admin, not just verification: a demo account that cannot open half the dashboard
+        // sends somebody hunting for a permissions bug that is not there.
+        $admin->assignRole(AdminRole::SuperAdmin->value);
 
         return $admin;
     }
@@ -340,10 +387,25 @@ class DatabaseSeeder extends Seeder
             'route_polyline' => '}_p~iF~ps|U_ulL',
             'route_distance_meters' => 32000,
             'route_duration_seconds' => 2880,
-            'bbox_min_lat' => 30.02,
-            'bbox_max_lat' => 30.08,
-            'bbox_min_lng' => 31.00,
-            'bbox_max_lng' => 31.49,
+            /*
+             * 🔴 COMPUTED from the two places, never written by hand.
+             *
+             * The hand-written box that used to be here had `bbox_max_lng => 31.49` while the
+             * origin sits at `31.4915` — fifteen ten-thousandths of a degree OUTSIDE its own box.
+             * The bounding box is the search's first filter, so every seeded commute was invisible
+             * to a search starting from its own origin, and the only symptom was an empty result
+             * list that reads as a broken endpoint.
+             *
+             * Two sets of magic numbers that have to agree with each other is how that happens.
+             * `BoundingBox::around()` is what the application itself uses, margin included.
+             */
+            ...BoundingBox::around(
+                [
+                    new Coordinate(lat: $origin->lat, lng: $origin->lng),
+                    new Coordinate(lat: $destination->lat, lng: $destination->lng),
+                ],
+                Distance::fromMetres((int) config('rafeeq.matching.search_margin_metres')),
+            )->toColumns(),
             'published_at' => now(),
         ]);
 

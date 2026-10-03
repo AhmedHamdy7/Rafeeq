@@ -23,6 +23,7 @@ use App\Domains\Driver\Models\DriverProfile;
 use App\Domains\Driver\Models\Vehicle;
 use App\Domains\Geo\Models\Corridor;
 use App\Domains\Geo\Models\Place;
+use App\Domains\Geo\ValueObjects\BoundingBox;
 use App\Domains\Identity\Enums\AccountStatus;
 use App\Domains\Identity\Enums\OrgType;
 use App\Domains\Identity\Enums\ProfileStatus;
@@ -35,6 +36,7 @@ use App\Domains\Rating\Actions\RevealRatingsAction;
 use App\Domains\Rating\Actions\SubmitRatingAction;
 use App\Domains\Shared\ValueObjects\Coordinate;
 use App\Domains\Shared\ValueObjects\DaysMask;
+use App\Domains\Shared\ValueObjects\Distance;
 use App\Domains\Trip\Enums\TripSessionStatus;
 use App\Domains\Trip\Models\TripSession;
 use App\Domains\Verification\Enums\PublicTrustTier;
@@ -96,6 +98,30 @@ class DemoDataSeeder extends Seeder
         ['name' => 'ياسمين طارق', 'first' => 'ياسمين', 'phone' => '+201055550005', 'time' => '07:45:00', 'price' => 8000, 'seats' => 4, 'plate' => 'و ي 240', 'make' => 'Kia', 'model' => 'Cerato', 'colour' => 'أحمر', 'trips' => 0, 'onTime' => null, 'audience' => CommuteAudience::WomenOnly],
     ];
 
+    /**
+     * The people building the client, so each has an account of their own rather than sharing
+     * Mariam's and overwriting each other's bookings.
+     *
+     * 🔴 `gender` is `woman` on both and the names are men's names. That is deliberate, and it is
+     * the one place in this file where the data is knowingly inconsistent — so it is written down
+     * here rather than discovered later.
+     *
+     * The audience filter is a HARD exclusion (pitfall #15): a women-only commute removes everyone
+     * else from the results rather than ranking them lower, and `gender` is read from the ACCOUNT,
+     * never from the request. Five of the six demo commutes are women-only, which is realistic —
+     * it is the product's default — so a male account would open search, find one result, and
+     * reasonably conclude the endpoint was broken.
+     *
+     * One commute (داليا's) stays `any_verified`, so the filter is still checkable: set a tester's
+     * gender to `man` and the list should collapse from six to one. If it does not, that is a bug.
+     *
+     * @var list<array<string, string>>
+     */
+    private const TESTERS = [
+        ['name' => 'أحمد إبراهيم', 'first' => 'أحمد', 'phone' => '+201125847213'],
+        ['name' => 'عمر علي', 'first' => 'عمر', 'phone' => '+201014531739'],
+    ];
+
     public function run(): void
     {
         if (User::query()->exists()) {
@@ -132,6 +158,10 @@ class DemoDataSeeder extends Seeder
 
         $this->seedRatedJourney($mariam);
         $this->seedPassengerIntent($mariam, $origin, $destination);
+
+        foreach (self::TESTERS as $spec) {
+            $this->seedTester($spec, $organization, $admin, $origin, $destination);
+        }
 
         $this->announce();
     }
@@ -215,14 +245,17 @@ class DemoDataSeeder extends Seeder
             'route_distance_meters' => 32000,
             'route_duration_seconds' => 2880,
             /*
-             * The same box as the reference commute. It has to CONTAIN the search origin and
-             * destination or the bounding-box pre-filter removes the offer before anything is
-             * scored — which would make this seeder look like a broken search.
+             * 🔴 Computed, not written by hand — see the same block in `DatabaseSeeder`, where a
+             * hand-written box excluded its own origin by a fraction of a degree and made every
+             * seeded commute invisible to search.
              */
-            'bbox_min_lat' => 30.02,
-            'bbox_max_lat' => 30.08,
-            'bbox_min_lng' => 31.00,
-            'bbox_max_lng' => 31.49,
+            ...BoundingBox::around(
+                [
+                    new Coordinate(lat: $origin->lat, lng: $origin->lng),
+                    new Coordinate(lat: $destination->lat, lng: $destination->lng),
+                ],
+                Distance::fromMetres((int) config('rafeeq.matching.search_margin_metres')),
+            )->toColumns(),
             'published_at' => now(),
         ]);
 
@@ -371,6 +404,111 @@ class DemoDataSeeder extends Seeder
         ]);
     }
 
+    /**
+     * One of the mobile developers: a verified passenger with a confirmed seat on a future day, a
+     * saved search and a standing request — so every passenger screen has something in it.
+     *
+     * Verified rather than merely signed in, because asking for a seat requires it. An account
+     * that can search but is refused the moment it taps "request" is the most confusing state to
+     * hand somebody building that screen.
+     *
+     * @param  array<string, string>  $spec
+     */
+    private function seedTester(
+        array $spec,
+        Organization $organization,
+        AdminUser $admin,
+        Place $origin,
+        Place $destination,
+    ): void {
+        $tester = User::factory()->woman()->create([
+            'phone_e164' => $spec['phone'],
+            'full_name' => $spec['name'],
+            'public_first_name' => $spec['first'],
+            'org_type' => OrgType::Work,
+            'organization_id' => $organization->id,
+            'registered_role' => RegisteredRole::Passenger,
+            'account_status' => AccountStatus::Active,
+            'profile_status' => ProfileStatus::BasicComplete,
+            'trust_level' => 3,
+        ]);
+
+        foreach ([VerificationType::Phone, VerificationType::GovernmentId, VerificationType::Selfie] as $type) {
+            UserVerification::factory()->approved()->create([
+                'user_id' => $tester->id,
+                'type' => $type,
+                'reviewed_by' => $admin->id,
+            ]);
+        }
+
+        TrustScore::factory()->create([
+            'user_id' => $tester->id,
+            'score' => 64,
+            'public_tier' => PublicTrustTier::Trusted,
+        ]);
+
+        $this->seatOn($tester, $this->nextFreeTrip());
+        $this->seedPassengerIntent($tester, $origin, $destination);
+    }
+
+    /**
+     * The soonest bookable day that still has a seat, so two testers do not land on the same one
+     * and fight over the last place.
+     */
+    private function nextFreeTrip(): ?ScheduledTrip
+    {
+        return ScheduledTrip::query()
+            ->where('status', ScheduledTripStatus::Scheduled)
+            ->where('departure_at', '>', now())
+            ->whereColumn('seats_taken', '<', 'seats_total')
+            ->orderBy('departure_at')
+            ->with('commuteOffer')
+            ->first();
+    }
+
+    /**
+     * A confirmed seat, with the money frozen onto the row the way an approval does it.
+     *
+     * 🔴 The three `*_snapshot_piastres` columns are copied from the trip rather than recomputed,
+     * because that is the whole point of their existing: what a passenger agreed to pay must not
+     * move when the driver later edits her price. A seeder that recomputed them would be modelling
+     * a bug.
+     */
+    private function seatOn(User $passenger, ?ScheduledTrip $trip): void
+    {
+        if ($trip === null || $trip->commuteOffer === null) {
+            return;
+        }
+
+        $offer = $trip->commuteOffer;
+
+        /*
+         * 3% of the seat price, matching the reference seeder. Which DIRECTION the fee goes is
+         * still an open decision — see the money conflict in the screen map — so this is a
+         * plausible number for a demo and not a statement about the product.
+         */
+        $platformFee = (int) round($trip->price_snapshot_piastres * 0.03);
+
+        $booking = Booking::create([
+            'scheduled_trip_id' => $trip->id,
+            'passenger_user_id' => $passenger->id,
+            'driver_profile_id' => $offer->driver_profile_id,
+            'seats_reserved' => 1,
+            'price_snapshot_piastres' => $trip->price_snapshot_piastres,
+            'platform_fee_snapshot_piastres' => $platformFee,
+            'driver_amount_snapshot_piastres' => $trip->price_snapshot_piastres - $platformFee,
+            'payment_type' => PaymentType::Cash,
+        ]);
+
+        $booking->forceFill([
+            'status' => BookingStatus::Confirmed->value,
+            'payment_status' => PaymentStatus::NotDue->value,
+        ])->save();
+
+        // Kept in step with the booking, or the seat count on every search result is a lie.
+        $trip->increment('seats_taken');
+    }
+
     private function announce(): void
     {
         $command = $this->command;
@@ -390,8 +528,14 @@ class DemoDataSeeder extends Seeder
         $command->line('   then request a code for any of the phones below and enter 123456.');
         $command->line('   It is refused outright on APP_ENV=production, so it cannot ship by accident.');
         $command->newLine();
-        $command->line('   +201033334444  Mariam — passenger: bookings, a rated trip, a saved search');
-        $command->line('   +201011112222  Nour   — driver: published commute, group, pending requests');
+        $command->line('   +201125847213  Ahmed Ibrahim  — passenger: confirmed seat, saved search, a request');
+        $command->line('   +201014531739  Omar Aly       — passenger: confirmed seat, saved search, a request');
+        $command->line('   +201033334444  Mariam         — passenger: bookings, a RATED trip, a saved search');
+        $command->line('   +201011112222  Nour           — driver: published commute, group, pending requests');
+        $command->newLine();
+        $command->line('   All four see all six commutes. Five of the six are women-only and the audience');
+        $command->line('   filter is a hard exclusion, so the testers are seeded as women — flip one to');
+        $command->line('   `man` and search should drop to the single any_verified commute.');
         $command->newLine();
     }
 }
