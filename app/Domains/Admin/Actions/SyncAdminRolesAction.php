@@ -40,6 +40,25 @@ final readonly class SyncAdminRolesAction
                 Permission::findOrCreate($permission->value, 'admin');
             }
 
+            /*
+             * 🔴 Flushed HERE, between writing the permissions and attaching them — not only at
+             * the end.
+             *
+             * Spatie resolves a permission NAME through its cached collection, and normally keeps
+             * that cache honest with a model event on save. So this method quietly depended on
+             * model events firing, and broke the moment something muted them: the database seeder
+             * uses `WithoutModelEvents`, so the rows above were written, the cache stayed empty,
+             * and `syncPermissions()` below threw "There is no permission named
+             * `verification.view`" about a permission it had just created three lines earlier.
+             *
+             * The symptom reached much further than the message. Seeding appeared to succeed up to
+             * that point, every role existed BY NAME with no permissions attached, and a
+             * `super_admin` then signed in, cleared both middleware, and got a bare 403 on every
+             * dashboard page — because each page checks a named permission the role did not hold.
+             * Nothing in that trail mentions caching.
+             */
+            app(PermissionRegistrar::class)->forgetCachedPermissions();
+
             foreach (AdminRole::cases() as $role) {
                 $model = Role::findOrCreate($role->value, 'admin');
 

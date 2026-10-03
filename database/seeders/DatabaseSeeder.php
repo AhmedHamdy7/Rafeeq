@@ -2,6 +2,7 @@
 
 namespace Database\Seeders;
 
+use App\Domains\Admin\Actions\SyncAdminRolesAction;
 use App\Domains\Admin\Enums\AdminRole;
 use App\Domains\Admin\Models\AdminUser;
 use App\Domains\Booking\Enums\BookingStatus;
@@ -168,12 +169,23 @@ class DatabaseSeeder extends Seeder
         $command->newLine();
     }
 
-    /** The 6 RBAC roles from Bible §Group 13 — must exist before assignRole() works. */
+    /**
+     * The 6 RBAC roles from Bible §Group 13, **with their permissions attached**.
+     *
+     * 🔴 Through `SyncAdminRolesAction`, not `Role::findOrCreate()`. That distinction was a real
+     * bug: creating the roles by name gave every seeded admin a role with ZERO permissions, so a
+     * `super_admin` signed in successfully, passed both middleware, and then got a bare 403 on
+     * every page — because each one checks a named permission the role did not actually hold.
+     *
+     * Nothing in that failure points at permissions. It reads as a broken page, or a broken
+     * session, and the role name on the account says the opposite of the truth.
+     *
+     * The Action is also what the application itself runs, so the roles a demo gets are the roles
+     * production would define rather than a second list that can drift.
+     */
     private function seedAdminRoles(): void
     {
-        foreach (AdminRole::cases() as $role) {
-            Role::findOrCreate($role->value, 'admin');
-        }
+        app(SyncAdminRolesAction::class)->execute();
     }
 
     /**
