@@ -256,9 +256,25 @@ driver's call are both needed for the step to complete.
 ```
 
 🔴 **`nextStep` is the router for the whole app, and reading it is the difference between a client
-that works and one that guesses.** It is the server telling you which screen to show: `BASIC_PROFILE`,
-`VERIFY_IDENTITY`, `HOME`, `ACCOUNT_SUSPENDED`. Do not infer the destination from which fields happen
-to be null.
+that works and one that guesses.** There are exactly four values, and the server picks one in this
+order of precedence:
+
+| `nextStep` | Show | Why it outranks what follows |
+|---|---|---|
+| `ACCOUNT_SUSPENDED` | Screen 35 | A suspended account must never be routed home, whatever else is true. |
+| `CREATE_PIN` | Screen 2's setup | This **device** has no local PIN. A reinstall is asked again rather than inheriting the old installation's trust. |
+| `COMPLETE_PROFILE` | Screen 7, then 8 | The profile is unfinished, so it is resumed — never skipped. |
+| `LOCAL_SECURITY_SETUP_OR_HOME` | Screen 9 | Nothing is outstanding. |
+
+Do not infer the destination from which fields happen to be null, and do not add a fifth case of
+your own: `GET /auth/me` returns the same field and is reachable **while suspended**, which is how
+the app recovers if it ever loses its place.
+
+> ⚠️ **Identity verification is not in this list, on purpose.** It is not a step in sign-up — it is a
+> gate on specific endpoints, which answer `403 VERIFICATION_REQUIRED` naming the levels they want.
+> So a person reaches home and browses first, and only meets verification when they try to ask for a
+> seat. Drive that screen from `GET /account/verifications` and from the home banner, never from
+> `nextStep`.
 
 ```
 3  PUT /account/profile/basic      { fullName, gender, registeredRole, dateOfBirth }
@@ -695,7 +711,7 @@ Send a code. Also the entry point for a PIN reset.
 | Response field | Meaning |
 |---|---|
 | `accountState` | `NEW` (just created) or `EXISTING`. Drives whether you show onboarding. |
-| `nextStep` | **The screen to go to next**, decided by the server: `COMPLETE_PROFILE`, `VERIFY_IDENTITY`, `HOME`. Follow it rather than deciding yourself — it accounts for suspension and half-finished profiles you cannot see. |
+| `nextStep` | **The screen to go to next**, decided by the server. Exactly four values: `ACCOUNT_SUSPENDED`, `CREATE_PIN`, `COMPLETE_PROFILE`, `LOCAL_SECURITY_SETUP_OR_HOME` — in that order of precedence, explained in 2.1. Follow it rather than deciding yourself; it accounts for suspension, a device with no PIN, and half-finished profiles you cannot see. Verification is **not** one of them — it is a per-endpoint gate, not a sign-up step. |
 | `pinLength` | How many digits your local PIN entry should take (currently 4). Configurable server-side; do not hard-code. |
 | `session` | See 5.2. |
 | `user` | See 5.5. |
@@ -2107,6 +2123,7 @@ exist, and every live endpoint must be named here.
 
 | Date | Change |
 |---|---|
+| 2026-10-03 | 🔴 **Correction — `nextStep`.** This file listed `COMPLETE_PROFILE`, `VERIFY_IDENTITY` and `HOME`; only the first is real. There are four values (`ACCOUNT_SUSPENDED`, `CREATE_PIN`, `COMPLETE_PROFILE`, `LOCAL_SECURITY_SETUP_OR_HOME`) and **verification is not one of them** — it is a per-endpoint gate, not a sign-up step. If you built a branch on `VERIFY_IDENTITY` or `HOME`, it never fires. Section 2.1 has the precedence order; a test now pins the list against the enum in both directions. |
 | 2026-10-03 | **New: section 2.1 — the whole cycle, request by request.** Every call in order from sign-in to rating, both roles, with the refusals worth rendering properly and the seeded staging accounts to run it against. Nothing was removed; it sits after the build order. |
 | 2026-10-02 | **Reviews and the rating filter** — 3 endpoints (`GET /commutes/{commute}/reviews`, `GET /ratings/about-me`, `POST /ratings/{rating}/report`) plus `minRating` on search. 🔒 **Reviews carry no reviewer and no exact date** — read 4.13 for why, it changes what your UI can show. A report flags for a human and takes nothing down. |
 | 2026-10-02 | **Ratings** — 4 endpoints. Section 4.13. 🔴 **Double-blind:** nothing in any payload says whether the other person has rated, the rating window closes when the reveal happens, and an edit is refused the moment the rating becomes visible. Side effect you get for free: `rating` in the public summary (5.1) starts carrying numbers on search, match details, group members and the driver's request review. |

@@ -1,5 +1,7 @@
 <?php
 
+use App\Domains\Identity\Enums\NextStep;
+use App\Domains\Shared\Support\ErrorCode;
 use Illuminate\Support\Facades\Route;
 
 /**
@@ -151,6 +153,81 @@ it('accounts for all 47 designed screens', function (int $screen) {
         "Screen {$screen} appears in no row of the mobile guide's screen index."
     );
 })->with(range(1, 47));
+
+/**
+ * 🔴 `nextStep` routes the entire sign-up, so a wrong value in the guide is a client built around a
+ * screen name the server never sends.
+ *
+ * Written after exactly that: the guide listed `COMPLETE_PROFILE`, `VERIFY_IDENTITY` and `HOME`, and
+ * only one of the three is real. The enum has four cases and `VERIFY_IDENTITY` is not among them —
+ * verification is a per-endpoint gate, not a step in registration. Nothing failed, because prose is
+ * not checked against code unless something checks it.
+ *
+ * Both directions matter here. A missing case leaves a client with no branch for a state the server
+ * will send; an invented one sends them building a screen that never arrives.
+ */
+it('names every nextStep the server can actually send, and no others', function () {
+    $guide = mobileApiGuide();
+
+    foreach (NextStep::cases() as $case) {
+        expect(str_contains($guide, '`'.$case->value.'`'))->toBeTrue(
+            "The mobile guide never mentions nextStep `{$case->value}`, so a client has no branch "
+            .'for a state the server will send.'
+        );
+    }
+
+    /*
+     * Then the other direction: a backticked SCREAMING_SNAKE token that reads as a destination must
+     * actually be one.
+     *
+     * The allow-list is every value of every domain enum, uppercased — because the guide documents
+     * statuses in exactly that shape (`SUSPENDED` is an `accountStatus`, `APPROVED` is a driver
+     * status) and flagging those would make this test cry wolf until somebody deleted it. So the
+     * rule is: an ALL-CAPS token is fine if the API really can return it SOMEWHERE; it is a suspect
+     * only if it appears nowhere in the code and still reads like a screen to go to.
+     */
+    preg_match_all('/`([A-Z][A-Z_]{4,})`/', $guide, $matches);
+
+    $realSteps = array_map(fn (NextStep $c) => $c->value, NextStep::cases());
+
+    $known = $realSteps;
+
+    foreach (glob(__DIR__.'/../../app/Domains/*/Enums/*.php') ?: [] as $file) {
+        $class = 'App\\Domains\\'.basename(dirname($file, 2)).'\\Enums\\'.basename($file, '.php');
+
+        if (! enum_exists($class)) {
+            continue;
+        }
+
+        foreach ($class::cases() as $case) {
+            if (property_exists($case, 'value')) {
+                $known[] = strtoupper((string) $case->value);
+            }
+        }
+    }
+
+    foreach (ErrorCode::cases() as $code) {
+        $known[] = $code->value;
+    }
+
+    $suspects = [];
+
+    foreach (array_unique($matches[1]) as $token) {
+        if (in_array($token, $known, true)) {
+            continue;
+        }
+
+        if (preg_match('/(PROFILE|HOME|PIN|IDENTITY|VERIFY)/', $token) === 1) {
+            $suspects[] = $token;
+        }
+    }
+
+    expect($suspects)->toBeEmpty(
+        "These read as `nextStep` values and are not among the enum's cases, so a client would "
+        ."build a screen the server never asks for: \n- ".implode("\n- ", $suspects)
+        ."\n\nThe real ones are: ".implode(', ', $realSteps)
+    );
+});
 
 /**
  * The reader is told the guide is kept current. That claim has to be checked against something,
