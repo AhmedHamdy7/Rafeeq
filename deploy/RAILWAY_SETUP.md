@@ -61,8 +61,24 @@ Nixpacks بتشوف `package.json` فبتضيف مرحلة Node كاملة — i
 | `APP_KEY` فاضي | التطبيق مايقومش خالص. `php artisan key:generate --show` من جهازك وحطّها في المتغيّرات |
 | متغيّرات قاعدة البيانات ناقصة | الـ Deploy Logs هتقول `could not find driver` أو `Connection refused` |
 | الخدمة بتسمع على منفذ ثابت | Railway بتحقن `$PORT` ولازم التطبيق يستخدمها — مزوّد PHP بيعمل ده لوحده لو مامنعتهوش |
+| **`BROADCAST_CONNECTION=reverb` ومفيش مفاتيح Reverb** | الـ Deploy Logs بتقول `Pusher\Pusher::__construct(): Argument #1 ($auth_key) must be of type string, null given` — **مكرّرة عشرات المرات**. ومابتذكرش broadcasting ولا إعدادات ولا اللي تعمله. **الحل: `BROADCAST_CONNECTION=log`** |
 
 **والـ Deploy Logs هي المصدر الوحيد اللي بيقول الحقيقة.** لو اللي فوق ماحلّهاش، ابعت آخر ٣٠ سطر.
+
+### الـ entrypoint بيفحص كل ده قبل ما يقوم
+
+كان بيموت على **أول** متغيّر ناقص، فكل نشر يكشف واحد بس — وده اتصلّح. دلوقتي بيفحص الكل ويطبع تقرير واحد:
+
+```
+🔴 RAFEEQ — refusing to start. Fix these in the platform's variables:
+  ✗ APP_KEY is not set. Generate one with:  php artisan key:generate --show
+  ✗ DB_HOST is not set. On Railway use the service reference, e.g. DB_HOST=${{MySQL.MYSQLHOST}}
+  ✗ BROADCAST_CONNECTION=reverb but missing: REVERB_APP_KEY
+    If you do not have one yet, set BROADCAST_CONNECTION=log
+  ✗ APP_URL has no scheme: 'rafeeq.up.railway.app'. It must start with https://
+```
+
+وفيه تحذيرات **مابتمنعش الإقلاع** بس مهمة: `APP_DEBUG=true` (صفحة الخطأ بتعرض SQL والمتغيّرات) و`LOG_LEVEL=debug` (بتكتب **أكواد الـ OTP** في اللوج) و`DB_PASSWORD` فاضي و`APP_URL` بـ `http://` (الكوكيز secure فالدخول مش هينفع).
 
 ---
 
@@ -152,7 +168,18 @@ CACHE_STORE=database
 SESSION_DRIVER=database
 SESSION_ENCRYPT=true
 SESSION_SECURE_COOKIE=true
+BROADCAST_CONNECTION=log
 ```
+
+🔴 **`BROADCAST_CONNECTION=log` مش اختيارية لحد ما تعمل خدمة Reverb.** لو حطيتها `reverb` والمفاتيح فاضية، التطبيق **مابيتعطّلش جزئيًا — بيموت**: لارافيل بتبني الـ broadcaster من خلال عميل Pusher، وconstructor بتاع Pusher بيرمي type error على مفتاح `null`:
+
+```
+Pusher\Pusher::__construct(): Argument #1 ($auth_key) must be of type string, null given
+```
+
+والرمية دي بتحصل وقت تحميل `routes/channels.php`، اللي بيحصل جوّه `route:cache` — فالحاويّة بتموت وقت الإقلاع والمنصّة بتقول "Application failed to respond" وبس. `log` بتقوم نظيفة، والحاجة الوحيدة اللي مش هتشتغل هي إن **الخريطة تتحرّك لوحدها**؛ الـ polling (`GET /trips/{trip}/location`) شغّال عادي.
+
+> **وده كان عيب في `.env.production.example` نفسه** — كان فيه `BROADCAST_CONNECTION=reverb` مع مفاتيح فاضية، فأي حد ينسخه يقع في نفس الحفرة. اتصلّح، والـ entrypoint بقى **بيرفض يقوم** لو لقى واحدة من غير التانية، برسالة بتقولك تعمل إيه.
 
 🔴 **`APP_DEBUG=false`** — لو `true`، صفحة الخطأ بتعرض الـ SQL والمتغيّرات وأجزاء من الكود.
 
