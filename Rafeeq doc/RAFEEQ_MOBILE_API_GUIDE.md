@@ -14,7 +14,7 @@
 >
 > **Base URL:** `{host}/api/v1` · **Auth:** bearer token · **Format:** JSON only.
 
-**Last updated:** 2026-10-02 · **116 endpoints live** · Phases 0–7 complete, Phase 9 in progress
+**Last updated:** 2026-10-03 · **116 endpoints live** · Phases 0–7 complete, Phase 9 in progress
 
 ---
 
@@ -229,6 +229,223 @@ The order that keeps you unblocked. Each step only needs the ones above it.
 | 10 | 28, 29 — request review, pickup approval | Driver decisions. |
 | 11 | 17, 36, 40, 41 — active trip, check-in, no-show, wait timer | The live run. Needs a WebSocket (section 6) and is the most stateful part. |
 | 12 | 21, 22, 26, 27, 35 | Account screens. 22 and 26 have no API yet (section 7). |
+
+---
+
+### 2.1 The whole cycle, request by request
+
+The section above says which screens to build first. This one says what the calls actually look like
+**in order**, so the lifecycle is visible before you build any of it — and every request below works
+today, against the seeded demo data.
+
+Two accounts travel through it. Where the two columns sit side by side, the passenger's call and the
+driver's call are both needed for the step to complete.
+
+> **Follow along:** the staging database is seeded with the accounts in the table at the end of this
+> section, and `RAFEEQ_DEV_OTP_CODE` is set, so every OTP is the same six digits. You can run the
+> whole sequence with `curl` before writing a line of Dart.
+
+#### A. Getting a token (both roles)
+
+```
+1  POST /auth/otp/request          { phone, purpose: "authentication", device: {...} }
+   → 202  { challengeId, expiresInSeconds, resendAfterSeconds }
+
+2  POST /auth/otp/verify           { challengeId, code, device: {...} }
+   → 200  { user: {...}, session: { accessToken, refreshToken, ... }, nextStep }
+```
+
+🔴 **`nextStep` is the router for the whole app, and reading it is the difference between a client
+that works and one that guesses.** It is the server telling you which screen to show: `BASIC_PROFILE`,
+`VERIFY_IDENTITY`, `HOME`, `ACCOUNT_SUSPENDED`. Do not infer the destination from which fields happen
+to be null.
+
+```
+3  PUT /account/profile/basic      { fullName, gender, registeredRole, dateOfBirth }
+   → 200   profileStatus becomes BASIC_COMPLETE
+```
+
+Until that call succeeds most endpoints answer `403 ACCOUNT_PROFILE_INCOMPLETE`. The seeded accounts
+are already past this step.
+
+```
+4  POST /account/verifications/government_id/documents    multipart: kind, file
+   POST /account/verifications/government_id/documents    (the second side)
+   POST /account/verifications/government_id/submit
+   → 200   status becomes PENDING, and a human decides
+```
+
+🔴 **Submitting is not being verified.** A reviewer approves it, so on a fresh account the next step
+is a wait — which is why the seeded accounts come pre-approved. `GET /account/verifications` is what
+screen 15 renders while waiting.
+
+```
+5  POST /auth/session/refresh      { refreshToken }
+   → 200  a new pair
+```
+
+Access tokens last **15 minutes**. Refresh on a `401 AUTH_SESSION_EXPIRED` and retry the original
+request once — this is the single most common reason a client "randomly stops working" after a
+quarter of an hour.
+
+#### B. Passenger: finding a seat and asking for it
+
+```
+6  GET /home
+   → 200  greeting · verification banner · nextJourney · topMatches · savedSearches
+
+7  GET /search/commutes?origin[lat]=..&origin[lng]=..&destination[lat]=..&
+                        destination[lng]=..&daysMask=62&arrivalWindowStart=06:45:00&
+                        arrivalWindowEnd=08:00:00&maxWalkMinutes=15&maxDetourMinutes=15
+   → 200  a ranked list; each row has commuteId, score + its breakdown, driver summary, vehicle
+
+8  POST /commutes/{commute}/pickup-preview   { lat, lng }
+   → 200  { addedMinutes, runTotalMinutes, maxDetourMinutes, withinLimit }
+```
+
+Step 8 creates nothing. It exists so the passenger can see the detour **before** committing to a
+custom meeting point, and so your screen can grey out a point the driver would refuse.
+
+```
+9  GET /commutes/{commute}/reviews
+   → 200  anonymous reviews, month-dated (4.13)
+
+10 POST /commutes/{commute}/seat-requests
+   { commitment: "trial"|"recurring", scheduledTripId?, requestedDaysMask?, seats,
+     meetingPreference, introMessage, paymentType, agreedToRules: true }
+   → 201  the request, status PENDING
+```
+
+🔴 **`agreedToRules` must be true and the refusals here are the ones to render properly**, not as a
+generic error: `SEAT_UNAVAILABLE` (409 — taken while they were deciding), `BOOKING_DEADLINE_PASSED`
+(409), `BOOKING_ALREADY_REQUESTED` (409), `VERIFICATION_REQUIRED` (403 — send them to step 4 and
+bring them back).
+
+#### C. Driver: answering it
+
+```
+11 GET /driver/home
+   → 200  nextRun · pendingRequests (count + first five) · stats
+
+12 GET /driver/seat-requests
+   → 200  each with the passenger's public summary and commitment
+
+13 POST /driver/seat-requests/{request}/approve        → 201  { bookings: [...] }
+   POST /driver/seat-requests/{request}/reject         { reason }
+   POST /driver/seat-requests/{request}/waitlist
+```
+
+🔴 **Approval is the most dangerous operation in the platform** and the one place your UI must not
+assume success: it runs under a row lock and can still lose to another approval on the last seat.
+Handle `SEAT_UNAVAILABLE` on the driver's side too. A trial returns one booking; a recurring
+membership returns one per committed day — one response shape for both.
+
+```
+14 GET /my-bookings            (passenger)      → 200  paginated
+   GET /groups/{group}         (either)         → 200  overview · rules · members
+```
+
+Only now does the passenger get the **exact** meeting point and the vehicle's **plate**:
+`BookingStatus::grantsExactDetails()` gates both until the booking is `CONFIRMED`. Before that the
+point is deliberately fuzzed — see 1.9 and 5.2. Do not treat the coarse point as a bug.
+
+#### D. The day of the trip
+
+```
+15 POST /groups/{group}/attendance    { date, status: "coming"|"away" }   (passenger, screen 36)
+   → 200
+```
+
+🔴 **This is the DECLARED attendance, not boarding.** It says "I intend to come". Who actually
+travelled is step 19, and the driver records that. Two different tables on purpose.
+
+```
+16 POST /trips/{trip}/start                                  (driver)  → 201  the session
+17 POST /trips/{trip}/status   { status: "EN_ROUTE" }         (driver)  → 200
+   POST /trips/{trip}/location { points: [ {lat,lng,recordedAt,accuracyMeters,speedKmh}, ... ] }
+   → 200  { accepted, rejected }
+```
+
+Positions are sent in **batches**, and `recordedAt` is the **device's** clock — a phone that loses
+signal in a tunnel and sends six buffered points on the other side is describing six different
+moments. The server bounds them; send what you recorded.
+
+```
+18 GET /trips/{trip}/location            (passenger on the run)
+   → 200  { position, lastLocationAt }
+   WebSocket: private-trip.{sessionId}   (section 6)
+```
+
+The socket is the fast path and this endpoint is the fallback. **Build the polling first** — a phone
+on a bad connection at a bus stop is exactly what a live map is for and exactly where a socket fails
+to open.
+
+```
+19 POST /trips/{trip}/check-in   { bookingId }      (driver)  → 200
+   POST /trips/{trip}/no-show    { bookingId }      (driver)  → 200
+   POST /trips/{trip}/wait-timers { bookingId }     (driver)  → 201
+   POST /bookings/{booking}/dispute { reason }      (passenger, 24 hours)  → 201
+```
+
+🔴 The driver confirms attendance (decision D18) **and the passenger has 24 hours to contest it**.
+Both halves are built; a client that ships the first without the second is shipping one party
+deciding the other's bill with no recourse.
+
+```
+20 POST /trips/{trip}/status  { status: "IN_PROGRESS" }   (driver)  → 200
+21 POST /trips/{trip}/complete                            (driver)  → 200
+```
+
+Completing from `EN_ROUTE` is refused — `IN_PROGRESS` first. `en_route` means she is still
+collecting people, so finishing from it would record a journey nobody was on.
+
+#### E. After the trip
+
+```
+22 GET /ratings/pending
+   → 200  the journeys awaiting this person's rating, with rateableUntil
+
+23 POST /bookings/{booking}/rating   { stars, comment?, tags? }
+   → 201  your own rating; isVisible is false until the other side rates
+```
+
+🔴 **Both sides rate before either can read the other** (4.13). `isVisible: false` says nothing
+about whether they have rated — do not word it as "waiting for them".
+
+```
+24 PATCH /ratings/{rating}      { stars?, comment?, tags? }
+   → 200  — refused the moment it becomes visible, whatever editableUntil said
+25 GET /ratings/about-me        → 200  what was said about you, anonymous
+26 POST /ratings/{rating}/report { reason }   → 201  flags for a human; removes nothing
+```
+
+#### F. Safety — available at every step above
+
+```
+POST /sos                              { isDiscreet?, lat?, lng?, tripSessionId? }  → 201
+POST /sos/{sos}/cancel                                                              → 200
+GET  /safety/emergency-contacts · POST · PATCH · DELETE
+POST /trips/{trip}/live-share          { contactId? }   → 201  { url, token } ONCE
+POST /incidents                        { category, description?, bookingId? }       → 201
+POST /incidents/{incident}/evidence    multipart: kind, file                        → 201
+POST /safety/blocked-users             { userId, reason? }                          → 201
+```
+
+🔴 **Every one of these works from a half-finished sign-up.** No verification gate, no complete
+profile, no active trip. That is deliberate — somebody in trouble at a roadside will not finish
+uploading a national ID first — so **do not gate the safety button in your own navigation either.**
+
+#### Accounts seeded on staging
+
+| Phone | Who | What they already have |
+|---|---|---|
+| `01125847213` | Ahmed Ibrahim | Verified passenger · confirmed seat · saved search · standing request |
+| `01014531739` | Omar Aly | The same |
+| `01033334444` | Mariam | Verified passenger · bookings · **a completed, rated trip** |
+| `01011112222` | Nour | Approved **driver** · published commute · group · pending seat requests |
+
+Six published commutes, ~130 bookable days, one revealed rating pair. Start at step 7 with Mariam or
+one of the testers; start at step 11 with Nour. Every OTP is the fixed development code.
 
 ---
 
@@ -1890,6 +2107,7 @@ exist, and every live endpoint must be named here.
 
 | Date | Change |
 |---|---|
+| 2026-10-03 | **New: section 2.1 — the whole cycle, request by request.** Every call in order from sign-in to rating, both roles, with the refusals worth rendering properly and the seeded staging accounts to run it against. Nothing was removed; it sits after the build order. |
 | 2026-10-02 | **Reviews and the rating filter** — 3 endpoints (`GET /commutes/{commute}/reviews`, `GET /ratings/about-me`, `POST /ratings/{rating}/report`) plus `minRating` on search. 🔒 **Reviews carry no reviewer and no exact date** — read 4.13 for why, it changes what your UI can show. A report flags for a human and takes nothing down. |
 | 2026-10-02 | **Ratings** — 4 endpoints. Section 4.13. 🔴 **Double-blind:** nothing in any payload says whether the other person has rated, the rating window closes when the reveal happens, and an edit is refused the moment the rating becomes visible. Side effect you get for free: `rating` in the public summary (5.1) starts carrying numbers on search, match details, group members and the driver's request review. |
 | 2026-10-02 | **Two corrections to this file, both mine.** (1) `autoShareTrips` was described as already sharing every trip. It is stored and acted on by nothing — section 4.12 now says why it needs Phase 12 and what to put on the screen meanwhile. (2) Escort mode was described as a contact watching a journey. Reading the sources, it is a **corridor night window armed by the ops team** — a dashboard control with no mobile surface and no endpoint coming. |
