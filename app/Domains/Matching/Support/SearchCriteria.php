@@ -51,6 +51,19 @@ final readonly class SearchCriteria
         /** Screen 18's "Add a return ride (~5:00 PM)". */
         public bool $wantsReturnTrip = false,
         public array $requiredRules = [],
+        /**
+         * 🔴 The prototype's `min rating` filter — a HARD one, per the Bible's own rule that
+         * "hard conflicts never receive a soft score". A passenger who says she will not ride
+         * with anyone under four stars is stating a condition, not a preference, and scoring it
+         * would put a 3.1-star driver in her results with a lower rank.
+         *
+         * 🔒 A driver with NO rating is NOT excluded, and that is the decision worth stating:
+         * `null` means "not rated yet", never zero. Excluding unrated drivers would freeze every
+         * new driver out of every filtered search — which is both a cold-start problem that
+         * starves supply and a wrong answer, since nobody has said anything bad about her. See
+         * HardFilters::requireMinimumRating.
+         */
+        public ?float $minRating = null,
     ) {}
 
     /**
@@ -103,6 +116,7 @@ final readonly class SearchCriteria
             flexibilityMinutes: (int) ($input['flexibilityMinutes'] ?? 15),
             wantsReturnTrip: (bool) ($input['wantsReturnTrip'] ?? false),
             requiredRules: $input['rules'] ?? [],
+            minRating: isset($input['minRating']) ? (float) $input['minRating'] : null,
         );
     }
 
@@ -138,6 +152,9 @@ final readonly class SearchCriteria
             $this->flexibilityMinutes,
             $this->wantsReturnTrip ? 'return' : 'one-way',
             implode(',', $this->requiredRules),
+            // Part of the key: two passengers with identical criteria and different minimums are
+            // asking different questions, and sharing a cache row would answer one of them wrong.
+            $this->minRating ?? 'any',
         ]));
     }
 }

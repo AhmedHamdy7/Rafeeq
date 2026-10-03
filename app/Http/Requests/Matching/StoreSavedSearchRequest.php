@@ -35,6 +35,13 @@ final class StoreSavedSearchRequest extends FormRequest
             'filters.arrivalWindowEnd' => ['required', 'string', 'date_format:H:i:s'],
             'filters.maxWalkMinutes' => ['required', 'integer', 'min:0', 'max:45'],
             'filters.maxDetourMinutes' => ['required', 'integer', 'min:0', 'max:45'],
+
+            /*
+             * Validated even though `filters` is otherwise free-form, because this one is applied
+             * as a HARD filter when the search is re-run: a saved `minRating` of 9 would quietly
+             * return nothing for ever, and the person would never learn why.
+             */
+            'filters.minRating' => ['nullable', 'numeric', 'between:1,5'],
         ];
     }
 }

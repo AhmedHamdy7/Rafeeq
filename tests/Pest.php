@@ -578,6 +578,71 @@ function checkIn(string $driverToken, string $tripId, array $payload)
     return test()->withToken($driverToken)->postJson("/api/v1/trips/{$tripId}/check-in", $payload);
 }
 
+/*
+ * Ratings (Phase 10). In Pest.php rather than in one test file because two files need them, and a
+ * global function declared in a test file only exists when THAT file is collected — running a
+ * single file would otherwise fail on a helper it can see in the editor (standard #43).
+ */
+
+/**
+ * Gets a journey to the only state a rating means anything in: it happened.
+ *
+ * `IN_PROGRESS` first, because a run may only be completed from there — `en_route` means she is
+ * still collecting people, and finishing from it would record a journey nobody was on.
+ */
+function journeyCompleted(string $driverToken, string $tripId): void
+{
+    underway($driverToken, $tripId);
+
+    test()->withToken($driverToken)
+        ->postJson("/api/v1/trips/{$tripId}/status", ['status' => 'IN_PROGRESS'])->assertOk();
+
+    test()->withToken($driverToken)->postJson("/api/v1/trips/{$tripId}/complete")->assertOk();
+}
+
+/**
+ * One party rating the other on a completed journey. Five stars unless the test says otherwise.
+ *
+ * NOT `rate()`: a name that generic in a file every test loads is a collision waiting for the next
+ * domain that has a rate of anything.
+ */
+function rateBooking(string $token, string $bookingId, array $payload = [])
+{
+    return test()->withToken($token)->postJson("/api/v1/bookings/{$bookingId}/rating", array_merge([
+        'stars' => 5,
+    ], $payload));
+}
+
+/**
+ * Both sides rate, which reveals everything — the only state a review is readable in.
+ */
+function bothRated(string $driverToken, string $paxToken, string $tripId, string $bookingId, array $passengerPayload = [], int $driverStars = 4): void
+{
+    journeyCompleted($driverToken, $tripId);
+
+    rateBooking($paxToken, $bookingId, $passengerPayload)->assertStatus(201);
+    rateBooking($driverToken, $bookingId, ['stars' => $driverStars])->assertStatus(201);
+}
+
+/**
+ * Sets columns on somebody's `user_stats` row, creating it if it is not there.
+ *
+ * 🔴 Through the QUERY BUILDER, not the model, and that is the whole reason this helper exists.
+ * `UserStat` has no `$fillable` on purpose — it is written only by system jobs, never from user
+ * input — so `updateOrCreate()` throws "Add [user_id] to fillable property". That has now caught
+ * three separate pieces of work, each time looking like a bug in the feature under test rather
+ * than in the setup. One helper, written down once.
+ *
+ * Creating the row matters as much as updating it: a driver who has not completed a trip has no
+ * row at all, because `CompleteTripAction` is what writes the first one.
+ *
+ * @param  array<string, mixed>  $values
+ */
+function setUserStat(string $userId, array $values): void
+{
+    DB::table('user_stats')->updateOrInsert(['user_id' => $userId], $values + ['updated_at' => now()]);
+}
+
 /**
  * Every `/v1/...` path the application actually serves.
  *

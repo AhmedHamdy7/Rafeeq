@@ -118,6 +118,7 @@ enum ErrorCode: string
     case RatingAlreadySubmitted = 'RATING_ALREADY_SUBMITTED';
     case RatingNotEditable = 'RATING_NOT_EDITABLE';
     case TripNotRateable = 'TRIP_NOT_RATEABLE';
+    case ReviewAlreadyReported = 'REVIEW_ALREADY_REPORTED';
 
     // ---- Safety (Phase 11, Chapter 10) ---------------------------------
     case SosAlreadyResolved = 'SOS_ALREADY_RESOLVED';
@@ -282,6 +283,7 @@ enum ErrorCode: string
             self::RatingAlreadySubmitted,
             self::RatingWindowClosed,
             self::RatingNotEditable,
+            self::ReviewAlreadyReported,
 
             self::SosAlreadyResolved,
             self::EmergencyContactDuplicate,

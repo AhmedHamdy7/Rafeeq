@@ -40,29 +40,6 @@ beforeEach(function () {
     ])->assertStatus(201)->json('data.id'));
 });
 
-/**
- * Gets the journey to the only state a rating means anything in: it happened.
- *
- * `IN_PROGRESS` first, because a run may only be completed from there — `en_route` means she is
- * still collecting people, and finishing from it would record a journey nobody was on.
- */
-function journeyCompleted(string $driverToken, string $tripId): void
-{
-    underway($driverToken, $tripId);
-
-    test()->withToken($driverToken)
-        ->postJson("/api/v1/trips/{$tripId}/status", ['status' => 'IN_PROGRESS'])->assertOk();
-
-    test()->withToken($driverToken)->postJson("/api/v1/trips/{$tripId}/complete")->assertOk();
-}
-
-function rate(string $token, string $bookingId, array $payload = [])
-{
-    return test()->withToken($token)->postJson("/api/v1/bookings/{$bookingId}/rating", array_merge([
-        'stars' => 5,
-    ], $payload));
-}
-
 /*
 |--------------------------------------------------------------------------
 | Writing one
@@ -72,7 +49,7 @@ function rate(string $token, string $bookingId, array $payload = [])
 it('lets both parties rate a journey that happened', function () {
     journeyCompleted($this->driverToken, $this->tripId);
 
-    $mine = rate($this->paxToken, $this->bookingId, [
+    $mine = rateBooking($this->paxToken, $this->bookingId, [
         'stars' => 5,
         'comment' => 'سواقة هادية ومواعيد مظبوطة.',
         'tags' => ['safe_driving', 'on_time'],
@@ -96,7 +73,7 @@ it('reads who the rating is about from the journey, not from the request', funct
     fakeOtpSender();
     $stranger = verifiedPassenger('01223339999', device: 'pax-2');
 
-    rate($this->paxToken, $this->bookingId, [
+    rateBooking($this->paxToken, $this->bookingId, [
         // All ignored: there are no such fields.
         'userId' => User::query()->firstWhere('phone_e164', '+201223339999')?->id,
         'reviewedUserId' => 'whoever',
@@ -121,13 +98,13 @@ it('refuses a journey the caller was not on', function () {
     $stranger = verifiedPassenger('01223339999', device: 'pax-2');
 
     // 404, not 403: whether a particular journey happened is not learnable by asking about its id.
-    rate($stranger, $this->bookingId)->assertStatus(404);
+    rateBooking($stranger, $this->bookingId)->assertStatus(404);
 
     expect(Rating::count())->toBe(0);
 });
 
 it('refuses a journey that has not happened', function () {
-    rate($this->paxToken, $this->bookingId)
+    rateBooking($this->paxToken, $this->bookingId)
         ->assertStatus(422)
         ->assertJsonPath('error.code', 'TRIP_NOT_RATEABLE')
         ->assertJsonPath('error.fields.bookingStatus.0', 'CONFIRMED');
@@ -140,7 +117,7 @@ it('refuses a journey that was cancelled', function () {
     Booking::query()->whereKey($this->bookingId)
         ->update(['status' => BookingStatus::CancelledByPassenger->value]);
 
-    rate($this->paxToken, $this->bookingId)->assertStatus(422);
+    rateBooking($this->paxToken, $this->bookingId)->assertStatus(422);
 
     expect(Rating::count())->toBe(0);
 });
@@ -148,9 +125,9 @@ it('refuses a journey that was cancelled', function () {
 it('allows one rating per person per journey', function () {
     journeyCompleted($this->driverToken, $this->tripId);
 
-    rate($this->paxToken, $this->bookingId)->assertStatus(201);
+    rateBooking($this->paxToken, $this->bookingId)->assertStatus(201);
 
-    rate($this->paxToken, $this->bookingId)
+    rateBooking($this->paxToken, $this->bookingId)
         ->assertStatus(409)
         ->assertJsonPath('error.code', 'RATING_ALREADY_SUBMITTED');
 
@@ -160,7 +137,7 @@ it('allows one rating per person per journey', function () {
 it('refuses stars outside one to five', function (int $stars) {
     journeyCompleted($this->driverToken, $this->tripId);
 
-    rate($this->paxToken, $this->bookingId, ['stars' => $stars])->assertStatus(422);
+    rateBooking($this->paxToken, $this->bookingId, ['stars' => $stars])->assertStatus(422);
 })->with([0, 6, -1, 99]);
 
 it('takes a rating with no comment at all', function () {
@@ -168,7 +145,7 @@ it('takes a rating with no comment at all', function () {
 
     // Somebody who had an uncomfortable ride may give three stars and not want to write about it,
     // and requiring a reason is how a rating screen becomes a form people abandon.
-    rate($this->paxToken, $this->bookingId, ['stars' => 3])->assertStatus(201);
+    rateBooking($this->paxToken, $this->bookingId, ['stars' => 3])->assertStatus(201);
 });
 
 /*
@@ -180,11 +157,11 @@ it('takes a rating with no comment at all', function () {
 it('reveals both ratings together, with one timestamp, once both exist', function () {
     journeyCompleted($this->driverToken, $this->tripId);
 
-    rate($this->paxToken, $this->bookingId, ['stars' => 5])->assertStatus(201);
+    rateBooking($this->paxToken, $this->bookingId, ['stars' => 5])->assertStatus(201);
 
     expect(Rating::sole()->visible_at)->toBeNull();
 
-    rate($this->driverToken, $this->bookingId, ['stars' => 4])->assertStatus(201);
+    rateBooking($this->driverToken, $this->bookingId, ['stars' => 4])->assertStatus(201);
 
     $ratings = Rating::query()->get();
 
@@ -203,7 +180,7 @@ it('reveals both ratings together, with one timestamp, once both exist', functio
 it('reveals a one-sided rating once the window has passed', function () {
     journeyCompleted($this->driverToken, $this->tripId);
 
-    rate($this->paxToken, $this->bookingId)->assertStatus(201);
+    rateBooking($this->paxToken, $this->bookingId)->assertStatus(201);
 
     // Nothing is due yet.
     test()->artisan('ratings:reveal-due')->assertExitCode(0);
@@ -226,7 +203,7 @@ it('closes submission when the reveal window closes', function () {
 
     ScheduledTrip::query()->whereKey($this->tripId)->update(['departure_at' => now()->subDays(8)]);
 
-    rate($this->paxToken, $this->bookingId)
+    rateBooking($this->paxToken, $this->bookingId)
         ->assertStatus(409)
         ->assertJsonPath('error.code', 'RATING_WINDOW_CLOSED');
 
@@ -245,7 +222,7 @@ it('follows the window length in settings', function () {
 
     ScheduledTrip::query()->whereKey($this->tripId)->update(['departure_at' => now()->subDays(3)]);
 
-    rate($this->paxToken, $this->bookingId)->assertStatus(409);
+    rateBooking($this->paxToken, $this->bookingId)->assertStatus(409);
 });
 
 /*
@@ -257,7 +234,7 @@ it('follows the window length in settings', function () {
 it('lets somebody fix what they wrote while nobody can read it', function () {
     journeyCompleted($this->driverToken, $this->tripId);
 
-    $id = rate($this->paxToken, $this->bookingId, [
+    $id = rateBooking($this->paxToken, $this->bookingId, [
         'stars' => 5,
         'comment' => 'سواقة هادية',
         'tags' => ['safe_driving'],
@@ -285,10 +262,10 @@ it('lets somebody fix what they wrote while nobody can read it', function () {
 it('refuses an edit once the rating can be read', function () {
     journeyCompleted($this->driverToken, $this->tripId);
 
-    $id = rate($this->paxToken, $this->bookingId, ['stars' => 5])->assertStatus(201)->json('data.id');
+    $id = rateBooking($this->paxToken, $this->bookingId, ['stars' => 5])->assertStatus(201)->json('data.id');
 
     // The driver rates, which reveals both — well inside the edit window.
-    rate($this->driverToken, $this->bookingId, ['stars' => 1])->assertStatus(201);
+    rateBooking($this->driverToken, $this->bookingId, ['stars' => 1])->assertStatus(201);
 
     test()->withToken($this->paxToken)->patchJson("/api/v1/ratings/{$id}", ['stars' => 1])
         ->assertStatus(409)
@@ -300,7 +277,7 @@ it('refuses an edit once the rating can be read', function () {
 it('refuses an edit once the edit window has run out', function () {
     journeyCompleted($this->driverToken, $this->tripId);
 
-    $id = rate($this->paxToken, $this->bookingId, ['stars' => 5])->assertStatus(201)->json('data.id');
+    $id = rateBooking($this->paxToken, $this->bookingId, ['stars' => 5])->assertStatus(201)->json('data.id');
 
     Rating::query()->whereKey($id)->update(['edit_deadline_at' => now()->subMinute()]);
 
@@ -316,7 +293,7 @@ it('refuses an edit once the edit window has run out', function () {
 it('refuses to edit somebody else rating, and says only that it is not found', function () {
     journeyCompleted($this->driverToken, $this->tripId);
 
-    $id = rate($this->paxToken, $this->bookingId, ['stars' => 5])->assertStatus(201)->json('data.id');
+    $id = rateBooking($this->paxToken, $this->bookingId, ['stars' => 5])->assertStatus(201)->json('data.id');
 
     test()->withToken($this->driverToken)->patchJson("/api/v1/ratings/{$id}", ['stars' => 1])
         ->assertStatus(404);
@@ -343,12 +320,12 @@ it('does not move an average until the rating can be read', function () {
 
     $driverUserId = Booking::sole()->driver_profile_id;
 
-    rate($this->paxToken, $this->bookingId, ['stars' => 5])->assertStatus(201);
+    rateBooking($this->paxToken, $this->bookingId, ['stars' => 5])->assertStatus(201);
 
     expect(UserStat::query()->whereKey($driverUserId)->sole()->avg_rating_as_driver)->toBeNull();
 
     // Only once it is revealed.
-    rate($this->driverToken, $this->bookingId, ['stars' => 3])->assertStatus(201);
+    rateBooking($this->driverToken, $this->bookingId, ['stars' => 3])->assertStatus(201);
 
     expect((float) UserStat::query()->whereKey($driverUserId)->sole()->avg_rating_as_driver)->toBe(5.0);
 });
@@ -356,8 +333,8 @@ it('does not move an average until the rating can be read', function () {
 it('fills the rating every other screen already reads', function () {
     journeyCompleted($this->driverToken, $this->tripId);
 
-    rate($this->paxToken, $this->bookingId, ['stars' => 4])->assertStatus(201);
-    rate($this->driverToken, $this->bookingId, ['stars' => 5])->assertStatus(201);
+    rateBooking($this->paxToken, $this->bookingId, ['stars' => 4])->assertStatus(201);
+    rateBooking($this->driverToken, $this->bookingId, ['stars' => 5])->assertStatus(201);
 
     // PersonSummary has read these columns since Phase 6 and returned null for want of ratings.
     $booking = Booking::sole();
@@ -395,7 +372,7 @@ it('lists the journeys still waiting for the caller rating', function () {
 it('drops a journey off the pending list once it has been rated', function () {
     journeyCompleted($this->driverToken, $this->tripId);
 
-    rate($this->paxToken, $this->bookingId)->assertStatus(201);
+    rateBooking($this->paxToken, $this->bookingId)->assertStatus(201);
 
     expect(test()->withToken($this->paxToken)->getJson('/api/v1/ratings/pending')
         ->assertOk()->json('data'))->toBe([]);
@@ -409,7 +386,7 @@ it('says nothing about whether the other person has rated', function () {
     journeyCompleted($this->driverToken, $this->tripId);
 
     // The driver rates first.
-    rate($this->driverToken, $this->bookingId, ['stars' => 2])->assertStatus(201);
+    rateBooking($this->driverToken, $this->bookingId, ['stars' => 2])->assertStatus(201);
 
     $row = test()->withToken($this->paxToken)->getJson('/api/v1/ratings/pending')
         ->assertOk()->json('data.0');
@@ -434,7 +411,7 @@ it('drops a journey off the pending list once the window has closed', function (
 it('shows a person their own ratings, hidden or not', function () {
     journeyCompleted($this->driverToken, $this->tripId);
 
-    rate($this->paxToken, $this->bookingId, ['stars' => 5, 'comment' => 'ممتازة'])->assertStatus(201);
+    rateBooking($this->paxToken, $this->bookingId, ['stars' => 5, 'comment' => 'ممتازة'])->assertStatus(201);
 
     // Their own, so no visibility filter applies: a person may always read what they said.
     $mine = test()->withToken($this->paxToken)->getJson('/api/v1/ratings/mine')
@@ -448,7 +425,7 @@ it('shows a person their own ratings, hidden or not', function () {
 it('never shows one person ratings to another', function () {
     journeyCompleted($this->driverToken, $this->tripId);
 
-    rate($this->paxToken, $this->bookingId, ['stars' => 5])->assertStatus(201);
+    rateBooking($this->paxToken, $this->bookingId, ['stars' => 5])->assertStatus(201);
 
     expect(test()->withToken($this->driverToken)->getJson('/api/v1/ratings/mine')
         ->assertOk()->json('data'))->toBe([]);

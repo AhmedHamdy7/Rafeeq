@@ -4,14 +4,21 @@ namespace App\Http\Controllers\Api\V1\Rating;
 
 use App\Domains\Booking\Enums\BookingStatus;
 use App\Domains\Booking\Models\Booking;
+use App\Domains\Commute\Models\CommuteOffer;
+use App\Domains\Matching\Support\HardFilters;
+use App\Domains\Rating\Actions\ReportReviewAction;
 use App\Domains\Rating\Actions\SubmitRatingAction;
+use App\Domains\Rating\Enums\ModerationStatus;
+use App\Domains\Rating\Enums\RatingDirection;
 use App\Domains\Rating\Models\Rating;
 use App\Domains\Shared\Exceptions\DomainException;
 use App\Domains\Shared\Support\ErrorCode;
 use App\Http\Controllers\Controller;
 use App\Http\OpenApi\ApiErrors;
+use App\Http\Requests\Rating\ReportReviewRequest;
 use App\Http\Requests\Rating\SubmitRatingRequest;
 use App\Http\Resources\PersonSummary;
+use App\Http\Resources\PublicReviewResource;
 use App\Http\Resources\RatingResource;
 use App\Http\Responses\ApiResponse;
 use Illuminate\Http\JsonResponse;
@@ -145,6 +152,91 @@ final class RatingController extends Controller
             ->paginate(ApiResponse::perPage($request));
 
         return ApiResponse::paginated($ratings, RatingResource::collection($ratings->items()));
+    }
+
+    /**
+     * GET /v1/commutes/{commute}/reviews — the visible reviews of this commute's driver.
+     *
+     * 🔒 Keyed on the COMMUTE, not on a user id, and that is deliberate rather than awkward. No
+     * payload in this API returns a user identifier — `PersonSummary` carries a public first name
+     * and nothing resolvable — so a `/users/{id}/reviews` route would have forced us to start
+     * handing ids out, undoing a decision made in Phase 6 for the sake of one screen. The client
+     * already holds the commute id from search.
+     *
+     * 🔒 `visible()` is applied explicitly here, which is the half pitfall #26 names. Hidden
+     * reviews are not in this list and no parameter can put them in it.
+     */
+    public function commuteReviews(Request $request, string $commute): JsonResponse
+    {
+        /*
+         * The same eligibility that governs seeing the commute at all. Without it, somebody
+         * excluded from a women-only commute could still read its driver's reviews — a smaller
+         * leak than seeing the commute, and the same rule should decide both.
+         */
+        $offer = CommuteOffer::query()
+            ->whereKey($commute)
+            ->tap(fn ($query) => HardFilters::applyEligibility($query, $request->user()))
+            ->first()
+            ?? throw DomainException::of(ErrorCode::NotFound);
+
+        $reviews = Rating::query()
+            ->visible()
+            ->where('reviewed_user_id', $offer->driver_profile_id)
+            ->where('direction', RatingDirection::PassengerToDriver->value)
+            // A moderator's takedown is withheld; a complaint is not. See ReportReviewAction.
+            ->where('moderation_status', '!=', ModerationStatus::Hidden->value)
+            ->with('tags')
+            ->latest('visible_at')
+            ->orderByDesc('id')
+            ->paginate(ApiResponse::perPage($request));
+
+        return ApiResponse::paginated($reviews, PublicReviewResource::collection($reviews->items()));
+    }
+
+    /**
+     * GET /v1/ratings/about-me — what has been said about the caller, once it is readable.
+     *
+     * 🔒 Anonymous, in the same shape a stranger sees (`PublicReviewResource`), and the month
+     * rather than the day. Showing somebody who gave them two stars is the retaliation vector, not
+     * a courtesy — and on a three-seat commute an exact date names the reviewer even when the
+     * payload does not. See that class for the full reasoning.
+     */
+    public function aboutMe(Request $request): JsonResponse
+    {
+        $reviews = Rating::query()
+            ->visible()
+            ->where('reviewed_user_id', $request->user()->id)
+            ->where('moderation_status', '!=', ModerationStatus::Hidden->value)
+            ->with('tags')
+            ->latest('visible_at')
+            ->orderByDesc('id')
+            ->paginate(ApiResponse::perPage($request));
+
+        return ApiResponse::paginated($reviews, PublicReviewResource::collection($reviews->items()));
+    }
+
+    /**
+     * POST /v1/ratings/{rating}/report — "this review is abusive".
+     *
+     * 🔴 Flags for a human; takes nothing down. A report that hid the review, or dropped it from
+     * the average, would make "report every review under four stars" a mechanical way to launder a
+     * record — see `ReportReviewAction`.
+     */
+    #[ApiErrors(ErrorCode::ReviewAlreadyReported, ErrorCode::NotFound)]
+    public function report(ReportReviewRequest $request, string $rating, ReportReviewAction $action): JsonResponse
+    {
+        $row = Rating::query()->whereKey($rating)->first()
+            ?? throw DomainException::of(ErrorCode::NotFound);
+
+        $report = $action->execute($request->user(), $row, $request->string('reason')->value());
+
+        return ApiResponse::success([
+            'id' => $report->id,
+            'status' => strtoupper($report->status->value),
+            // Said plainly, because the expectation matters: the review stays up while a person
+            // looks at it, and a client that implied otherwise would be promising a takedown.
+            'reviewRemains' => true,
+        ], status: 201);
     }
 
     /**

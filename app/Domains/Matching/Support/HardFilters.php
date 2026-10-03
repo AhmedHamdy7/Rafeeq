@@ -42,6 +42,8 @@ final class HardFilters
                 // Relevance, as opposed to eligibility: whether this journey is
                 // anywhere near the one being searched for.
                 self::intersectBoundingBox($offer, $criteria);
+
+                self::requireMinimumRating($offer, $criteria);
             })
             // Only days that can still be booked. A trip whose deadline has
             // passed is not a match, it is a disappointment with a nice score.
@@ -156,6 +158,49 @@ final class HardFilters
                             ->whereColumn('blocked_users.blocked_user_id', 'commute_offers.driver_profile_id');
                     });
                 });
+        });
+    }
+
+    /**
+     * 🔴 The passenger's `min rating` filter (prototype, Filters screen).
+     *
+     * A HARD filter, not a scoring penalty, per the Bible's own rule that "hard conflicts never
+     * receive a soft score". Somebody who says she will not ride with anyone under four stars is
+     * stating a condition; scoring it would put a 3.1-star driver in her results, ranked lower,
+     * which is the same class of mistake as scoring a women-only breach instead of excluding it.
+     *
+     * 🔒 **A driver with no rating is kept, and this is the judgement in the method.** `null` means
+     * "nobody has rated her yet", never zero — the project says so everywhere a rate is returned.
+     * Excluding unrated drivers would hide every new driver from every filtered search, which is
+     * both a cold start that starves supply and an untrue answer: nothing bad has been said about
+     * her. The mobile guide tells the client to label the filter accordingly, because a passenger
+     * who ticks "4+ stars" and is shown an unrated driver deserves to know why.
+     *
+     * @param  Builder<CommuteOffer>  $offer
+     */
+    private static function requireMinimumRating(Builder $offer, SearchCriteria $criteria): void
+    {
+        if ($criteria->minRating === null) {
+            return;
+        }
+
+        /*
+         * Written as "there is no evidence she is BELOW your bar" rather than "her rating is at or
+         * above it", and the difference is the whole point. A `whereHas` on the stats row would
+         * exclude a driver who has no row at all — which is every driver who has not yet completed
+         * a trip, since the row is written when one does. The negative form keeps her: no row, or
+         * no rating in it, both mean nothing has been said.
+         *
+         * A subquery rather than a three-hop relation, like the block check below: it compares
+         * against `commute_offers.driver_profile_id`, which IS the user id (the profile is 1:1 and
+         * keyed by it), and keeps the outer query's plan simple.
+         */
+        $offer->whereNotExists(function ($query) use ($criteria): void {
+            $query->selectRaw(1)
+                ->from('user_stats')
+                ->whereColumn('user_stats.user_id', 'commute_offers.driver_profile_id')
+                ->whereNotNull('user_stats.avg_rating_as_driver')
+                ->where('user_stats.avg_rating_as_driver', '<', $criteria->minRating);
         });
     }
 

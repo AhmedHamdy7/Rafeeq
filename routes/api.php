@@ -257,6 +257,21 @@ Route::prefix('v1')->group(function (): void {
         Route::patch('ratings/{rating}', [RatingController::class, 'update']);
 
         /*
+         * Reviews, as a stranger sees them — and as their subject does.
+         *
+         * 🔒 Keyed on the COMMUTE rather than on a user id, because no payload in this API returns
+         * a user identifier and a `/users/{id}/reviews` route would have forced us to start. The
+         * client already holds the commute id from search.
+         *
+         * 🔒 Both listings are anonymous and carry a month rather than a date — a commute seats
+         * one to three people, so an exact date names the reviewer even when the payload does not,
+         * and the driver already knows where the passenger lives. See `PublicReviewResource`.
+         */
+        Route::get('commutes/{commute}/reviews', [RatingController::class, 'commuteReviews']);
+        Route::get('ratings/about-me', [RatingController::class, 'aboutMe']);
+        Route::post('ratings/{rating}/report', [RatingController::class, 'report']);
+
+        /*
          * Reports. Rate-limited per Chapter 10 §Security, generously: the failure to avoid is
          * refusing a real report, not admitting a spurious one that a human reads and closes.
          */

@@ -72,6 +72,16 @@ final class SearchCommutesRequest extends FormRequest
             // derived from it and the days you chose, so a month is the number you know.
             'budgetMonthlyPiastres' => ['nullable', 'integer', 'min:0'],
 
+            /*
+             * The lowest driver rating you will consider, 1 to 5.
+             *
+             * 🔴 A HARD filter: anything below it is removed, not ranked lower. But a driver who
+             * has NOT BEEN RATED YET is still shown — `null` means "nobody has said anything",
+             * never zero, and hiding new drivers would both starve the platform of them and tell
+             * you something untrue. Label the control accordingly.
+             */
+            'minRating' => ['nullable', 'numeric', 'between:1,5'],
+
             // How much earlier or later than your window still works for you.
             'flexibilityMinutes' => ['nullable', 'integer', 'min:0', 'max:60'],
 

@@ -6,6 +6,7 @@ use App\Domains\Driver\Enums\DriverProfileStatus;
 use App\Domains\Driver\Models\DriverProfile;
 use App\Domains\Driver\Models\Vehicle;
 use App\Domains\Identity\Models\User;
+use App\Domains\Identity\Models\UserStat;
 use App\Domains\Safety\Models\BlockedUser;
 use App\Domains\Shared\ValueObjects\DaysMask;
 use Carbon\CarbonImmutable;
@@ -262,4 +263,65 @@ it('requires a complete profile but not verification, so the product can be eval
 
     // Profile complete, identity unverified — searching is allowed.
     search($token)->assertOk();
+});
+
+/*
+|--------------------------------------------------------------------------
+| The passenger's minimum rating (Phase 10)
+|--------------------------------------------------------------------------
+|
+| 🔴 A HARD filter, per the Bible's own rule that "hard conflicts never receive a soft score".
+| Somebody who says she will not ride with anyone under four stars is stating a condition, not a
+| preference — scoring it would put a 3.1-star driver in her results, ranked lower, which is the
+| same class of mistake as scoring a women-only breach instead of excluding it.
+*/
+
+it('excludes a driver rated below the passenger minimum', function () {
+    setUserStat($this->driverUserId, ['avg_rating_as_driver' => 3.10]);
+
+    $token = passenger('01112223344');
+
+    expect(search($token, ['minRating' => 4])->assertOk()->json('data'))->toBe([]);
+
+    // And without the filter she is found, so the test is about the filter and not the setup.
+    expect(search($token)->assertOk()->json('data'))->toHaveCount(1);
+});
+
+it('keeps a driver rated at the minimum', function () {
+    setUserStat($this->driverUserId, ['avg_rating_as_driver' => 4.00]);
+
+    // At, not above: the boundary is a minimum, and excluding somebody who meets it exactly is
+    // the off-by-one that would quietly hide every driver sitting on a round number.
+    expect(search(passenger('01112223344'), ['minRating' => 4])->assertOk()->json('data'))
+        ->toHaveCount(1);
+});
+
+/**
+ * 🔒 The decision in this filter, and the one worth defending.
+ *
+ * `null` means "nobody has rated her yet", never zero — the project says so everywhere a rate is
+ * returned. Excluding unrated drivers would hide EVERY new driver from EVERY filtered search: a
+ * cold start that starves the platform of supply, and an untrue answer, because nothing bad has
+ * been said about her.
+ */
+it('keeps a driver nobody has rated yet', function () {
+    setUserStat($this->driverUserId, ['avg_rating_as_driver' => null]);
+
+    expect(search(passenger('01112223344'), ['minRating' => 5])->assertOk()->json('data'))
+        ->toHaveCount(1);
+});
+
+/**
+ * The same case one step earlier: a driver who has not completed a trip has no `user_stats` row at
+ * all, because the row is written when one completes. A `whereHas` on the stats row would have
+ * excluded her — which is why the filter is written as "there is no evidence she is below your
+ * bar" rather than "her rating is at or above it".
+ */
+it('keeps a driver who has no stats row at all', function () {
+    UserStat::query()->where('user_id', $this->driverUserId)->delete();
+
+    expect(UserStat::query()->where('user_id', $this->driverUserId)->exists())->toBeFalse();
+
+    expect(search(passenger('01112223344'), ['minRating' => 5])->assertOk()->json('data'))
+        ->toHaveCount(1);
 });

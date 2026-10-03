@@ -182,6 +182,10 @@ it('generates a document describing every /v1 route', function () {
         'GET /v1/ratings/mine',
         'POST /v1/bookings/{booking}/rating',
         'PATCH /v1/ratings/{rating}',
+        // Reviews: keyed on the commute, never on a user id — no payload in this API returns one.
+        'GET /v1/commutes/{commute}/reviews',
+        'GET /v1/ratings/about-me',
+        'POST /v1/ratings/{rating}/report',
         'GET /v1/incidents',
         'GET /v1/incidents/{incident}',
         'POST /v1/incidents',

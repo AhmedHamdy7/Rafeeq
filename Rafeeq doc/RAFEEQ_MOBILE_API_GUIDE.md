@@ -14,7 +14,7 @@
 >
 > **Base URL:** `{host}/api/v1` · **Auth:** bearer token · **Format:** JSON only.
 
-**Last updated:** 2026-10-02 · **113 endpoints live** · Phases 0–7 complete, Phase 9 in progress
+**Last updated:** 2026-10-02 · **116 endpoints live** · Phases 0–7 complete, Phase 9 in progress
 
 ---
 
@@ -22,7 +22,7 @@
 
 ### إيه الجاهز دلوقتي
 
-**١١٣ endpoint شغّالين ومختبَرين** (1,325 اختبار كلهم خضرا). يعني من الـ٤٧ شاشة:
+**١١٦ endpoint شغّالين ومختبَرين** (1,325 اختبار كلهم خضرا). يعني من الـ٤٧ شاشة:
 
 | | عدد | التفاصيل |
 |---|---|---|
@@ -427,6 +427,9 @@ fails if this list and the running routes ever disagree in either direction.
 | `GET /driver/home` | 4.11 Home aggregates |
 | `GET /home` | 4.11 Home aggregates |
 | `GET /ratings/pending` | 4.13 Ratings |
+| `GET /ratings/about-me` | 4.13 Ratings |
+| `POST /ratings/{rating}/report` | 4.13 Ratings |
+| `GET /commutes/{commute}/reviews` | 4.13 Ratings |
 | `GET /ratings/mine` | 4.13 Ratings |
 | `POST /bookings/{booking}/rating` | 4.13 Ratings |
 | `PATCH /ratings/{rating}` | 4.13 Ratings |
@@ -1538,6 +1541,67 @@ because confirming that one exists would itself say they had rated.
 `GET /ratings/mine` returns what the caller wrote, visible or not. No filter applies to your own: a
 person may always read what they said.
 
+#### `GET /commutes/{commute}/reviews` — paginated · what people said about this driver
+
+What screen 12's reviews section runs on.
+
+🔒 **Keyed on the commute, not on a person**, and that is deliberate rather than awkward: no payload
+in this API returns a user identifier, so a `/users/{id}/reviews` route would have forced us to
+start handing them out. You already hold the commute id from search.
+
+| Response field | Meaning |
+|---|---|
+| `id` | For reporting it, if it is about you. |
+| `direction` | `passenger_to_driver` here. |
+| `stars`, `comment`, `tags` | What was written. `comment` may be `null`. |
+| `month` | `YYYY-MM`. **Not a date — see below.** |
+| `wasEdited` | Whether the text was changed before it became readable. |
+
+🔒 **There is no reviewer and no exact date, and this will not change on request.** The reasoning,
+because it affects what you can build:
+
+> A commute seats one to three people. A review dated to the day identifies the journey, and the
+> journey identifies the person — so a precise date names the reviewer even when the payload does
+> not. That matters more here than on an ordinary marketplace for one concrete reason: **the driver
+> already has the passenger's pickup point.** She knows her front door. A passenger who writes
+> honestly about a driver who can find her house, and who can be identified from the date, is
+> exposed in a way an anonymous shopper never is — and the result is not fairer reviews, it is
+> quieter ones.
+
+So: no avatar, no name, no "reviewed on 12 March". Render the month. If your design needs a
+reviewer block, make it an anonymous one.
+
+#### `GET /ratings/about-me` — paginated · what was said about you
+
+The same anonymous shape, and **anonymous to you as well.** Being shown who gave you two stars is
+the retaliation vector, not a courtesy. Hidden reviews are not here either — double-blind is
+symmetric, and a subject who could read one early would be writing her own rating with knowledge of
+it.
+
+#### `POST /ratings/{rating}/report` — "this review is abusive"
+
+**Request:** `reason` (required, 3–255 characters).
+
+🔴 **A report flags for a human and takes nothing down.** The review stays on the profile and stays
+in the average until a moderator decides otherwise, and the response says so (`reviewRemains:
+true`). **Do not write copy promising removal.** If a report hid the review, "report every review
+under four stars" would be a mechanical way to launder a record — and the people most motivated to
+do that are exactly the ones a rating system exists to surface.
+
+🔒 Only the **subject** of a review may report it. The reviewer gets a `404` (they wrote it), a
+stranger gets a `404`, and so does a review that has not been revealed yet — all three
+indistinguishable from a wrong id. `REVIEW_ALREADY_REPORTED` (409) for a second attempt.
+
+#### `minRating` on search — a hard filter
+
+`GET /search/commutes` now takes `minRating` (1–5). It **excludes**, it does not rank — a passenger
+who says she will not ride with anyone under four stars is stating a condition.
+
+🔴 **A driver nobody has rated yet is still shown.** `null` means "not rated", never zero, and
+hiding new drivers would both starve the platform of them and tell the passenger something untrue.
+**Label the control accordingly** — "4+ stars (includes new drivers)" or similar — because
+otherwise somebody who ticks it and sees an unrated driver will read it as a bug.
+
 #### What ratings switch on elsewhere
 
 Once a rating is revealed it feeds `rating` in the **public summary (5.1)**, which search results,
@@ -1826,6 +1890,7 @@ exist, and every live endpoint must be named here.
 
 | Date | Change |
 |---|---|
+| 2026-10-02 | **Reviews and the rating filter** — 3 endpoints (`GET /commutes/{commute}/reviews`, `GET /ratings/about-me`, `POST /ratings/{rating}/report`) plus `minRating` on search. 🔒 **Reviews carry no reviewer and no exact date** — read 4.13 for why, it changes what your UI can show. A report flags for a human and takes nothing down. |
 | 2026-10-02 | **Ratings** — 4 endpoints. Section 4.13. 🔴 **Double-blind:** nothing in any payload says whether the other person has rated, the rating window closes when the reveal happens, and an edit is refused the moment the rating becomes visible. Side effect you get for free: `rating` in the public summary (5.1) starts carrying numbers on search, match details, group members and the driver's request review. |
 | 2026-10-02 | **Two corrections to this file, both mine.** (1) `autoShareTrips` was described as already sharing every trip. It is stored and acted on by nothing — section 4.12 now says why it needs Phase 12 and what to put on the screen meanwhile. (2) Escort mode was described as a contact watching a journey. Reading the sources, it is a **corridor night window armed by the ops team** — a dashboard control with no mobile surface and no endpoint coming. |
 | 2026-10-02 | **Evidence on a report** — 2 endpoints (`POST`/`GET /incidents/{incident}/evidence`). Section 4.12. 🔴 **Images only** (video and audio are refused, with the reason given) and **nothing can be un-attached** — confirm before uploading. No path, URL or hash is ever returned, so keep your own local copy if the screen needs a thumbnail. |

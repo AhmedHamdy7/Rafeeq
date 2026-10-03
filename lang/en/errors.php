@@ -111,6 +111,7 @@ return [
     'RATING_ALREADY_SUBMITTED' => 'You have already rated this trip.',
     'RATING_NOT_EDITABLE' => 'This rating can no longer be changed.',
     'TRIP_NOT_RATEABLE' => 'This trip cannot be rated.',
+    'REVIEW_ALREADY_REPORTED' => 'You have already reported this review.',
 
     /*
      * Safety. Each of these is read by somebody who may be in a bad situation, so each says
