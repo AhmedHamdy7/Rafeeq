@@ -33,6 +33,35 @@ return Application::configure(basePath: dirname(__DIR__))
         attributes: ['middleware' => ['auth:sanctum']],
     )
     ->withMiddleware(function (Middleware $middleware): void {
+        /*
+         * 🔴 Trust the platform's proxy headers. Found when the admin dashboard's stylesheet
+         * silently stopped loading on a hosted deploy, and the stylesheet was the least of it.
+         *
+         * TLS terminates at the edge (Railway, Fly, a local nginx on a VM), so the request reaches
+         * PHP over plain HTTP with `X-Forwarded-Proto: https`. Laravel trusts no proxy by default,
+         * so it concluded the request was insecure, and three things followed:
+         *
+         *   1. `asset()` and `url()` generated `http://` links. On an `https://` page the browser
+         *      blocks those as mixed content — which is why the CSS vanished with no error. The
+         *      same applies to the **live-share link** a passenger sends a relative, which is
+         *      generated from `url()` and has to be openable.
+         *   2. 🔒 `$request->ip()` returned the PROXY's address for every visitor on earth. The
+         *      public `/s/{token}` page is rate-limited per IP, so its limit was being shared by
+         *      everybody — one busy viewer could lock the page for all of them. The same value is
+         *      hashed into `admin_actions.ip_hash`, where "which address did this come from" is
+         *      the question the column exists to answer.
+         *   3. `SESSION_SECURE_COOKIE=true` plus a request believed to be insecure is how sign-in
+         *      fails with nothing in the log.
+         *
+         * `'*'` trusts whatever sent the headers, and that is correct HERE because the application
+         * is only ever reachable THROUGH a proxy: inside a container the platform's edge is the
+         * only route in, and on the VM setup nginx and php-fpm talk over the loopback. If php-fpm
+         * is ever exposed directly, this must become the proxy's real address — otherwise anyone
+         * can spoof their own IP, and the two privacy-relevant uses above are what they would be
+         * spoofing.
+         */
+        $middleware->trustProxies(at: '*');
+
         $middleware->api(append: [
             SetLocaleFromHeader::class,
         ]);
