@@ -37,6 +37,33 @@ return [
         'privacy_version' => env('RAFEEQ_PRIVACY_VERSION', '1.0'),
     ],
 
+    /*
+    |--------------------------------------------------------------------------
+    | API documentation
+    |--------------------------------------------------------------------------
+    */
+    'docs' => [
+        /*
+         * 🔒 DEPLOY-ONLY. Whether `/docs/api` is open to anyone who knows the URL.
+         *
+         * Off by default, and that default is the honest one: the OpenAPI document is the complete
+         * API surface — every endpoint, every field name, every error code — which is exactly what
+         * the mobile team needs and exactly what somebody probing the platform would start by
+         * collecting. It does not hand out data or bypass a single check; it hands out a map.
+         *
+         * On a staging instance with seeded fictional data that trade is clearly worth it, and it
+         * is the alternative to emailing a JSON file after every change. On anything holding real
+         * people's journeys it is not, so:
+         *
+         *   · it is ignored outright when APP_ENV=production (see AppServiceProvider)
+         *   · turning it off again is one variable, with no deploy
+         *
+         * The generated document is also available without exposing anything: `composer openapi`
+         * writes it to a file you can send them.
+         */
+        'public' => (bool) env('RAFEEQ_PUBLIC_API_DOCS', false),
+    ],
+
     'verification' => [
         /*
          * DEPLOY-ONLY. Which filesystem disk holds identity documents.

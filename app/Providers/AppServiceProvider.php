@@ -24,6 +24,7 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Date;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Support\Facades\View;
 use Illuminate\Support\ServiceProvider;
@@ -103,12 +104,41 @@ class AppServiceProvider extends ServiceProvider
         );
 
         $this->defineRateLimiters();
+        $this->defineApiDocsAccess();
 
         // The OpenAPI document is a deliverable for the external Flutter team
         // (MASTER_PLAN §15.4/§18), so its accuracy is wired here rather than
         // left to whoever runs the export.
         Scramble::configure()
             ->withOperationTransformers(DescribeErrorResponses::class);
+    }
+
+    /**
+     * 🔒 Who may read `/docs/api` — the gate `Scramble`'s `RestrictedDocsAccess` asks about.
+     *
+     * Without this gate defined, the docs are reachable in `local` and answer 403 everywhere else.
+     * That default is right, and this is the deliberate exception to it: an external team cannot
+     * build against a contract they are emailed a copy of after every change.
+     *
+     * 🔴 What opening it costs, stated plainly because the switch is one variable and somebody will
+     * flip it again later: the OpenAPI document is the complete API surface — every endpoint, field
+     * name and error code. It hands out no data and bypasses no check; it hands out a map, and a map
+     * is the first thing somebody probing the platform would collect. On a staging instance holding
+     * seeded fictional journeys that is a good trade. On one holding real journeys it is not.
+     *
+     * So production is excluded here rather than left to the variable. Any instance that is actually
+     * serving people cannot have its contract opened by setting an environment flag, which is the
+     * same reasoning as the development OTP code refusing to work there.
+     */
+    private function defineApiDocsAccess(): void
+    {
+        Gate::define('viewApiDocs', function (?object $user = null): bool {
+            if ($this->app->isProduction()) {
+                return false;
+            }
+
+            return (bool) config('rafeeq.docs.public');
+        });
     }
 
     /**
