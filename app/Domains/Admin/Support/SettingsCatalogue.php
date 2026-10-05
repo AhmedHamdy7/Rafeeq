@@ -83,11 +83,17 @@ final class SettingsCatalogue
         'safety.live_share_grace_minutes' => ['group' => 'safety', 'min' => 0, 'max' => 120, 'unit' => 'minutes'],
         'safety.live_share_max_minutes' => ['group' => 'safety', 'min' => 30, 'max' => 720, 'unit' => 'minutes'],
 
+        // ---- Trip chat (Chapter 11) ---------------------------------------
+        'chat.opens_hours_before' => ['group' => 'chat', 'min' => 1, 'max' => 72, 'unit' => 'hours'],
+        'chat.grace_minutes' => ['group' => 'chat', 'min' => 0, 'max' => 1_440, 'unit' => 'minutes'],
+        'chat.max_hours_after_departure' => ['group' => 'chat', 'min' => 2, 'max' => 48, 'unit' => 'hours'],
+        'chat.messages_per_minute' => ['group' => 'chat', 'min' => 5, 'max' => 120, 'unit' => 'per_minute'],
+
         // ---- Operations (Chapter 12) -------------------------------------
         'admin.suspension_review_hours' => ['group' => 'admin', 'min' => 1, 'max' => 168, 'unit' => 'hours'],
     ];
 
-    public const array GROUPS = ['auth', 'profile', 'commute', 'booking', 'trip', 'rating', 'safety', 'admin'];
+    public const array GROUPS = ['auth', 'profile', 'commute', 'booking', 'trip', 'rating', 'safety', 'chat', 'admin'];
 
     /**
      * @return array{group: string, min: int, max: int, unit: string, locked?: string}|null

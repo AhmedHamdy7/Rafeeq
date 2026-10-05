@@ -127,6 +127,7 @@ return [
     'INCIDENT_CLOSED' => 'This report has been closed, so nothing more can be added to it. Please file a new report.',
     'LIVE_SHARE_ALREADY_ENDED' => 'That share link has already been stopped.',
     'NOTIFICATION_CATEGORY_LOCKED' => 'Safety notices cannot be turned off.',
+    'CHAT_NOT_OPEN' => 'Messages for this trip are not open right now.',
 
     /*
      * Admin sign-in. One message for a wrong password and a wrong code, on purpose —

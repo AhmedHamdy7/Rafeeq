@@ -514,6 +514,28 @@ return [
         'push_driver' => env('RAFEEQ_PUSH_DRIVER', 'log'),
     ],
 
+    /*
+     * Trip chat (Chapter 11 §Trip Chat): one conversation per booking, between that day's
+     * passenger and driver, for "pickup clarification, arrival updates, minor delays" — and
+     * explicitly "not intended for long-term messaging". These numbers are what keep it that.
+     */
+    'chat' => [
+        // How long before departure the conversation opens. A recurring member's booking three
+        // weeks out does not need a channel open for three weeks.
+        'opens_hours_before' => 24,
+
+        // How long after the journey ends it stays open — "the trip plus a grace period", for
+        // "I left my umbrella in your car".
+        'grace_minutes' => 120,
+
+        // When a run never records its end, how long after departure the conversation closes
+        // anyway. Without this a run nobody completed would keep its chat open for ever.
+        'max_hours_after_departure' => 12,
+
+        // Per sender, per minute. Generous for "I'm here / where are you"; tight for flooding.
+        'messages_per_minute' => 20,
+    ],
+
     'safety' => [
         /*
          * How long somebody has to take back an SOS before it is treated as real.

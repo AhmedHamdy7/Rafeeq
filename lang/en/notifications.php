@@ -41,6 +41,12 @@ return [
         'title' => 'Seat request not accepted',
         'body' => ':name could not take you on this commute. Search again for another.',
     ],
+    'chat_message' => [
+        'title' => 'New message from :name',
+        'body' => 'Open the trip to read it.',
+    ],
+    // Not a notification: the description of the report filed when a chat message is reported.
+    'chat_report' => "Reported chat message.\nReason: :reason\nMessage: «:message»",
     'trip_started' => [
         'title' => ':name has started today’s commute',
         'body' => 'Open the trip to follow the car.',

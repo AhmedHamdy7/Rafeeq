@@ -344,6 +344,7 @@ return [
             'trip' => 'الرحلة',
             'rating' => 'التقييمات',
             'safety' => 'الأمان',
+            'chat' => 'محادثة الرحلة',
             'admin' => 'العمليات',
         ],
         'locked' => [
@@ -411,6 +412,10 @@ return [
             'safety__live_share_grace_minutes' => 'المشاركة المباشرة بعد نهاية الرحلة',
             'safety__live_share_max_minutes' => 'أطول مدة للمشاركة المباشرة',
             'admin__suspension_review_hours' => 'ميعاد المراجعة الموعود للإيقاف',
+            'chat__opens_hours_before' => 'المحادثة بتفتح قبل القيام بـ',
+            'chat__grace_minutes' => 'المحادثة بتفضل مفتوحة بعد الرحلة',
+            'chat__max_hours_after_departure' => 'المحادثة بتتقفل بعد القيام لو الرحلة ماتقفلتش',
+            'chat__messages_per_minute' => 'رسايل المحادثة لكل عضو في الدقيقة',
         ],
     ],
 

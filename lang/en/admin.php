@@ -347,6 +347,7 @@ return [
             'trip' => 'The trip',
             'rating' => 'Ratings',
             'safety' => 'Safety',
+            'chat' => 'Trip chat',
             'admin' => 'Operations',
         ],
         'locked' => [
@@ -414,6 +415,10 @@ return [
             'safety__live_share_grace_minutes' => 'Live share after the trip ends',
             'safety__live_share_max_minutes' => 'Longest a live share can last',
             'admin__suspension_review_hours' => 'Promised review time for a hold',
+            'chat__opens_hours_before' => 'Chat opens before departure',
+            'chat__grace_minutes' => 'Chat stays open after the trip',
+            'chat__max_hours_after_departure' => 'Chat closes after departure if the run never ends',
+            'chat__messages_per_minute' => 'Chat messages per member per minute',
         ],
     ],
 
