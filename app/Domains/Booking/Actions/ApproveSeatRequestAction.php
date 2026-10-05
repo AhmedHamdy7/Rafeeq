@@ -12,6 +12,8 @@ use App\Domains\Commute\Enums\ScheduledTripStatus;
 use App\Domains\Commute\Models\ScheduledTrip;
 use App\Domains\Group\Actions\AddMemberToGroupAction;
 use App\Domains\Identity\Models\User;
+use App\Domains\Notification\Enums\NotificationType;
+use App\Domains\Notification\Support\Notifier;
 use App\Domains\Shared\Exceptions\DomainException;
 use App\Domains\Shared\Support\ErrorCode;
 use App\Domains\Shared\ValueObjects\DaysMask;
@@ -159,6 +161,13 @@ final readonly class ApproveSeatRequestAction
             // Last, because it is the one write that should not exist if any of
             // the above failed: a member of a group they have no booking in.
             $member = $this->addMember->execute($request, $offer);
+
+            // Inside the transaction on purpose: if anything above had thrown, the passenger
+            // must not be told they have a seat. The push itself waits for the commit.
+            Notifier::send($request->passenger, NotificationType::SeatApproved,
+                ['name' => $offer->driverProfile->user->public_first_name],
+                ['seatRequestId' => $request->id, 'commuteId' => $offer->id],
+            );
 
             return new SeatApproval($request, $member, $bookings, $skipped);
         });

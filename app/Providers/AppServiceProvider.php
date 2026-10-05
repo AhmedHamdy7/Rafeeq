@@ -13,6 +13,8 @@ use App\Domains\Geo\Support\CachingGeoEngine;
 use App\Domains\Geo\Support\StraightLineGeoEngine;
 use App\Domains\Identity\Contracts\OtpSender;
 use App\Domains\Identity\Support\LogOtpSender;
+use App\Domains\Notification\Contracts\PushSender;
+use App\Domains\Notification\Support\LogPushSender;
 use App\Domains\Safety\Support\SafetySettings;
 use App\Domains\Verification\Contracts\VirusScanner;
 use App\Domains\Verification\Enums\VerificationStatus;
@@ -44,6 +46,12 @@ class AppServiceProvider extends ServiceProvider
         // Resolving by name keeps that decision to one config line and one
         // new class; `LogOtpSender` refuses to run in production itself, so
         // an unconfigured deploy fails loudly instead of losing every code.
+        // Push (Chapter 11). Only the development transport exists until a provider is chosen
+        // and its credentials exist; see LogPushSender for why it does not refuse production.
+        $this->app->bind(PushSender::class, fn () => match (config('rafeeq.notifications.push_driver')) {
+            default => new LogPushSender,
+        });
+
         $this->app->bind(OtpSender::class, fn () => match (config('rafeeq.auth.otp.driver')) {
             'log' => new LogOtpSender,
             default => throw new InvalidArgumentException(

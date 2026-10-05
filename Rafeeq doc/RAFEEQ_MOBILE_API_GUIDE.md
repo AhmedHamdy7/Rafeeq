@@ -14,7 +14,7 @@
 >
 > **Base URL:** `{host}/api/v1` · **Auth:** bearer token · **Format:** JSON only.
 
-**Last updated:** 2026-10-05 · **116 endpoints live** · Phases 0–7 complete, Phase 9 in progress
+**Last updated:** 2026-10-05 · **120 endpoints live** · Phases 0–7 complete, Phase 9 in progress, Phase 12 started
 
 ---
 
@@ -542,7 +542,7 @@ Status: ✅ fully served · ⚠️ served, something named missing · ⛔ no API
 | # | Screen | Endpoints | Status |
 |---|---|---|---|
 | 21 | **Profile** | `GET /auth/me` · `GET /account/stats` | ✅ The three numbers come from `user_stats`. **Every rate is `null` until it has been computed — show a dash, not a zero.** Role switching needs a product decision. |
-| 22 | Notifications | — | ⛔ Phase 12. |
+| 22 | Notifications | `GET /notifications` · `PATCH /notifications/read` · `GET`/`PATCH /notifications/preferences` | ✅ Inbox, unread badge and switches — section 4.14. Push needs a provider decision (FCM) before phones actually buzz; the inbox works without it. Trip chat is the next slice. |
 | 26 | **Privacy & blocked** | `GET`/`POST /safety/blocked-users` · `DELETE .../{user}` | ✅ Blocking works in **both directions** from the next search. 🔒 Nothing tells the blocked person, and the list is one-directional — who I blocked, never who blocked me. Privacy toggles themselves are yours/local. |
 | 27 | Help & legal | `GET /account/consents` for versions | ⚠️ Static content is yours; the consent versions in force come from the API. |
 | 35 | Account restricted | `GET /auth/me` → `user.suspension` · or the `ACCOUNT_SUSPENDED` (403) refusal's `error.fields` | ✅ Everything the screen shows now has a source: the reason as a sentence (`suspensionReason`, in the request's language), the **Reference** (`suspension.caseNumber`, e.g. `RF-482913`) and the **Expected update** (`suspension.reviewDueAt`). See the `user` object in 4.1. |
@@ -687,6 +687,10 @@ fails if this list and the running routes ever disagree in either direction.
 | `POST /trips/{trip}/live-share` | 4.12 Safety |
 | `POST /sos` | 4.12 Safety |
 | `POST /sos/{sos}/cancel` | 4.12 Safety |
+| `GET /notifications` | 4.14 Notifications |
+| `PATCH /notifications/read` | 4.14 Notifications |
+| `GET /notifications/preferences` | 4.14 Notifications |
+| `PATCH /notifications/preferences` | 4.14 Notifications |
 
 One route is deliberately **not** in this index and **not** in the OpenAPI document: `/s/{token}`,
 the page a trusted contact opens. It is not under `/v1`, it takes no auth token, and it returns HTML
@@ -1852,6 +1856,53 @@ stars**.
 
 ---
 
+### 4.14 Notifications (screen 22)
+
+What the platform tells a member on its own initiative. Every message lands in the **inbox**
+(`in_app`) and, if the member allows it, is also **pushed** to each signed-in phone.
+
+> ⚠️ **Push is wired but not delivering yet.** No push provider (FCM/APNs) has been chosen, so the
+> server records each push as `no_push_provider` and nothing reaches the phone. **The inbox works
+> today** — poll `GET /notifications` and use `meta.unreadCount` for the badge. Send the device's push
+> token at sign-in as you already can (`device.pushToken`); it will be used as soon as a provider is
+> configured, with no client change.
+
+These four routes sit in the **signed-in** tier, not `active`: a member whose account was just put on
+hold must still be able to read the notice that says so.
+
+#### `GET /notifications` — paginated, newest first
+
+| Response field | Meaning |
+|---|---|
+| `type` | What happened — route on this. Today: `seat_requested` (driver) · `seat_approved` · `seat_declined` · `trip_started` · `sos_picked_up` · `report_resolved` · `report_closed` · `account_on_hold` · `account_reinstated`. **Expect new values**; show an unknown one as a plain message. |
+| `category` | `booking` · `payment` · `trip` · `safety` · `marketing`. |
+| `title` / `body` | **Already in the member's language** — rendered when the message was sent, and stored as written. Show them as they are. They never contain a phone number, an address or a full name: a push body appears on a lock screen. |
+| `data` | Ids for the screen to open: `seatRequestId`, `commuteId`, `tripId`, `sosId`, `incidentId`. Never names. |
+| `isRead` / `readAt` / `createdAt` | |
+
+`meta.unreadCount` is the badge, counted over the whole inbox, not the page.
+
+#### `PATCH /notifications/read`
+
+`{ "ids": ["…", "…"] }` or `{ "all": true }`. Returns `{ "unreadCount": n }`. Ids that are not the
+caller's are ignored rather than refused (refusing would confirm they exist).
+
+#### `GET /notifications/preferences` · `PATCH /notifications/preferences`
+
+One switch per `category` × `channel` (`push`, `in_app`), each with `enabled` and `canDisable`.
+
+- **Safety cannot be switched off** (Chapter 11). Its switches come back `enabled: true,
+  canDisable: false` — draw them on and locked. Sending `enabled: false` for safety refuses the
+  **whole** request with `NOTIFICATION_CATEGORY_LOCKED` (422), so the app never shows a switch "off"
+  for something still on.
+- **Marketing starts off.** Everything else starts on.
+- `PATCH` takes `{ "preferences": [ { "category", "channel", "enabled" } ] }` — only the switches that
+  changed — and returns the full list.
+
+🔴 **A silent SOS never pushes.** When an operator picks up a discreet alert, the member is told in
+the inbox only — a phone that buzzes in a car with the person it was raised about is the one thing the
+silent alert promised would not happen. Do not add a local notification for it either.
+
 ## 5. Shared shapes
 
 These appear inside many responses. Each is described once here.
@@ -2097,7 +2148,7 @@ Nothing below exists. Build the screen shells if you like, but there is no endpo
 | **Reviews on a profile, trust tier** | reviews on 12, `minRating` filter on 11, history on 19 | **10** | 🔴 **Rating itself is done** — section 4.13 — and the `rating` in every public summary now carries a number once a rating is revealed. Still to come: the list of **other people's** visible reviews on a profile, reporting an abusive review, and the public trust tier (`new` / `trusted` / `highly_trusted`). The underlying score is deliberately internal and will never be returned. |
 | **Auto-share trips** | 26 | **12** | 🔴 **`autoShareTrips` on an emergency contact is stored and nothing acts on it yet.** See 4.12 — read that before you build the toggle. |
 | **Night escort mode** | none | **13** | Not a mobile feature at all, and this corrects an earlier line in this file. It is a **corridor-level night window armed by the ops team** (or automatically, 9pm–5am) with staff monitoring — a dashboard control, not something an app shows or calls. There will be no endpoint for it. |
-| **Notifications and chat** | 22 | **12** | Push, in-app notifications, preferences, trip chat. **Everything today is pull-only** — no server-initiated message of any kind reaches the app. Plan for polling in the interim, and tell us what you need first. |
+| **Trip chat** | 22 (chat tab) | **12** | The inbox, the unread count and the preference switches are live (4.14). Still to come: trip chat, and push actually reaching phones — that needs an FCM project and its credentials. Until then poll `GET /notifications` (its `meta.unreadCount` is the badge). |
 
 ---
 
@@ -2127,6 +2178,7 @@ exist, and every live endpoint must be named here.
 
 | Date | Change |
 |---|---|
+| 2026-10-05 | **New: section 4.14 — notifications (screen 22).** Four endpoints: the inbox with `meta.unreadCount`, mark-read, and the preference switches. Every message is already in the member's language. **Push is wired but no provider is configured yet**, so poll the inbox for now. Safety switches cannot be turned off, and a silent SOS never pushes. |
 | 2026-10-05 | **Screen 35 is buildable in full.** Staff can now put an account on hold from the dashboard, and `GET /auth/me` returns `user.suspension` (`caseNumber`, `reasonCode`, `suspendedAt`, `reviewDueAt`) while it lasts; `suspensionReason` is now a ready-to-show sentence in the request's language. The `ACCOUNT_SUSPENDED` refusal carries the same four values in `error.fields`. Also: a driver on hold disappears from search until the hold is lifted. |
 | 2026-10-05 | **No new endpoints — two existing fields now actually fill.** The operations dashboard can pick up an SOS and work a report, so `respondedAt` on an SOS stops being permanently `null`, and `GET /incidents/{incident}` now returns `RESOLVED`/`CLOSED` with a `resolution` the safety team wrote **to the reporter**. Read the `resolution` row in the incidents section: it is a message, not a label. |
 | 2026-10-03 | 🔴 **Correction — `nextStep`.** This file listed `COMPLETE_PROFILE`, ~~VERIFY_IDENTITY~~ and ~~HOME~~; only the first is real. There are four values (`ACCOUNT_SUSPENDED`, `CREATE_PIN`, `COMPLETE_PROFILE`, `LOCAL_SECURITY_SETUP_OR_HOME`) and **verification is not one of them** — it is a per-endpoint gate, not a sign-up step. If you built a branch on VERIFY_IDENTITY or HOME, it never fires. Section 2.1 has the precedence order; a test now pins the list against the enum in both directions. |

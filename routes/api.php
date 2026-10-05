@@ -18,6 +18,7 @@ use App\Http\Controllers\Api\V1\Group\GroupAbsenceController;
 use App\Http\Controllers\Api\V1\Group\GroupAttendanceController;
 use App\Http\Controllers\Api\V1\Group\GroupController;
 use App\Http\Controllers\Api\V1\HomeController;
+use App\Http\Controllers\Api\V1\Notification\NotificationController;
 use App\Http\Controllers\Api\V1\PlaceController;
 use App\Http\Controllers\Api\V1\Rating\RatingController;
 use App\Http\Controllers\Api\V1\Safety\SafetyController;
@@ -251,6 +252,15 @@ Route::prefix('v1')->group(function (): void {
          * In the signed-in tier rather than behind `account.active`: a suspended account still has
          * journeys it travelled on, and the other person is owed the rating as much as before.
          */
+        /*
+         * Notifications (Phase 12, Chapter 11). Signed-in tier, not active: a member whose
+         * account was just put on hold must still be able to read the notice saying so.
+         */
+        Route::get('notifications', [NotificationController::class, 'index']);
+        Route::patch('notifications/read', [NotificationController::class, 'markRead']);
+        Route::get('notifications/preferences', [NotificationController::class, 'preferences']);
+        Route::patch('notifications/preferences', [NotificationController::class, 'updatePreferences']);
+
         Route::get('ratings/pending', [RatingController::class, 'pending']);
         Route::get('ratings/mine', [RatingController::class, 'mine']);
         Route::post('bookings/{booking}/rating', [RatingController::class, 'store']);

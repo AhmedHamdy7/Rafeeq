@@ -10,6 +10,8 @@ use App\Domains\Commute\Models\CommuteOffer;
 use App\Domains\Commute\Models\ScheduledTrip;
 use App\Domains\Identity\Models\User;
 use App\Domains\Matching\Support\HardFilters;
+use App\Domains\Notification\Enums\NotificationType;
+use App\Domains\Notification\Support\Notifier;
 use App\Domains\Shared\Exceptions\DomainException;
 use App\Domains\Shared\Support\ErrorCode;
 use Illuminate\Support\Facades\DB;
@@ -103,6 +105,15 @@ final readonly class RequestSeatAction
             $request->expires_at = now()->addHours((int) config('rafeeq.booking.request_expiry_hours'));
 
             $request->save();
+
+            // Only a request that asks the driver for something. A day that was full put it
+            // straight on the waitlist, and there is nothing for her to answer yet.
+            if (! $waitlisted) {
+                Notifier::send($offer->driverProfile->user, NotificationType::SeatRequested,
+                    ['name' => $passenger->public_first_name],
+                    ['seatRequestId' => $request->id],
+                );
+            }
 
             return $request;
         });

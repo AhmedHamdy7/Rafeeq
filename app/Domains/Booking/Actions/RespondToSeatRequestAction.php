@@ -5,6 +5,8 @@ namespace App\Domains\Booking\Actions;
 use App\Domains\Booking\Enums\SeatRequestStatus;
 use App\Domains\Booking\Models\SeatRequest;
 use App\Domains\Identity\Models\User;
+use App\Domains\Notification\Enums\NotificationType;
+use App\Domains\Notification\Support\Notifier;
 use App\Domains\Shared\Exceptions\DomainException;
 use App\Domains\Shared\Support\ErrorCode;
 use Illuminate\Support\Facades\DB;
@@ -41,6 +43,13 @@ final readonly class RespondToSeatRequestAction
         ])->save();
 
         $this->closeTheirPlaceInTheQueue($request, $wasWaiting);
+
+        // The driver's note is not repeated here: it may be personal, and a push body is shown
+        // on a lock screen. The passenger reads it on the request itself.
+        Notifier::send($request->passenger, NotificationType::SeatDeclined,
+            ['name' => $driver->public_first_name],
+            ['seatRequestId' => $request->id],
+        );
 
         return $request;
     }

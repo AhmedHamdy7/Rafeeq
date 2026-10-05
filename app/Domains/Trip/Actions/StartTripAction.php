@@ -7,6 +7,8 @@ use App\Domains\Booking\Models\Booking;
 use App\Domains\Commute\Actions\CreateCommuteOfferAction;
 use App\Domains\Commute\Enums\ScheduledTripStatus;
 use App\Domains\Commute\Models\ScheduledTrip;
+use App\Domains\Notification\Enums\NotificationType;
+use App\Domains\Notification\Support\Notifier;
 use App\Domains\Shared\Exceptions\DomainException;
 use App\Domains\Shared\Support\ErrorCode;
 use App\Domains\Trip\Enums\AttendanceStatus;
@@ -80,8 +82,28 @@ final readonly class StartTripAction
 
             $this->openAttendanceRows($trip);
 
+            $this->tellThePassengers($trip);
+
             return $session;
         });
+    }
+
+    /**
+     * Chapter 8's first line to the passenger: "Ahmed has started today's commute."
+     */
+    private function tellThePassengers(ScheduledTrip $trip): void
+    {
+        $driverName = $trip->commuteOffer->driverProfile->user->public_first_name;
+
+        Booking::query()
+            ->where('scheduled_trip_id', $trip->id)
+            ->where('status', BookingStatus::Confirmed)
+            ->with('passenger')
+            ->get()
+            ->each(fn (Booking $booking) => Notifier::send($booking->passenger, NotificationType::TripStarted,
+                ['name' => $driverName],
+                ['tripId' => $trip->id],
+            ));
     }
 
     /**
