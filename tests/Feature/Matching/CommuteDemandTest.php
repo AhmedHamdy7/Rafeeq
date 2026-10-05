@@ -7,6 +7,7 @@ use App\Domains\Matching\Jobs\NotifyMatchingDemands;
 use App\Domains\Matching\Models\CommuteDemand;
 use App\Domains\Matching\Models\MatchNotification;
 use App\Domains\Matching\Support\SearchCriteria;
+use App\Domains\Notification\Models\Notification;
 use App\Domains\Shared\ValueObjects\Coordinate;
 use App\Domains\Shared\ValueObjects\DaysMask;
 use App\Domains\Shared\ValueObjects\WalkTime;
@@ -142,6 +143,14 @@ it('notifies a waiting passenger when a matching commute appears', function () {
         ->and($notification->score)->toBeGreaterThanOrEqual(
             (int) config('rafeeq.matching.notification_score_threshold')
         );
+
+    // And the passenger is actually TOLD (Phase 12) — before, the row above was written and
+    // nobody heard about it. The commute id only; nothing about the driver.
+    $told = Notification::query()
+        ->where('type', 'match_found')->where('channel', 'in_app')->sole();
+
+    expect($told->user_id)->toBe(CommuteDemand::sole()->passenger_user_id)
+        ->and($told->data)->toMatchArray(['commuteId' => $commuteId]);
 });
 
 it('shows a passenger the matches found for their saved requests', function () {

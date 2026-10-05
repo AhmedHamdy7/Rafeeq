@@ -103,7 +103,7 @@ final readonly class LeaveGroupAction
             ->get();
 
         foreach ($bookings as $booking) {
-            $this->cancel->byPassenger($booking, $reason ?? __('commute.group.left'));
+            $this->cancel->byPassenger($booking, $reason ?? __('commute.group.left'), notify: false);
         }
     }
 }

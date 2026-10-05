@@ -67,6 +67,18 @@ Schedule::command('ratings:reveal-due')
     ->hourly()
     ->withoutOverlapping();
 
+/*
+ * "Last day to rate your trip" — one reminder per person per booking (per run for a driver), in
+ * the final 24 hours of the window. Hourly so the reminder lands near the start of that last day
+ * for everybody, whatever time their trip left; idempotent, so running it again sends nothing new.
+ *
+ * If it does not run: nobody is reminded, and somebody who never rates keeps the other side's
+ * rating hidden until the window closes — the quiet veto the reminder exists to discourage.
+ */
+Schedule::command('ratings:send-reminders')
+    ->hourly()
+    ->withoutOverlapping();
+
 Schedule::command('trips:flush-locations')
     ->everyThirtySeconds()
     ->withoutOverlapping();

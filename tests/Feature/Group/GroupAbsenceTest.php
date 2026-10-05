@@ -8,6 +8,7 @@ use App\Domains\Commute\Models\ScheduledTrip;
 use App\Domains\Driver\Models\Vehicle;
 use App\Domains\Group\Models\CommuteGroup;
 use App\Domains\Group\Models\GroupAbsence;
+use App\Domains\Notification\Models\Notification;
 use App\Domains\Shared\ValueObjects\DaysMask;
 use Carbon\CarbonImmutable;
 use Illuminate\Support\Facades\Storage;
@@ -99,6 +100,10 @@ it('cancels the bookings in range and frees the seats when asked', function () {
     ScheduledTrip::query()->whereIn('id', $inRange)->get()->each(
         fn (ScheduledTrip $trip) => expect($trip->seats_taken)->toBe(0)
     );
+
+    // One decision, not one notice per day: the bulk path does not send the driver a
+    // "booking cancelled" for every released day (Phase 12).
+    expect(Notification::query()->where('type', 'booking_cancelled')->count())->toBe(0);
 
     // Recorded as the passenger's own cancellation with the reason attached, so the
     // audit trail says why rather than only who.

@@ -1512,7 +1512,9 @@ empty list for a stranger is genuinely empty.
 
 > 🔴 **`autoShareTrips` does not yet do anything, and this is the one field in the API where that
 > gap could hurt somebody.** A person who switches it on believes their sister will see every trip.
-> Nobody will, until the notification channel exists.
+> Nobody will, until an outbound SMS/WhatsApp provider is chosen (2026-10-05: the notification inbox
+> now exists, but it only reaches people with the app — a trusted contact usually has neither the
+> app nor an account, so the link has to go to their phone number).
 >
 > The reason it cannot be built first is in the live-share design, two subsections down: an auto-made
 > share link has to be **delivered at the moment it is created**, because the token is returned once
@@ -1877,7 +1879,7 @@ hold must still be able to read the notice that says so.
 
 | Response field | Meaning |
 |---|---|
-| `type` | What happened — route on this. Today: `seat_requested` (driver) · `seat_approved` · `seat_declined` · `trip_started` · `sos_picked_up` · `report_resolved` · `report_closed` · `account_on_hold` · `account_reinstated`. **Expect new values**; show an unknown one as a plain message. |
+| `type` | What happened — route on this. Today: `seat_requested` (driver) · `seat_approved` · `seat_declined` · `booking_cancelled` (to the other side) · `match_found` (a saved request matched — `data.commuteId`) · `trip_started` · `chat_message` · `rating_due` (passenger, `data.bookingId`) · `rating_due_riders` (driver, once per run, `data.tripId`) · `rating_reminder` (last day of the window, once) · `sos_picked_up` · `report_resolved` · `report_closed` · `account_on_hold` · `account_reinstated`. **Expect new values**; show an unknown one as a plain message. |
 | `category` | `booking` · `payment` · `trip` · `safety` · `marketing`. |
 | `title` / `body` | **Already in the member's language** — rendered when the message was sent, and stored as written. Show them as they are. They never contain a phone number, an address or a full name: a push body appears on a lock screen. |
 | `data` | Ids for the screen to open: `seatRequestId`, `commuteId`, `tripId`, `sosId`, `incidentId`. Never names. |
@@ -2223,6 +2225,7 @@ exist, and every live endpoint must be named here.
 
 | Date | Change |
 |---|---|
+| 2026-10-05 | **Five more notification types** (4.14): `booking_cancelled`, `match_found` (your saved request matched), `rating_due` / `rating_due_riders` when a run completes, and one `rating_reminder` on the last day of the rating window. No endpoint changes. `autoShareTrips` is still inactive — it needs an SMS/WhatsApp provider, not the in-app inbox (4.12). |
 | 2026-10-05 | **New: section 4.15 — trip chat.** Three endpoints: read a booking's conversation, send, report a message. Open from 24h before departure to 2h after the run; a blocked pair gets the same `CHAT_NOT_OPEN` as a closed window. Numbers and emails are allowed but flagged (`containsContactInfo`) — warn before acting on them. |
 | 2026-10-05 | **New: section 4.14 — notifications (screen 22).** Four endpoints: the inbox with `meta.unreadCount`, mark-read, and the preference switches. Every message is already in the member's language. **Push is wired but no provider is configured yet**, so poll the inbox for now. Safety switches cannot be turned off, and a silent SOS never pushes. |
 | 2026-10-05 | **Screen 35 is buildable in full.** Staff can now put an account on hold from the dashboard, and `GET /auth/me` returns `user.suspension` (`caseNumber`, `reasonCode`, `suspendedAt`, `reviewDueAt`) while it lasts; `suspensionReason` is now a ready-to-show sentence in the request's language. The `ACCOUNT_SUSPENDED` refusal carries the same four values in `error.fields`. Also: a driver on hold disappears from search until the hold is lifted. |
