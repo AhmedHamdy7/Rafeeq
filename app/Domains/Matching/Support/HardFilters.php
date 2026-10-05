@@ -8,6 +8,7 @@ use App\Domains\Commute\Enums\ScheduledTripStatus;
 use App\Domains\Commute\Models\CommuteOffer;
 use App\Domains\Commute\Models\ScheduledTrip;
 use App\Domains\Driver\Enums\DriverProfileStatus;
+use App\Domains\Identity\Enums\AccountStatus;
 use App\Domains\Identity\Enums\Gender;
 use App\Domains\Identity\Models\User;
 use Illuminate\Database\Eloquent\Builder;
@@ -106,11 +107,19 @@ final class HardFilters
      * lapsed, is not bookable however good its score. Checked here rather than
      * relying on the offer having been paused, because the offer and the driver
      * can fall out of step for as long as it takes a sweep to run.
+     *
+     * 🔴 "Suspended" means two different things and both are checked: the driver
+     * PROFILE (a driving decision) and the ACCOUNT (a staff decision about the person,
+     * Phase 13). Checking only the first left a suspended driver's commutes in search
+     * results — passengers could request seats from somebody who could no longer
+     * answer, approve or start anything.
      */
     private static function requireApprovedDriver(Builder $offer): void
     {
         $offer->whereHas('driverProfile', fn (Builder $driver) => $driver
             ->where('status', DriverProfileStatus::Approved->value)
+            ->whereHas('user', fn (Builder $user) => $user
+                ->where('account_status', AccountStatus::Active->value))
             ->where(fn (Builder $licence) => $licence
                 ->whereNull('licence_expiry')
                 ->orWhere('licence_expiry', '>=', now()->toDateString())));

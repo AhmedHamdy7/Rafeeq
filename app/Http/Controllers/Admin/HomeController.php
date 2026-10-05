@@ -25,6 +25,7 @@ final class HomeController extends Controller
         'admin.trips' => AdminPermission::TripView,
         'admin.verifications' => AdminPermission::VerificationView,
         'admin.drivers' => AdminPermission::DriverView,
+        'admin.members' => AdminPermission::MemberView,
     ];
 
     public function __invoke(): RedirectResponse

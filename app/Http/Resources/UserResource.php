@@ -3,6 +3,7 @@
 namespace App\Http\Resources;
 
 use App\Domains\Identity\Actions\RecordConsentAction;
+use App\Domains\Identity\Enums\AccountStatus;
 use App\Domains\Identity\Models\User;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
@@ -34,9 +35,22 @@ final class UserResource extends JsonResource
             'dateOfBirth' => $this->date_of_birth?->toDateString(),
             'email' => $this->email,
             'accountStatus' => strtoupper($this->account_status->value),
+            /*
+             * Why the account is on hold, in the caller's language — a category the member can
+             * be shown, never the note staff wrote to the file. Present only while suspended.
+             */
             'suspensionReason' => $this->when(
                 $this->suspension_reason !== null,
-                $this->suspension_reason,
+                fn () => __('auth.suspension_reasons.'.$this->suspension_reason),
+            ),
+            /*
+             * The two things screen 35 shows next to the reason: a reference to quote to the
+             * safety team, and when the platform promised to look again. Present only while
+             * suspended.
+             */
+            'suspension' => $this->when(
+                $this->account_status === AccountStatus::Suspended,
+                fn () => SuspensionSummary::for($this->resource),
             ),
             'profileStatus' => strtoupper($this->profile_status->value),
             'registeredRole' => $this->registered_role?->value,

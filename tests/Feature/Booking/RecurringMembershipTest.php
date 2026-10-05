@@ -241,3 +241,28 @@ it('does not seat a trial rider on days they never committed to', function () {
     // One day, because that is what a trial is.
     expect(Booking::count())->toBe(1);
 });
+
+/**
+ * A hold pauses NEW bookings (screen 35's own words) and keeps the ones already made, so the
+ * nightly roll-forward must not go on booking somebody the platform has just stopped from
+ * booking.
+ */
+it('stops extending a member whose account is on hold, and keeps the days already booked', function () {
+    $requestId = requestRecurringSeat($this->paxToken, $this->commuteId, $this->daysMask)
+        ->assertStatus(201)->json('data.id');
+
+    test()->withToken($this->driverToken)
+        ->postJson("/api/v1/driver/seat-requests/{$requestId}/approve")->assertStatus(201);
+
+    $atJoining = Booking::count();
+
+    GroupMember::query()->where('role', GroupMemberRole::Member->value)->sole()
+        ->user->forceFill(['account_status' => 'suspended'])->save();
+
+    $this->travel(14)->days();
+
+    Artisan::call('commutes:generate-trips');
+    Artisan::call('memberships:roll-forward');
+
+    expect(Booking::count())->toBe($atJoining);
+});

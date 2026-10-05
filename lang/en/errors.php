@@ -139,4 +139,6 @@ return [
     'SOS_ALREADY_ACKNOWLEDGED' => 'Another operator has already picked up this alert.',
     'SOS_NOT_ACKNOWLEDGED' => 'Pick up the alert before recording how it ended.',
     'INCIDENT_TRANSITION_NOT_ALLOWED' => 'This case has moved on since the page was loaded. Look at it again before acting.',
+    'MEMBER_NOT_ACTIVE' => 'This account is not active — it may already be on hold. Reload before acting.',
+    'MEMBER_NOT_SUSPENDED' => 'This account is not on hold any more. Reload before acting.',
 ];

@@ -6,6 +6,7 @@ use App\Http\Controllers\LiveShareController;
 use App\Livewire\Admin\DriverApplications;
 use App\Livewire\Admin\LiveTrips;
 use App\Livewire\Admin\Login;
+use App\Livewire\Admin\Members;
 use App\Livewire\Admin\SafetyCases;
 use App\Livewire\Admin\VerificationQueue;
 use Illuminate\Support\Facades\Route;
@@ -68,6 +69,7 @@ Route::prefix('admin')->name('admin.')->group(function (): void {
         Route::get('trips', LiveTrips::class)->name('trips');
         Route::get('verifications', VerificationQueue::class)->name('verifications');
         Route::get('drivers', DriverApplications::class)->name('drivers');
+        Route::get('members', Members::class)->name('members');
 
         /*
          * POST, and therefore CSRF-protected. A GET sign-out can be triggered by any

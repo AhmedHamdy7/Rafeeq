@@ -138,6 +138,21 @@
                         @endif
                     </a>
                 @endcan
+
+                @can(AdminPermission::MemberView->value)
+                    <a
+                        href="{{ route('admin.members') }}"
+                        wire:navigate
+                        class="rq-nav"
+                        @if (request()->routeIs('admin.members')) aria-current="page" @endif
+                    >
+                        <span class="rq-nav__tile" aria-hidden="true">☺</span>
+                        <span class="rq-nav__label">{{ __('admin.nav.members') }}</span>
+                        @if ($overdueHolds ?? 0)
+                            <span class="rq-pill rq-pill--bad">{{ $overdueHolds }}</span>
+                        @endif
+                    </a>
+                @endcan
             </nav>
 
             <div style="flex:1"></div>

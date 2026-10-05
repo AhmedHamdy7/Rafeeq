@@ -227,6 +227,17 @@ return [
          * identity documents.
          */
         'session_idle_minutes' => 30,
+
+        /*
+         * How soon the platform promises to look again at an account it put on hold
+         * (screen 35: "Expected update — within 24h").
+         *
+         * Written onto the suspension when it is created, so a member told 24 hours is held
+         * to 24 hours even if this is later changed. Overdue holds are flagged on the
+         * MEMBERS page — an account frozen and then forgotten is the failure this exists to
+         * make visible.
+         */
+        'suspension_review_hours' => 24,
     ],
 
     'group' => [

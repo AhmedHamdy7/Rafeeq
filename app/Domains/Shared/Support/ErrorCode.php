@@ -143,6 +143,8 @@ enum ErrorCode: string
     case SosAlreadyAcknowledged = 'SOS_ALREADY_ACKNOWLEDGED';
     case SosNotAcknowledged = 'SOS_NOT_ACKNOWLEDGED';
     case IncidentTransitionNotAllowed = 'INCIDENT_TRANSITION_NOT_ALLOWED';
+    case MemberNotActive = 'MEMBER_NOT_ACTIVE';
+    case MemberNotSuspended = 'MEMBER_NOT_SUSPENDED';
 
     public function defaultStatus(): int
     {
@@ -333,7 +335,10 @@ enum ErrorCode: string
              */
             self::SosAlreadyAcknowledged,
             self::SosNotAcknowledged,
-            self::IncidentTransitionNotAllowed => 409,
+            self::IncidentTransitionNotAllowed,
+            // Somebody else already put this account on hold, or already lifted it.
+            self::MemberNotActive,
+            self::MemberNotSuspended => 409,
         };
     }
 

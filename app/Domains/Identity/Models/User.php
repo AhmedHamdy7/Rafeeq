@@ -16,6 +16,7 @@ use App\Domains\Notification\Models\Notification;
 use App\Domains\Payment\Models\PaymentMethod;
 use App\Domains\Safety\Models\BlockedUser;
 use App\Domains\Safety\Models\EmergencyContact;
+use App\Domains\Safety\Models\Incident;
 use App\Domains\Verification\Models\TrustScore;
 use App\Domains\Verification\Models\UserVerification;
 use Database\Factories\UserFactory;
@@ -108,6 +109,31 @@ class User extends Authenticatable
     public function trustScore(): HasOne
     {
         return $this->hasOne(TrustScore::class);
+    }
+
+    /**
+     * Reports filed ABOUT this person. Staff-side only: no member-facing endpoint may read
+     * this direction (IncidentResource never names the subject to anybody).
+     */
+    public function reportsAbout(): HasMany
+    {
+        return $this->hasMany(Incident::class, 'reported_user_id');
+    }
+
+    /**
+     * Every time staff put this account on hold, newest last. See AccountSuspension.
+     */
+    public function suspensions(): HasMany
+    {
+        return $this->hasMany(AccountSuspension::class);
+    }
+
+    /**
+     * The hold in force right now, if any — the one screen 35 shows.
+     */
+    public function activeSuspension(): HasOne
+    {
+        return $this->hasOne(AccountSuspension::class)->whereNull('lifted_at')->latestOfMany('suspended_at');
     }
 
     public function driverProfile(): HasOne
