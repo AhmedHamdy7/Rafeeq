@@ -33,6 +33,7 @@ class IdentityDocument extends Model
             'virus_scan_status' => VirusScanStatus::class,
             'expires_at' => 'datetime',
             'purge_after' => 'date',
+            'purged_at' => 'datetime',
         ];
     }
 

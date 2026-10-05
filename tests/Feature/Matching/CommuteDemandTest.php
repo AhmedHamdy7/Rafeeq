@@ -113,6 +113,16 @@ it('expires demands that have run out of time', function () {
         ->and(CommuteDemand::sole()->status)->toBe(CommuteDemandStatus::Expired);
 });
 
+it('expires them on the schedule, through the command', function () {
+    saveDemand($this->paxToken)->assertStatus(201);
+
+    CommuteDemand::query()->update(['expires_at' => now()->subMinute()]);
+
+    $this->artisan('demands:expire')->expectsOutputToContain('Expired 1')->assertSuccessful();
+
+    expect(CommuteDemand::sole()->status)->toBe(CommuteDemandStatus::Expired);
+});
+
 /**
  * Publishing is the driver's action; telling passengers is a consequence of it,
  * and must not make their publish slower or able to fail.
