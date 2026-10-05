@@ -14,7 +14,7 @@
 >
 > **Base URL:** `{host}/api/v1` · **Auth:** bearer token · **Format:** JSON only.
 
-**Last updated:** 2026-10-03 · **116 endpoints live** · Phases 0–7 complete, Phase 9 in progress
+**Last updated:** 2026-10-05 · **116 endpoints live** · Phases 0–7 complete, Phase 9 in progress
 
 ---
 
@@ -1456,7 +1456,7 @@ Answers `201` with the SOS.
 | `countdownSeconds` | How long to count down. Copied onto the row when it was raised, so it is the window actually in force — do not hard-code 10. |
 | `isDiscreet` | Echoed back. |
 | `cancelledAt` | `null` unless it was taken back. |
-| `respondedAt` | When a human first picked it up. `null` until then. **Show this** — it is what tells the person somebody is actually looking. |
+| `respondedAt` | When a human first picked it up. `null` until then. **Show this** — it is what tells the person somebody is actually looking. Since 2026-10-05 the safety desk sets it from the dashboard, so it really does change while the alert is open. ⚠️ There is no endpoint to re-read an SOS yet: today the app learns it from the cancel refusal (`error.fields.respondedAt`, below). A push when somebody picks it up is Phase 12. |
 | `resolution` | `false_alarm` · `resolved` · `escalated_police`, once decided. `null` while open. |
 
 🔒 The responder's identity is deliberately **not** returned. An operator handling an emergency is a
@@ -1549,7 +1549,7 @@ Rate-limited per user per hour, generously — a `429` carries `Retry-After`. `I
 | `severity` | The platform's judgement. See above. |
 | `status` | `OPEN` · `UNDER_REVIEW` · `ESCALATED` · `RESOLVED` · `CLOSED`. |
 | `slaDueAt` | When the platform has undertaken to respond by, written when the report was filed. Fixed rather than recomputed — a deadline that can be recalculated is one that can be quietly moved. |
-| `resolution` / `resolvedAt` | Once decided. |
+| `resolution` / `resolvedAt` | Set when the safety team resolves or closes the report — `null` before that, including while it is `ESCALATED`. `resolution` is **free text written by a member of staff to the reporter** (up to 255 characters, in whatever language they wrote it), so render it as a message from Rafeeq, not as a status label, and with `dir="auto"`. The reason for an escalation is internal and never appears here. |
 | `bookingId` | The journey, when one was named. |
 | `evidenceCount` | How many files are attached. |
 
@@ -2123,6 +2123,7 @@ exist, and every live endpoint must be named here.
 
 | Date | Change |
 |---|---|
+| 2026-10-05 | **No new endpoints — two existing fields now actually fill.** The operations dashboard can pick up an SOS and work a report, so `respondedAt` on an SOS stops being permanently `null`, and `GET /incidents/{incident}` now returns `RESOLVED`/`CLOSED` with a `resolution` the safety team wrote **to the reporter**. Read the `resolution` row in the incidents section: it is a message, not a label. |
 | 2026-10-03 | 🔴 **Correction — `nextStep`.** This file listed `COMPLETE_PROFILE`, ~~VERIFY_IDENTITY~~ and ~~HOME~~; only the first is real. There are four values (`ACCOUNT_SUSPENDED`, `CREATE_PIN`, `COMPLETE_PROFILE`, `LOCAL_SECURITY_SETUP_OR_HOME`) and **verification is not one of them** — it is a per-endpoint gate, not a sign-up step. If you built a branch on VERIFY_IDENTITY or HOME, it never fires. Section 2.1 has the precedence order; a test now pins the list against the enum in both directions. |
 | 2026-10-03 | **New: section 2.1 — the whole cycle, request by request.** Every call in order from sign-in to rating, both roles, with the refusals worth rendering properly and the seeded staging accounts to run it against. Nothing was removed; it sits after the build order. |
 | 2026-10-02 | **Reviews and the rating filter** — 3 endpoints (`GET /commutes/{commute}/reviews`, `GET /ratings/about-me`, `POST /ratings/{rating}/report`) plus `minRating` on search. 🔒 **Reviews carry no reviewer and no exact date** — read 4.13 for why, it changes what your UI can show. A report flags for a human and takes nothing down. |

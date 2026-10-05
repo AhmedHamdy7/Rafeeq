@@ -18,8 +18,10 @@ it('authenticates using password_hash, not the default password column', functio
 });
 
 it('assigns and checks Spatie roles correctly with a ULID-keyed model', function () {
-    Role::create(['name' => AdminRole::Verification->value, 'guard_name' => 'admin']);
-    Role::create(['name' => AdminRole::Finance->value, 'guard_name' => 'admin']);
+    // `findOrCreate`: the roles already exist after migrating, since the permission-sync
+    // migration writes them (2026_10_05_090000).
+    Role::findOrCreate(AdminRole::Verification->value, 'admin');
+    Role::findOrCreate(AdminRole::Finance->value, 'admin');
 
     $admin = AdminUser::factory()->create();
 

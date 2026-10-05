@@ -136,6 +136,14 @@ enum ErrorCode: string
     case AdminMfaNotEnrolled = 'ADMIN_MFA_NOT_ENROLLED';
     case AdminMfaRequired = 'ADMIN_MFA_REQUIRED';
 
+    /*
+     * Safety cases, from the operator's side (Phase 13). Only the dashboard can raise these —
+     * they live with the Admin domain's Actions, outside the /v1 contract (decision D4).
+     */
+    case SosAlreadyAcknowledged = 'SOS_ALREADY_ACKNOWLEDGED';
+    case SosNotAcknowledged = 'SOS_NOT_ACKNOWLEDGED';
+    case IncidentTransitionNotAllowed = 'INCIDENT_TRANSITION_NOT_ALLOWED';
+
     public function defaultStatus(): int
     {
         return match ($this) {
@@ -317,6 +325,15 @@ enum ErrorCode: string
             // and are being stopped by the second factor rather than by identity.
             self::AdminMfaNotEnrolled,
             self::AdminMfaRequired => 403,
+
+            /*
+             * 409: two operators on one case, or a step taken out of order. Nothing about the
+             * request is wrong — the case moved underneath the page, and the answer is to look
+             * at it again.
+             */
+            self::SosAlreadyAcknowledged,
+            self::SosNotAcknowledged,
+            self::IncidentTransitionNotAllowed => 409,
         };
     }
 

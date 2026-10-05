@@ -52,6 +52,7 @@ enum AdminRole: string
                 AdminPermission::MemberSuspend,
                 AdminPermission::CommuteView,
                 AdminPermission::CommuteModerate,
+                AdminPermission::TripView,
                 AdminPermission::TicketView,
                 // Can see a verification's state to understand why a driver is stuck,
                 // but not open the document or decide it.
@@ -86,6 +87,9 @@ enum AdminRole: string
             self::SafetyLead => [
                 AdminPermission::SafetyView,
                 AdminPermission::SafetyResolve,
+                // An SOS arrives attached to a car on the road; the person answering it
+                // has to be able to see that car.
+                AdminPermission::TripView,
                 AdminPermission::MemberView,
                 AdminPermission::MemberSuspend,
                 AdminPermission::TicketView,

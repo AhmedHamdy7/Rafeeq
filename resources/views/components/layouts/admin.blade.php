@@ -79,6 +79,36 @@
                     link is NOT the permission check — every component re-checks — but
                     showing somebody a door that 403s is its own small cruelty.
                 --}}
+                @can(AdminPermission::SafetyView->value)
+                    <a
+                        href="{{ route('admin.safety') }}"
+                        wire:navigate
+                        class="rq-nav"
+                        @if (request()->routeIs('admin.safety')) aria-current="page" @endif
+                    >
+                        <span class="rq-nav__tile" aria-hidden="true">⚠</span>
+                        <span class="rq-nav__label">{{ __('admin.nav.safety') }}</span>
+                        @if ($openSafetyCases ?? 0)
+                            <span class="rq-pill rq-pill--bad">{{ $openSafetyCases }}</span>
+                        @endif
+                    </a>
+                @endcan
+
+                @can(AdminPermission::TripView->value)
+                    <a
+                        href="{{ route('admin.trips') }}"
+                        wire:navigate
+                        class="rq-nav"
+                        @if (request()->routeIs('admin.trips')) aria-current="page" @endif
+                    >
+                        <span class="rq-nav__tile" aria-hidden="true">⛟</span>
+                        <span class="rq-nav__label">{{ __('admin.nav.trips') }}</span>
+                        @if ($liveTrips ?? 0)
+                            <span class="rq-pill rq-pill--ok">{{ $liveTrips }}</span>
+                        @endif
+                    </a>
+                @endcan
+
                 @can(AdminPermission::VerificationView->value)
                     <a
                         href="{{ route('admin.verifications') }}"
@@ -163,6 +193,16 @@
             </header>
 
             <main class="rq-content">
+                @if ($unacknowledgedAlert ?? null)
+                    {{-- Same alert, same wording, on every page: see the composer in AppServiceProvider. --}}
+                    <div class="rq-banner" role="alert" wire:key="sos-banner-{{ $unacknowledgedAlert->id }}">
+                        <span style="flex:1">
+                            {{ __($unacknowledgedAlert->is_discreet ? 'admin.safety.banner_silent' : 'admin.safety.banner', ['ago' => $unacknowledgedAlert->created_at->diffForHumans()]) }}
+                        </span>
+                        <a class="rq-btn rq-btn--danger" href="{{ route('admin.safety') }}" wire:navigate>{{ __('admin.safety.open') }}</a>
+                    </div>
+                @endif
+
                 @if (session('status'))
                     {{-- `wire:key` so a flash from one action is not reused by the next render. --}}
                     <p class="rq-flash" wire:key="flash-{{ md5(session('status')) }}">{{ session('status') }}</p>

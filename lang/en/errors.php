@@ -134,4 +134,9 @@ return [
     'ADMIN_CREDENTIALS_INVALID' => 'Those sign-in details are not correct.',
     'ADMIN_MFA_NOT_ENROLLED' => 'Finish setting up two-factor authentication before signing in.',
     'ADMIN_MFA_REQUIRED' => 'Enter the code from your authenticator app to continue.',
+
+    // Read by an operator on the safety desk, not by a member.
+    'SOS_ALREADY_ACKNOWLEDGED' => 'Another operator has already picked up this alert.',
+    'SOS_NOT_ACKNOWLEDGED' => 'Pick up the alert before recording how it ended.',
+    'INCIDENT_TRANSITION_NOT_ALLOWED' => 'This case has moved on since the page was loaded. Look at it again before acting.',
 ];

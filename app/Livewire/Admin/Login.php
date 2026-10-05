@@ -96,7 +96,8 @@ class Login extends Component
         session()->regenerate();
         session()->put(EnsureAdminMfaIsConfirmed::PASSED, true);
 
-        $this->redirectRoute('admin.verifications', navigate: true);
+        // The first page this admin's role can open — see HomeController.
+        $this->redirectRoute('admin.home', navigate: true);
     }
 
     public function render()
