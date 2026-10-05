@@ -131,6 +131,9 @@ enum ErrorCode: string
     case IncidentClosed = 'INCIDENT_CLOSED';
     case LiveShareAlreadyEnded = 'LIVE_SHARE_ALREADY_ENDED';
 
+    // ---- Notifications (Phase 12, Chapter 11) --------------------------
+    case NotificationCategoryLocked = 'NOTIFICATION_CATEGORY_LOCKED';
+
     // ---- Admin dashboard (Chapter 12) ----------------------------------
     case AdminCredentialsInvalid = 'ADMIN_CREDENTIALS_INVALID';
     case AdminMfaNotEnrolled = 'ADMIN_MFA_NOT_ENROLLED';
@@ -315,6 +318,10 @@ enum ErrorCode: string
 
             // 403: blocking yourself is not a state, it is a mistake about who you are.
             self::CannotBlockSelf => 403,
+
+            // 422: what was sent asks for something the platform does not allow — safety
+            // notices cannot be switched off (Chapter 11).
+            self::NotificationCategoryLocked => 422,
 
             /*
              * 401: a staff sign-in that did not succeed. One code for a wrong

@@ -502,6 +502,18 @@ return [
         'edit_window_minutes' => 15,
     ],
 
+    /*
+     * Notifications (Chapter 11, Phase 12).
+     */
+    'notifications' => [
+        /*
+         * Which push transport sends to phones. Only `log` exists today: choosing FCM/APNs needs
+         * a project and credentials that do not exist yet. Until then every message still lands
+         * in the member's in-app inbox, and each push row records `no_push_provider`.
+         */
+        'push_driver' => env('RAFEEQ_PUSH_DRIVER', 'log'),
+    ],
+
     'safety' => [
         /*
          * How long somebody has to take back an SOS before it is treated as real.

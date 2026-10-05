@@ -4,6 +4,8 @@ namespace App\Domains\Admin\Actions;
 
 use App\Domains\Admin\Models\AdminUser;
 use App\Domains\Admin\Support\AdminActionLog;
+use App\Domains\Notification\Enums\NotificationType;
+use App\Domains\Notification\Support\Notifier;
 use App\Domains\Safety\Enums\IncidentStatus;
 use App\Domains\Safety\Enums\SafetyEventType;
 use App\Domains\Safety\Models\Incident;
@@ -135,6 +137,14 @@ final readonly class HandleIncidentAction
                 // that is never deleted.
                 metadata: ['incidentId' => $incident->id, 'status' => $to->value],
             );
+
+            // The reporter hears about an answer, not about an escalation — that is internal.
+            if ($final) {
+                Notifier::send($incident->reporter,
+                    $to === IncidentStatus::Resolved ? NotificationType::ReportResolved : NotificationType::ReportClosed,
+                    data: ['incidentId' => $incident->id],
+                );
+            }
 
             return $incident;
         });

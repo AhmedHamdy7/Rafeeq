@@ -126,6 +126,7 @@ return [
     'INCIDENT_EVIDENCE_LIMIT_REACHED' => 'You have attached as many files to this report as we allow.',
     'INCIDENT_CLOSED' => 'This report has been closed, so nothing more can be added to it. Please file a new report.',
     'LIVE_SHARE_ALREADY_ENDED' => 'That share link has already been stopped.',
+    'NOTIFICATION_CATEGORY_LOCKED' => 'Safety notices cannot be turned off.',
 
     /*
      * Admin sign-in. One message for a wrong password and a wrong code, on purpose —

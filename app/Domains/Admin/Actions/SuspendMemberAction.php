@@ -9,6 +9,8 @@ use App\Domains\Identity\Enums\AccountStatus;
 use App\Domains\Identity\Enums\SuspensionReason;
 use App\Domains\Identity\Models\AccountSuspension;
 use App\Domains\Identity\Models\User;
+use App\Domains\Notification\Enums\NotificationType;
+use App\Domains\Notification\Support\Notifier;
 use App\Domains\Safety\Models\Incident;
 use App\Domains\Shared\Exceptions\DomainException;
 use App\Domains\Shared\Support\ErrorCode;
@@ -88,6 +90,8 @@ final readonly class SuspendMemberAction
                 reason: $note,
             );
 
+            Notifier::send($member, NotificationType::AccountOnHold, ['case' => $suspension->case_number]);
+
             return $suspension;
         });
     }
@@ -131,6 +135,8 @@ final readonly class SuspendMemberAction
                 after: ['account_status' => AccountStatus::Active->value],
                 reason: $note,
             );
+
+            Notifier::send($member, NotificationType::AccountReinstated);
 
             return $member;
         });

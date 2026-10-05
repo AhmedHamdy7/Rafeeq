@@ -42,8 +42,9 @@ final class ApiResponse
      * one comes back short.
      *
      * @param  LengthAwarePaginator<int, mixed>  $page
+     * @param  array<string, mixed>  $extraMeta
      */
-    public static function paginated(LengthAwarePaginator $page, mixed $data = null): JsonResponse
+    public static function paginated(LengthAwarePaginator $page, mixed $data = null, array $extraMeta = []): JsonResponse
     {
         return self::success($data ?? $page->items(), meta: [
             'page' => $page->currentPage(),
@@ -53,6 +54,8 @@ final class ApiResponse
             // Stated rather than left for the client to work out from three other
             // numbers, which is the sort of arithmetic every client gets wrong once.
             'hasMore' => $page->hasMorePages(),
+            // A list-level fact that is not about paging, e.g. the inbox's unread count.
+            ...$extraMeta,
         ]);
     }
 

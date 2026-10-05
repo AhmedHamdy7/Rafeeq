@@ -4,6 +4,8 @@ namespace App\Domains\Admin\Actions;
 
 use App\Domains\Admin\Models\AdminUser;
 use App\Domains\Admin\Support\AdminActionLog;
+use App\Domains\Notification\Enums\NotificationType;
+use App\Domains\Notification\Support\Notifier;
 use App\Domains\Safety\Enums\SafetyEventType;
 use App\Domains\Safety\Enums\SafetySeverity;
 use App\Domains\Safety\Enums\SosResolution;
@@ -72,6 +74,16 @@ final readonly class RespondToSosAction
             );
 
             $this->timeline($sos, 'acknowledged');
+
+            /*
+             * 🔴 `quiet` for a silent alert: inbox only, never a push. A phone that buzzes in a
+             * car with the person it was raised about is the one thing a discreet alert
+             * promised would not happen.
+             */
+            Notifier::send($sos->safetyEvent->user, NotificationType::SosPickedUp,
+                data: ['sosId' => $sos->id],
+                quiet: $sos->is_discreet,
+            );
 
             return $sos;
         });
