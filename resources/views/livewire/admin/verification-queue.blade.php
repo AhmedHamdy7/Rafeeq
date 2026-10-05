@@ -42,6 +42,16 @@
                 @endforeach
             </ul>
 
+            @if ($maySeeDocuments && $card['documents'] !== [])
+                {{-- Opened in a new tab through the session; every opening is audited. --}}
+                <div class="rq-actions" style="margin-top:8px">
+                    @foreach ($card['documents'] as $document)
+                        <a class="rq-btn rq-btn--quiet" target="_blank" rel="noopener"
+                           href="{{ route('admin.files.document', $document['id']) }}">{{ __('admin.files.open', ['what' => $document['label']]) }}</a>
+                    @endforeach
+                </div>
+            @endif
+
             @if ($mayDecide)
                 <div class="rq-actions">
                     <button type="button" class="rq-btn rq-btn--approve"

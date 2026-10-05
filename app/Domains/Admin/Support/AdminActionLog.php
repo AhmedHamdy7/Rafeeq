@@ -51,6 +51,9 @@ final class AdminActionLog
         'incident.escalate',
         'incident.resolve',
         'incident.close',
+        // Starting or ending watch over a route by hand: asked about the night something happens.
+        'escort.arm',
+        'escort.disarm',
         // A number every member is subject to. "Who changed the OTP lifetime, and why".
         'settings.update',
         'settings.reset',

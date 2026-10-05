@@ -538,6 +538,17 @@ return [
 
     'safety' => [
         /*
+         * Night escort mode (Master Plan §170: "auto-arms 9 PM–5 AM, with monitoring from the
+         * operations team"). 1 = every corridor is armed each night; 0 = only what staff arm by
+         * hand. The Bible names this key: `safety.night_escort_enabled`.
+         */
+        'night_escort_enabled' => 1,
+
+        // The night window, in Cairo hours. Ends the next morning.
+        'escort_starts_hour' => 21,
+        'escort_ends_hour' => 5,
+
+        /*
          * How long somebody has to take back an SOS before it is treated as real.
          *
          * 🔴 The countdown runs on the PHONE and the row is written the instant the button is

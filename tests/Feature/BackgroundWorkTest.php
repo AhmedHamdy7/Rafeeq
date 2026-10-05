@@ -63,6 +63,9 @@ it('registers every scheduled command the platform depends on', function (string
     // The last-day rating nudge. Without it, somebody who never rates keeps the other side's
     // rating hidden until the window closes, and nobody is told the window is closing.
     'ratings:send-reminders',
+
+    // Night escort. Without it no corridor is watched at night unless somebody remembers to arm it.
+    'escort:arm-tonight',
 ]);
 
 /**

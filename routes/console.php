@@ -79,6 +79,19 @@ Schedule::command('ratings:send-reminders')
     ->hourly()
     ->withoutOverlapping();
 
+/*
+ * Night escort (Master Plan: 9 PM–5 AM). Shortly before the window opens, so the live board shows
+ * every corridor armed by the time the first night run starts; idempotent, so a second run (or a
+ * retry after a failed deploy) arms nothing new. Off when `safety.night_escort_enabled` is 0.
+ *
+ * If it does not run: no corridor is under escort tonight unless somebody on the desk arms it by
+ * hand — and the dashboard tile reads "0 corridors armed", which is how that gets noticed.
+ */
+Schedule::command('escort:arm-tonight')
+    ->dailyAt('20:45')
+    ->timezone('Africa/Cairo')
+    ->withoutOverlapping();
+
 Schedule::command('trips:flush-locations')
     ->everyThirtySeconds()
     ->withoutOverlapping();

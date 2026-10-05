@@ -2,10 +2,12 @@
 
 use App\Http\Controllers\Admin\HomeController;
 use App\Http\Controllers\Admin\LogoutController;
+use App\Http\Controllers\Admin\StaffFileController;
 use App\Http\Controllers\LiveShareController;
 use App\Livewire\Admin\AuditLog;
 use App\Livewire\Admin\Dashboard;
 use App\Livewire\Admin\DriverApplications;
+use App\Livewire\Admin\Escort;
 use App\Livewire\Admin\LiveTrips;
 use App\Livewire\Admin\Login;
 use App\Livewire\Admin\Members;
@@ -71,11 +73,16 @@ Route::prefix('admin')->name('admin.')->group(function (): void {
         Route::get('dashboard', Dashboard::class)->name('dashboard');
         Route::get('safety', SafetyCases::class)->name('safety');
         Route::get('trips', LiveTrips::class)->name('trips');
+        Route::get('escort', Escort::class)->name('escort');
         Route::get('verifications', VerificationQueue::class)->name('verifications');
         Route::get('drivers', DriverApplications::class)->name('drivers');
         Route::get('members', Members::class)->name('members');
         Route::get('audit', AuditLog::class)->name('audit');
         Route::get('settings', Settings::class)->name('settings');
+
+        // Private files, opened through the session — never a link that works elsewhere.
+        Route::get('files/documents/{document}', [StaffFileController::class, 'document'])->name('files.document');
+        Route::get('files/evidence/{evidence}', [StaffFileController::class, 'evidence'])->name('files.evidence');
 
         /*
          * POST, and therefore CSRF-protected. A GET sign-out can be triggered by any

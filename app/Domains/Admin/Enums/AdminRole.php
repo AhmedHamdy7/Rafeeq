@@ -87,6 +87,7 @@ enum AdminRole: string
             self::SafetyLead => [
                 AdminPermission::SafetyView,
                 AdminPermission::SafetyResolve,
+                AdminPermission::SafetyViewEvidence,
                 // An SOS arrives attached to a car on the road; the person answering it
                 // has to be able to see that car.
                 AdminPermission::TripView,

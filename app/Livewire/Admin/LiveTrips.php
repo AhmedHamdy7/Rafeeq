@@ -6,6 +6,7 @@ use App\Domains\Admin\Enums\AdminPermission;
 use App\Domains\Admin\Support\LiveTripBoard;
 use App\Domains\Booking\Enums\BookingStatus;
 use App\Domains\Booking\Models\Booking;
+use App\Domains\Safety\Support\EscortCoverage;
 use App\Domains\Trip\Models\TripSession;
 use App\Domains\Trip\Support\LiveLocationStore;
 use Illuminate\Support\Facades\Auth;
@@ -79,6 +80,7 @@ class LiveTrips extends Component
             'tracked' => $tracked,
             'position' => $tracked === null ? null : $locations->current($tracked->id),
             'riders' => $tracked === null ? collect() : $this->ridersOn($tracked),
+            'escortCorridors' => EscortCoverage::activeCorridorIds(),
         ])->title(__('admin.trips.title'));
     }
 

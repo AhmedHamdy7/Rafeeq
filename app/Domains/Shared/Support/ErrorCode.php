@@ -149,6 +149,8 @@ enum ErrorCode: string
     case IncidentTransitionNotAllowed = 'INCIDENT_TRANSITION_NOT_ALLOWED';
     case MemberNotActive = 'MEMBER_NOT_ACTIVE';
     case MemberNotSuspended = 'MEMBER_NOT_SUSPENDED';
+    case EscortAlreadyArmed = 'ESCORT_ALREADY_ARMED';
+    case EscortNotActive = 'ESCORT_NOT_ACTIVE';
 
     public function defaultStatus(): int
     {
@@ -350,7 +352,10 @@ enum ErrorCode: string
             self::IncidentTransitionNotAllowed,
             // Somebody else already put this account on hold, or already lifted it.
             self::MemberNotActive,
-            self::MemberNotSuspended => 409,
+            self::MemberNotSuspended,
+            // The corridor is already watched, or the watch already ended.
+            self::EscortAlreadyArmed,
+            self::EscortNotActive => 409,
         };
     }
 
