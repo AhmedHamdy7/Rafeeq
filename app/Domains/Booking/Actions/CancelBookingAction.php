@@ -8,6 +8,9 @@ use App\Domains\Booking\Enums\BookingStatus;
 use App\Domains\Booking\Models\Booking;
 use App\Domains\Booking\Support\BookingEventLog;
 use App\Domains\Commute\Models\ScheduledTrip;
+use App\Domains\Identity\Models\User;
+use App\Domains\Notification\Enums\NotificationType;
+use App\Domains\Notification\Support\Notifier;
 use App\Domains\Shared\Exceptions\DomainException;
 use App\Domains\Shared\Support\ErrorCode;
 use Illuminate\Support\Facades\DB;
@@ -33,7 +36,11 @@ final readonly class CancelBookingAction
 {
     public function __construct(private PromoteFromWaitlistAction $promote) {}
 
-    public function byPassenger(Booking $booking, ?string $reason = null): Booking
+    /**
+     * @param  bool  $notify  false for the bulk paths (a planned absence, leaving a group), which
+     *                        cancel many days in a loop — see tellTheOtherSide()
+     */
+    public function byPassenger(Booking $booking, ?string $reason = null, bool $notify = true): Booking
     {
         return $this->cancel(
             $booking,
@@ -41,6 +48,7 @@ final readonly class CancelBookingAction
             BookingActorType::Passenger,
             $booking->passenger_user_id,
             $reason,
+            $notify,
         );
     }
 
@@ -60,12 +68,38 @@ final readonly class CancelBookingAction
         );
     }
 
+    /**
+     * The other person on the booking hears about it; the one who cancelled does not need to.
+     * The reason is not repeated — it may be personal, and the message shows on a lock screen.
+     *
+     * Single cancellations only. A member planning a two-week absence cancels ten days in one
+     * go, and ten identical notices to the driver for one decision is how notices get ignored;
+     * the bulk paths show up in the group's attendance and absences instead.
+     */
+    private function tellTheOtherSide(Booking $booking, ScheduledTrip $trip, BookingActorType $actorType): void
+    {
+        $byPassenger = $actorType === BookingActorType::Passenger;
+
+        $recipient = User::query()->find($byPassenger ? $booking->driver_profile_id : $booking->passenger_user_id);
+        $actor = User::query()->find($byPassenger ? $booking->passenger_user_id : $booking->driver_profile_id);
+
+        if ($recipient === null) {
+            return;
+        }
+
+        Notifier::send($recipient, NotificationType::BookingCancelled, [
+            'name' => $actor?->public_first_name ?? '',
+            'date' => $trip->trip_date->format('j/n'),
+        ], ['bookingId' => $booking->id]);
+    }
+
     private function cancel(
         Booking $booking,
         BookingStatus $to,
         BookingActorType $actorType,
         string $actorId,
         ?string $reason,
+        bool $notify = true,
     ): Booking {
         // The state machine decides, not this method: a completed or already
         // cancelled booking has no transition to cancelled, and asking the enum
@@ -76,7 +110,7 @@ final readonly class CancelBookingAction
             ]);
         }
 
-        return DB::transaction(function () use ($booking, $to, $actorType, $actorId, $reason): Booking {
+        return DB::transaction(function () use ($booking, $to, $actorType, $actorId, $reason, $notify): Booking {
             $from = $booking->status;
 
             // Locked for the same reason as taking a seat: the count must not be
@@ -118,6 +152,10 @@ final readonly class CancelBookingAction
                 from: $from,
                 metadata: ['reason' => $reason, 'seats_released' => $release],
             );
+
+            if ($notify) {
+                $this->tellTheOtherSide($booking, $trip, $actorType);
+            }
 
             return $booking;
         });

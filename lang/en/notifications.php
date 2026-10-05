@@ -47,6 +47,26 @@ return [
     ],
     // Not a notification: the description of the report filed when a chat message is reported.
     'chat_report' => "Reported chat message.\nReason: :reason\nMessage: «:message»",
+    'booking_cancelled' => [
+        'title' => 'A seat was cancelled',
+        'body' => ':name cancelled the booking for :date.',
+    ],
+    'match_found' => [
+        'title' => 'A commute that fits your request',
+        'body' => 'A new commute matches the trip you saved. Take a look before the seats go.',
+    ],
+    'rating_due' => [
+        'title' => 'How was your commute today?',
+        'body' => 'Rate your trip with :name. Neither of you sees the other’s rating until both have rated.',
+    ],
+    'rating_due_riders' => [
+        'title' => 'How was your commute today?',
+        'body' => 'Rate your riders. Nobody sees a rating until both sides have rated.',
+    ],
+    'rating_reminder' => [
+        'title' => 'Last day to rate your trip',
+        'body' => 'Ratings for this trip close soon.',
+    ],
     'trip_started' => [
         'title' => ':name has started today’s commute',
         'body' => 'Open the trip to follow the car.',

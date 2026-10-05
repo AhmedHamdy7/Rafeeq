@@ -102,7 +102,7 @@ final readonly class PlanAbsenceAction
             ->get();
 
         foreach ($bookings as $booking) {
-            $this->cancel->byPassenger($booking, $reason ?? __('commute.absence.planned'));
+            $this->cancel->byPassenger($booking, $reason ?? __('commute.absence.planned'), notify: false);
         }
     }
 

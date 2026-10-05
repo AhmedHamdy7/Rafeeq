@@ -8,6 +8,8 @@ use App\Domains\Matching\Models\CommuteDemand;
 use App\Domains\Matching\Models\MatchNotification;
 use App\Domains\Matching\Support\MatchResult;
 use App\Domains\Matching\Support\SearchCriteria;
+use App\Domains\Notification\Enums\NotificationType;
+use App\Domains\Notification\Support\Notifier;
 use App\Domains\Shared\ValueObjects\WalkTime;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Support\Facades\DB;
@@ -69,6 +71,15 @@ final readonly class NotifyMatchingDemandsAction
                 // Stamped so the cooldown holds even when several commutes are
                 // published in the same minute.
                 $demand->forceFill(['last_notified_at' => now()])->save();
+
+                /*
+                 * The point of saving a request: being told when a commute that fits appears.
+                 * Until Phase 12 the row above was written and nobody was told. The commute id
+                 * opens its match details; nothing about the driver is in the message.
+                 */
+                Notifier::send($demand->passenger, NotificationType::MatchFound,
+                    data: ['commuteId' => $offer->id, 'demandId' => $demand->id],
+                );
             });
 
             $notified++;

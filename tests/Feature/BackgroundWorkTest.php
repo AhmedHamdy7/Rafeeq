@@ -59,6 +59,10 @@ it('registers every scheduled command the platform depends on', function (string
      * morning the car does not stop for them.
      */
     'memberships:roll-forward',
+
+    // The last-day rating nudge. Without it, somebody who never rates keeps the other side's
+    // rating hidden until the window closes, and nobody is told the window is closing.
+    'ratings:send-reminders',
 ]);
 
 /**

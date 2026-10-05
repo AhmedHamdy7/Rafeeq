@@ -26,10 +26,15 @@ enum NotificationType: string
     case SeatRequested = 'seat_requested';
     case SeatApproved = 'seat_approved';
     case SeatDeclined = 'seat_declined';
+    case BookingCancelled = 'booking_cancelled';
+    case MatchFound = 'match_found';
 
     // ---- Trip ---------------------------------------------------------------
     case TripStarted = 'trip_started';
     case ChatMessage = 'chat_message';
+    case RatingDue = 'rating_due';
+    case RatingDueRiders = 'rating_due_riders';
+    case RatingReminder = 'rating_reminder';
 
     public function category(): NotificationCategory
     {
@@ -42,10 +47,15 @@ enum NotificationType: string
 
             self::SeatRequested,
             self::SeatApproved,
-            self::SeatDeclined => NotificationCategory::Booking,
+            self::SeatDeclined,
+            self::BookingCancelled,
+            self::MatchFound => NotificationCategory::Booking,
 
             self::TripStarted,
-            self::ChatMessage => NotificationCategory::Trip,
+            self::ChatMessage,
+            self::RatingDue,
+            self::RatingDueRiders,
+            self::RatingReminder => NotificationCategory::Trip,
         };
     }
 }

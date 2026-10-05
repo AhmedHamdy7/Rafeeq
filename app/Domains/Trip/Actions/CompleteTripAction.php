@@ -13,6 +13,8 @@ use App\Domains\Commute\Models\ScheduledTrip;
 use App\Domains\Driver\Models\DriverProfile;
 use App\Domains\Group\Models\CommuteGroup;
 use App\Domains\Identity\Models\UserStat;
+use App\Domains\Notification\Enums\NotificationType;
+use App\Domains\Notification\Support\Notifier;
 use App\Domains\Shared\Exceptions\DomainException;
 use App\Domains\Shared\Support\ErrorCode;
 use App\Domains\Trip\Enums\AttendanceStatus;
@@ -77,6 +79,7 @@ final readonly class CompleteTripAction
             $bookings = $this->finaliseAttendance($trip->id);
 
             $this->completeBookings($bookings);
+            $this->askForRatings($trip, $bookings);
             $this->recordStatistics($session, $trip->commute_offer_id, $bookings);
 
             $trip->forceFill(['status' => ScheduledTripStatus::Completed->value])->save();
@@ -159,6 +162,32 @@ final readonly class CompleteTripAction
                 from: BookingStatus::Confirmed,
             );
         }
+    }
+
+    /**
+     * Chapter 9: "A few minutes later both receive a notification: How was your commute today?"
+     *
+     * Each passenger is asked about their own booking. The driver is asked ONCE for the run, not
+     * once per passenger — three identical prompts for one morning is how prompts get ignored.
+     *
+     * @param  Collection<int, Booking>  $bookings
+     */
+    private function askForRatings(ScheduledTrip $trip, Collection $bookings): void
+    {
+        if ($bookings->isEmpty()) {
+            return;
+        }
+
+        $driver = $trip->commuteOffer->driverProfile->user;
+
+        foreach ($bookings as $booking) {
+            Notifier::send($booking->passenger, NotificationType::RatingDue,
+                ['name' => $driver->public_first_name],
+                ['bookingId' => $booking->id],
+            );
+        }
+
+        Notifier::send($driver, NotificationType::RatingDueRiders, data: ['tripId' => $trip->id]);
     }
 
     /**
