@@ -51,6 +51,9 @@ final class AdminActionLog
         'incident.escalate',
         'incident.resolve',
         'incident.close',
+        // A number every member is subject to. "Who changed the OTP lifetime, and why".
+        'settings.update',
+        'settings.reset',
     ];
 
     /**

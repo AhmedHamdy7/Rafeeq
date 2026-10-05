@@ -451,6 +451,33 @@ a { color: inherit; text-decoration: none; }
 
 .rq-mono { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12px; }
 
+/* ---------------------------------------------------------------- dashboard tiles
+ *
+ * The prototype's stat tiles. Each is a link to the queue it counts, so the whole tile is
+ * the hit area.
+ */
+
+.rq-tiles { display: grid; grid-template-columns: repeat(auto-fill, minmax(210px, 1fr)); gap: 13px; }
+
+.rq-tile {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 16px 17px;
+  border-radius: var(--radius-lg);
+  background: var(--surface);
+  border: 1px solid var(--line);
+  color: inherit;
+  text-decoration: none;
+}
+
+.rq-tile:hover { background: var(--sunken); }
+.rq-tile__label { font-size: 12.5px; font-weight: 600; color: var(--fg-2); }
+.rq-tile__value { font-size: 34px; font-weight: 700; letter-spacing: -0.03em; line-height: 1.15; margin-top: 6px; }
+.rq-tile__note { font-size: 12px; color: var(--fg-3); }
+.rq-tile--alert { border-color: var(--bad-500); }
+.rq-tile--alert .rq-tile__value, .rq-tile--alert .rq-tile__note { color: var(--bad-600); }
+
 /* ---------------------------------------------------------------- auth pages */
 
 .rq-guest {

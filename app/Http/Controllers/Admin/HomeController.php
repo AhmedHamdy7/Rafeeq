@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Admin;
 
 use App\Domains\Admin\Enums\AdminPermission;
 use App\Http\Controllers\Controller;
+use App\Livewire\Admin\Dashboard;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Support\Facades\Auth;
 
@@ -26,11 +27,23 @@ final class HomeController extends Controller
         'admin.verifications' => AdminPermission::VerificationView,
         'admin.drivers' => AdminPermission::DriverView,
         'admin.members' => AdminPermission::MemberView,
+        'admin.settings' => AdminPermission::SettingsManage,
     ];
 
     public function __invoke(): RedirectResponse
     {
         $admin = Auth::guard('admin')->user();
+
+        /*
+         * The dashboard first, for anybody who has a tile on it — the prototype opens there,
+         * and it carries the same unanswered-SOS banner as every other page, so the safety
+         * desk loses nothing by landing on it.
+         */
+        if (Dashboard::isAvailableTo($admin)) {
+            return redirect()->route('admin.dashboard');
+        }
+
+        // Otherwise the first page the role can open.
 
         foreach (self::LANDINGS as $route => $permission) {
             if ($admin?->can($permission->value) === true) {
