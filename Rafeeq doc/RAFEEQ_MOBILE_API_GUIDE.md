@@ -126,6 +126,10 @@ go to the phone screen. On plain `UNAUTHENTICATED`, refresh once and retry.
 `ACCOUNT_SUSPENDED` and `ACCOUNT_PROFILE_INCOMPLETE` are **403, deliberately not 401** — the
 session is fine, so do not throw it away and restart at the phone screen.
 
+`ACCOUNT_SUSPENDED` carries screen 35's data in `error.fields`, each as a one-item list like
+every other field: `caseNumber`, `reasonCode`, `suspendedAt`, `reviewDueAt` — so a client that
+meets it in the middle of a flow can show the screen without another call.
+
 ### 1.3 Pagination
 
 Paginated endpoints take `?page=` and `?perPage=` (default 20, max 100) and return `meta`.
@@ -541,7 +545,7 @@ Status: ✅ fully served · ⚠️ served, something named missing · ⛔ no API
 | 22 | Notifications | — | ⛔ Phase 12. |
 | 26 | **Privacy & blocked** | `GET`/`POST /safety/blocked-users` · `DELETE .../{user}` | ✅ Blocking works in **both directions** from the next search. 🔒 Nothing tells the blocked person, and the list is one-directional — who I blocked, never who blocked me. Privacy toggles themselves are yours/local. |
 | 27 | Help & legal | `GET /account/consents` for versions | ⚠️ Static content is yours; the consent versions in force come from the API. |
-| 35 | Account restricted | code `ACCOUNT_SUSPENDED` (403) | ⚠️ The code exists and the screen can be built on it. **The case number and "expected update within 24h" are Phase 13, not 11** — see below. |
+| 35 | Account restricted | `GET /auth/me` → `user.suspension` · or the `ACCOUNT_SUSPENDED` (403) refusal's `error.fields` | ✅ Everything the screen shows now has a source: the reason as a sentence (`suspensionReason`, in the request's language), the **Reference** (`suspension.caseNumber`, e.g. `RF-482913`) and the **Expected update** (`suspension.reviewDueAt`). See the `user` object in 4.1. |
 
 ### Not built yet
 
@@ -1939,7 +1943,8 @@ deserves to see *why* one ranked above the other:
 | `profilePhotoPath` | Storage path; ask us for the display URL flow before wiring it. |
 | `dateOfBirth`, `email` | Own only. |
 | `accountStatus` | `ACTIVE` · `SUSPENDED` · `DELETED`. |
-| `suspensionReason` | Set when suspended. Show it — this is screen 35. |
+| `suspensionReason` | Present only while suspended: **one sentence, already in the request's language**, saying why in general terms (e.g. "A safety report is under review, so new bookings are paused."). Show it as written. It is a category, never the note staff wrote, and never names anybody. |
+| `suspension` | Present only while suspended: `caseNumber` (the reference the member quotes, e.g. `RF-482913`), `reasonCode` (`safety_report` · `identity_check` · `payment_issue` · `policy_breach` — for an icon or analytics, not for wording), `suspendedAt`, `reviewDueAt` (the promised "expected update" time — show it as a time, and keep showing it if it has passed rather than hiding it). `caseNumber` can be `null` only for an account suspended before holds were recorded. |
 | `profileStatus` | `PHONE_ONLY` · `BASIC_COMPLETE`. **Until `BASIC_COMPLETE` the `active` tier refuses most endpoints.** |
 | `registeredRole` | `passenger` · `driver` · `both`. |
 | `orgType` / `organizationId` | Their claimed workplace or university. |
@@ -2091,7 +2096,6 @@ Nothing below exists. Build the screen shells if you like, but there is no endpo
 | **Driver cancelling one day** | 43, 45, 46 | **9** | A driver cancelling a single day and the backup search that follows. **Blocked on an open decision** — refunds and reliability, section 8 #3. Route deviation itself is now detected and reported (see `deviationDetectedAt`); the ops ALERT it should trigger needs Phase 12/13. |
 | **Reviews on a profile, trust tier** | reviews on 12, `minRating` filter on 11, history on 19 | **10** | 🔴 **Rating itself is done** — section 4.13 — and the `rating` in every public summary now carries a number once a rating is revealed. Still to come: the list of **other people's** visible reviews on a profile, reporting an abusive review, and the public trust tier (`new` / `trusted` / `highly_trusted`). The underlying score is deliberately internal and will never be returned. |
 | **Auto-share trips** | 26 | **12** | 🔴 **`autoShareTrips` on an emergency contact is stored and nothing acts on it yet.** See 4.12 — read that before you build the toggle. |
-| **Case number on a restricted account** | 35 | **13** | `ACCOUNT_SUSPENDED` carries no `error.fields` today, so there is no case reference and no "expected update" time. **Nothing in the platform suspends an account yet** — only an admin can, and that is the Phase 13 dashboard, which is also where the case reference and the response deadline would be written. Build the screen on the code alone and leave room for two strings. (This row said Phase 11 in earlier versions of this file. It was wrong: the data has no source until the act that creates it exists.) |
 | **Night escort mode** | none | **13** | Not a mobile feature at all, and this corrects an earlier line in this file. It is a **corridor-level night window armed by the ops team** (or automatically, 9pm–5am) with staff monitoring — a dashboard control, not something an app shows or calls. There will be no endpoint for it. |
 | **Notifications and chat** | 22 | **12** | Push, in-app notifications, preferences, trip chat. **Everything today is pull-only** — no server-initiated message of any kind reaches the app. Plan for polling in the interim, and tell us what you need first. |
 
@@ -2123,6 +2127,7 @@ exist, and every live endpoint must be named here.
 
 | Date | Change |
 |---|---|
+| 2026-10-05 | **Screen 35 is buildable in full.** Staff can now put an account on hold from the dashboard, and `GET /auth/me` returns `user.suspension` (`caseNumber`, `reasonCode`, `suspendedAt`, `reviewDueAt`) while it lasts; `suspensionReason` is now a ready-to-show sentence in the request's language. The `ACCOUNT_SUSPENDED` refusal carries the same four values in `error.fields`. Also: a driver on hold disappears from search until the hold is lifted. |
 | 2026-10-05 | **No new endpoints — two existing fields now actually fill.** The operations dashboard can pick up an SOS and work a report, so `respondedAt` on an SOS stops being permanently `null`, and `GET /incidents/{incident}` now returns `RESOLVED`/`CLOSED` with a `resolution` the safety team wrote **to the reporter**. Read the `resolution` row in the incidents section: it is a message, not a label. |
 | 2026-10-03 | 🔴 **Correction — `nextStep`.** This file listed `COMPLETE_PROFILE`, ~~VERIFY_IDENTITY~~ and ~~HOME~~; only the first is real. There are four values (`ACCOUNT_SUSPENDED`, `CREATE_PIN`, `COMPLETE_PROFILE`, `LOCAL_SECURITY_SETUP_OR_HOME`) and **verification is not one of them** — it is a per-endpoint gate, not a sign-up step. If you built a branch on VERIFY_IDENTITY or HOME, it never fires. Section 2.1 has the precedence order; a test now pins the list against the enum in both directions. |
 | 2026-10-03 | **New: section 2.1 — the whole cycle, request by request.** Every call in order from sign-in to rating, both roles, with the refusals worth rendering properly and the seeded staging accounts to run it against. Nothing was removed; it sits after the build order. |

@@ -7,6 +7,7 @@ use App\Domains\Identity\Enums\SecurityEventType;
 use App\Domains\Identity\Support\SecurityLog;
 use App\Domains\Shared\Exceptions\DomainException;
 use App\Domains\Shared\Support\ErrorCode;
+use App\Http\Resources\SuspensionSummary;
 use Closure;
 use Illuminate\Http\Request;
 use Symfony\Component\HttpFoundation\Response;
@@ -35,7 +36,15 @@ final class EnsureAccountIsActive
                 'path' => $request->path(),
             ]);
 
-            throw DomainException::of(ErrorCode::AccountSuspended);
+            /*
+             * The case reference and the review time travel with the refusal, so a client
+             * that meets this mid-flow can show screen 35 without another round trip.
+             * Each value wrapped in a list, the envelope's shape for `fields`.
+             */
+            throw DomainException::of(ErrorCode::AccountSuspended, fields: array_map(
+                fn (?string $value) => [$value],
+                SuspensionSummary::for($user),
+            ));
         }
 
         return $next($request);

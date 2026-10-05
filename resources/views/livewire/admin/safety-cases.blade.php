@@ -204,6 +204,12 @@
                     <button type="button" class="rq-btn rq-btn--quiet" wire:click="openDecision('{{ $report->id }}', 'close')">
                         {{ __('admin.safety.close') }}
                     </button>
+                    @if ($report->reported_user_id !== null && auth('admin')->user()?->can('member.view'))
+                        {{-- Where "freeze this account" happens: a hold has its own case number and review time. --}}
+                        <a class="rq-btn rq-btn--quiet" href="{{ route('admin.members', ['member' => $report->reported_user_id]) }}" wire:navigate>
+                            {{ __('admin.safety.open_member') }}
+                        </a>
+                    @endif
                 </div>
 
                 @if ($openReport === $report->id)

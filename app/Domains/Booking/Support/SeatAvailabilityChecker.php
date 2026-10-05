@@ -7,6 +7,7 @@ use App\Domains\Booking\Models\Booking;
 use App\Domains\Commute\Enums\ScheduledTripStatus;
 use App\Domains\Commute\Models\ScheduledTrip;
 use App\Domains\Driver\Enums\DriverProfileStatus;
+use App\Domains\Identity\Enums\AccountStatus;
 use App\Domains\Shared\Exceptions\DomainException;
 use App\Domains\Shared\Support\ErrorCode;
 
@@ -67,6 +68,11 @@ final class SeatAvailabilityChecker
         $profile = $trip->commuteOffer->driverProfile;
 
         if ($profile->status !== DriverProfileStatus::Approved || ! $profile->hasValidLicence()) {
+            throw DomainException::of(ErrorCode::SeatUnavailable);
+        }
+
+        // The account as well as the profile — see HardFilters::requireApprovedDriver().
+        if ($profile->user->account_status !== AccountStatus::Active) {
             throw DomainException::of(ErrorCode::SeatUnavailable);
         }
 

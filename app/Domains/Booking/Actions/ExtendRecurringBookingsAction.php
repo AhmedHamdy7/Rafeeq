@@ -12,6 +12,7 @@ use App\Domains\Commute\Models\ScheduledTrip;
 use App\Domains\Group\Enums\GroupMemberRole;
 use App\Domains\Group\Enums\GroupMemberStatus;
 use App\Domains\Group\Models\GroupMember;
+use App\Domains\Identity\Enums\AccountStatus;
 use App\Domains\Shared\Exceptions\DomainException;
 use App\Domains\Shared\ValueObjects\DaysMask;
 use Illuminate\Support\Collection;
@@ -59,6 +60,13 @@ final readonly class ExtendRecurringBookingsAction
             // committed to one day, not a pattern.
             ->where('role', GroupMemberRole::Member->value)
             ->whereNotNull('committed_days_mask')
+            /*
+             * A suspended member keeps the days already booked — the restricted-account
+             * screen promises "your current group can still see your attendance" — but
+             * gets no new ones. Extending them would be booking on behalf of somebody
+             * the platform has just stopped from booking.
+             */
+            ->whereHas('user', fn ($user) => $user->where('account_status', AccountStatus::Active->value))
             ->with('commuteGroup')
             ->chunkById(200, function ($members) use (&$created): void {
                 foreach ($members as $member) {

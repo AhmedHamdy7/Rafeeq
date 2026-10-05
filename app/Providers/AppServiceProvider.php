@@ -4,6 +4,7 @@ namespace App\Providers;
 
 use App\Domains\Admin\Enums\AdminPermission;
 use App\Domains\Admin\Support\LiveTripBoard;
+use App\Domains\Admin\Support\MemberDirectory;
 use App\Domains\Admin\Support\SafetyCaseQueue;
 use App\Domains\Driver\Enums\DriverProfileStatus;
 use App\Domains\Driver\Models\DriverProfile;
@@ -191,6 +192,12 @@ class AppServiceProvider extends ServiceProvider
 
                 'pendingDrivers' => $admin?->can(AdminPermission::DriverView->value)
                     ? DriverProfile::query()->where('status', DriverProfileStatus::PendingReview->value)->count()
+                    : 0,
+
+                // Holds whose promised review time has passed — a member told "within 24h"
+                // who is still waiting. The badge is the reminder.
+                'overdueHolds' => $admin?->can(AdminPermission::MemberView->value)
+                    ? MemberDirectory::overdueHolds()
                     : 0,
 
                 'liveTrips' => $admin?->can(AdminPermission::TripView->value)
