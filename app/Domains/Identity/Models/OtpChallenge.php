@@ -7,8 +7,10 @@ use App\Domains\Identity\Enums\OtpStatus;
 use Database\Factories\OtpChallengeFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Attributes\Hidden;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Concerns\HasUlids;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
+use Illuminate\Database\Eloquent\MassPrunable;
 use Illuminate\Database\Eloquent\Model;
 
 /**
@@ -23,7 +25,7 @@ use Illuminate\Database\Eloquent\Model;
 class OtpChallenge extends Model
 {
     /** @use HasFactory<OtpChallengeFactory> */
-    use HasFactory, HasUlids;
+    use HasFactory, HasUlids, MassPrunable;
 
     protected function casts(): array
     {
@@ -46,5 +48,15 @@ class OtpChallenge extends Model
     public function hasAttemptsRemaining(): bool
     {
         return $this->attempt_count < $this->max_attempts;
+    }
+
+    /**
+     * Deleted by the scheduled `model:prune`. A login code has no use after it expires; a week covers any support question about a failed sign-in.
+     *
+     * @return Builder<static>
+     */
+    public function prunable(): Builder
+    {
+        return static::query()->where('created_at', '<', now()->subDays((int) config('rafeeq.retention.otp_challenges_days')));
     }
 }

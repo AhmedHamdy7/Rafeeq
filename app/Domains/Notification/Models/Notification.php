@@ -7,8 +7,10 @@ use App\Domains\Notification\Enums\NotificationCategory;
 use App\Domains\Notification\Enums\NotificationChannel;
 use Database\Factories\NotificationFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Concerns\HasUlids;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
+use Illuminate\Database\Eloquent\MassPrunable;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
@@ -23,7 +25,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 class Notification extends Model
 {
     /** @use HasFactory<NotificationFactory> */
-    use HasFactory, HasUlids;
+    use HasFactory, HasUlids, MassPrunable;
 
     protected function casts(): array
     {
@@ -44,5 +46,15 @@ class Notification extends Model
     public function isRead(): bool
     {
         return $this->read_at !== null;
+    }
+
+    /**
+     * Deleted by the scheduled `model:prune`. The inbox and the push delivery log both age out at 90 days (ERD §18).
+     *
+     * @return Builder<static>
+     */
+    public function prunable(): Builder
+    {
+        return static::query()->where('created_at', '<', now()->subDays((int) config('rafeeq.retention.notifications_days')));
     }
 }
