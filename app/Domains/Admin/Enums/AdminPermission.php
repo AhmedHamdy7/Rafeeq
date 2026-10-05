@@ -52,6 +52,12 @@ enum AdminPermission: string
     // ---- Safety --------------------------------------------------------
     case SafetyView = 'safety.view';
     case SafetyResolve = 'safety.resolve';
+    /*
+     * Opening the photographs attached to a report. Separate from reading the case for the same
+     * reason opening an identity document is separate from seeing the queue: a report about
+     * harassment can carry pictures of the person who made it.
+     */
+    case SafetyViewEvidence = 'safety.view_evidence';
 
     // ---- Money ---------------------------------------------------------
     case PaymentView = 'payment.view';

@@ -5,6 +5,7 @@ return [
     'title' => 'Rafeeq Operations',
 
     'nav' => [
+        'escort' => 'Night escort',
         'verifications' => 'Verification',
         'drivers' => 'Drivers',
         'safety' => 'Safety cases',
@@ -182,6 +183,28 @@ return [
         'open_member' => 'Open member',
     ],
 
+    'escort' => [
+        'title' => 'Night escort',
+        'armed_count' => '{0} No corridor under escort right now|{1} 1 corridor under escort right now|[2,*] :count corridors under escort right now',
+        'trips_covered' => '{0} no trips covered tonight|{1} 1 trip covered tonight|[2,*] :count trips covered tonight',
+        'auto_on' => 'Every corridor is armed automatically each night, :from to :to (Cairo time).',
+        'auto_off' => 'Automatic night escort is switched off in Settings. Only corridors armed by hand are watched.',
+        'until' => 'Watched until :time',
+        'by_schedule' => 'armed by the nightly schedule',
+        'by_admin' => 'armed by :name',
+        'not_watched' => 'Not under escort',
+        'on' => 'Escort on',
+        'off' => 'Off',
+        'arm' => 'Arm escort',
+        'disarm' => 'Stand down',
+        'hours' => 'For how many hours',
+        'reason' => 'reason',
+        'reason_placeholder' => 'Why — this is kept in the audit log.',
+        'armed' => 'Escort armed on this corridor.',
+        'disarmed' => 'Escort stood down on this corridor.',
+        'no_corridors' => 'No corridors have been set up yet.',
+    ],
+
     'trips' => [
         'title' => 'Live trips',
         'in_progress' => '{0} No trips on the road|{1} :count trip on the road|[2,*] :count trips on the road',
@@ -205,6 +228,7 @@ return [
             'deviation' => 'Off route by :meters m',
             'silent' => 'GPS silent',
         ],
+        'escort' => 'Night escort',
         'track' => 'Track',
         'hide' => 'Hide',
         'open_case' => 'Open case',
@@ -270,6 +294,7 @@ return [
     ],
 
     'dashboard' => [
+        'escort' => 'Corridors under night escort',
         'title' => 'Dashboard',
         'safety' => 'Open safety cases',
         'critical_unassigned' => '{1} :count critical, unassigned|[2,*] :count critical, unassigned',
@@ -373,6 +398,8 @@ return [
             'meters' => 'm',
             'contacts' => 'contacts',
             'files' => 'files',
+            'switch' => '(1 on, 0 off)',
+            'hour_of_day' => 'o’clock (Cairo)',
         ],
         'keys' => [
             'auth__otp__length' => 'Sign-in code length',
@@ -407,6 +434,9 @@ return [
             'trip__gps_silence_alert_seconds' => 'GPS silence before the board flags a car',
             'rating__window_days' => 'Time to rate a journey',
             'rating__edit_window_minutes' => 'Time to correct a rating',
+            'safety__night_escort_enabled' => 'Night escort arms itself every night',
+            'safety__escort_starts_hour' => 'Night escort starts at',
+            'safety__escort_ends_hour' => 'Night escort ends at',
             'safety__sos_countdown_seconds' => 'SOS cancel countdown',
             'safety__max_emergency_contacts' => 'Emergency contacts per member',
             'safety__reports_per_hour' => 'Reports per member per hour',
@@ -419,6 +449,19 @@ return [
             'chat__grace_minutes' => 'Chat stays open after the trip',
             'chat__max_hours_after_departure' => 'Chat closes after departure if the run never ends',
             'chat__messages_per_minute' => 'Chat messages per member per minute',
+        ],
+    ],
+
+    'files' => [
+        'open' => 'Open :what',
+        'integrity_failed' => 'This file no longer matches what was uploaded, so it is not shown. Report this to the platform team.',
+        'kinds' => [
+            'national_id_front' => 'ID front',
+            'national_id_back' => 'ID back',
+            'selfie' => 'selfie',
+            'licence_front' => 'licence front',
+            'licence_back' => 'licence back',
+            'badge' => 'work badge',
         ],
     ],
 

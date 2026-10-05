@@ -75,6 +75,9 @@ final class SettingsCatalogue
         'rating.edit_window_minutes' => ['group' => 'rating', 'min' => 0, 'max' => 120, 'unit' => 'minutes'],
 
         // ---- Safety (Chapter 10) -----------------------------------------
+        'safety.night_escort_enabled' => ['group' => 'safety', 'min' => 0, 'max' => 1, 'unit' => 'switch'],
+        'safety.escort_starts_hour' => ['group' => 'safety', 'min' => 17, 'max' => 23, 'unit' => 'hour_of_day'],
+        'safety.escort_ends_hour' => ['group' => 'safety', 'min' => 3, 'max' => 9, 'unit' => 'hour_of_day'],
         'safety.sos_countdown_seconds' => ['group' => 'safety', 'min' => 3, 'max' => 30, 'unit' => 'seconds'],
         'safety.max_emergency_contacts' => ['group' => 'safety', 'min' => 1, 'max' => 10, 'unit' => 'contacts'],
         'safety.reports_per_hour' => ['group' => 'safety', 'min' => 3, 'max' => 100, 'unit' => 'per_hour'],

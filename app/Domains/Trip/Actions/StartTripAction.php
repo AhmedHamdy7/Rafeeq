@@ -9,6 +9,7 @@ use App\Domains\Commute\Enums\ScheduledTripStatus;
 use App\Domains\Commute\Models\ScheduledTrip;
 use App\Domains\Notification\Enums\NotificationType;
 use App\Domains\Notification\Support\Notifier;
+use App\Domains\Safety\Support\EscortCoverage;
 use App\Domains\Shared\Exceptions\DomainException;
 use App\Domains\Shared\Support\ErrorCode;
 use App\Domains\Trip\Enums\AttendanceStatus;
@@ -84,6 +85,8 @@ final readonly class StartTripAction
 
             $this->tellThePassengers($trip);
 
+            $this->countUnderEscort($trip);
+
             return $session;
         });
     }
@@ -104,6 +107,16 @@ final readonly class StartTripAction
                 ['name' => $driverName],
                 ['tripId' => $trip->id],
             ));
+    }
+
+    /**
+     * A run that leaves while its corridor is under night escort is counted against the window —
+     * the "trips covered" the desk reads in the morning. Counted with an atomic increment, not a
+     * read-and-write, because several drivers on one corridor start within the same minute.
+     */
+    private function countUnderEscort(ScheduledTrip $trip): void
+    {
+        EscortCoverage::activeFor($trip->commuteOffer->corridor_id)?->increment('trips_covered');
     }
 
     /**

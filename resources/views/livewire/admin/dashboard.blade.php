@@ -38,6 +38,14 @@
             </a>
         @endif
 
+        @if ($escort !== null)
+            <a class="rq-tile" href="{{ route('admin.escort') }}" wire:navigate>
+                <span class="rq-tile__label">{{ __('admin.dashboard.escort') }}</span>
+                <span class="rq-tile__value">{{ $escort['armed'] }}</span>
+                <span class="rq-tile__note">{{ trans_choice('admin.escort.trips_covered', $escort['tripsCovered'], ['count' => $escort['tripsCovered']]) }}</span>
+            </a>
+        @endif
+
         @if ($verifications !== null)
             <a class="rq-tile" href="{{ route('admin.verifications') }}" wire:navigate>
                 <span class="rq-tile__label">{{ __('admin.dashboard.verifications') }}</span>

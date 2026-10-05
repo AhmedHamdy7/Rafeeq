@@ -82,6 +82,16 @@ final readonly class VerificationQueue
             'submittedAt' => $verification->submitted_at,
             'attempt' => $verification->attempt_count,
             'checks' => self::checks($verification),
+            // What the reviewer can open. Only files the scan passed — an infected file is never
+            // served, so it is never offered either.
+            'documents' => $verification->documents
+                ->filter(fn ($document) => $document->virus_scan_status->value === 'clean')
+                ->map(fn ($document) => [
+                    'id' => $document->id,
+                    'label' => __('admin.files.kinds.'.$document->kind->value),
+                ])
+                ->values()
+                ->all(),
             'risk' => self::risk($verification),
         ];
     }
@@ -119,7 +129,7 @@ final readonly class VerificationQueue
 
         foreach ($verification->documents as $document) {
             $checks[] = [
-                'label' => ucfirst(str_replace('_', ' ', $document->kind->value)),
+                'label' => __('admin.files.kinds.'.$document->kind->value),
                 'value' => $document->virus_scan_status->value === 'clean'
                     ? __('admin.queue.uploaded')
                     : __('admin.queue.scan_'.$document->virus_scan_status->value),

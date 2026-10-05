@@ -17,6 +17,28 @@ use App\Domains\Admin\Models\PlatformSetting;
 final class SafetySettings
 {
     /**
+     * Whether every corridor is armed each night by `escort:arm-tonight`. Off, the desk still arms
+     * corridors by hand — the switch decides only what happens without anybody asking.
+     */
+    public static function nightEscortEnabled(): bool
+    {
+        return (int) self::get('safety.night_escort_enabled') === 1;
+    }
+
+    /**
+     * The night window, in Cairo hours: it starts on one day and ends on the next morning.
+     */
+    public static function escortStartsHour(): int
+    {
+        return min(23, max(0, (int) self::get('safety.escort_starts_hour')));
+    }
+
+    public static function escortEndsHour(): int
+    {
+        return min(23, max(0, (int) self::get('safety.escort_ends_hour')));
+    }
+
+    /**
      * How long somebody has to take back an SOS before it is treated as real.
      *
      * The countdown runs on the phone; this is what it counts down and what gets copied onto the

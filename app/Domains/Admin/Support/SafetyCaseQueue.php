@@ -59,7 +59,7 @@ final class SafetyCaseQueue
     public static function openReports(int $perPage): LengthAwarePaginator
     {
         return self::openReportQuery()
-            ->with(['reporter', 'reportedUser', 'assignedAdmin'])
+            ->with(['reporter', 'reportedUser', 'assignedAdmin', 'evidence'])
             ->withCount('evidence')
             ->orderBy('sla_due_at')
             ->orderBy('id')

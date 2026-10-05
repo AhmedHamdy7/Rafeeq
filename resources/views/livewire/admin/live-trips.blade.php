@@ -50,6 +50,10 @@
                     </div>
                 </div>
                 <span class="rq-pill rq-pill--count">{{ __('admin.trips.status.'.$session->current_status->value) }}</span>
+                {{-- Not a problem flag: it says the desk is watching this corridor, not that anything is wrong. --}}
+                @if ($offer->corridor_id !== null && in_array($offer->corridor_id, $escortCorridors, true))
+                    <span class="rq-pill rq-pill--warn">{{ __('admin.trips.escort') }}</span>
+                @endif
                 @foreach (array_keys($flags) as $flag)
                     <span class="rq-pill rq-pill--bad">
                         @if ($flag === 'deviation')

@@ -9,6 +9,7 @@ use App\Domains\Driver\Models\DriverProfile;
 use App\Domains\Safety\Enums\IncidentStatus;
 use App\Domains\Safety\Enums\SafetySeverity;
 use App\Domains\Safety\Models\Incident;
+use App\Domains\Safety\Support\EscortCoverage;
 use App\Domains\Trip\Models\TripSession;
 use App\Domains\Verification\Enums\VerificationStatus;
 use App\Domains\Verification\Models\UserVerification;
@@ -95,6 +96,17 @@ final class DashboardSummary
                 ->where('severity', SafetySeverity::Critical->value)
                 ->whereNull('assigned_admin_id')
                 ->count(),
+        ];
+    }
+
+    /**
+     * @return array{armed: int, tripsCovered: int}
+     */
+    public static function escort(): array
+    {
+        return [
+            'armed' => EscortCoverage::armedCount(),
+            'tripsCovered' => EscortCoverage::tripsCoveredTonight(),
         ];
     }
 

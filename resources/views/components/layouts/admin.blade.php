@@ -121,6 +121,18 @@
                     </a>
                 @endcan
 
+                @can(AdminPermission::SafetyView->value)
+                    <a
+                        href="{{ route('admin.escort') }}"
+                        wire:navigate
+                        class="rq-nav"
+                        @if (request()->routeIs('admin.escort')) aria-current="page" @endif
+                    >
+                        <span class="rq-nav__tile" aria-hidden="true">☾</span>
+                        <span class="rq-nav__label">{{ __('admin.nav.escort') }}</span>
+                    </a>
+                @endcan
+
                 @can(AdminPermission::VerificationView->value)
                     <a
                         href="{{ route('admin.verifications') }}"

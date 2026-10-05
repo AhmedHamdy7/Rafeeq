@@ -179,7 +179,15 @@
                 </div>
                 <div>
                     <dt>{{ __('admin.safety.evidence') }}</dt>
-                    <dd>{{ trans_choice('admin.safety.files', $report->evidence_count, ['count' => $report->evidence_count]) }}</dd>
+                    <dd>
+                        {{ trans_choice('admin.safety.files', $report->evidence_count, ['count' => $report->evidence_count]) }}
+                        @if (auth('admin')->user()?->can('safety.view_evidence'))
+                            @foreach ($report->evidence as $file)
+                                {{-- Opened through the session, checked against its hash, audited. --}}
+                                · <a href="{{ route('admin.files.evidence', $file->id) }}" target="_blank" rel="noopener">{{ __('admin.files.open', ['what' => $loop->iteration]) }}</a>
+                            @endforeach
+                        @endif
+                    </dd>
                 </div>
             </dl>
 

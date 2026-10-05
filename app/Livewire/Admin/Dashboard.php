@@ -59,6 +59,7 @@ class Dashboard extends Component
 
         return view('livewire.admin.dashboard', [
             'safety' => $may(AdminPermission::SafetyView) ? DashboardSummary::safety() : null,
+            'escort' => $may(AdminPermission::SafetyView) ? DashboardSummary::escort() : null,
             'trips' => $may(AdminPermission::TripView) ? DashboardSummary::trips() : null,
             'seatsToday' => $may(AdminPermission::TripView) ? DashboardSummary::seatsToday() : null,
             'verifications' => $may(AdminPermission::VerificationView) ? DashboardSummary::verifications() : null,
