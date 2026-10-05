@@ -85,7 +85,7 @@ final readonly class VerificationQueue
             // What the reviewer can open. Only files the scan passed — an infected file is never
             // served, so it is never offered either.
             'documents' => $verification->documents
-                ->filter(fn ($document) => $document->virus_scan_status->value === 'clean')
+                ->filter(fn ($document) => $document->virus_scan_status->value === 'clean' && $document->purged_at === null)
                 ->map(fn ($document) => [
                     'id' => $document->id,
                     'label' => __('admin.files.kinds.'.$document->kind->value),

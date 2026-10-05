@@ -66,6 +66,13 @@ it('registers every scheduled command the platform depends on', function (string
 
     // Night escort. Without it no corridor is watched at night unless somebody remembers to arm it.
     'escort:arm-tonight',
+
+    // Retention for identity documents and report evidence. Without it the dates shown to members
+    // are never honoured.
+    'files:purge-expired',
+
+    // Saved ride requests past their expiry. Without it the passenger's list says "active" for ever.
+    'demands:expire',
 ]);
 
 /**

@@ -46,6 +46,8 @@ final class StaffFileController extends Controller
 
         abort_unless($file->virus_scan_status->value === 'clean', 404);
 
+        $this->assertNotPurged($file->purged_at);
+
         return $this->serve($storage, $file->file_path, $file->file_hash, 'verification.view_document', $file);
     }
 
@@ -54,6 +56,8 @@ final class StaffFileController extends Controller
         $this->authorizeTo(AdminPermission::SafetyViewEvidence);
 
         $file = IncidentEvidence::query()->whereKey($evidence)->firstOrFail();
+
+        $this->assertNotPurged($file->purged_at);
 
         return $this->serve($storage, $file->file_path, $file->file_hash, 'evidence.view', $file);
     }
@@ -78,6 +82,15 @@ final class StaffFileController extends Controller
             'X-Content-Type-Options' => 'nosniff',
             'X-Robots-Tag' => 'noindex',
         ]);
+    }
+
+    /**
+     * 410 rather than 404: the file existed and was destroyed on its retention date, which is a
+     * different answer — and one the person asking may need to write down.
+     */
+    private function assertNotPurged(?\DateTimeInterface $purgedAt): void
+    {
+        abort_if($purgedAt !== null, 410, __('admin.files.purged'));
     }
 
     private function authorizeTo(AdminPermission $permission): void

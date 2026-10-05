@@ -454,6 +454,7 @@ return [
 
     'files' => [
         'open' => 'Open :what',
+        'purged' => 'This file was destroyed on its retention date. The record that it existed, and its hash, are kept.',
         'integrity_failed' => 'This file no longer matches what was uploaded, so it is not shown. Report this to the platform team.',
         'kinds' => [
             'national_id_front' => 'ID front',

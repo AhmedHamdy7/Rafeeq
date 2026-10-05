@@ -25,6 +25,7 @@ class IncidentEvidence extends Model
         return [
             'kind' => EvidenceKind::class,
             'purge_after' => 'date',
+            'purged_at' => 'datetime',
         ];
     }
 

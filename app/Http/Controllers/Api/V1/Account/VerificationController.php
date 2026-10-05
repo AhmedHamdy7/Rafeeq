@@ -133,6 +133,11 @@ final class VerificationController extends Controller
             throw DomainException::of(ErrorCode::NotFound);
         }
 
+        // Destroyed on its retention date (`files:purge-expired`): the row stays, the file does not.
+        if ($identityDocument->purged_at !== null) {
+            throw DomainException::of(ErrorCode::NotFound);
+        }
+
         SecurityLog::record(SecurityEventType::DocumentAccessed, $request->user(), metadata: [
             'document_id' => $identityDocument->id,
         ]);

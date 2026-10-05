@@ -26,6 +26,7 @@ class VehicleDocument extends Model
             'verification_status' => VehicleVerificationStatus::class,
             'expires_at' => 'date',
             'purge_after' => 'date',
+            'purged_at' => 'datetime',
         ];
     }
 

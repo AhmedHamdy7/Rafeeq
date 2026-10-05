@@ -80,6 +80,15 @@ Schedule::command('ratings:send-reminders')
     ->withoutOverlapping();
 
 /*
+ * Saved ride requests past their expiry become `expired`. Matching already ignores them by date, so
+ * nobody is matched to a stale request either way — what this fixes is the passenger's own list,
+ * which otherwise shows a request as active for ever and never tells them to save a new one.
+ */
+Schedule::command('demands:expire')
+    ->hourly()
+    ->withoutOverlapping();
+
+/*
  * Night escort (Master Plan: 9 PM–5 AM). Shortly before the window opens, so the live board shows
  * every corridor armed by the time the first night run starts; idempotent, so a second run (or a
  * retry after a failed deploy) arms nothing new. Off when `safety.night_escort_enabled` is 0.
@@ -109,5 +118,19 @@ Schedule::command('trips:flush-locations')
  */
 Schedule::command('trips:purge-locations')
     ->dailyAt('04:00')
+    ->timezone('Africa/Cairo')
+    ->withoutOverlapping();
+
+/*
+ * 🔒 Destroys private files past their `purge_after` date — identity documents, vehicle documents
+ * and report evidence (ERD §18). The same kind of promise as the GPS purge above, and one the member
+ * is shown: a report's evidence carries its destruction date in the app.
+ *
+ * Files under review and evidence on open cases are held (see PurgeExpiredFilesAction). If it does
+ * not run: national IDs and photographs of bad moments are kept indefinitely, past a date the
+ * member was told.
+ */
+Schedule::command('files:purge-expired')
+    ->dailyAt('04:30')
     ->timezone('Africa/Cairo')
     ->withoutOverlapping();
