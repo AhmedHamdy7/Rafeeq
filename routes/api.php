@@ -18,6 +18,7 @@ use App\Http\Controllers\Api\V1\Group\GroupAbsenceController;
 use App\Http\Controllers\Api\V1\Group\GroupAttendanceController;
 use App\Http\Controllers\Api\V1\Group\GroupController;
 use App\Http\Controllers\Api\V1\HomeController;
+use App\Http\Controllers\Api\V1\Notification\ChatController;
 use App\Http\Controllers\Api\V1\Notification\NotificationController;
 use App\Http\Controllers\Api\V1\PlaceController;
 use App\Http\Controllers\Api\V1\Rating\RatingController;
@@ -460,6 +461,16 @@ Route::prefix('v1')->group(function (): void {
              * fast path and this is the fallback — a phone on a bad connection at a bus stop
              * is exactly what a live map is for, and exactly where a socket fails to open.
              */
+            /*
+             * Trip chat (Phase 12, Chapter 11). In the active + verified tier with the bookings
+             * themselves: a member on hold keeps their inbox but not new messages.
+             */
+            Route::get('bookings/{booking}/messages', [ChatController::class, 'index']);
+            Route::post('bookings/{booking}/messages', [ChatController::class, 'store'])
+                ->middleware('throttle:chat-messages');
+            Route::post('messages/{message}/report', [ChatController::class, 'report'])
+                ->middleware('throttle:safety-reports');
+
             Route::post('trips/{trip}/location', [TripLocationController::class, 'store']);
             Route::get('trips/{trip}/location', [TripLocationController::class, 'show']);
         });

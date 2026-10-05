@@ -14,7 +14,7 @@
 >
 > **Base URL:** `{host}/api/v1` · **Auth:** bearer token · **Format:** JSON only.
 
-**Last updated:** 2026-10-05 · **120 endpoints live** · Phases 0–7 complete, Phase 9 in progress, Phase 12 started
+**Last updated:** 2026-10-05 · **123 endpoints live** · Phases 0–7 complete, Phase 9 in progress, Phase 12 started
 
 ---
 
@@ -691,6 +691,9 @@ fails if this list and the running routes ever disagree in either direction.
 | `PATCH /notifications/read` | 4.14 Notifications |
 | `GET /notifications/preferences` | 4.14 Notifications |
 | `PATCH /notifications/preferences` | 4.14 Notifications |
+| `GET /bookings/{booking}/messages` | 4.15 Trip chat |
+| `POST /bookings/{booking}/messages` | 4.15 Trip chat |
+| `POST /messages/{message}/report` | 4.15 Trip chat |
 
 One route is deliberately **not** in this index and **not** in the OpenAPI document: `/s/{token}`,
 the page a trusted contact opens. It is not under `/v1`, it takes no auth token, and it returns HTML
@@ -1903,6 +1906,48 @@ One switch per `category` × `channel` (`push`, `in_app`), each with `enabled` a
 the inbox only — a phone that buzzes in a car with the person it was raised about is the one thing the
 silent alert promised would not happen. Do not add a local notification for it either.
 
+### 4.15 Trip chat (the "Message" button on screen 41)
+
+One conversation per **booking**, between that day's passenger and driver. Chapter 11 scopes it:
+pickup clarification, arrival updates, minor delays — "not intended for long-term messaging". The
+prototype's only entry point is the **Message** button beside **Call** on the driver's wait screen;
+the passenger side opens the same conversation from the trip.
+
+**When it is open.** From **24 hours before departure** until **2 hours after the run is completed**
+(or, if nobody ever completes the run, 12 hours after departure plus those 2 hours). A cancelled
+booking has no conversation. All three numbers are platform settings — read `meta.opensAt`,
+`meta.closesAt` and `meta.canSend` rather than computing them.
+
+#### `GET /bookings/{booking}/messages` — paginated, newest first
+
+| Field | Meaning |
+|---|---|
+| `mine` | The caller wrote it. There are only two people; no user ids are returned. |
+| `body` | As written. |
+| `containsContactInfo` | It contains something that looks like a phone number or an email. **Allowed, and flagged** — show the recipient a caution before they act on it: a number shared here leaves the platform's protections behind (blocking, the safety desk, the trip record). |
+| `readAt` | When the other person opened the conversation after it arrived. |
+| `sentAt` | |
+| `meta.canSend` | Whether a message can be sent right now. |
+| `meta.opensAt` / `meta.closesAt` | The window. |
+
+**Opening the conversation marks the other person's messages read** — there is no separate call.
+
+#### `POST /bookings/{booking}/messages` — `{ "body": "..." }`, 1–500 characters
+
+`201` with the message. `CHAT_NOT_OPEN` (409, `error.fields.opensAt` / `closesAt`) outside the window.
+🔒 **The same `CHAT_NOT_OPEN` is returned when either person has blocked the other** — deliberately
+indistinguishable, because "you cannot message her because she blocked you" tells somebody they were
+blocked. Rate-limited per sender (`429` with `Retry-After`).
+
+The other person gets a `chat_message` notification (4.14) that says **who** wrote, never **what** —
+the body would otherwise appear on a lock screen.
+
+#### `POST /messages/{message}/report` — `{ "reason": "..." }`
+
+Only the **recipient** can report a message (404 otherwise). It files an ordinary report with the
+safety team, quoting the message, and returns `{ "incidentId" }` — the report then shows in
+`GET /incidents` like any other, with its status and the team's answer.
+
 ## 5. Shared shapes
 
 These appear inside many responses. Each is described once here.
@@ -2148,7 +2193,7 @@ Nothing below exists. Build the screen shells if you like, but there is no endpo
 | **Reviews on a profile, trust tier** | reviews on 12, `minRating` filter on 11, history on 19 | **10** | 🔴 **Rating itself is done** — section 4.13 — and the `rating` in every public summary now carries a number once a rating is revealed. Still to come: the list of **other people's** visible reviews on a profile, reporting an abusive review, and the public trust tier (`new` / `trusted` / `highly_trusted`). The underlying score is deliberately internal and will never be returned. |
 | **Auto-share trips** | 26 | **12** | 🔴 **`autoShareTrips` on an emergency contact is stored and nothing acts on it yet.** See 4.12 — read that before you build the toggle. |
 | **Night escort mode** | none | **13** | Not a mobile feature at all, and this corrects an earlier line in this file. It is a **corridor-level night window armed by the ops team** (or automatically, 9pm–5am) with staff monitoring — a dashboard control, not something an app shows or calls. There will be no endpoint for it. |
-| **Trip chat** | 22 (chat tab) | **12** | The inbox, the unread count and the preference switches are live (4.14). Still to come: trip chat, and push actually reaching phones — that needs an FCM project and its credentials. Until then poll `GET /notifications` (its `meta.unreadCount` is the badge). |
+| **Push delivery** | all | **12** | The inbox (4.14) and trip chat (4.15) are live. Push is wired but **no provider has been chosen yet**, so nothing reaches a phone — poll `GET /notifications` (`meta.unreadCount`) and the open conversation in the meantime. |
 
 ---
 
@@ -2178,6 +2223,7 @@ exist, and every live endpoint must be named here.
 
 | Date | Change |
 |---|---|
+| 2026-10-05 | **New: section 4.15 — trip chat.** Three endpoints: read a booking's conversation, send, report a message. Open from 24h before departure to 2h after the run; a blocked pair gets the same `CHAT_NOT_OPEN` as a closed window. Numbers and emails are allowed but flagged (`containsContactInfo`) — warn before acting on them. |
 | 2026-10-05 | **New: section 4.14 — notifications (screen 22).** Four endpoints: the inbox with `meta.unreadCount`, mark-read, and the preference switches. Every message is already in the member's language. **Push is wired but no provider is configured yet**, so poll the inbox for now. Safety switches cannot be turned off, and a silent SOS never pushes. |
 | 2026-10-05 | **Screen 35 is buildable in full.** Staff can now put an account on hold from the dashboard, and `GET /auth/me` returns `user.suspension` (`caseNumber`, `reasonCode`, `suspendedAt`, `reviewDueAt`) while it lasts; `suspensionReason` is now a ready-to-show sentence in the request's language. The `ACCOUNT_SUSPENDED` refusal carries the same four values in `error.fields`. Also: a driver on hold disappears from search until the hold is lifted. |
 | 2026-10-05 | **No new endpoints — two existing fields now actually fill.** The operations dashboard can pick up an SOS and work a report, so `respondedAt` on an SOS stops being permanently `null`, and `GET /incidents/{incident}` now returns `RESOLVED`/`CLOSED` with a `resolution` the safety team wrote **to the reporter**. Read the `resolution` row in the incidents section: it is a message, not a label. |

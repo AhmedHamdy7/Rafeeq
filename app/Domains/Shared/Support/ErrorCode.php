@@ -133,6 +133,7 @@ enum ErrorCode: string
 
     // ---- Notifications (Phase 12, Chapter 11) --------------------------
     case NotificationCategoryLocked = 'NOTIFICATION_CATEGORY_LOCKED';
+    case ChatNotOpen = 'CHAT_NOT_OPEN';
 
     // ---- Admin dashboard (Chapter 12) ----------------------------------
     case AdminCredentialsInvalid = 'ADMIN_CREDENTIALS_INVALID';
@@ -322,6 +323,10 @@ enum ErrorCode: string
             // 422: what was sent asks for something the platform does not allow — safety
             // notices cannot be switched off (Chapter 11).
             self::NotificationCategoryLocked => 422,
+
+            // 409: the conversation's window is a state — not yet open, already closed. Also
+            // what a blocked pair gets, deliberately indistinguishable (SendChatMessageAction).
+            self::ChatNotOpen => 409,
 
             /*
              * 401: a staff sign-in that did not succeed. One code for a wrong

@@ -29,6 +29,7 @@ enum NotificationType: string
 
     // ---- Trip ---------------------------------------------------------------
     case TripStarted = 'trip_started';
+    case ChatMessage = 'chat_message';
 
     public function category(): NotificationCategory
     {
@@ -43,7 +44,8 @@ enum NotificationType: string
             self::SeatApproved,
             self::SeatDeclined => NotificationCategory::Booking,
 
-            self::TripStarted => NotificationCategory::Trip,
+            self::TripStarted,
+            self::ChatMessage => NotificationCategory::Trip,
         };
     }
 }
