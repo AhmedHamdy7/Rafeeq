@@ -46,7 +46,7 @@ it('signs in once the authenticator code is right', function () {
         ->set('code', currentTotpCode($this->admin))
         ->call('submitCode')
         ->assertHasNoErrors()
-        ->assertRedirect(route('admin.verifications'));
+        ->assertRedirect(route('admin.home'));
 
     expect(Auth::guard('admin')->id())->toBe($this->admin->id)
         ->and(session(EnsureAdminMfaIsConfirmed::PASSED))->toBeTrue();
@@ -228,4 +228,30 @@ it('never leaves the password in the component state', function () {
     // A Livewire component's state survives in the browser between requests, and the
     // code step has no use for it.
     expect($component->get('password'))->toBe('');
+});
+
+/**
+ * 🔴 Signing in used to land on the verification queue for everybody. A safety lead holds no
+ * `verification.view`, so the desk that answers SOS alerts got a bare 403 as its first screen.
+ */
+it('lands each role on the first page it can open', function (AdminRole $role, string $route) {
+    actingAsAdmin(adminWithRole($role));
+
+    $this->get(route('admin.home'))->assertRedirect(route($route));
+})->with([
+    'safety lead' => [AdminRole::SafetyLead, 'admin.safety'],
+    'super admin' => [AdminRole::SuperAdmin, 'admin.safety'],
+    'operations' => [AdminRole::Operations, 'admin.trips'],
+    'verification' => [AdminRole::Verification, 'admin.verifications'],
+    'support' => [AdminRole::Support, 'admin.verifications'],
+]);
+
+it('says plainly when a role has no page yet, instead of bouncing it to one that refuses', function () {
+    actingAsAdmin(adminWithRole(AdminRole::Finance));
+
+    $this->get(route('admin.home'))->assertForbidden();
+});
+
+it('sends a signed-out visitor at the bare dashboard address to the sign-in page', function () {
+    $this->get('/admin')->assertRedirect(route('admin.login'));
 });

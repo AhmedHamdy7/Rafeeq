@@ -445,6 +445,19 @@ return [
          * the way to collect people, being off the direct line is the job.
          */
         'deviation_threshold_meters' => 1_000,
+
+        /*
+         * How long a car on the road may go without sending a position before the live board
+         * flags it (Phase 13).
+         *
+         * A phone in a tunnel goes quiet for a minute and that is nothing; a phone that has
+         * been quiet for several is a flat battery, a revoked permission, or something worse,
+         * and the person watching the board cannot tell which without asking. Two minutes is
+         * twenty-four missed five-second pings — long enough that the Ring Road's tunnels do
+         * not trip it, short enough that a real silence is on the screen while it still
+         * matters.
+         */
+        'gps_silence_alert_seconds' => 120,
     ],
 
     /*

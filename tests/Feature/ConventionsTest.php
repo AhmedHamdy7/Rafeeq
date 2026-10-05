@@ -242,6 +242,14 @@ it('keeps the live-booking index and the duplicate check saying the same thing',
 
     expect($expression)->not->toBeNull('bookings.live_booking_key is missing from the database.');
 
+    /*
+     * The two engines report the same expression differently. MariaDB echoes it as written
+     * ('pending'); MySQL 8 — production — adds a charset introducer and escapes the quotes
+     * (_utf8mb4\'pending\'). Read literally, the second fails every status below while the
+     * index is perfectly correct, so the comparisons are made on the normalised form.
+     */
+    $expression = str_replace(['_utf8mb4', '\\'], '', (string) $expression);
+
     // The statuses the application counts as a live booking, read from the source of
     // truth for that decision.
     $checked = [];

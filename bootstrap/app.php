@@ -81,7 +81,8 @@ return Application::configure(basePath: dirname(__DIR__))
          * HTML.
          */
         $middleware->redirectGuestsTo(
-            fn (Request $request) => $request->is('admin/*') ? route('admin.login') : null,
+            // `admin` as well as `admin/*`: the dashboard's landing URL is the bare path.
+            fn (Request $request) => $request->is('admin', 'admin/*') ? route('admin.login') : null,
         );
 
         // Opt-in, never global: the routes a suspended or half-registered

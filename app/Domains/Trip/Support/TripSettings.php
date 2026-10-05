@@ -90,6 +90,14 @@ final class TripSettings
         return max(1, (int) self::get('trip.deviation_threshold_meters'));
     }
 
+    /**
+     * How long a car on the road may go without a position before the live board flags it.
+     */
+    public static function gpsSilenceAlertSeconds(): int
+    {
+        return max(1, (int) self::get('trip.gps_silence_alert_seconds'));
+    }
+
     private static function get(string $key): mixed
     {
         return PlatformSetting::value($key, config("rafeeq.{$key}"));

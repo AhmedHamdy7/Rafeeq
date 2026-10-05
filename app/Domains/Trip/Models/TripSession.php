@@ -3,6 +3,7 @@
 namespace App\Domains\Trip\Models;
 
 use App\Domains\Commute\Models\ScheduledTrip;
+use App\Domains\Safety\Models\SafetyEvent;
 use App\Domains\Trip\Enums\TripSessionStatus;
 use Database\Factories\TripSessionFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
@@ -48,6 +49,15 @@ class TripSession extends Model
     public function waitTimers(): HasMany
     {
         return $this->hasMany(TripWaitTimer::class);
+    }
+
+    /**
+     * Everything safety-related that happened on this run — an SOS, a silent alert, a
+     * report. Read by the live board to put a car with an open alert at the top.
+     */
+    public function safetyEvents(): HasMany
+    {
+        return $this->hasMany(SafetyEvent::class);
     }
 
     public function hasGpsDropout(int $thresholdSeconds = 60): bool

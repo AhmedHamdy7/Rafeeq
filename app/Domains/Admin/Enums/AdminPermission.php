@@ -40,6 +40,15 @@ enum AdminPermission: string
     case CommuteView = 'commute.view';
     case CommuteModerate = 'commute.moderate';
 
+    // ---- Trips ---------------------------------------------------------
+    /*
+     * The live board: who is on the road right now, with which car, and whether anything
+     * looks wrong. Read-only, and separate from `commute.view` because the board shows
+     * where people ARE rather than what has been published — a different question, asked
+     * by a different desk.
+     */
+    case TripView = 'trip.view';
+
     // ---- Safety --------------------------------------------------------
     case SafetyView = 'safety.view';
     case SafetyResolve = 'safety.resolve';

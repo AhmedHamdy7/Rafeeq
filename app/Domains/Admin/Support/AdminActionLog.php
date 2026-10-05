@@ -45,6 +45,12 @@ final class AdminActionLog
         'account.reactivate',
         'commute.unpublish',
         'booking.refund',
+        // How an emergency ended, and every decision about a report. Months later these
+        // rows are read by somebody asking "why was this closed" — sometimes a lawyer.
+        'sos.resolve',
+        'incident.escalate',
+        'incident.resolve',
+        'incident.close',
     ];
 
     /**

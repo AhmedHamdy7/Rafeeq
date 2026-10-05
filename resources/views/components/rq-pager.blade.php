@@ -1,4 +1,4 @@
-@props(['page'])
+@props(['page', 'position' => 'admin.pager.position'])
 
 {{--
     Paging controls in the dashboard's own design language.
@@ -10,6 +10,9 @@
     `wire:click` on the methods Livewire's WithPagination trait provides, so turning a
     page is an AJAX re-render like every other action here: no navigation, no scroll jump,
     no full reload.
+
+    `position` names the line under the controls, because ":total waiting" is right for a
+    review queue and wrong for a list of cars on the road.
 --}}
 @if ($page->hasPages())
     <nav
@@ -28,7 +31,7 @@
         </button>
 
         <span class="rq-note" style="flex:1;text-align:center">
-            {{ __('admin.pager.position', [
+            {{ __($position, [
                 'page' => $page->currentPage(),
                 'last' => $page->lastPage(),
                 'total' => $page->total(),

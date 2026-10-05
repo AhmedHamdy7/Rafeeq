@@ -3,6 +3,8 @@
 namespace App\Providers;
 
 use App\Domains\Admin\Enums\AdminPermission;
+use App\Domains\Admin\Support\LiveTripBoard;
+use App\Domains\Admin\Support\SafetyCaseQueue;
 use App\Domains\Driver\Enums\DriverProfileStatus;
 use App\Domains\Driver\Models\DriverProfile;
 use App\Domains\Geo\Contracts\GeoQueryEngine;
@@ -180,6 +182,7 @@ class AppServiceProvider extends ServiceProvider
     {
         View::composer('components.layouts.admin', function ($view): void {
             $admin = auth('admin')->user();
+            $mayReadSafety = $admin?->can(AdminPermission::SafetyView->value) === true;
 
             $view->with([
                 'pendingVerifications' => $admin?->can(AdminPermission::VerificationView->value)
@@ -189,6 +192,29 @@ class AppServiceProvider extends ServiceProvider
                 'pendingDrivers' => $admin?->can(AdminPermission::DriverView->value)
                     ? DriverProfile::query()->where('status', DriverProfileStatus::PendingReview->value)->count()
                     : 0,
+
+                'liveTrips' => $admin?->can(AdminPermission::TripView->value)
+                    ? LiveTripBoard::count()
+                    : 0,
+
+                'openSafetyCases' => $mayReadSafety
+                    ? SafetyCaseQueue::liveAlertCount() + SafetyCaseQueue::openReportCount()
+                    : 0,
+
+                /*
+                 * 🔴 The banner across the top of EVERY page for anybody on the safety desk,
+                 * not only on the safety page: an alert raised while the operator is reviewing
+                 * a driver application must be on the screen they are already looking at. The
+                 * prototype draws exactly this ("unassigned for 6 minutes").
+                 *
+                 * Not on the safety page itself. The layout is drawn once per navigation and
+                 * Livewire's polling re-renders the page beneath it, so there the banner would
+                 * keep insisting nobody had picked up an alert the operator just picked up.
+                 * That page's own red cards say the same thing and stay current.
+                 */
+                'unacknowledgedAlert' => $mayReadSafety && ! request()->routeIs('admin.safety')
+                    ? SafetyCaseQueue::oldestUnacknowledged()
+                    : null,
             ]);
         });
     }
