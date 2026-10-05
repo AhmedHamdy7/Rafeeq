@@ -74,6 +74,18 @@
 
             <div class="rq-rail__section">{{ __('admin.nav.operations') }}</div>
             <nav style="display:flex;flex-direction:column;gap:3px">
+                @if (\App\Livewire\Admin\Dashboard::isAvailableTo($admin))
+                    <a
+                        href="{{ route('admin.dashboard') }}"
+                        wire:navigate
+                        class="rq-nav"
+                        @if (request()->routeIs('admin.dashboard')) aria-current="page" @endif
+                    >
+                        <span class="rq-nav__tile" aria-hidden="true">▦</span>
+                        <span class="rq-nav__label">{{ __('admin.nav.dashboard') }}</span>
+                    </a>
+                @endif
+
                 {{--
                     Each link is rendered only if this admin may use the page. A hidden
                     link is NOT the permission check — every component re-checks — but
@@ -154,6 +166,26 @@
                     </a>
                 @endcan
             </nav>
+
+            @if ($admin?->can(AdminPermission::AuditLogView->value) || $admin?->can(AdminPermission::SettingsManage->value))
+                <div class="rq-rail__section" style="margin-top:18px">{{ __('admin.nav.general') }}</div>
+                <nav style="display:flex;flex-direction:column;gap:3px">
+                    @can(AdminPermission::AuditLogView->value)
+                        <a href="{{ route('admin.audit') }}" wire:navigate class="rq-nav"
+                           @if (request()->routeIs('admin.audit')) aria-current="page" @endif>
+                            <span class="rq-nav__tile" aria-hidden="true">≡</span>
+                            <span class="rq-nav__label">{{ __('admin.nav.audit') }}</span>
+                        </a>
+                    @endcan
+                    @can(AdminPermission::SettingsManage->value)
+                        <a href="{{ route('admin.settings') }}" wire:navigate class="rq-nav"
+                           @if (request()->routeIs('admin.settings')) aria-current="page" @endif>
+                            <span class="rq-nav__tile" aria-hidden="true">⚙</span>
+                            <span class="rq-nav__label">{{ __('admin.nav.settings') }}</span>
+                        </a>
+                    @endcan
+                </nav>
+            @endif
 
             <div style="flex:1"></div>
 

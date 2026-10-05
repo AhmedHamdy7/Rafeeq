@@ -239,11 +239,12 @@ it('lands each role on the first page it can open', function (AdminRole $role, s
 
     $this->get(route('admin.home'))->assertRedirect(route($route));
 })->with([
-    'safety lead' => [AdminRole::SafetyLead, 'admin.safety'],
-    'super admin' => [AdminRole::SuperAdmin, 'admin.safety'],
-    'operations' => [AdminRole::Operations, 'admin.trips'],
-    'verification' => [AdminRole::Verification, 'admin.verifications'],
-    'support' => [AdminRole::Support, 'admin.verifications'],
+    // Everybody with a tile lands on the dashboard, which carries the unanswered-SOS banner too.
+    'safety lead' => [AdminRole::SafetyLead, 'admin.dashboard'],
+    'super admin' => [AdminRole::SuperAdmin, 'admin.dashboard'],
+    'operations' => [AdminRole::Operations, 'admin.dashboard'],
+    'verification' => [AdminRole::Verification, 'admin.dashboard'],
+    'support' => [AdminRole::Support, 'admin.dashboard'],
 ]);
 
 it('says plainly when a role has no page yet, instead of bouncing it to one that refuses', function () {
