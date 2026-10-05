@@ -1,5 +1,10 @@
 <?php
 
+use App\Domains\Identity\Models\OtpChallenge;
+use App\Domains\Identity\Models\SecurityEvent;
+use App\Domains\Notification\Models\Message;
+use App\Domains\Notification\Models\Notification;
+use App\Domains\Payment\Models\PaymentWebhook;
 use Illuminate\Support\Facades\Schedule;
 
 /*
@@ -132,5 +137,24 @@ Schedule::command('trips:purge-locations')
  */
 Schedule::command('files:purge-expired')
     ->dailyAt('04:30')
+    ->timezone('Africa/Cairo')
+    ->withoutOverlapping();
+
+/*
+ * 🔒 Retention for the rows ERD §18 gives a lifetime: login codes (7 days), the inbox and push log
+ * (90 days), trip chat (12 months), payment webhooks (90 days), the security log (24 months). The
+ * models are listed by name because `model:prune` only looks in app/Models on its own, and every
+ * model here lives under app/Domains — without the list it would run, find nothing, and succeed.
+ *
+ * If it does not run: everybody's trip chat is kept for ever, past a period the platform declared.
+ */
+Schedule::command('model:prune', ['--model' => [
+    OtpChallenge::class,
+    Notification::class,
+    Message::class,
+    PaymentWebhook::class,
+    SecurityEvent::class,
+]])
+    ->dailyAt('04:45')
     ->timezone('Africa/Cairo')
     ->withoutOverlapping();

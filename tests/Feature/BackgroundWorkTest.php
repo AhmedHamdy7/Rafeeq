@@ -73,6 +73,9 @@ it('registers every scheduled command the platform depends on', function (string
 
     // Saved ride requests past their expiry. Without it the passenger's list says "active" for ever.
     'demands:expire',
+
+    // Retention for login codes, notifications, chat, webhooks and the security log (ERD §18).
+    'model:prune',
 ]);
 
 /**

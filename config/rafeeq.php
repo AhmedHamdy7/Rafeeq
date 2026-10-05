@@ -814,4 +814,17 @@ return [
         ],
     ],
 
+    /*
+     * How long rows are kept before `model:prune` deletes them (ERD §18). Legal and privacy policy,
+     * not tuning — so here rather than in platform_settings, where a dashboard toggle could quietly
+     * extend how long the platform holds people's messages.
+     */
+    'retention' => [
+        'otp_challenges_days' => 7,
+        'notifications_days' => 90,
+        'messages_months' => 12,
+        'payment_webhooks_days' => 90,
+        'security_events_months' => 24,
+    ],
+
 ];
