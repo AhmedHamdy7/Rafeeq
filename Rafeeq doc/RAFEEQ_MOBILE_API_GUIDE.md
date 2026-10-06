@@ -18,36 +18,53 @@
 
 ---
 
-## ملخص بالعربي
+## Summary
 
-### إيه الجاهز دلوقتي
+### What is ready
 
-**١١٦ endpoint شغّالين ومختبَرين** (1,373 اختبار كلهم خضرا). يعني من الـ٤٧ شاشة:
+**116 endpoints, live and tested**, across the 47 designed screens:
 
-| | عدد | التفاصيل |
+| | Count | Covers |
 |---|---|---|
-| ✅ **جاهزة بالكامل** | ~٢٦ شاشة | الدخول والتسجيل كله · التوثيق · السائق والعربيات · نشر الرحلة · البحث والمطابقة · طلب المقعد · المجموعة · الرحلة الحيّة · **مركز الأمان** (SOS · جهات الطوارئ · البلاغات · الحظر · مشاركة الرحلة) |
-| ⚠️ **جاهزة وناقصها حقل أو حقلين** | ~٨ شاشات | مكتوب تحت بالظبط الناقص إيه في كل واحدة |
-| ⛔ **مش جاهزة** | ~١١ شاشة | التقييمات · الإشعارات · المدفوعات · إلغاء السائقة ليوم واحد — كل واحدة مكتوب جنبها المرحلة. **الأمان بقى جاهز** (SOS · جهات الطوارئ · البلاغات · الحظر · مشاركة الرحلة المباشرة) |
-| 🚫 **مش محتاجة API** | ٤ شاشات | حالات جهاز أو نص ثابت |
+| ✅ **Fully served** | ~32 screens | Sign-in and sign-up · verification · driver and vehicles · publishing a commute · search and matching · seat requests · the group · the live trip · **ratings and reviews** · **the Safety Centre** (SOS · trusted contacts · reports with evidence · blocking · live share) · notifications inbox · trip chat |
+| ⚠️ **Served, missing a field or two** | ~8 screens | Each one says exactly what is absent, in the screen index. |
+| ⛔ **Not served** | ~3 screens | Payments and the wallet (34) · a driver cancelling a single day (43, 45, 46). Both have a phase and a reason in section 7. |
+| 🚫 **No API needed** | 4 screens | Device states, or static copy. |
 
-### ابدأ منين
+### Where to start
 
-الترتيب المقترح تحت في **Build order**، وملخصه: الدخول (5→6→7→8) ← التوثيق (15، 30) ← الصفحة الرئيسية (9) ← البحث (10، 11، 12) ← طلب المقعد (13، 14) ← الرحلات والمجموعة (19، 20) ← بعدين السائق (23، 24، 25، 31، 28، 29) ← وآخر حاجة الرحلة الحيّة (17، 36، 40، 41).
+The suggested order is in **Build order** below. In short: sign-in (5→6→7→8) → verification (15, 30)
+→ home (9) → search (10, 11, 12) → seat request (13, 14) → trips and the group (19, 20) → then the
+driver side (23, 24, 25, 31, 28, 29) → and the live trip last (17, 36, 40, 41).
 
-### حاجات مهمة تعرفها قبل ما تبدأ
+If you would rather see the lifecycle before building any of it, **2.1** walks the whole cycle as an
+ordered sequence of calls, against accounts that are already seeded on staging.
 
-1. **كل رد في نفس الشكل** (`success` · `data` · `meta`؟). الأخطاء برضو شكل واحد فيه `error.code` — اعمل `switch` على الـ `code` مش على النص.
-2. **الفلوس كلها قروش** (`*Piastres`) — أعداد صحيحة، مش كسور. 8000 = 80 ج.م. عمرك ما تقسم على 100 وتخزّن النتيجة.
-3. **الأوقات UTC بصيغة ISO 8601**، ومعاها الوقت المحلي لما يكون مهم للعرض. أي حاجة اسمها `*Local` هي ساعة حيطة للعرض بس — عمرك ما تحسب بيها.
-4. **الأيام bitmask**: السبت 1 · الأحد 2 · الاتنين 4 · التلات 8 · الأربع 16 · الخميس 32 · الجمعة 64. "الأحد للخميس" = 62.
-5. **الخصوصية مبنية في الـ API مش في الشاشة.** التليفون والاسم الكامل والجنس **عمرهم ما يرجعوا** لشخص تاني. ونقطة الالتقاء بترجع **مضبّبة** لحد ما الحجز يتأكد. مش محتاج تخفي حاجة في الواجهة — إحنا مش بنبعتها من الأصل.
-6. **كل List بتكبر مع الاستخدام معمولة paginate.** استخدم `meta.hasMore` مش عدد الصفوف.
-7. **`null` معناها "مش معروف" مش صفر.** تقييم `null` = الشخص ما اتقيّمش لسه، **ماتعرضهاش صفر نجوم**.
+### Seven things to know before you start
 
-### الفايل ده بيتحدث
+1. **Every response has the same shape** (`success` · `data` · `meta`?). Errors do too, carrying
+   `error.code` — **switch on the `code`, never on the message text.** The text is translated and
+   will change; the code will not.
+2. **All money is in piastres** (`*Piastres`) — whole numbers, never decimals. 8000 = EGP 80. Never
+   divide by 100 and store the result.
+3. **Times are UTC in ISO 8601**, with a local wall clock alongside where it matters for display.
+   Anything named `*Local` is for showing only — **never compute with it.**
+4. **Days are a bitmask**: Sat 1 · Sun 2 · Mon 4 · Tue 8 · Wed 16 · Thu 32 · Fri 64. "Sunday to
+   Thursday" is 62.
+5. **Privacy is built into the API, not into the screen.** A phone number, a full name and a gender
+   are **never** returned about another person, and a meeting point comes back **fuzzed** until the
+   booking is confirmed. You do not need to hide anything in the UI — we do not send it.
+6. **Every list that grows with use is paginated.** Use `meta.hasMore`, not the row count.
+7. **`null` means "not known", not zero.** A `null` rating means nobody has rated that person yet —
+   **do not draw it as nought stars.**
 
-مع **كل endpoint جديد وكل مرحلة تخلص**. وفيه اختبار (`tests/Feature/MobileApiGuideTest.php`) بيتأكد إن كل endpoint مذكور هنا موجود فعلًا، وإن مفيش endpoint شغّال مش مذكور — يعني الفايل ده **مايقدرش يتعفّن**. آخر تحديث مكتوب فوق، وسجل التغييرات في آخر الفايل.
+### This file is kept current
+
+Updated with **every new endpoint and every phase completed**, and
+`tests/Feature/MobileApiGuideTest.php` fails the build if it drifts: every endpoint named here must
+exist, every live endpoint must be named here, and the `nextStep` values must match the enum. So
+this file **cannot go stale** without the build going red. The last-updated date is above; the change
+log is at the end.
 
 ---
 
@@ -2288,7 +2305,7 @@ Nothing below exists. Build the screen shells if you like, but there is no endpo
 |---|---|---|---|
 | **Payments and wallet** | 34, group `payments` tab | **8** | **In progress.** Cash is now recorded (`paymentStatus` → `PAID`, see 5.9) and the driver's fee debt is tracked, with a publishing cap. Still to come: the driver's balance screen, the group's weekly statement, then — once a payment provider is chosen — payment methods, online capture, payouts and refunds. Cancellation fees wait on the cancellation policy. |
 | **Driver cancelling one day** | 43, 45, 46 | **9** | A driver cancelling a single day and the backup search that follows. **Blocked on an open decision** — refunds and reliability, section 8 #3. Route deviation itself is now detected and reported (see `deviationDetectedAt`); the ops ALERT it should trigger needs Phase 12/13. |
-| **Reviews on a profile, trust tier** | reviews on 12, `minRating` filter on 11, history on 19 | **10** | 🔴 **Rating itself is done** — section 4.13 — and the `rating` in every public summary now carries a number once a rating is revealed. Still to come: the list of **other people's** visible reviews on a profile, reporting an abusive review, and the public trust tier (`new` / `trusted` / `highly_trusted`). The underlying score is deliberately internal and will never be returned. |
+| **Public trust tier** | badge on 12 and 21 | **10** | 🔴 **Ratings and reviews are both done** — section 4.13. Rating, the double-blind reveal, the anonymous review list on a commute, "what was said about me", reporting an abusive review and the `minRating` search filter are all live, and the `rating` in every public summary carries a number once a rating is revealed. The only piece left is the **public trust tier** (`new` / `trusted` / `highly_trusted`), which needs a product decision on its thresholds. The score behind it is deliberately internal and will never be returned. |
 | **Auto-share trips** | 26 | **12** | 🔴 **`autoShareTrips` on an emergency contact is stored and nothing acts on it yet.** See 4.12 — read that before you build the toggle. |
 | **Night escort mode** | none | **13** | Not a mobile feature at all, and this corrects an earlier line in this file. It is a **corridor-level night window armed by the ops team** (or automatically, 9pm–5am) with staff monitoring — a dashboard control, not something an app shows or calls. There will be no endpoint for it. |
 | **Push delivery** | all | **12** | The inbox (4.14) and trip chat (4.15) are live. Push is wired but **no provider has been chosen yet**, so nothing reaches a phone — poll `GET /notifications` (`meta.unreadCount`) and the open conversation in the meantime. |
@@ -2321,6 +2338,7 @@ exist, and every live endpoint must be named here.
 
 | Date | Change |
 |---|---|
+| 2026-10-06 | **This file is now entirely in English.** The Arabic summary became an English one with the same content; no section was dropped. Two stale claims fixed while translating: the summary still listed ratings as not served, and section 7 still said the profile review list and review reporting were to come — all three have been live since 2026-10-02. |
 | 2026-10-06 | **Added to 2.1: the local PIN, concretely** — client-side guidance, explicitly not a contract. Store the refresh token encrypted under a key DERIVED from the PIN rather than storing the PIN or a hash of it, so there is nothing on the device to run guesses against. Plus the states usually missed: `pinLength` comes from the server, a dead refresh token must not be reported as a wrong PIN, and a reinstall deliberately starts without a PIN. Nothing was removed. |
 | 2026-10-06 | **Correction:** `user.profileStatus` is `NOT_STARTED` · `BASIC_COMPLETE` — this file wrongly said `PHONE_ONLY`; the API never changed (5.5). `accountStatus` also lists `PENDING_DELETION`. The basic-profile request now lists every allowed value and the `YYYY-MM-DD` date format (4.2). |
 | 2026-10-06 | **Phase 8 starts — cash is now recorded.** A cash booking's `paymentStatus` turns `PAID` about two hours after the driver confirms the passenger travelled, and `DISPUTED` when the passenger contests the record (5.9). New refusal on `POST /commutes/{commute}/publish` and `/resume`: `DRIVER_DEBT_LIMIT_REACHED` (403) when a driver owes more than the limit in platform fees from cash trips; existing rides continue. No new endpoints. |
