@@ -14,7 +14,7 @@
 >
 > **Base URL:** `{host}/api/v1` · **Auth:** bearer token · **Format:** JSON only.
 
-**Last updated:** 2026-10-06 · **124 endpoints live** · Phases 0–7 complete, Phase 9 in progress, Phase 12 started
+**Last updated:** 2026-10-06 · **124 endpoints live** · Phases 0–7, 9 and 11 complete · 10, 12 and 13 all but a decision each
 
 ---
 
@@ -22,7 +22,7 @@
 
 ### What is ready
 
-**116 endpoints, live and tested**, across the 47 designed screens:
+**124 endpoints live** and tested, across the 47 designed screens:
 
 | | Count | Covers |
 |---|---|---|
@@ -2338,6 +2338,7 @@ exist, and every live endpoint must be named here.
 
 | Date | Change |
 |---|---|
+| 2026-10-06 | **Correction:** the new English summary said 116 endpoints against a real 124 — the header was right and the summary was not. Fixed, and a test now checks every endpoint count in the prose rather than only the one in the header, which is how the two disagreed. |
 | 2026-10-06 | **This file is now entirely in English.** The Arabic summary became an English one with the same content; no section was dropped. Two stale claims fixed while translating: the summary still listed ratings as not served, and section 7 still said the profile review list and review reporting were to come — all three have been live since 2026-10-02. |
 | 2026-10-06 | **Added to 2.1: the local PIN, concretely** — client-side guidance, explicitly not a contract. Store the refresh token encrypted under a key DERIVED from the PIN rather than storing the PIN or a hash of it, so there is nothing on the device to run guesses against. Plus the states usually missed: `pinLength` comes from the server, a dead refresh token must not be reported as a wrong PIN, and a reinstall deliberately starts without a PIN. Nothing was removed. |
 | 2026-10-06 | **Correction:** `user.profileStatus` is `NOT_STARTED` · `BASIC_COMPLETE` — this file wrongly said `PHONE_ONLY`; the API never changed (5.5). `accountStatus` also lists `PENDING_DELETION`. The basic-profile request now lists every allowed value and the `YYYY-MM-DD` date format (4.2). |
