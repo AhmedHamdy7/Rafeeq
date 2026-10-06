@@ -4,6 +4,7 @@ use App\Domains\Admin\Enums\AdminRole;
 use App\Domains\Admin\Models\AdminAction;
 use App\Domains\Admin\Models\PlatformSetting;
 use App\Domains\Admin\Support\SettingsCatalogue;
+use App\Domains\Booking\Support\FeeSplit;
 use App\Domains\Trip\Support\TripSettings;
 use App\Livewire\Admin\Settings;
 use Illuminate\Support\Facades\Lang;
@@ -129,7 +130,20 @@ it('will not change a locked setting', function (string $key) {
     changeSetting($key, (string) SettingsCatalogue::ENTRIES[$key]['min'])->assertHasErrors('value');
 
     expect(PlatformSetting::find($key))->toBeNull();
-})->with(['auth.pin.length', 'auth.otp.length', 'booking.platform_fee_percent']);
+})->with(['auth.pin.length', 'auth.otp.length']);
+
+/**
+ * Decided 2026-10-06: the fee is deducted from the driver at 3% and staff may change it. A booking
+ * freezes its own split when it is approved, so the new figure only reaches bookings made after.
+ */
+it('lets staff change the platform fee, and only new bookings use it', function () {
+    actingAsAdmin(adminWithRole(AdminRole::SuperAdmin));
+
+    changeSetting('booking.platform_fee_percent', '5')->assertHasNoErrors();
+
+    expect(FeeSplit::forSeats(10_000, 1))
+        ->toBe(['price' => 10_000, 'platformFee' => 500, 'driverAmount' => 9_500]);
+});
 
 it('will not write a key that is not in the catalogue', function () {
     actingAsAdmin(adminWithRole(AdminRole::SuperAdmin));

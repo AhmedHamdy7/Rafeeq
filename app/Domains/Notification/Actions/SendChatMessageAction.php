@@ -26,6 +26,12 @@ use Illuminate\Support\Facades\DB;
  * Refused, with the same `CHAT_NOT_OPEN`, when the window is closed AND when either person has
  * blocked the other. The second must not be distinguishable: telling somebody "you cannot
  * message her because she blocked you" is telling them she blocked them.
+ *
+ * 🔒 A phone number or an email is REFUSED, not delivered (product decision, 2026-10-06). A number
+ * shared here moves the conversation off the platform — away from blocking, the safety desk and the
+ * trip record — and that is exactly where a member who later needs protection cannot get it. It
+ * used to be delivered and flagged; `contains_contact_info` stays on the row for messages from
+ * that time.
  */
 final readonly class SendChatMessageAction
 {
@@ -35,6 +41,14 @@ final readonly class SendChatMessageAction
 
         if (! ChatWindow::isOpen($booking) || BlockedUser::existsBetween($sender->id, $recipientId)) {
             throw self::notOpen($booking);
+        }
+
+        // After the window check: telling somebody their number is not allowed in a conversation
+        // that is closed (or blocked) would answer a question they could not have asked.
+        if (ContactInfoDetector::contains($body)) {
+            throw DomainException::of(ErrorCode::ChatContactInfoNotAllowed, fields: [
+                'body' => [__('errors.'.ErrorCode::ChatContactInfoNotAllowed->value)],
+            ]);
         }
 
         return DB::transaction(function () use ($sender, $booking, $body, $recipientId): Message {
@@ -52,7 +66,8 @@ final readonly class SendChatMessageAction
                 'sender_user_id' => $sender->id,
                 'body' => $body,
             ]);
-            $message->contains_contact_info = ContactInfoDetector::contains($body);
+            // Always false from here on — a message that contains it is refused above.
+            $message->contains_contact_info = false;
             $message->save();
 
             /*

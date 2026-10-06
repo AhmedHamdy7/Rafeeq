@@ -134,6 +134,7 @@ enum ErrorCode: string
     // ---- Notifications (Phase 12, Chapter 11) --------------------------
     case NotificationCategoryLocked = 'NOTIFICATION_CATEGORY_LOCKED';
     case ChatNotOpen = 'CHAT_NOT_OPEN';
+    case ChatContactInfoNotAllowed = 'CHAT_CONTACT_INFO_NOT_ALLOWED';
 
     // ---- Admin dashboard (Chapter 12) ----------------------------------
     case AdminCredentialsInvalid = 'ADMIN_CREDENTIALS_INVALID';
@@ -329,6 +330,9 @@ enum ErrorCode: string
             // 409: the conversation's window is a state — not yet open, already closed. Also
             // what a blocked pair gets, deliberately indistinguishable (SendChatMessageAction).
             self::ChatNotOpen => 409,
+
+            // 422: the message itself is what is refused — a phone number or an email in it.
+            self::ChatContactInfoNotAllowed => 422,
 
             /*
              * 401: a staff sign-in that did not succeed. One code for a wrong

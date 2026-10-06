@@ -362,6 +362,7 @@ return [
         'out_of_range' => 'لازم يكون بين :min و:max.',
         'out_of_order' => ':low لازم يفضل أقل من :high.',
         'groups' => [
+            'verification' => 'التوثيق',
             'auth' => 'الدخول',
             'profile' => 'البروفايل',
             'commute' => 'الرحلات والتسعير',
@@ -374,7 +375,6 @@ return [
         ],
         'locked' => [
             'client_contract' => 'ثابت — تطبيق الموبايل مبني عليه',
-            'fee_decision' => 'مستني قرار الرسوم',
         ],
         'units' => [
             'digits' => 'أرقام',
@@ -438,6 +438,7 @@ return [
             'safety__max_emergency_contacts' => 'جهات الطوارئ لكل عضو',
             'safety__reports_per_hour' => 'البلاغات لكل عضو في الساعة',
             'safety__max_evidence_per_incident' => 'ملفات الأدلة لكل بلاغ',
+            'verification__document_retention_days' => 'مدة الاحتفاظ بصور البطايق ومستندات العربيات بعد رفعها',
             'safety__evidence_retention_days' => 'مدة الاحتفاظ بأدلة البلاغات',
             'safety__live_share_grace_minutes' => 'المشاركة المباشرة بعد نهاية الرحلة',
             'safety__live_share_max_minutes' => 'أطول مدة للمشاركة المباشرة',

@@ -1,6 +1,7 @@
 <?php
 
 use App\Domains\Admin\Enums\AdminRole;
+use App\Domains\Admin\Models\PlatformSetting;
 use App\Domains\Driver\Enums\VehicleVerificationStatus;
 use App\Domains\Driver\Models\VehicleDocument;
 use App\Domains\Safety\Enums\IncidentStatus;
@@ -142,4 +143,20 @@ it('tells staff a destroyed file is gone rather than missing', function () {
     actingAsAdmin(adminWithRole(AdminRole::SafetyLead));
 
     $this->get(route('admin.files.evidence', $evidence->id))->assertStatus(410);
+});
+
+/**
+ * Decided 2026-10-06: 90 days from upload, editable from Settings — and stamped on the row when the
+ * file arrives, so a later change never extends the life of a file sent under the old policy.
+ */
+it('dates a new document from the retention setting in force when it is uploaded', function () {
+    PlatformSetting::updateOrCreate(
+        ['setting_key' => 'verification.document_retention_days'],
+        ['setting_value' => 30, 'value_type' => 'integer'],
+    );
+
+    fakeOtpSender();
+    submitGovernmentId(signIn('01112223344')['session']['accessToken']);
+
+    expect(IdentityDocument::query()->first()->purge_after->toDateString())->toBe(now()->addDays(30)->toDateString());
 });

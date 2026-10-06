@@ -9,6 +9,7 @@ use App\Domains\Driver\Models\VehicleDocument;
 use App\Domains\Identity\Models\User;
 use App\Domains\Verification\Support\DocumentIntake;
 use App\Domains\Verification\Support\DocumentStorage;
+use App\Domains\Verification\Support\VerificationSettings;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\DB;
 
@@ -62,7 +63,7 @@ final readonly class UploadVehicleDocumentAction
                 'expires_at' => $expiresAt,
                 // §18 retention: set at upload so a purge job never has to
                 // infer it.
-                'purge_after' => now()->addDays(90)->toDateString(),
+                'purge_after' => now()->addDays(VerificationSettings::documentRetentionDays())->toDateString(),
             ]);
 
             $document->save();

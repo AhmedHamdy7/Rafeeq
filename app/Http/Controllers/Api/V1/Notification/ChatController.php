@@ -69,7 +69,7 @@ final class ChatController extends Controller
     /**
      * POST /v1/bookings/{booking}/messages — send one.
      */
-    #[ApiErrors(ErrorCode::ChatNotOpen, ErrorCode::NotFound)]
+    #[ApiErrors(ErrorCode::ChatNotOpen, ErrorCode::ChatContactInfoNotAllowed, ErrorCode::NotFound)]
     public function store(SendChatMessageRequest $request, string $booking, SendChatMessageAction $action): JsonResponse
     {
         $message = $action->execute($request->user(), $this->participatingIn($request, $booking), $request->validated('body'));

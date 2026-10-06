@@ -13,6 +13,7 @@ use App\Domains\Verification\Models\IdentityDocument;
 use App\Domains\Verification\Support\DocumentIntake;
 use App\Domains\Verification\Support\DocumentStorage;
 use App\Domains\Verification\Support\VerificationRequirements;
+use App\Domains\Verification\Support\VerificationSettings;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\DB;
 
@@ -78,7 +79,7 @@ final readonly class UploadVerificationDocumentAction
                 'size_bytes' => $stored['size'],
                 // §18 retention: documents are not kept forever. The date is
                 // set at upload so a purge job never has to infer it.
-                'purge_after' => now()->addDays(90)->toDateString(),
+                'purge_after' => now()->addDays(VerificationSettings::documentRetentionDays())->toDateString(),
             ]);
 
             // Not fillable on purpose — a scan result must never be something a
