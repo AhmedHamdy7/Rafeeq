@@ -47,6 +47,10 @@ return [
     ],
     // Not a notification: the description of the report filed when a chat message is reported.
     'chat_report' => "Reported chat message.\nReason: :reason\nMessage: «:message»",
+    'trip_day_cancelled' => [
+        'title' => 'No ride on :date',
+        'body' => ':name cancelled the commute for :date. Your other days are unchanged.',
+    ],
     'booking_cancelled' => [
         'title' => 'A seat was cancelled',
         'body' => ':name cancelled the booking for :date.',

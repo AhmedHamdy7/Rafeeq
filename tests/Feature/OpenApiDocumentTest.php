@@ -153,6 +153,7 @@ it('generates a document describing every /v1 route', function () {
         'GET /v1/trips/{trip}',
         'POST /v1/trips/{trip}/start',
         'POST /v1/trips/{trip}/status',
+        'POST /v1/trips/{trip}/cancel',
         'POST /v1/trips/{trip}/complete',
         'GET /v1/trips/{trip}/attendance',
         'POST /v1/trips/{trip}/check-in',
