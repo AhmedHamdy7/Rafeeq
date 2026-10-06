@@ -455,6 +455,60 @@ POST /safety/blocked-users             { userId, reason? }                      
 profile, no active trip. That is deliberate — somebody in trouble at a roadside will not finish
 uploading a national ID first — so **do not gate the safety button in your own navigation either.**
 
+#### The local PIN, concretely — client-side guidance, not a contract
+
+The API has no opinion about how you protect the token; it holds one fact, `device.hasLocalPin`, and
+there is no endpoint that takes a PIN. That leaves a real design question on your side, and it comes
+up often enough to answer here. **This section is a recommendation, not a requirement** — nothing
+below is enforced by the server.
+
+🔴 **Do not store the PIN at all — not the digits, not a hash of them.** Store the **refresh token**,
+encrypted under a key *derived* from the PIN. The PIN then exists nowhere: not on the server, not on
+the device.
+
+```
+Creating it
+  salt = 16 random bytes                 stored in the clear (it is not a secret)
+  key  = PBKDF2(pin, salt, 100_000)      held in memory only, never written
+  blob = AES-GCM(refreshToken, key)
+  store: salt + blob
+
+Unlocking
+  key  = PBKDF2(entered pin, salt, 100_000)
+  AES-GCM-decrypt(blob, key)
+    ✓  you now hold the refresh token  →  POST /auth/session/refresh
+    ✗  wrong PIN
+```
+
+**Why this beats storing a hash of the PIN:** there is nothing to compare against. A wrong PIN is a
+failed decryption, so somebody who pulls the device's storage has no hash to run four digits' worth
+of guesses against — because no hash was ever written.
+
+Put `salt + blob` in `flutter_secure_storage` as well (`AndroidOptions(encryptedSharedPreferences:
+true)`), so there are two layers. Either one alone is weak: the Keystore opens without a PIN, so
+anyone holding an unlocked phone is in; and a PIN-derived key alone leaves the blob sitting in plain
+app storage.
+
+States you have to handle, and the last two are the ones usually missed:
+
+| | |
+|---|---|
+| **PIN length** | From `pinLength` on `/auth/otp/verify` and `/auth/me`. It is 4 today and **server-configurable — do not hard-code it.** |
+| **Repeated wrong PIN** | A local, increasing lockout. The server knows nothing about it, so do not expect it to help. |
+| **Forgot the PIN** | Discard the blob → `POST /auth/otp/request` with **`purpose: "pin_reset"`** → verify → set a new PIN → `PATCH /account/devices/current/security`. There is no PIN recovery, because the server never knew it. |
+| **`refresh` returns 401** | The token is dead — a revoked device, or reuse detected. Clear everything and return to the phone screen. 🔴 **Do not show "wrong PIN"**: the PIN was right, and that message sends somebody retrying something that cannot work. |
+| **Reinstall** | A new `device.publicId` means `hasLocalPin` is false and `nextStep` is `CREATE_PIN`. That is deliberate — a fresh installation does not inherit the previous one's trust. |
+| **Two accounts on one device** (screen 3) | One blob per account, each with its own PIN. `UNIQUE(user_id, device_public_id)` allows it. |
+
+And the only thing the server wants from you:
+
+```http
+PATCH /account/devices/current/security     { "hasLocalPin": true }
+```
+
+🔒 A **flag, not a value.** No field accepts a PIN or a hash of one, and sending it anyway does
+nothing.
+
 #### Accounts seeded on staging
 
 | Phone | Who | What they already have |
@@ -2267,6 +2321,7 @@ exist, and every live endpoint must be named here.
 
 | Date | Change |
 |---|---|
+| 2026-10-06 | **Added to 2.1: the local PIN, concretely** — client-side guidance, explicitly not a contract. Store the refresh token encrypted under a key DERIVED from the PIN rather than storing the PIN or a hash of it, so there is nothing on the device to run guesses against. Plus the states usually missed: `pinLength` comes from the server, a dead refresh token must not be reported as a wrong PIN, and a reinstall deliberately starts without a PIN. Nothing was removed. |
 | 2026-10-06 | **Correction:** `user.profileStatus` is `NOT_STARTED` · `BASIC_COMPLETE` — this file wrongly said `PHONE_ONLY`; the API never changed (5.5). `accountStatus` also lists `PENDING_DELETION`. The basic-profile request now lists every allowed value and the `YYYY-MM-DD` date format (4.2). |
 | 2026-10-06 | **Phase 8 starts — cash is now recorded.** A cash booking's `paymentStatus` turns `PAID` about two hours after the driver confirms the passenger travelled, and `DISPUTED` when the passenger contests the record (5.9). New refusal on `POST /commutes/{commute}/publish` and `/resume`: `DRIVER_DEBT_LIMIT_REACHED` (403) when a driver owes more than the limit in platform fees from cash trips; existing rides continue. No new endpoints. |
 | 2026-10-06 | **New: `POST /trips/{trip}/cancel` — "Cancel today" (screen 23, section 4.9).** A driver calls off one day before it starts; every passenger on it is told (new notification type `trip_day_cancelled`), bookings end as `CANCELLED_BY_DRIVER`, nothing is charged. |
