@@ -47,6 +47,9 @@ final class SettingsCatalogue
         'profile.full_name_min_length' => ['group' => 'profile', 'min' => 2, 'max' => 10, 'unit' => 'characters'],
         'profile.full_name_max_length' => ['group' => 'profile', 'min' => 20, 'max' => 100, 'unit' => 'characters'],
 
+        // ---- Verification -------------------------------------------------
+        'verification.document_retention_days' => ['group' => 'verification', 'min' => 30, 'max' => 730, 'unit' => 'days'],
+
         // ---- Commutes and pricing (Chapter 4, ERD §23.3) ------------------
         'commute.min_price_piastres' => ['group' => 'commute', 'min' => 1_000, 'max' => 20_000, 'unit' => 'piastres'],
         'commute.max_price_piastres' => ['group' => 'commute', 'min' => 2_000, 'max' => 50_000, 'unit' => 'piastres'],
@@ -55,8 +58,8 @@ final class SettingsCatalogue
         'pricing.rounding_step_piastres' => ['group' => 'commute', 'min' => 100, 'max' => 2_500, 'unit' => 'piastres'],
 
         // ---- Money -------------------------------------------------------
-        'booking.platform_fee_percent' => ['group' => 'booking', 'min' => 0, 'max' => 20, 'unit' => 'percent',
-            'locked' => 'fee_decision'],
+        // Decided 2026-10-06: deducted from the driver's price, 3% by default, editable here.
+        'booking.platform_fee_percent' => ['group' => 'booking', 'min' => 0, 'max' => 20, 'unit' => 'percent'],
 
         // ---- The trip itself (Chapter 8) ---------------------------------
         'trip.start_window_minutes' => ['group' => 'trip', 'min' => 15, 'max' => 240, 'unit' => 'minutes'],

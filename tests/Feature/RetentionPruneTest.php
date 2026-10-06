@@ -1,5 +1,6 @@
 <?php
 
+use App\Domains\Admin\Models\AdminAction;
 use App\Domains\Identity\Models\OtpChallenge;
 use App\Domains\Identity\Models\SecurityEvent;
 use App\Domains\Notification\Models\Message;
@@ -22,6 +23,7 @@ dataset('retained', [
     'trip chat, 12 months' => [Message::class, fn () => now()->subMonths(12)->subDay(), fn () => now()->subMonths(11)],
     'payment webhooks, 90 days' => [PaymentWebhook::class, fn () => now()->subDays(91), fn () => now()->subDays(89)],
     'security log, 24 months' => [SecurityEvent::class, fn () => now()->subMonths(24)->subDay(), fn () => now()->subMonths(23)],
+    'admin audit log, 24 months' => [AdminAction::class, fn () => now()->subMonths(24)->subDay(), fn () => now()->subMonths(23)],
 ]);
 
 it('deletes rows past their lifetime and keeps the rest', function (string $model, Closure $old, Closure $recent) {
@@ -49,4 +51,4 @@ it('names every retained model in the schedule', function (string $model) {
 
     expect($prune)->not->toBeNull()
         ->and($prune)->toContain($model);
-})->with([OtpChallenge::class, Notification::class, Message::class, PaymentWebhook::class, SecurityEvent::class]);
+})->with([OtpChallenge::class, Notification::class, Message::class, PaymentWebhook::class, SecurityEvent::class, AdminAction::class]);

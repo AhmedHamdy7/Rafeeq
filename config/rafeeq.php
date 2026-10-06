@@ -90,6 +90,14 @@ return [
         'presigned_document_urls' => env('RAFEEQ_PRESIGNED_DOCUMENT_URLS', false),
 
         /*
+         * How long an identity or vehicle document's file is kept after UPLOAD before
+         * `files:purge-expired` destroys it (ERD §18). Decided 2026-10-06: 90 days from upload,
+         * editable from Settings. Stamped onto each row as `purge_after` when the file arrives,
+         * so a later change never extends the life of a file sent under the old policy.
+         */
+        'document_retention_days' => 90,
+
+        /*
          * DEPLOY-ONLY. Which scanner inspects an upload before it can be
          * submitted for review. `signature` is the development scanner and
          * refuses to run in production, so shipping without a real engine
@@ -147,10 +155,10 @@ return [
         /*
          * The platform's share of each seat, as a percentage.
          *
-         * 3.0 is the figure the Engineering Bible uses throughout (§2014:
-         * `payment.platform_fee_pct = 3.0`). It is ALSO open question #5 in
-         * MASTER_PLAN §19 — "is 3% confirmed, and is it flat or tiered?" —
-         * deferred to Phase 8.
+         * ✅ Decided 2026-10-06 (MASTER_PLAN §19 open question #5, Screen Map §8.1): the fee is
+         * DEDUCTED from the driver's price — `price = platform_fee + driver_amount`, the rider
+         * pays the published price and nothing on top — at 3%, flat, and staff may change it
+         * from the dashboard's Settings page (whole percents).
          *
          * Building on the documented number is safe because every booking
          * freezes its own snapshot at approval: changing this later moves
@@ -825,6 +833,7 @@ return [
         'messages_months' => 12,
         'payment_webhooks_days' => 90,
         'security_events_months' => 24,
+        'admin_actions_months' => 24,
     ],
 
 ];

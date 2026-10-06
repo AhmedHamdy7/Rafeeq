@@ -14,7 +14,7 @@
 >
 > **Base URL:** `{host}/api/v1` · **Auth:** bearer token · **Format:** JSON only.
 
-**Last updated:** 2026-10-05 · **123 endpoints live** · Phases 0–7 complete, Phase 9 in progress, Phase 12 started
+**Last updated:** 2026-10-06 · **123 endpoints live** · Phases 0–7 complete, Phase 9 in progress, Phase 12 started
 
 ---
 
@@ -1926,7 +1926,7 @@ booking has no conversation. All three numbers are platform settings — read `m
 |---|---|
 | `mine` | The caller wrote it. There are only two people; no user ids are returned. |
 | `body` | As written. |
-| `containsContactInfo` | It contains something that looks like a phone number or an email. **Allowed, and flagged** — show the recipient a caution before they act on it: a number shared here leaves the platform's protections behind (blocking, the safety desk, the trip record). |
+| `containsContactInfo` | Always `false` for new messages: a message containing a phone number or an email is now **refused** (`CHAT_CONTACT_INFO_NOT_ALLOWED`, below). Can still be `true` on messages sent before 2026-10-06. |
 | `readAt` | When the other person opened the conversation after it arrived. |
 | `sentAt` | |
 | `meta.canSend` | Whether a message can be sent right now. |
@@ -1937,6 +1937,9 @@ booking has no conversation. All three numbers are platform settings — read `m
 #### `POST /bookings/{booking}/messages` — `{ "body": "..." }`, 1–500 characters
 
 `201` with the message. `CHAT_NOT_OPEN` (409, `error.fields.opensAt` / `closesAt`) outside the window.
+**`CHAT_CONTACT_INFO_NOT_ALLOWED` (422, `error.fields.body`)** when the message contains a phone number
+(Arabic or Western digits, spaced, `+20…`) or an email — nothing is stored or sent. Keep the user's text
+in the input so they can edit it, and show `error.message`.
 🔒 **The same `CHAT_NOT_OPEN` is returned when either person has blocked the other** — deliberately
 indistinguishable, because "you cannot message her because she blocked you" tells somebody they were
 blocked. Rate-limited per sender (`429` with `Retry-After`).
@@ -2129,10 +2132,13 @@ price, or the platform changing its percentage, moves nothing here. And the meet
 **fuzzed to ~110m until the booking is confirmed** — a pickup point is often somebody's front
 door, and a pending or cancelled booking has not earned it.
 
-⚠️ **The fee direction is an open question** (section 8). Today `totalPiastres = platformFee +
-driverAmount`, i.e. the fee is deducted from the driver's price. Your screens 12 and 24 show it
-added on top of the passenger instead. **Do not hard-code either reading** — render the three
-figures you are given.
+✅ **The fee direction is decided (2026-10-06): the fee is deducted from the driver's price.**
+`totalPiastres = platformFee + driverAmount`; the passenger pays the published seat price and
+nothing on top. The rate is 3% by default and the operations team can change it, so **never
+hard-code a percentage** — render the figures you are given. ⚠️ **Screens 12 and 24 need new copy:**
+screen 12 must not show the fee as a line added to the seat price, and screen 24's *"You keep the
+full contribution; Rafeeq's fee is charged to passengers separately"* is wrong — the driver keeps
+the price minus the fee.
 
 ### 5.10 Trip session
 
@@ -2205,9 +2211,9 @@ Do not design around either side of these. Ask before you build the screen.
 
 | # | Question | Affects |
 |---|---|---|
-| 1 | **Which way does the platform fee go, and what is the rate?** Today: deducted from the driver's price at 3%. Your screens 12 and 24: added on top of the passenger at 10%. The Bible's own worked example agrees with your screens (a passenger paying 88 for an 80 seat), which contradicts its own prose. Must be settled before Phase 8. | 12, 24, all money |
+| 1 | ~~**Which way does the platform fee go, and what is the rate?**~~ ✅ **Decided 2026-10-06:** deducted from the driver's price, 3% by default, changeable by operations. Screens 12 and 24 need new copy (see 5.9). | 12, 24, all money |
 | 2 | **`firstName` + `lastName`, or one `fullName`?** Screen 7 splits them; the endpoint takes one. | 7 |
-| 3 | **A single day cancelled by the driver** — refund? counts against her reliability? No endpoint until this is answered. | 23, 46 |
+| 3 | ~~**A single day cancelled by the driver**~~ ✅ **Decided 2026-10-06: yes, a driver may cancel one day.** The endpoint is being built next. | 23, 46 |
 | 4 | **"5 min late" as a third declared attendance state.** Screen 36 has the button; the model has `coming`/`away` only. It is also exactly what a wait timer exists to act on. | 36, 41 |
 | 5 | **`Seat belts (all seats)`** is not modelled anywhere, and **`Air conditioning`** is per commute, not per vehicle as screen 31 has it. | 31 |
 | 6 | **Attendance cut-off**: screen 20 says a fixed 9 PM; the implementation uses two hours before departure. Two different models. | 20, 36 |
@@ -2225,6 +2231,8 @@ exist, and every live endpoint must be named here.
 
 | Date | Change |
 |---|---|
+| 2026-10-06 | **Two product decisions.** (1) **The platform fee is deducted from the driver's price**, 3% by default and changeable by operations — screens 12 and 24 need new copy (5.9). (2) A driver may cancel a single day — endpoint coming next. |
+| 2026-10-06 | **Trip chat now refuses phone numbers and emails** (4.15): `POST /bookings/{booking}/messages` answers `422 CHAT_CONTACT_INFO_NOT_ALLOWED` and stores nothing. `containsContactInfo` stays in the shape and is always `false` for new messages. |
 | 2026-10-05 | **Five more notification types** (4.14): `booking_cancelled`, `match_found` (your saved request matched), `rating_due` / `rating_due_riders` when a run completes, and one `rating_reminder` on the last day of the rating window. No endpoint changes. `autoShareTrips` is still inactive — it needs an SMS/WhatsApp provider, not the in-app inbox (4.12). |
 | 2026-10-05 | **New: section 4.15 — trip chat.** Three endpoints: read a booking's conversation, send, report a message. Open from 24h before departure to 2h after the run; a blocked pair gets the same `CHAT_NOT_OPEN` as a closed window. Numbers and emails are allowed but flagged (`containsContactInfo`) — warn before acting on them. |
 | 2026-10-05 | **New: section 4.14 — notifications (screen 22).** Four endpoints: the inbox with `meta.unreadCount`, mark-read, and the preference switches. Every message is already in the member's language. **Push is wired but no provider is configured yet**, so poll the inbox for now. Safety switches cannot be turned off, and a silent SOS never pushes. |

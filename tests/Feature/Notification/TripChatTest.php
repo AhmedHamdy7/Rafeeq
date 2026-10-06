@@ -62,11 +62,11 @@ it('lets the passenger and the driver talk about the pickup', function () {
  * 🔒 Who wrote, never what: the body would be on a lock screen.
  */
 it('tells the other person a message arrived, without the message', function () {
-    sendChat($this->paxToken, $this->booking->id, 'call me 01012345678');
+    sendChat($this->paxToken, $this->booking->id, 'waiting by the north gate')->assertStatus(201);
 
     $note = Notification::query()->where('user_id', $this->driver->id)->where('type', 'chat_message')->where('channel', 'in_app')->sole();
 
-    expect($note->title.$note->body)->not->toContain('0101')
+    expect($note->title.$note->body)->not->toContain('north gate')
         ->and($note->data)->toBe(['bookingId' => $this->booking->id]);
 });
 
@@ -137,10 +137,17 @@ it('refuses a blocked pair with the same answer as a closed window', function ()
         ->assertJsonPath('meta.canSend', false);
 });
 
-it('flags a phone number or an email, and delivers it', function (string $body) {
+/**
+ * 🔒 Refused, not delivered: a number shared here moves the conversation off the platform, away from
+ * blocking and the safety desk. Nothing is stored and nobody is notified.
+ */
+it('refuses a phone number or an email, and stores nothing', function (string $body) {
     sendChat($this->paxToken, $this->booking->id, $body)
-        ->assertStatus(201)
-        ->assertJsonPath('data.containsContactInfo', true);
+        ->assertStatus(422)
+        ->assertJsonPath('error.code', 'CHAT_CONTACT_INFO_NOT_ALLOWED');
+
+    expect(Message::query()->count())->toBe(0)
+        ->and(Notification::query()->where('user_id', $this->driver->id)->where('type', 'chat_message')->exists())->toBeFalse();
 })->with([
     'local' => 'كلمني على 01012345678',
     'arabic digits' => 'رقمي ٠١٠١٢٣٤٥٦٧٨',

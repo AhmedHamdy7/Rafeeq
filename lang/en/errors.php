@@ -128,6 +128,7 @@ return [
     'LIVE_SHARE_ALREADY_ENDED' => 'That share link has already been stopped.',
     'NOTIFICATION_CATEGORY_LOCKED' => 'Safety notices cannot be turned off.',
     'CHAT_NOT_OPEN' => 'Messages for this trip are not open right now.',
+    'CHAT_CONTACT_INFO_NOT_ALLOWED' => 'Phone numbers and email addresses cannot be sent in trip chat. Keep the conversation here, where the platform can protect you both.',
 
     /*
      * Admin sign-in. One message for a wrong password and a wrong code, on purpose —

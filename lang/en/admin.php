@@ -365,6 +365,7 @@ return [
         'out_of_range' => 'Must be between :min and :max.',
         'out_of_order' => ':low must stay below :high.',
         'groups' => [
+            'verification' => 'Verification',
             'auth' => 'Sign-in',
             'profile' => 'Profile',
             'commute' => 'Commutes and pricing',
@@ -377,7 +378,6 @@ return [
         ],
         'locked' => [
             'client_contract' => 'Fixed — the mobile app is built around it',
-            'fee_decision' => 'Waiting on the fee decision',
         ],
         'units' => [
             'digits' => 'digits',
@@ -441,6 +441,7 @@ return [
             'safety__max_emergency_contacts' => 'Emergency contacts per member',
             'safety__reports_per_hour' => 'Reports per member per hour',
             'safety__max_evidence_per_incident' => 'Evidence files per report',
+            'verification__document_retention_days' => 'How long ID and vehicle documents are kept after upload',
             'safety__evidence_retention_days' => 'How long report evidence is kept',
             'safety__live_share_grace_minutes' => 'Live share after the trip ends',
             'safety__live_share_max_minutes' => 'Longest a live share can last',
