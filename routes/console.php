@@ -95,6 +95,27 @@ Schedule::command('demands:expire')
     ->withoutOverlapping();
 
 /*
+ * 🔴 Cash collected on the day, recorded once the driver has confirmed who travelled and two hours
+ * have passed undisputed (Bible §8.1, Master Plan §15.6). Writes the payment, the platform's fee as
+ * the driver's debt, and marks the booking paid. Idempotent — one charge per booking by key.
+ *
+ * If it does not run: no cash trip is ever recorded as paid, drivers' fee debt never grows, and the
+ * debt cap never stops anybody — the platform's whole income from cash trips goes unrecorded.
+ */
+Schedule::command('payments:settle-cash')
+    ->everyFifteenMinutes()
+    ->withoutOverlapping();
+
+/*
+ * Pitfall #39: every driver's balance against the sum of their fee ledger. Reports drift to the
+ * critical log and fails; never repairs it (see ReconcileDriverBalancesAction).
+ */
+Schedule::command('payments:reconcile-balances')
+    ->dailyAt('03:30')
+    ->timezone('Africa/Cairo')
+    ->withoutOverlapping();
+
+/*
  * Night escort (Master Plan: 9 PM–5 AM). Shortly before the window opens, so the live board shows
  * every corridor armed by the time the first night run starts; idempotent, so a second run (or a
  * retry after a failed deploy) arms nothing new. Off when `safety.night_escort_enabled` is 0.

@@ -76,6 +76,13 @@ it('registers every scheduled command the platform depends on', function (string
 
     // Retention for login codes, notifications, chat, webhooks and the security log (ERD §18).
     'model:prune',
+
+    // Cash collected on the day. Without it nothing is ever recorded as paid and drivers' fee debt
+    // never grows, so the debt cap never applies.
+    'payments:settle-cash',
+
+    // The fee ledger against its projection (pitfall #39).
+    'payments:reconcile-balances',
 ]);
 
 /**

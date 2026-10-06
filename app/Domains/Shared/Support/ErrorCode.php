@@ -54,6 +54,7 @@ enum ErrorCode: string
 
     // ---- Driver & vehicles (Phase 4, Chapter 3) ------------------------
     case DriverNotEligible = 'DRIVER_NOT_ELIGIBLE';
+    case DriverDebtLimitReached = 'DRIVER_DEBT_LIMIT_REACHED';
     case DriverApplicationLocked = 'DRIVER_APPLICATION_LOCKED';
     case DriverApplicationIncomplete = 'DRIVER_APPLICATION_INCOMPLETE';
     case LicenceExpired = 'DRIVER_LICENCE_EXPIRED';
@@ -214,6 +215,10 @@ enum ErrorCode: string
 
             // 403: the account is fine, this person just may not do it yet.
             self::DriverNotEligible => 403,
+
+            // 403: the driver owes more in uncollected cash fees than the platform allows before
+            // a new commute may go up (Bible §8.1). Settling brings it back under the cap.
+            self::DriverDebtLimitReached => 403,
 
             self::DriverApplicationLocked,
             self::DriverDuplicateDetected,

@@ -4,6 +4,7 @@ namespace App\Domains\Trip\Actions;
 
 use App\Domains\Booking\Enums\BookingActorType;
 use App\Domains\Booking\Enums\BookingEventType;
+use App\Domains\Booking\Enums\PaymentStatus;
 use App\Domains\Booking\Models\Booking;
 use App\Domains\Booking\Support\BookingEventLog;
 use App\Domains\Shared\Exceptions\DomainException;
@@ -71,6 +72,13 @@ final readonly class DisputeAttendanceAction
                 // never came" are the same category and opposite cases.
                 'dispute_reason' => $reason,
             ])->save();
+
+            /*
+             * Collection stops here (Master Plan §15.6). If the two-hour delay has already passed
+             * and the cash was recorded, the booking still says so — staff decide what the money
+             * was for, and the dispute must be visible on it until they do.
+             */
+            $booking->forceFill(['payment_status' => PaymentStatus::Disputed->value])->save();
 
             BookingEventLog::record(
                 $booking,

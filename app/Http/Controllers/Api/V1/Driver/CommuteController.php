@@ -145,6 +145,7 @@ final class CommuteController extends Controller
         ErrorCode::CommuteInvalidTransition,
         ErrorCode::CommuteVehicleUnavailable,
         ErrorCode::DriverNotEligible,
+        ErrorCode::DriverDebtLimitReached,
         ErrorCode::LicenceExpired,
         ErrorCode::NotFound,
     )]
@@ -179,6 +180,7 @@ final class CommuteController extends Controller
         ErrorCode::CommuteInvalidTransition,
         ErrorCode::CommuteVehicleUnavailable,
         ErrorCode::DriverNotEligible,
+        ErrorCode::DriverDebtLimitReached,
         ErrorCode::LicenceExpired,
         ErrorCode::NotFound,
     )]

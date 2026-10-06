@@ -151,6 +151,23 @@ return [
         'expected_review_minutes' => 120,
     ],
 
+    'payment' => [
+        /*
+         * How long after the driver confirms somebody travelled before the money is recorded as
+         * collected (Master Plan §15.6: "two hours before any money moves"). Long enough for a
+         * driver who tapped the wrong name to notice and for a passenger to object first.
+         */
+        'collection_delay_minutes' => 120,
+
+        /*
+         * The most a driver may owe the platform in uncollected fees from cash trips before they
+         * may not publish (Bible §8.1: `payment.max_driver_debt_piastres = 20000`, 200 EGP; open
+         * question #6 in MASTER_PLAN §19 — the documented figure until decided otherwise).
+         * Existing bookings continue; only publishing stops.
+         */
+        'max_driver_debt_piastres' => 20_000,
+    ],
+
     'booking' => [
         /*
          * The platform's share of each seat, as a percentage.

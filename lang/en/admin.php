@@ -442,6 +442,8 @@ return [
             'safety__reports_per_hour' => 'Reports per member per hour',
             'safety__max_evidence_per_incident' => 'Evidence files per report',
             'verification__document_retention_days' => 'How long ID and vehicle documents are kept after upload',
+            'payment__collection_delay_minutes' => 'How long after attendance is confirmed before cash is recorded as collected',
+            'payment__max_driver_debt_piastres' => 'The most a driver may owe in fees before they cannot publish',
             'safety__evidence_retention_days' => 'How long report evidence is kept',
             'safety__live_share_grace_minutes' => 'Live share after the trip ends',
             'safety__live_share_max_minutes' => 'Longest a live share can last',
