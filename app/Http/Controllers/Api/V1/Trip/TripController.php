@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Api\V1\Trip;
 
 use App\Domains\Booking\Enums\BookingStatus;
 use App\Domains\Booking\Models\Booking;
+use App\Domains\Commute\Actions\CancelTripDayAction;
 use App\Domains\Commute\Models\CommuteOffer;
 use App\Domains\Commute\Models\ScheduledTrip;
 use App\Domains\Shared\Exceptions\DomainException;
@@ -15,6 +16,8 @@ use App\Domains\Trip\Enums\TripSessionStatus;
 use App\Http\Controllers\Controller;
 use App\Http\OpenApi\ApiErrors;
 use App\Http\Requests\Trip\AdvanceTripRequest;
+use App\Http\Requests\Trip\CancelTripDayRequest;
+use App\Http\Resources\ScheduledTripResource;
 use App\Http\Resources\TripSessionResource;
 use App\Http\Responses\ApiResponse;
 use Illuminate\Http\JsonResponse;
@@ -113,6 +116,20 @@ final class TripController extends Controller
         return ApiResponse::success(new TripSessionResource(
             $action->execute($session)->load('scheduledTrip')
         ));
+    }
+
+    /**
+     * POST /v1/trips/{trip}/cancel — "Cancel today" (screen 23): one day off, the commute stands.
+     *
+     * Every passenger on the day is told and their booking ends as cancelled by the driver; see
+     * the Action for what else closes with it.
+     */
+    #[ApiErrors(ErrorCode::TripNotCancellable, ErrorCode::NotFound)]
+    public function cancel(CancelTripDayRequest $request, string $trip, CancelTripDayAction $action): JsonResponse
+    {
+        $cancelled = $action->execute($this->driven($request, $trip), $request->user(), $request->validated('reason'));
+
+        return ApiResponse::success(new ScheduledTripResource($cancelled));
     }
 
     /**

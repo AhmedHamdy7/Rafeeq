@@ -14,7 +14,7 @@
 >
 > **Base URL:** `{host}/api/v1` · **Auth:** bearer token · **Format:** JSON only.
 
-**Last updated:** 2026-10-06 · **123 endpoints live** · Phases 0–7 complete, Phase 9 in progress, Phase 12 started
+**Last updated:** 2026-10-06 · **124 endpoints live** · Phases 0–7 complete, Phase 9 in progress, Phase 12 started
 
 ---
 
@@ -508,7 +508,7 @@ Status: ✅ fully served · ⚠️ served, something named missing · ⛔ no API
 
 | # | Screen | Endpoints | Status |
 |---|---|---|---|
-| 23 | **Driver home** | **`GET /driver/home`** | ✅ One call: today's run, countdown, attendance counts, seats open, what to collect and what she keeps, approved passengers with their meeting points, pending requests with the full count, and her stats. A passenger who is not a driver gets an **empty** payload, not a 404 — the role switch lives on this screen. **Missing: "Cancel today"** (no endpoint cancels a single day — section 8). |
+| 23 | **Driver home** | **`GET /driver/home`** | ✅ One call: today's run, countdown, attendance counts, seats open, what to collect and what she keeps, approved passengers with their meeting points, pending requests with the full count, and her stats. A passenger who is not a driver gets an **empty** payload, not a 404 — the role switch lives on this screen. **"Cancel today"** → `POST /trips/{trip}/cancel` (4.9). |
 | 24 | Publish route | `POST /commutes` · `PUT /commutes/{commute}/route` · `PUT /commutes/{commute}/schedule` · `GET /commutes/{commute}/price-suggestion` | ✅ The suggestion returns the number, the slider bounds, and the reasoning behind it. **Price bounds are 5,000–12,000 piastres (EGP 50–120)** — matching your slider. |
 | 25 | Publish review | `GET /commutes/{commute}` · `POST /commutes/{commute}/publish` | ✅ |
 | 31 | Vehicle capture | `POST /driver/vehicles` · `POST /driver/vehicles/{vehicle}/documents` | ⚠️ **Missing: a second vehicle photo** (one `photo_path` column), **`Seat belts (all seats)` is not modelled anywhere**, and **`Air conditioning` is modelled per COMMUTE** (`rules.ac`), not per vehicle as your screen has it. Section 8. |
@@ -642,6 +642,7 @@ fails if this list and the running routes ever disagree in either direction.
 | `POST /pickup-requests/{pickupRequest}/accept-alternative` | 4.8 Pickup points |
 | `GET /trips/{trip}` | 4.9 Live trip |
 | `GET /trips/{trip}/attendance` | 4.9 Live trip |
+| `POST /trips/{trip}/cancel` | 4.9 Live trip |
 | `POST /trips/{trip}/check-in` | 4.9 Live trip |
 | `POST /trips/{trip}/complete` | 4.9 Live trip |
 | `GET /trips/{trip}/location` | 4.9 Live trip |
@@ -1195,6 +1196,23 @@ the transition was invalid.
 Closes the session, completes the bookings, updates the counters, and clears the live position.
 **No money moves** — there is a two-hour delay before collection so a driver who tapped the wrong
 name can notice (and Phase 8 is not built).
+
+#### `POST /trips/{trip}/cancel` — verified, driver only — "Cancel today" (screen 23)
+
+`{ "reason"?: "..." }` (optional, up to 255). Calls off **one day**; the commute and every other day
+stand. `200` with the day (`ScheduledTrip`, `status: "CANCELLED"`, `seatsTaken: 0`).
+
+- Every booking on the day becomes `CANCELLED_BY_DRIVER` and every passenger gets a
+  `trip_day_cancelled` notification (4.14) with the driver's first name and the date — **never the
+  reason**, which may be personal and shows on a lock screen. Nothing is charged.
+- A pending one-day request for that date is expired.
+- `TRIP_NOT_CANCELLABLE` (409, `error.fields.status`) once the run has started, or if the day is
+  already cancelled. A run already under way is ended through `POST /trips/{trip}/status` instead.
+- Anybody but the day's driver gets `404`.
+- A cancelled day stays cancelled: it cannot be booked or started, and is not regenerated.
+
+Ask for confirmation first, and say how many people will be told (`GET /driver/home` already
+has the count for today).
 
 #### `GET /trips/{trip}` — verified, driver or anybody on the run
 
@@ -1879,7 +1897,7 @@ hold must still be able to read the notice that says so.
 
 | Response field | Meaning |
 |---|---|
-| `type` | What happened — route on this. Today: `seat_requested` (driver) · `seat_approved` · `seat_declined` · `booking_cancelled` (to the other side) · `match_found` (a saved request matched — `data.commuteId`) · `trip_started` · `chat_message` · `rating_due` (passenger, `data.bookingId`) · `rating_due_riders` (driver, once per run, `data.tripId`) · `rating_reminder` (last day of the window, once) · `sos_picked_up` · `report_resolved` · `report_closed` · `account_on_hold` · `account_reinstated`. **Expect new values**; show an unknown one as a plain message. |
+| `type` | What happened — route on this. Today: `seat_requested` (driver) · `seat_approved` · `seat_declined` · `booking_cancelled` (to the other side) · `trip_day_cancelled` (the driver called off a day — `data.tripId`, `data.bookingId`) · `match_found` (a saved request matched — `data.commuteId`) · `trip_started` · `chat_message` · `rating_due` (passenger, `data.bookingId`) · `rating_due_riders` (driver, once per run, `data.tripId`) · `rating_reminder` (last day of the window, once) · `sos_picked_up` · `report_resolved` · `report_closed` · `account_on_hold` · `account_reinstated`. **Expect new values**; show an unknown one as a plain message. |
 | `category` | `booking` · `payment` · `trip` · `safety` · `marketing`. |
 | `title` / `body` | **Already in the member's language** — rendered when the message was sent, and stored as written. Show them as they are. They never contain a phone number, an address or a full name: a push body appears on a lock screen. |
 | `data` | Ids for the screen to open: `seatRequestId`, `commuteId`, `tripId`, `sosId`, `incidentId`. Never names. |
@@ -2213,7 +2231,7 @@ Do not design around either side of these. Ask before you build the screen.
 |---|---|---|
 | 1 | ~~**Which way does the platform fee go, and what is the rate?**~~ ✅ **Decided 2026-10-06:** deducted from the driver's price, 3% by default, changeable by operations. Screens 12 and 24 need new copy (see 5.9). | 12, 24, all money |
 | 2 | **`firstName` + `lastName`, or one `fullName`?** Screen 7 splits them; the endpoint takes one. | 7 |
-| 3 | ~~**A single day cancelled by the driver**~~ ✅ **Decided 2026-10-06: yes, a driver may cancel one day.** The endpoint is being built next. | 23, 46 |
+| 3 | ~~**A single day cancelled by the driver**~~ ✅ **Decided and built 2026-10-06:** `POST /trips/{trip}/cancel` (4.9). | 23, 46 |
 | 4 | **"5 min late" as a third declared attendance state.** Screen 36 has the button; the model has `coming`/`away` only. It is also exactly what a wait timer exists to act on. | 36, 41 |
 | 5 | **`Seat belts (all seats)`** is not modelled anywhere, and **`Air conditioning`** is per commute, not per vehicle as screen 31 has it. | 31 |
 | 6 | **Attendance cut-off**: screen 20 says a fixed 9 PM; the implementation uses two hours before departure. Two different models. | 20, 36 |
@@ -2231,7 +2249,8 @@ exist, and every live endpoint must be named here.
 
 | Date | Change |
 |---|---|
-| 2026-10-06 | **Two product decisions.** (1) **The platform fee is deducted from the driver's price**, 3% by default and changeable by operations — screens 12 and 24 need new copy (5.9). (2) A driver may cancel a single day — endpoint coming next. |
+| 2026-10-06 | **New: `POST /trips/{trip}/cancel` — "Cancel today" (screen 23, section 4.9).** A driver calls off one day before it starts; every passenger on it is told (new notification type `trip_day_cancelled`), bookings end as `CANCELLED_BY_DRIVER`, nothing is charged. |
+| 2026-10-06 | **Two product decisions.** (1) **The platform fee is deducted from the driver's price**, 3% by default and changeable by operations — screens 12 and 24 need new copy (5.9). (2) A driver may cancel a single day — `POST /trips/{trip}/cancel`. |
 | 2026-10-06 | **Trip chat now refuses phone numbers and emails** (4.15): `POST /bookings/{booking}/messages` answers `422 CHAT_CONTACT_INFO_NOT_ALLOWED` and stores nothing. `containsContactInfo` stays in the shape and is always `false` for new messages. |
 | 2026-10-05 | **Five more notification types** (4.14): `booking_cancelled`, `match_found` (your saved request matched), `rating_due` / `rating_due_riders` when a run completes, and one `rating_reminder` on the last day of the rating window. No endpoint changes. `autoShareTrips` is still inactive — it needs an SMS/WhatsApp provider, not the in-app inbox (4.12). |
 | 2026-10-05 | **New: section 4.15 — trip chat.** Three endpoints: read a booking's conversation, send, report a message. Open from 24h before departure to 2h after the run; a blocked pair gets the same `CHAT_NOT_OPEN` as a closed window. Numbers and emails are allowed but flagged (`containsContactInfo`) — warn before acting on them. |

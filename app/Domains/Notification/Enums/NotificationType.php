@@ -27,6 +27,7 @@ enum NotificationType: string
     case SeatApproved = 'seat_approved';
     case SeatDeclined = 'seat_declined';
     case BookingCancelled = 'booking_cancelled';
+    case TripDayCancelled = 'trip_day_cancelled';
     case MatchFound = 'match_found';
 
     // ---- Trip ---------------------------------------------------------------
@@ -49,6 +50,7 @@ enum NotificationType: string
             self::SeatApproved,
             self::SeatDeclined,
             self::BookingCancelled,
+            self::TripDayCancelled,
             self::MatchFound => NotificationCategory::Booking,
 
             self::TripStarted,

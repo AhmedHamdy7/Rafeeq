@@ -420,6 +420,8 @@ Route::prefix('v1')->group(function (): void {
             Route::post('trips/{trip}/start', [TripController::class, 'start']);
             Route::post('trips/{trip}/status', [TripController::class, 'advance']);
             Route::post('trips/{trip}/complete', [TripController::class, 'complete']);
+            // "Cancel today" — one day off, before it starts; the commute stands (screen 23).
+            Route::post('trips/{trip}/cancel', [TripController::class, 'cancel']);
 
             /*
              * Who actually travelled (decision D18).
