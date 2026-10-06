@@ -58,6 +58,8 @@ final class SettingsCatalogue
         'pricing.rounding_step_piastres' => ['group' => 'commute', 'min' => 100, 'max' => 2_500, 'unit' => 'piastres'],
 
         // ---- Money -------------------------------------------------------
+        'payment.collection_delay_minutes' => ['group' => 'booking', 'min' => 30, 'max' => 1_440, 'unit' => 'minutes'],
+        'payment.max_driver_debt_piastres' => ['group' => 'booking', 'min' => 5_000, 'max' => 200_000, 'unit' => 'piastres'],
         // Decided 2026-10-06: deducted from the driver's price, 3% by default, editable here.
         'booking.platform_fee_percent' => ['group' => 'booking', 'min' => 0, 'max' => 20, 'unit' => 'percent'],
 

@@ -439,6 +439,8 @@ return [
             'safety__reports_per_hour' => 'البلاغات لكل عضو في الساعة',
             'safety__max_evidence_per_incident' => 'ملفات الأدلة لكل بلاغ',
             'verification__document_retention_days' => 'مدة الاحتفاظ بصور البطايق ومستندات العربيات بعد رفعها',
+            'payment__collection_delay_minutes' => 'بعد تأكيد الحضور بقد إيه الكاش يتسجّل إنه اتحصّل',
+            'payment__max_driver_debt_piastres' => 'أقصى مديونية رسوم على السائق قبل ما يتمنع من النشر',
             'safety__evidence_retention_days' => 'مدة الاحتفاظ بأدلة البلاغات',
             'safety__live_share_grace_minutes' => 'المشاركة المباشرة بعد نهاية الرحلة',
             'safety__live_share_max_minutes' => 'أطول مدة للمشاركة المباشرة',

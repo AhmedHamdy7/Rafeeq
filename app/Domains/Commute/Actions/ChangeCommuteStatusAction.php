@@ -8,6 +8,7 @@ use App\Domains\Commute\Enums\ScheduledTripStatus;
 use App\Domains\Commute\Models\CommuteOffer;
 use App\Domains\Commute\Models\ScheduledTrip;
 use App\Domains\Driver\Models\DriverProfile;
+use App\Domains\Payment\Support\DriverDebt;
 use Illuminate\Support\Facades\DB;
 
 /**
@@ -47,6 +48,7 @@ final readonly class ChangeCommuteStatusAction
         // Re-checked on the way back: a commute paused because the vehicle was
         // suspended must not resume just because the driver asked.
         CreateCommuteOfferAction::assertDriverMayPublish($offer->driverProfile);
+        DriverDebt::assertMayPublish($offer->driverProfile);
         CreateCommuteOfferAction::usableVehicle($offer->driverProfile, $offer->vehicle_id);
 
         return DB::transaction(function () use ($offer): CommuteOffer {

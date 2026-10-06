@@ -948,6 +948,11 @@ Computes the route, writes the search box, generates the first bookable days. Re
 vehicle: `DRIVER_LICENCE_EXPIRED`, `COMMUTE_VEHICLE_UNAVAILABLE` and `COMMUTE_INCOMPLETE` are all
 expected failures here.
 
+**`DRIVER_DEBT_LIMIT_REACHED` (403)** — the driver owes more in platform fees from cash trips than the
+limit (200 EGP by default; operations can change it). `error.fields.outstandingPiastres` and
+`error.fields.capPiastres` give both numbers. **Her existing rides continue** — starting a run is never
+refused for this. The same refusal applies to `resume`. Show the amount and how to settle it.
+
 #### `POST /commutes/{commute}/pause` · `/resume` — verified
 
 Pausing stops it being found and stops new days being generated. **Days already booked are
@@ -2140,7 +2145,7 @@ a brand-new member they are unreliable.
 | `price.platformFeePiastres` | The platform's share. |
 | `price.driverAmountPiastres` | What reaches the driver. |
 | `paymentType` | `cash` · `online`. |
-| `paymentStatus` | `NOT_DUE` (cash is settled in the car) · `PENDING` · `PAID` · `FAILED` · `REFUNDED` · `DISPUTED`. |
+| `paymentStatus` | `NOT_DUE` (nothing recorded yet) · `PENDING` · `PAID` · `FAILED` · `REFUNDED` · `DISPUTED`. **Cash:** the passenger pays in the car; the booking turns `PAID` about **two hours after the driver confirms they travelled** (the delay lets a wrong tap be noticed). A no-show stays `NOT_DUE`. `DISPUTED` as soon as the passenger contests the attendance record, until staff decide. |
 | `meetingPoint` | `{lat, lng, isExact}`, or **`null` for the standard point** — which is the run's origin. |
 | `cancelledAt`, `cancelledReason`, `cancellationFeePiastres` | The fee is always `0` today. |
 | `trip` | The scheduled trip above, when loaded. |
@@ -2214,7 +2219,7 @@ Nothing below exists. Build the screen shells if you like, but there is no endpo
 
 | Area | Screens | Phase | What is missing |
 |---|---|---|---|
-| **Payments and wallet** | 34, group `payments` tab | **8** | Payment methods, online capture, driver balance and payouts, refunds, cancellation fees. `paymentStatus` exists and stays `NOT_DUE` for cash. **Blocked on the fee-direction decision, section 8.** |
+| **Payments and wallet** | 34, group `payments` tab | **8** | **In progress.** Cash is now recorded (`paymentStatus` → `PAID`, see 5.9) and the driver's fee debt is tracked, with a publishing cap. Still to come: the driver's balance screen, the group's weekly statement, then — once a payment provider is chosen — payment methods, online capture, payouts and refunds. Cancellation fees wait on the cancellation policy. |
 | **Driver cancelling one day** | 43, 45, 46 | **9** | A driver cancelling a single day and the backup search that follows. **Blocked on an open decision** — refunds and reliability, section 8 #3. Route deviation itself is now detected and reported (see `deviationDetectedAt`); the ops ALERT it should trigger needs Phase 12/13. |
 | **Reviews on a profile, trust tier** | reviews on 12, `minRating` filter on 11, history on 19 | **10** | 🔴 **Rating itself is done** — section 4.13 — and the `rating` in every public summary now carries a number once a rating is revealed. Still to come: the list of **other people's** visible reviews on a profile, reporting an abusive review, and the public trust tier (`new` / `trusted` / `highly_trusted`). The underlying score is deliberately internal and will never be returned. |
 | **Auto-share trips** | 26 | **12** | 🔴 **`autoShareTrips` on an emergency contact is stored and nothing acts on it yet.** See 4.12 — read that before you build the toggle. |
@@ -2249,6 +2254,7 @@ exist, and every live endpoint must be named here.
 
 | Date | Change |
 |---|---|
+| 2026-10-06 | **Phase 8 starts — cash is now recorded.** A cash booking's `paymentStatus` turns `PAID` about two hours after the driver confirms the passenger travelled, and `DISPUTED` when the passenger contests the record (5.9). New refusal on `POST /commutes/{commute}/publish` and `/resume`: `DRIVER_DEBT_LIMIT_REACHED` (403) when a driver owes more than the limit in platform fees from cash trips; existing rides continue. No new endpoints. |
 | 2026-10-06 | **New: `POST /trips/{trip}/cancel` — "Cancel today" (screen 23, section 4.9).** A driver calls off one day before it starts; every passenger on it is told (new notification type `trip_day_cancelled`), bookings end as `CANCELLED_BY_DRIVER`, nothing is charged. |
 | 2026-10-06 | **Two product decisions.** (1) **The platform fee is deducted from the driver's price**, 3% by default and changeable by operations — screens 12 and 24 need new copy (5.9). (2) A driver may cancel a single day — `POST /trips/{trip}/cancel`. |
 | 2026-10-06 | **Trip chat now refuses phone numbers and emails** (4.15): `POST /bookings/{booking}/messages` answers `422 CHAT_CONTACT_INFO_NOT_ALLOWED` and stores nothing. `containsContactInfo` stays in the shape and is always `false` for new messages. |

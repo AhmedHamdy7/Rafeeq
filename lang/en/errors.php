@@ -46,6 +46,7 @@ return [
 
     // Driver application. The duplicate message is deliberately vague about
     // WHICH detail matched — see the note on the error code.
+    'DRIVER_DEBT_LIMIT_REACHED' => 'You owe Rafeeq more in fees from cash trips than the limit allows, so you cannot publish right now. Your existing rides continue. Settle the balance to publish again.',
     'DRIVER_NOT_ELIGIBLE' => 'You cannot apply to drive yet.',
     'DRIVER_APPLICATION_LOCKED' => 'Your application is being reviewed and cannot be changed. Withdraw it first if you need to make a correction.',
     'DRIVER_APPLICATION_INCOMPLETE' => 'Some required details or documents are still missing.',
