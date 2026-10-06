@@ -104,6 +104,27 @@ php artisan view:cache
 #
 #     php artisan migrate --force
 #
+# 🔴 But they ARE checked here. Without the pre-deploy step the new code starts against the old
+# schema, and what that looks like is a bare "500 Server Error" on the first page that reads a new
+# table — the admin dashboard, in the case that added this check — with nothing about migrations
+# anywhere. Refusing to start says it in one line, and the platform keeps serving the previous
+# deployment instead of new code on an old database.
+#
+# `--pending=3` exits 3 only when migrations are pending; any other failure (database unreachable,
+# no migrations table yet) is reported but does not block the start.
+set +e
+PENDING_OUTPUT="$(php artisan migrate:status --pending=3 2>&1)"
+PENDING_STATUS=$?
+set -e
+
+if [ "${PENDING_STATUS}" -eq 3 ]; then
+    printf '\n🔴 RAFEEQ — refusing to start: the database is behind the code.\n%s\n\n' "${PENDING_OUTPUT}" >&2
+    printf 'Run the migrations once, as the platform'\''s pre-deploy step:\n    php artisan migrate --force\nOn Railway: Service → Settings → Deploy → Pre-deploy Command. See deploy/RAILWAY_SETUP.md.\n\n' >&2
+    exit 1
+elif [ "${PENDING_STATUS}" -ne 0 ]; then
+    printf '\n⚠️  RAFEEQ — could not check for pending migrations (starting anyway):\n%s\n\n' "${PENDING_OUTPUT}" >&2
+fi
+#
 # ⚠️ And the queue worker, Reverb and the scheduler are separate services. Without them,
 # notifications never arrive, the live map never moves, and GPS trails are lost — none of which
 # reports an error anywhere. See deploy/RAILWAY_SETUP.md.

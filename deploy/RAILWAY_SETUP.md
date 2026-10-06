@@ -211,7 +211,9 @@ Railway → Service → Settings → **Deploy → Pre-deploy Command**:
 php artisan migrate --force
 ```
 
-بيشتغل قبل كل نشر. أول مرة بس، من الـ Console، لو عاوز داتا يشتغلوا عليها:
+بيشتغل قبل كل نشر. 🔴 **لو مش متضبط**، الكود الجديد بيشتغل على سكيمة قديمة، وده شكله `500 Server Error` على أول صفحة بتقرا جدول جديد (حصل فعلًا على `/admin/dashboard` بعد إضافة `account_suspensions`). عشان كده الـ entrypoint دلوقتي **بيرفض يبدأ لو فيه migrations معلّقة** وبيكتب في الـ Deploy Logs اسمها والأمر المطلوب — و Railway بيفضل شغّال على النشر اللي قبله. ولو عايز تشغّلها يدوي مرة: من الـ Console بتاع الخدمة `php artisan migrate --force`، وتتأكد بـ `php artisan migrate:status --pending`.
+
+أول مرة بس، من الـ Console، لو عاوز داتا يشتغلوا عليها:
 
 ```
 php artisan db:seed --force
