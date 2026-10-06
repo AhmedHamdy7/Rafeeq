@@ -776,8 +776,21 @@ and there never will be. `pushToken` is stored encrypted.
 
 #### `PUT /account/profile/basic` — signed-in, active account
 
-**Request:** `fullName` (required), `publicFirstName`, `gender` (required), `registeredRole`
-(required), `dateOfBirth`, `preferredLanguage`, `orgType`, `organizationId`.
+**Request:**
+
+| Field | | Values |
+|---|---|---|
+| `fullName` | required | Arabic or Latin letters; spaces, `-`, `'`, `.` allowed; at least one letter. Length bounds are a platform setting. |
+| `gender` | required | `woman` · `man` · `prefer_not_to_say`. 🔒 Never returned by any endpoint. |
+| `registeredRole` | required | `driver` · `passenger` · `both` |
+| `dateOfBirth` | optional | **`YYYY-MM-DD`** only. Must make the person at least the minimum age (18 today — a platform setting, do not hard-code it) and no more than 120. |
+| `publicFirstName` | optional | Up to 50 characters. Defaults to the first word of `fullName`. |
+| `preferredLanguage` | optional | `ar` · `en` |
+| `orgType` | optional | `work` · `university` · `school` |
+| `organizationId` | optional | A 26-character organisation id. |
+
+All values are **lower-case** in the request; the response returns statuses upper-case (see 5.5).
+Idempotent — sending it again overwrites rather than failing.
 
 Returns `user`. See screen 7 above: the split-name question is open.
 
@@ -2066,10 +2079,10 @@ deserves to see *why* one ranked above the other:
 | `fullName` / `publicFirstName` | Same rule. |
 | `profilePhotoPath` | Storage path; ask us for the display URL flow before wiring it. |
 | `dateOfBirth`, `email` | Own only. |
-| `accountStatus` | `ACTIVE` · `SUSPENDED` · `DELETED`. |
+| `accountStatus` | `ACTIVE` · `SUSPENDED` · `PENDING_DELETION` · `DELETED`. `PENDING_DELETION` is reserved for the 30-day grace after a deletion request (not built yet); treat any value you do not know as "not active". |
 | `suspensionReason` | Present only while suspended: **one sentence, already in the request's language**, saying why in general terms (e.g. "A safety report is under review, so new bookings are paused."). Show it as written. It is a category, never the note staff wrote, and never names anybody. |
 | `suspension` | Present only while suspended: `caseNumber` (the reference the member quotes, e.g. `RF-482913`), `reasonCode` (`safety_report` · `identity_check` · `payment_issue` · `policy_breach` — for an icon or analytics, not for wording), `suspendedAt`, `reviewDueAt` (the promised "expected update" time — show it as a time, and keep showing it if it has passed rather than hiding it). `caseNumber` can be `null` only for an account suspended before holds were recorded. |
-| `profileStatus` | `PHONE_ONLY` · `BASIC_COMPLETE`. **Until `BASIC_COMPLETE` the `active` tier refuses most endpoints.** |
+| `profileStatus` | `NOT_STARTED` (signed in with a phone, basic profile not filled yet) · `BASIC_COMPLETE` (after `PUT /account/profile/basic` succeeds). **Until `BASIC_COMPLETE` the `active` tier refuses most endpoints** with `403 ACCOUNT_PROFILE_INCOMPLETE` — send the person to screen 7. *(An earlier version of this file said `PHONE_ONLY`; the API has always returned `NOT_STARTED`.)* |
 | `registeredRole` | `passenger` · `driver` · `both`. |
 | `orgType` / `organizationId` | Their claimed workplace or university. |
 | `preferredLanguage` | `ar` · `en`. |
@@ -2254,6 +2267,7 @@ exist, and every live endpoint must be named here.
 
 | Date | Change |
 |---|---|
+| 2026-10-06 | **Correction:** `user.profileStatus` is `NOT_STARTED` · `BASIC_COMPLETE` — this file wrongly said `PHONE_ONLY`; the API never changed (5.5). `accountStatus` also lists `PENDING_DELETION`. The basic-profile request now lists every allowed value and the `YYYY-MM-DD` date format (4.2). |
 | 2026-10-06 | **Phase 8 starts — cash is now recorded.** A cash booking's `paymentStatus` turns `PAID` about two hours after the driver confirms the passenger travelled, and `DISPUTED` when the passenger contests the record (5.9). New refusal on `POST /commutes/{commute}/publish` and `/resume`: `DRIVER_DEBT_LIMIT_REACHED` (403) when a driver owes more than the limit in platform fees from cash trips; existing rides continue. No new endpoints. |
 | 2026-10-06 | **New: `POST /trips/{trip}/cancel` — "Cancel today" (screen 23, section 4.9).** A driver calls off one day before it starts; every passenger on it is told (new notification type `trip_day_cancelled`), bookings end as `CANCELLED_BY_DRIVER`, nothing is charged. |
 | 2026-10-06 | **Two product decisions.** (1) **The platform fee is deducted from the driver's price**, 3% by default and changeable by operations — screens 12 and 24 need new copy (5.9). (2) A driver may cancel a single day — `POST /trips/{trip}/cancel`. |
