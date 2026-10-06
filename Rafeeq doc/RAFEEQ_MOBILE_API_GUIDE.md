@@ -14,7 +14,7 @@
 >
 > **Base URL:** `{host}/api/v1` · **Auth:** bearer token · **Format:** JSON only.
 
-**Last updated:** 2026-10-06 · **124 endpoints live** · Phases 0–7, 9 and 11 complete · 10, 12 and 13 all but a decision each
+**Last updated:** 2026-10-06 · **126 endpoints live** · Phases 0–7, 9 and 11 complete · 10, 12 and 13 all but a decision each
 
 ---
 
@@ -22,7 +22,7 @@
 
 ### What is ready
 
-**124 endpoints live** and tested, across the 47 designed screens:
+**126 endpoints live** and tested, across the 47 designed screens:
 
 | | Count | Covers |
 |---|---|---|
@@ -696,6 +696,8 @@ fails if this list and the running routes ever disagree in either direction.
 | `PATCH /bookings/{booking}/cancel` | 4.7 Seat requests and bookings |
 | `POST /bookings/{booking}/dispute` | 4.7 Seat requests and bookings |
 | `GET /driver/bookings` | 4.7 Seat requests and bookings |
+| `GET /driver/balance` | 4.16 Money |
+| `GET /groups/{group}/statement` | 4.16 Money |
 | `GET /driver/seat-requests` | 4.7 Seat requests and bookings |
 | `POST /driver/seat-requests/{seatRequest}/approve` | 4.7 Seat requests and bookings |
 | `POST /driver/seat-requests/{seatRequest}/reject` | 4.7 Seat requests and bookings |
@@ -2060,6 +2062,75 @@ Only the **recipient** can report a message (404 otherwise). It files an ordinar
 safety team, quoting the message, and returns `{ "incidentId" }` — the report then shows in
 `GET /incidents` like any other, with its status and the team's answer.
 
+### 4.16 Money (screen 34, the group's `payments` tab)
+
+🔴 **The fee comes out of the DRIVER's share, at 3%, and the passenger pays the seat price.** That
+was settled on 2026-10-06 and it closes the contradiction this file carried for weeks: an 8000 seat
+means the passenger owes **8000** and the driver keeps **7760**. If you built anything against the
+other reading — a passenger paying 8800 for an 8000 seat — change it.
+
+🔴 **And the consequence your screens exist to make visible:** on a **cash** trip the driver collects
+the whole 8000 at the roadside, so the 240 is not withheld from her — it becomes a **debt she owes
+the platform.** It accrues trip by trip and eventually stops her publishing. A driver who is only
+ever shown "earnings" and then cannot publish has been told nothing.
+
+> ⚠️ **Nothing here moves money.** No payment methods, no card capture, no payouts, no refunds —
+> those wait on a payment provider being chosen (section 7). These two endpoints read what the cash
+> path has already recorded.
+
+#### `GET /driver/balance`
+
+| Response field | Meaning |
+|---|---|
+| `outstandingFeePiastres` | What she owes the platform — fees from cash trips she has already been paid for in full. |
+| `debtCapPiastres` | The limit. **Read it; do not hard-code it** — it is a runtime setting staff can move. |
+| `remainingBeforeBlockPiastres` | The headroom, so you can draw a bar without doing the arithmetic. |
+| `isBlockedFromPublishing` | 🔴 Computed from the **current** cap, not from a stored flag. The flag is a projection a nightly job maintains; the cap is a setting. |
+| `existingRunsContinue` | Always `true`, and **say it on the screen.** Being over the cap stops her publishing something NEW; every run already booked goes ahead, because the passengers on it did nothing wrong. "Account blocked" would be both frightening and untrue. |
+| `blockReason` | Staff's note, when there is one. |
+| `lifetimeEarningsPiastres` · `lastSettledAt` | Her side of the ledger. |
+
+A driver who has never completed a cash trip has no balance row, and this answers **zeros rather
+than 404** — "no such driver" is the wrong answer to "what do I owe".
+
+🔒 Hers alone. There is no endpoint at any access level that reads another driver's income or debt.
+
+#### `GET /groups/{group}/statement` — optional `?weekOf=YYYY-MM-DD`
+
+One row per journey for the week, plus totals. **Saturday to Friday** — the platform's day bitmask
+starts at Saturday and the reference commute runs Sunday to Thursday, so a Monday-start week would
+split every working week across two statements.
+
+🔒 **Who sees which rows differs, and it is the query that differs — not a filter you apply.**
+
+| | The driver sees | A passenger sees |
+|---|---|---|
+| Rows | every passenger's | only her own |
+| `passengerFirstName` | the name | `null` |
+| `platformFeePiastres` · `driverKeepsPiastres` | both, per row and in the totals | `null` |
+
+A passenger's fellow riders may be on **different prices** after a change, and a statement that
+exposed that would turn a lift to work into a negotiation. The fee is out of the driver's share, so
+it is not a passenger's business either.
+
+| Row field | Meaning |
+|---|---|
+| `bookingId` · `tripDate` · `seats` | Which journey. |
+| `pricePiastres` | 🔴 What was **agreed**, read from the booking's snapshot — never recomputed from today's price. A driver who raises her price does not retroactively change what somebody already owed. |
+| `paymentType` | `cash` or `online`. |
+| `paymentStatus` | `NOT_DUE` · `PENDING` · `PAID` · `FAILED` · `REFUNDED` · `DISPUTED`. Cash becomes `PAID` two hours after attendance is confirmed. |
+| `wasNoShow` | Still owed — the seat was held and the car went (decision D18) — but flagged so you can show it differently from an ordinary ride. |
+
+`totals` carries `duePiastres`, `paidPiastres` and `outstandingPiastres` (stated, not left as
+subtraction — it is the number the screen is opened to find), plus the driver's `platformFeePiastres`
+and `driverKeepsPiastres`.
+
+Cancelled and expired bookings are **absent**, not zero-valued: they are not money, they are things
+that did not happen. `404` for a group the caller is not in — and for one that does not exist, so
+neither is distinguishable from the other.
+
+---
+
 ## 5. Shared shapes
 
 These appear inside many responses. Each is described once here.
@@ -2338,6 +2409,7 @@ exist, and every live endpoint must be named here.
 
 | Date | Change |
 |---|---|
+| 2026-10-06 | **Money — 2 endpoints** (`GET /driver/balance`, `GET /groups/{group}/statement`). Section 4.16. 🔴 **The fee comes out of the driver at 3% and the passenger pays the seat price** — settled, and it closes the contradiction this file carried: an 8000 seat means the passenger owes 8000 and the driver keeps 7760. On a cash trip the fee becomes a **debt the driver owes**, which eventually stops her publishing. Nothing here moves money; capture, payouts and refunds still wait on a provider. |
 | 2026-10-06 | **Correction:** the new English summary said 116 endpoints against a real 124 — the header was right and the summary was not. Fixed, and a test now checks every endpoint count in the prose rather than only the one in the header, which is how the two disagreed. |
 | 2026-10-06 | **This file is now entirely in English.** The Arabic summary became an English one with the same content; no section was dropped. Two stale claims fixed while translating: the summary still listed ratings as not served, and section 7 still said the profile review list and review reporting were to come — all three have been live since 2026-10-02. |
 | 2026-10-06 | **Added to 2.1: the local PIN, concretely** — client-side guidance, explicitly not a contract. Store the refresh token encrypted under a key DERIVED from the PIN rather than storing the PIN or a hash of it, so there is nothing on the device to run guesses against. Plus the states usually missed: `pinLength` comes from the server, a dead refresh token must not be reported as a wrong PIN, and a reinstall deliberately starts without a PIN. Nothing was removed. |

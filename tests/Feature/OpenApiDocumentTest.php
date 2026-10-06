@@ -219,6 +219,12 @@ it('generates a document describing every /v1 route', function () {
         'POST /v1/driver/seat-requests/{seatRequest}/approve',
         'POST /v1/driver/seat-requests/{seatRequest}/reject',
         'GET /v1/driver/bookings',
+        /*
+         * The money (Phase 8). Neither of these MOVES any — payment methods, capture, payouts and
+         * refunds all wait on a provider being chosen.
+         */
+        'GET /v1/driver/balance',
+        'GET /v1/groups/{group}/statement',
 
         'POST /v1/commutes/{commute}/pickup-preview',
         'POST /v1/driver/seat-requests/{seatRequest}/waitlist',
