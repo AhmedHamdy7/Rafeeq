@@ -8,6 +8,7 @@ use App\Domains\Booking\Models\SeatRequest;
 use App\Domains\Commute\Enums\CommuteLocationType;
 use App\Domains\Commute\Models\CommuteOffer;
 use App\Domains\Geo\Contracts\GeoQueryEngine;
+use App\Domains\Geo\Support\Polyline;
 use App\Domains\Geo\ValueObjects\Route;
 use App\Domains\Group\Models\CommuteGroup;
 use App\Domains\Group\Models\GroupMember;
@@ -169,7 +170,8 @@ final readonly class PickupDetour
      */
     private static function publishedRoute(CommuteOffer $offer): Route
     {
-        if ($offer->route_polyline === null) {
+        // An unreadable stored route is treated like no route: a refusal, never a 500.
+        if ($offer->route_polyline === null || ! Polyline::isReadable($offer->route_polyline)) {
             throw DomainException::of(ErrorCode::PickupNotOnCommute);
         }
 

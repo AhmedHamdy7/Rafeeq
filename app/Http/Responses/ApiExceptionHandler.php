@@ -96,7 +96,10 @@ final class ApiExceptionHandler
 
             return ApiResponse::error(
                 ErrorCode::ServerError,
-                message: app()->isProduction() ? null : $e->getMessage(),
+                // Only with APP_DEBUG on. Keyed on the environment name, a server run as `staging`
+                // sent internal exception text ("Latitude out of range: 1232.00015") to clients
+                // the guide tells to show `error.message` to the person as written.
+                message: config('app.debug') ? $e->getMessage() : null,
                 status: 500,
             );
         });

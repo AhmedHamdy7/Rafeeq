@@ -44,6 +44,26 @@ final class Polyline
     }
 
     /**
+     * Whether a stored polyline decodes to real coordinates.
+     *
+     * A route is written once, at publish, and read on every search — so a malformed one (bad
+     * data, a hand-edited row) would otherwise fail every request that touches it. Readers that
+     * should skip a broken commute rather than fail the whole request ask this first.
+     */
+    public static function isReadable(string $encoded): bool
+    {
+        if ($encoded === '') {
+            return false;
+        }
+
+        try {
+            return count(self::decode($encoded)) >= 2;
+        } catch (\Throwable) {
+            return false;
+        }
+    }
+
+    /**
      * @return array<int, Coordinate>
      */
     public static function decode(string $encoded): array

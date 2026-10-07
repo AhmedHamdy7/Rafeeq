@@ -23,6 +23,7 @@ use App\Domains\Driver\Models\DriverProfile;
 use App\Domains\Driver\Models\Vehicle;
 use App\Domains\Geo\Models\Corridor;
 use App\Domains\Geo\Models\Place;
+use App\Domains\Geo\Support\StraightLineGeoEngine;
 use App\Domains\Geo\ValueObjects\BoundingBox;
 use App\Domains\Identity\Enums\AccountStatus;
 use App\Domains\Identity\Enums\OrgType;
@@ -30,6 +31,8 @@ use App\Domains\Identity\Enums\ProfileStatus;
 use App\Domains\Identity\Enums\RegisteredRole;
 use App\Domains\Identity\Models\Organization;
 use App\Domains\Identity\Models\User;
+use App\Domains\Matching\Actions\MatchDemandToExistingCommutesAction;
+use App\Domains\Matching\Enums\CommuteDemandStatus;
 use App\Domains\Matching\Models\CommuteDemand;
 use App\Domains\Matching\Models\SavedSearch;
 use App\Domains\Rating\Actions\RevealRatingsAction;
@@ -163,6 +166,11 @@ class DemoDataSeeder extends Seeder
             $this->seedTester($spec, $organization, $admin, $origin, $destination);
         }
 
+        // Saved requests matched against the commutes just published, so Home's top matches are
+        // not empty on a fresh environment.
+        $matcher = app(MatchDemandToExistingCommutesAction::class);
+        CommuteDemand::query()->with('passenger')->get()->each(fn (CommuteDemand $demand) => $matcher->execute($demand));
+
         $this->announce();
     }
 
@@ -241,9 +249,12 @@ class DemoDataSeeder extends Seeder
             'max_walk_minutes' => 12,
             'audience' => $spec['audience'],
             'allows_custom_pickup' => true,
-            'route_polyline' => '}_p~iF~ps|U_ulL',
-            'route_distance_meters' => 32000,
-            'route_duration_seconds' => 2880,
+            /*
+             * 🔴 Computed by the same engine publishing uses, never a pasted string. A hand-written
+             * polyline (a truncated example from the encoding's documentation) used to sit here:
+             * it decoded to a latitude of 1232, and every search on this corridor answered 500.
+             */
+            ...self::seededRoute($origin, $destination),
             /*
              * 🔴 Computed, not written by hand — see the same block in `DatabaseSeeder`, where a
              * hand-written box excluded its own origin by a fraction of a degree and made every
@@ -401,7 +412,82 @@ class DemoDataSeeder extends Seeder
         CommuteDemand::factory()->create([
             'passenger_user_id' => $mariam->id,
             'days_mask' => DaysMask::weekdaysSunToThu()->value,
+            ...self::demandOnCorridor($origin, $destination),
         ]);
+    }
+
+    /**
+     * 🔴 The request's points ARE the corridor's two places. The factory's random coordinates are
+     * right for unit tests and wrong here: a demo request labelled "الرحاب ← القرية الذكية" that
+     * sits anywhere in greater Cairo matches nothing, and Home's top matches stay empty for every
+     * tester.
+     *
+     * @return array<string, mixed>
+     */
+    private static function demandOnCorridor(Place $origin, Place $destination): array
+    {
+        return [
+            'origin_point' => new Coordinate(lat: (float) $origin->lat, lng: (float) $origin->lng),
+            'destination_point' => new Coordinate(lat: (float) $destination->lat, lng: (float) $destination->lng),
+            'origin_lat' => $origin->lat,
+            'origin_lng' => $origin->lng,
+            'dest_lat' => $destination->lat,
+            'dest_lng' => $destination->lng,
+            'preferred_arrival_start' => '06:45:00',
+            'preferred_arrival_end' => '08:00:00',
+            'max_walk_minutes' => 12,
+            'status' => CommuteDemandStatus::Active,
+            'expires_at' => now()->addDays((int) config('rafeeq.matching.demand_expiry_days')),
+        ];
+    }
+
+    /**
+     * `demo:refresh` — keeps a long-lived demo environment usable as the calendar moves on.
+     *
+     * Seeding books each tester onto the soonest trip, and a few days later that trip is in the past:
+     * Home's "next journey" goes empty, and so do top matches if the requests were never matched.
+     * This puts each demo passenger back on an upcoming trip if they have none, points their saved
+     * requests at the corridor again, and matches them against the commutes running now.
+     *
+     * @return array<int, array{phone: string, booked: bool, matches: int}>
+     */
+    public function refreshTesters(): array
+    {
+        $origin = Place::query()->where('name', 'like', '%الرحاب%')->first() ?? Place::query()->firstOrFail();
+        $destination = Place::query()->where('id', '!=', $origin->id)->firstOrFail();
+        $matcher = app(MatchDemandToExistingCommutesAction::class);
+        $report = [];
+
+        foreach ([...array_column(self::TESTERS, 'phone'), '+201033334444'] as $phone) {
+            $user = User::query()->where('phone_e164', $phone)->first();
+
+            if ($user === null) {
+                continue;
+            }
+
+            $hasUpcoming = Booking::query()
+                ->where('passenger_user_id', $user->id)
+                ->where('status', BookingStatus::Confirmed->value)
+                ->whereHas('scheduledTrip', fn ($trip) => $trip
+                    ->where('status', ScheduledTripStatus::Scheduled->value)
+                    ->where('departure_at', '>', now()))
+                ->exists();
+
+            if (! $hasUpcoming) {
+                $this->seatOn($user, $this->nextFreeTrip($user));
+            }
+
+            $matches = 0;
+
+            foreach (CommuteDemand::query()->where('passenger_user_id', $user->id)->get() as $demand) {
+                $demand->forceFill(self::demandOnCorridor($origin, $destination))->save();
+                $matches += $matcher->execute($demand->load('passenger'));
+            }
+
+            $report[] = ['phone' => $phone, 'booked' => ! $hasUpcoming, 'matches' => $matches];
+        }
+
+        return $report;
     }
 
     /**
@@ -455,9 +541,12 @@ class DemoDataSeeder extends Seeder
      * The soonest bookable day that still has a seat, so two testers do not land on the same one
      * and fight over the last place.
      */
-    private function nextFreeTrip(): ?ScheduledTrip
+    private function nextFreeTrip(?User $for = null): ?ScheduledTrip
     {
         return ScheduledTrip::query()
+            // Never a day this person already holds a seat on.
+            ->when($for !== null, fn ($query) => $query->whereDoesntHave('bookings', fn ($booking) => $booking
+                ->where('passenger_user_id', $for->id)))
             ->where('status', ScheduledTripStatus::Scheduled)
             ->where('departure_at', '>', now())
             ->whereColumn('seats_taken', '<', 'seats_total')
@@ -537,5 +626,24 @@ class DemoDataSeeder extends Seeder
         $command->line('   filter is a hard exclusion, so the testers are seeded as women — flip one to');
         $command->line('   `man` and search should drop to the single any_verified commute.');
         $command->newLine();
+    }
+
+    /**
+     * The route publishing would store for a straight run between two places.
+     *
+     * @return array{route_polyline: string, route_distance_meters: int, route_duration_seconds: int}
+     */
+    private static function seededRoute(Place $origin, Place $destination): array
+    {
+        $route = app(StraightLineGeoEngine::class)->routeBetween(
+            new Coordinate(lat: (float) $origin->lat, lng: (float) $origin->lng),
+            new Coordinate(lat: (float) $destination->lat, lng: (float) $destination->lng),
+        );
+
+        return [
+            'route_polyline' => $route->polyline,
+            'route_distance_meters' => $route->distance->metres,
+            'route_duration_seconds' => $route->durationSeconds,
+        ];
     }
 }

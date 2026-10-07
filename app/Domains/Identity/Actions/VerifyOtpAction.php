@@ -10,6 +10,7 @@ use App\Domains\Identity\Support\AuthSettings;
 use App\Domains\Identity\Support\SecurityLog;
 use App\Domains\Shared\Exceptions\DomainException;
 use App\Domains\Shared\Support\ErrorCode;
+use App\Domains\Shared\Support\RateLimits;
 use App\Domains\Shared\ValueObjects\PhoneNumber;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
@@ -83,6 +84,10 @@ final readonly class VerifyOtpAction
      */
     private function assertWithinAttemptRateLimit(string $challengeId): void
     {
+        if (! RateLimits::enabled()) {
+            return;
+        }
+
         $key = 'otp:verify:'.$challengeId;
 
         if (RateLimiter::tooManyAttempts($key, AuthSettings::otpVerificationsPerChallengePerMinute())) {

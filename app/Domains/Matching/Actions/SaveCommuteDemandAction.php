@@ -5,8 +5,10 @@ namespace App\Domains\Matching\Actions;
 use App\Domains\Commute\Enums\CommuteAudience;
 use App\Domains\Identity\Models\User;
 use App\Domains\Matching\Enums\CommuteDemandStatus;
+use App\Domains\Matching\Jobs\MatchNewDemand;
 use App\Domains\Matching\Models\CommuteDemand;
 use App\Domains\Matching\Support\SearchCriteria;
+use Illuminate\Support\Facades\DB;
 
 /**
  * Saves what a passenger was looking for when nothing matched (Chapter 5's
@@ -57,6 +59,9 @@ final readonly class SaveCommuteDemandAction
         $demand->expires_at = now()->addDays((int) config('rafeeq.matching.demand_expiry_days'));
 
         $demand->save();
+
+        // Against the commutes already running — see MatchDemandToExistingCommutesAction.
+        DB::afterCommit(fn () => MatchNewDemand::dispatch($demand->id));
 
         return $demand;
     }

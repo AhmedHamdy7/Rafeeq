@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Api\V1\Search;
 use App\Domains\Matching\Actions\SearchCommutesAction;
 use App\Domains\Shared\Exceptions\DomainException;
 use App\Domains\Shared\Support\ErrorCode;
+use App\Domains\Shared\Support\RateLimits;
 use App\Http\Controllers\Controller;
 use App\Http\OpenApi\ApiErrors;
 use App\Http\Requests\Matching\SearchCommutesRequest;
@@ -42,6 +43,10 @@ final class SearchController extends Controller
 
     private function assertWithinRateLimit(string $userId): void
     {
+        if (! RateLimits::enabled()) {
+            return;
+        }
+
         $key = 'search:commutes:'.$userId;
         $limit = (int) config('rafeeq.matching.searches_per_user_per_minute');
 

@@ -163,6 +163,29 @@ it('notifies a waiting passenger when a matching commute appears', function () {
         ->and($told->data)->toMatchArray(['commuteId' => $commuteId]);
 });
 
+/**
+ * 🔴 The other direction (2026-10-07). Matching used to run only when a commute was PUBLISHED, so a
+ * request saved on a corridor with commutes already running was never matched to any of them — and
+ * Home's top matches stayed empty for exactly the person most likely to want one.
+ */
+it('matches a new request against the commutes already running, and says nothing about it', function () {
+    $driverToken = approvedDriver(phone: '01012345678', devicePublicId: 'driver-1');
+    $commuteId = readyCommute($driverToken, Vehicle::sole()->id);
+    test()->withToken($driverToken)->postJson("/api/v1/commutes/{$commuteId}/publish")->assertOk();
+
+    saveDemand($this->paxToken)->assertStatus(201);
+
+    expect(MatchNotification::sole()->commute_offer_id)->toBe($commuteId)
+        // They were just shown this commute by the search they saved from: no notice about it.
+        ->and(Notification::query()->where('type', 'match_found')->exists())->toBeFalse();
+
+    test()->withToken($this->paxToken)->getJson('/api/v1/home')
+        ->assertOk()
+        ->assertJsonPath('data.topMatches.0.commuteId', $commuteId);
+
+    $this->artisan('demands:match-existing')->expectsOutputToContain('Recorded 0')->assertSuccessful();
+});
+
 it('shows a passenger the matches found for their saved requests', function () {
     saveDemand($this->paxToken)->assertStatus(201);
 

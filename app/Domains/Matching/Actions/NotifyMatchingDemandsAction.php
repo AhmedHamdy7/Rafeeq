@@ -119,7 +119,22 @@ final readonly class NotifyMatchingDemandsAction
      */
     private function bestMatchFor(CommuteDemand $demand, CommuteOffer $offer): ?MatchResult
     {
-        $criteria = new SearchCriteria(
+        foreach ($this->search->execute($demand->passenger, self::criteriaFor($demand)) as $result) {
+            if ($result->offer->id === $offer->id) {
+                return $result;
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * A saved request, as the search the passenger would run. One place, so matching a new commute
+     * against waiting requests and a new request against existing commutes ask the same question.
+     */
+    public static function criteriaFor(CommuteDemand $demand): SearchCriteria
+    {
+        return new SearchCriteria(
             origin: $demand->origin_point,
             destination: $demand->destination_point,
             days: $demand->daysMask(),
@@ -132,13 +147,5 @@ final readonly class NotifyMatchingDemandsAction
             flexibilityMinutes: $demand->flexibility_minutes,
             wantsReturnTrip: $demand->wants_return_trip,
         );
-
-        foreach ($this->search->execute($demand->passenger, $criteria) as $result) {
-            if ($result->offer->id === $offer->id) {
-                return $result;
-            }
-        }
-
-        return null;
     }
 }

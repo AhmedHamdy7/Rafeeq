@@ -8,6 +8,7 @@ use App\Domains\Commute\Models\CommuteOffer;
 use App\Domains\Commute\Models\ScheduledTrip;
 use App\Domains\Geo\Contracts\GeoQueryEngine;
 use App\Domains\Geo\Support\Haversine;
+use App\Domains\Geo\Support\Polyline;
 use App\Domains\Geo\ValueObjects\Route;
 use App\Domains\Identity\Models\User;
 use App\Domains\Matching\Models\MatchScore;
@@ -20,6 +21,7 @@ use App\Domains\Shared\ValueObjects\Coordinate;
 use App\Domains\Shared\ValueObjects\Distance;
 use App\Domains\Shared\ValueObjects\WalkTime;
 use Illuminate\Database\Eloquent\Collection;
+use Illuminate\Support\Facades\Log;
 
 /**
  * The search engine (Chapter 5, Bible §7.2). The heart of the product.
@@ -240,6 +242,16 @@ final readonly class SearchCommutesAction
     private function routeOf(CommuteOffer $offer): ?Route
     {
         if ($offer->route_polyline === null) {
+            return null;
+        }
+
+        /*
+         * 🔴 One commute with broken geometry must not hide every other commute on the corridor.
+         * Skipped and logged; the search answers with what it can read.
+         */
+        if (! Polyline::isReadable($offer->route_polyline)) {
+            Log::warning('Commute skipped in search: its stored route cannot be read', ['commute_offer_id' => $offer->id]);
+
             return null;
         }
 
