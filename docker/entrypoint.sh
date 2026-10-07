@@ -99,29 +99,47 @@ php artisan config:cache
 php artisan route:cache
 php artisan view:cache
 
-# 🔴 Migrations are NOT run here, deliberately. Two replicas starting at once would run them
-# concurrently, and a half-applied migration is worse than an unmigrated database. Run them as the
-# platform's pre-deploy/release step, which happens once:
+# 🔴 Pending migrations are APPLIED here, then checked.
 #
-#     php artisan migrate --force
+# This file used to refuse to migrate — two replicas starting at once would run them concurrently —
+# and expected the platform's pre-deploy step to do it. In practice that step is one more setting to
+# get right, and a deploy without it was refused at start (or, before that, served 500s on the first
+# page that read a new table). `--isolated` removes the original objection: it takes a lock, so when
+# two instances start together exactly one migrates and the other waits for it below.
 #
-# 🔴 But they ARE checked here. Without the pre-deploy step the new code starts against the old
-# schema, and what that looks like is a bare "500 Server Error" on the first page that reads a new
-# table — the admin dashboard, in the case that added this check — with nothing about migrations
-# anywhere. Refusing to start says it in one line, and the platform keeps serving the previous
-# deployment instead of new code on an old database.
+# A pre-deploy `php artisan migrate --force` still works and is still the better place: by the time
+# this runs there is then nothing pending, and nothing here does anything.
 #
-# `--pending=3` exits 3 only when migrations are pending; any other failure (database unreachable,
-# no migrations table yet) is reported but does not block the start.
-set +e
-PENDING_OUTPUT="$(php artisan migrate:status --pending=3 2>&1)"
-PENDING_STATUS=$?
-set -e
+# `migrate:status --pending=3` exits 3 only when migrations are pending; any other failure (database
+# unreachable, no migrations table yet) is reported but does not block the start.
+pending_status() {
+    set +e
+    PENDING_OUTPUT="$(php artisan migrate:status --pending=3 2>&1)"
+    PENDING_STATUS=$?
+    set -e
+}
+
+pending_status
 
 if [ "${PENDING_STATUS}" -eq 3 ]; then
-    printf '\n🔴 RAFEEQ — refusing to start: the database is behind the code.\n%s\n\n' "${PENDING_OUTPUT}" >&2
-    printf 'Run the migrations once, as the platform'\''s pre-deploy step:\n    php artisan migrate --force\nOn Railway: Service → Settings → Deploy → Pre-deploy Command. See deploy/RAILWAY_SETUP.md.\n\n' >&2
-    exit 1
+    printf '\n▶ RAFEEQ — applying pending migrations:\n%s\n\n' "${PENDING_OUTPUT}" >&2
+
+    if ! php artisan migrate --force --isolated; then
+        printf '\n🔴 RAFEEQ — refusing to start: a migration FAILED (output above). The previous deployment keeps serving.\n\n' >&2
+        exit 1
+    fi
+
+    # Another instance may hold the lock and still be migrating: give it up to a minute.
+    for attempt in 1 2 3 4 5 6 7 8 9 10 11 12; do
+        pending_status
+        [ "${PENDING_STATUS}" -ne 3 ] && break
+        sleep 5
+    done
+
+    if [ "${PENDING_STATUS}" -eq 3 ]; then
+        printf '\n🔴 RAFEEQ — refusing to start: the database is still behind the code.\n%s\n\nRun:  php artisan migrate --force\n\n' "${PENDING_OUTPUT}" >&2
+        exit 1
+    fi
 elif [ "${PENDING_STATUS}" -ne 0 ]; then
     printf '\n⚠️  RAFEEQ — could not check for pending migrations (starting anyway):\n%s\n\n' "${PENDING_OUTPUT}" >&2
 fi
