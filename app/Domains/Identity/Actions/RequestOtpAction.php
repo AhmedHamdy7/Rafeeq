@@ -11,6 +11,7 @@ use App\Domains\Identity\Support\AuthSettings;
 use App\Domains\Identity\Support\SecurityLog;
 use App\Domains\Shared\Exceptions\DomainException;
 use App\Domains\Shared\Support\ErrorCode;
+use App\Domains\Shared\Support\RateLimits;
 use App\Domains\Shared\ValueObjects\PhoneNumber;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Log;
@@ -100,6 +101,10 @@ final readonly class RequestOtpAction
      */
     private function assertWithinRateLimits(PhoneNumber $phone, ?string $ip): void
     {
+        if (! RateLimits::enabled()) {
+            return;
+        }
+
         $phoneKey = 'otp:phone:'.hash('sha256', $phone->e164);
 
         if (RateLimiter::tooManyAttempts($phoneKey, AuthSettings::otpRequestsPerPhonePerHour())) {
@@ -139,6 +144,10 @@ final readonly class RequestOtpAction
      */
     private function assertResendAllowed(OtpChallenge $previous): void
     {
+        if (! RateLimits::enabled()) {
+            return;
+        }
+
         $cooldownEndsAt = $previous->created_at->addSeconds(AuthSettings::otpResendCooldownSeconds());
 
         if ($cooldownEndsAt->isFuture()) {

@@ -33,6 +33,7 @@ use App\Domains\Geo\Enums\CorridorStatus;
 use App\Domains\Geo\Enums\PlaceType;
 use App\Domains\Geo\Models\Corridor;
 use App\Domains\Geo\Models\Place;
+use App\Domains\Geo\Support\StraightLineGeoEngine;
 use App\Domains\Geo\ValueObjects\BoundingBox;
 use App\Domains\Group\Enums\CommuteGroupStatus;
 use App\Domains\Group\Enums\GroupMemberRole;
@@ -396,9 +397,12 @@ class DatabaseSeeder extends Seeder
             'max_walk_minutes' => 10,
             'audience' => CommuteAudience::WomenOnly,
             'allows_custom_pickup' => true,
-            'route_polyline' => '}_p~iF~ps|U_ulL',
-            'route_distance_meters' => 32000,
-            'route_duration_seconds' => 2880,
+            /*
+             * 🔴 Computed by the same engine publishing uses, never a pasted string. A hand-written
+             * polyline (a truncated example from the encoding's documentation) used to sit here:
+             * it decoded to a latitude of 1232, and every search on this corridor answered 500.
+             */
+            ...self::seededRoute($origin, $destination),
             /*
              * 🔴 COMPUTED from the two places, never written by hand.
              *
@@ -586,5 +590,24 @@ class DatabaseSeeder extends Seeder
             'description' => 'السائقة كانت بتسرع جدًا وبتتخطى إشارات المرور.',
             'sla_due_at' => now()->addHours(24),
         ]);
+    }
+
+    /**
+     * The route publishing would store for a straight run between two places.
+     *
+     * @return array{route_polyline: string, route_distance_meters: int, route_duration_seconds: int}
+     */
+    private static function seededRoute(Place $origin, Place $destination): array
+    {
+        $route = app(StraightLineGeoEngine::class)->routeBetween(
+            new Coordinate(lat: (float) $origin->lat, lng: (float) $origin->lng),
+            new Coordinate(lat: (float) $destination->lat, lng: (float) $destination->lng),
+        );
+
+        return [
+            'route_polyline' => $route->polyline,
+            'route_distance_meters' => $route->distance->metres,
+            'route_duration_seconds' => $route->durationSeconds,
+        ];
     }
 }

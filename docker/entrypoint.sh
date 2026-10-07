@@ -78,6 +78,7 @@ esac
 
 # 🔒 Two settings that are safe locally and dangerous on anything reachable.
 [ "${APP_DEBUG}" = "true" ] && warn "APP_DEBUG=true. The error page shows SQL, environment values and source. Set it to false."
+[ "${RAFEEQ_RATE_LIMITS}" = "off" ] && warn "RAFEEQ_RATE_LIMITS=off. OTP, search, chat and report limits are OFF (ignored on APP_ENV=production). For testing only."
 [ "${LOG_LEVEL}" = "debug" ] && warn "LOG_LEVEL=debug. On a non-production APP_ENV this writes OTP CODES to the log, which is a sign-in bypass for anyone who can read it."
 
 if [ -n "${WARN}" ]; then

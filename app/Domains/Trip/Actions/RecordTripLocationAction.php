@@ -3,6 +3,7 @@
 namespace App\Domains\Trip\Actions;
 
 use App\Domains\Geo\Contracts\GeoQueryEngine;
+use App\Domains\Geo\Support\Polyline;
 use App\Domains\Geo\ValueObjects\Route;
 use App\Domains\Shared\Exceptions\DomainException;
 use App\Domains\Shared\Support\ErrorCode;
@@ -178,7 +179,7 @@ final readonly class RecordTripLocationAction
 
         $polyline = $session->scheduledTrip->commuteOffer->route_polyline;
 
-        if ($polyline === null || $polyline === '') {
+        if ($polyline === null || ! Polyline::isReadable($polyline)) {
             // No published route to measure against. Silence rather than a guess.
             return [];
         }

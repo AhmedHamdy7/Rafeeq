@@ -151,6 +151,12 @@ return [
         'expected_review_minutes' => 120,
     ],
 
+    /*
+     * DEPLOY-ONLY. `RAFEEQ_RATE_LIMITS=off` turns off the request limits (OTP, search, chat, reports)
+     * for a test environment. Ignored on APP_ENV=production — see RateLimits.
+     */
+    'rate_limits_enabled' => env('RAFEEQ_RATE_LIMITS', 'on') !== 'off',
+
     'payment' => [
         /*
          * How long after the driver confirms somebody travelled before the money is recorded as

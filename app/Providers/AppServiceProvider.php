@@ -17,6 +17,7 @@ use App\Domains\Notification\Contracts\PushSender;
 use App\Domains\Notification\Support\ChatSettings;
 use App\Domains\Notification\Support\LogPushSender;
 use App\Domains\Safety\Support\SafetySettings;
+use App\Domains\Shared\Support\RateLimits;
 use App\Domains\Verification\Contracts\VirusScanner;
 use App\Domains\Verification\Enums\VerificationStatus;
 use App\Domains\Verification\Models\UserVerification;
@@ -171,13 +172,13 @@ class AppServiceProvider extends ServiceProvider
          * and the endpoint requires a token anyway.
          */
         // Trip chat: per sender. Enough for "I'm here / where are you", not enough to flood.
-        RateLimiter::for('chat-messages', fn (Request $request) => Limit::perMinute(
-            ChatSettings::messagesPerMinute()
-        )->by($request->user()?->id ?? $request->ip()));
+        RateLimiter::for('chat-messages', fn (Request $request) => RateLimits::enabled()
+            ? Limit::perMinute(ChatSettings::messagesPerMinute())->by($request->user()?->id ?? $request->ip())
+            : Limit::none());
 
-        RateLimiter::for('safety-reports', fn (Request $request) => Limit::perHour(
-            SafetySettings::reportsPerHour()
-        )->by($request->user()?->id ?? $request->ip()));
+        RateLimiter::for('safety-reports', fn (Request $request) => RateLimits::enabled()
+            ? Limit::perHour(SafetySettings::reportsPerHour())->by($request->user()?->id ?? $request->ip())
+            : Limit::none());
     }
 
     /**

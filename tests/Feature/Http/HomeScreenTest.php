@@ -285,6 +285,10 @@ it('offers the best matches it was told about, not the most recent', function ()
     test()->withToken($paxToken)->postJson('/api/v1/commute-demands', searchCriteria())
         ->assertStatus(201);
 
+    // Saving now matches the request against commutes already running (2026-10-07). This test is
+    // about the ORDER of the cards, so it sets every score itself.
+    MatchNotification::query()->delete();
+
     $demandId = CommuteDemand::sole()->id;
 
     // One notification per demand per commute, so each score needs its own commute. The
@@ -317,6 +321,9 @@ it('names the commute a match points at, not just that one was found', function 
 
     test()->withToken($paxToken)->postJson('/api/v1/commute-demands', searchCriteria())
         ->assertStatus(201);
+
+    // Saving already matched it against this commute (2026-10-07); the score is set here.
+    MatchNotification::query()->delete();
 
     MatchNotification::query()->create([
         'commute_demand_id' => CommuteDemand::sole()->id,
