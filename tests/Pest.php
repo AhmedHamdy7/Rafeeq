@@ -644,6 +644,44 @@ function setUserStat(string $userId, array $values): void
 }
 
 /**
+ * Sets columns on a driver's `driver_balances` row, creating it if it is not there.
+ *
+ * 🔴 Through the query builder, for the same reason as `setUserStat`: `DriverBalance` has no
+ * `$fillable` on purpose — it is a PROJECTION of `driver_fee_ledger`, written only by the
+ * settlement and reconciliation jobs, never from user input. So `updateOrCreate()` throws
+ * "Add fillable property", and the error reads as a bug in the balance endpoint rather than in the
+ * test's setup.
+ *
+ * @param  array<string, mixed>  $values
+ */
+function setDriverBalance(string $driverUserId, array $values): void
+{
+    DB::table('driver_balances')->updateOrInsert(
+        ['driver_profile_id' => $driverUserId],
+        $values + ['updated_at' => now()],
+    );
+}
+
+/**
+ * Moves a booking's price, keeping the three money columns consistent.
+ *
+ * 🔴 `bookings` carries a CHECK constraint — `price = platform_fee + driver_amount` — so changing
+ * the price alone is rejected by the database. That is the constraint doing its job: a money row
+ * that does not add up is worse than one that is wrong, because nothing downstream can tell which
+ * of the three to trust. The fee is recomputed at the settled 3%.
+ */
+function repriceBooking(string $bookingId, int $pricePiastres): void
+{
+    $fee = (int) round($pricePiastres * 0.03);
+
+    DB::table('bookings')->where('id', $bookingId)->update([
+        'price_snapshot_piastres' => $pricePiastres,
+        'platform_fee_snapshot_piastres' => $fee,
+        'driver_amount_snapshot_piastres' => $pricePiastres - $fee,
+    ]);
+}
+
+/**
  * Every `/v1/...` path the application actually serves.
  *
  * @return array<int, string>

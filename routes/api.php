@@ -20,6 +20,7 @@ use App\Http\Controllers\Api\V1\Group\GroupController;
 use App\Http\Controllers\Api\V1\HomeController;
 use App\Http\Controllers\Api\V1\Notification\ChatController;
 use App\Http\Controllers\Api\V1\Notification\NotificationController;
+use App\Http\Controllers\Api\V1\Payment\MoneyController;
 use App\Http\Controllers\Api\V1\PlaceController;
 use App\Http\Controllers\Api\V1\Rating\RatingController;
 use App\Http\Controllers\Api\V1\Safety\SafetyController;
@@ -356,6 +357,21 @@ Route::prefix('v1')->group(function (): void {
             Route::post('driver/seat-requests/{seatRequest}/reject', [SeatRequestController::class, 'reject']);
             Route::post('driver/seat-requests/{seatRequest}/waitlist', [SeatRequestController::class, 'waitlist']);
             Route::get('driver/bookings', [BookingController::class, 'forDriver']);
+
+            /*
+             * The money, as the two people in the car see it (Phase 8, Bible §8).
+             *
+             * 🔴 Nothing here MOVES money. No payment method, no capture, no payout, no refund —
+             * those need a provider that has not been chosen, and a half-built capture path is
+             * worse than none. These two read what the cash path has already recorded.
+             *
+             * 🔒 `driver/balance` is hers alone: there is no endpoint at any access level that
+             * reads another driver's income or debt. The group statement shows a passenger only her
+             * own rows — what her fellow passengers pay is not her business, and they may be on
+             * different prices after a change.
+             */
+            Route::get('driver/balance', [MoneyController::class, 'driverBalance']);
+            Route::get('groups/{group}/statement', [MoneyController::class, 'groupStatement']);
 
             /*
              * Custom meeting points. Two ways in, because the schema has two: a

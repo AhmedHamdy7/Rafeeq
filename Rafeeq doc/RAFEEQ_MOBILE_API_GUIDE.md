@@ -14,40 +14,57 @@
 >
 > **Base URL:** `{host}/api/v1` · **Auth:** bearer token · **Format:** JSON only.
 
-**Last updated:** 2026-10-06 · **124 endpoints live** · Phases 0–7 complete, Phase 9 in progress, Phase 12 started
+**Last updated:** 2026-10-06 · **126 endpoints live** · Phases 0–7, 9 and 11 complete · 10, 12 and 13 all but a decision each
 
 ---
 
-## ملخص بالعربي
+## Summary
 
-### إيه الجاهز دلوقتي
+### What is ready
 
-**١١٦ endpoint شغّالين ومختبَرين** (1,373 اختبار كلهم خضرا). يعني من الـ٤٧ شاشة:
+**126 endpoints live** and tested, across the 47 designed screens:
 
-| | عدد | التفاصيل |
+| | Count | Covers |
 |---|---|---|
-| ✅ **جاهزة بالكامل** | ~٢٦ شاشة | الدخول والتسجيل كله · التوثيق · السائق والعربيات · نشر الرحلة · البحث والمطابقة · طلب المقعد · المجموعة · الرحلة الحيّة · **مركز الأمان** (SOS · جهات الطوارئ · البلاغات · الحظر · مشاركة الرحلة) |
-| ⚠️ **جاهزة وناقصها حقل أو حقلين** | ~٨ شاشات | مكتوب تحت بالظبط الناقص إيه في كل واحدة |
-| ⛔ **مش جاهزة** | ~١١ شاشة | التقييمات · الإشعارات · المدفوعات · إلغاء السائقة ليوم واحد — كل واحدة مكتوب جنبها المرحلة. **الأمان بقى جاهز** (SOS · جهات الطوارئ · البلاغات · الحظر · مشاركة الرحلة المباشرة) |
-| 🚫 **مش محتاجة API** | ٤ شاشات | حالات جهاز أو نص ثابت |
+| ✅ **Fully served** | ~32 screens | Sign-in and sign-up · verification · driver and vehicles · publishing a commute · search and matching · seat requests · the group · the live trip · **ratings and reviews** · **the Safety Centre** (SOS · trusted contacts · reports with evidence · blocking · live share) · notifications inbox · trip chat |
+| ⚠️ **Served, missing a field or two** | ~8 screens | Each one says exactly what is absent, in the screen index. |
+| ⛔ **Not served** | ~3 screens | Payments and the wallet (34) · a driver cancelling a single day (43, 45, 46). Both have a phase and a reason in section 7. |
+| 🚫 **No API needed** | 4 screens | Device states, or static copy. |
 
-### ابدأ منين
+### Where to start
 
-الترتيب المقترح تحت في **Build order**، وملخصه: الدخول (5→6→7→8) ← التوثيق (15، 30) ← الصفحة الرئيسية (9) ← البحث (10، 11، 12) ← طلب المقعد (13، 14) ← الرحلات والمجموعة (19، 20) ← بعدين السائق (23، 24، 25، 31، 28، 29) ← وآخر حاجة الرحلة الحيّة (17، 36، 40، 41).
+The suggested order is in **Build order** below. In short: sign-in (5→6→7→8) → verification (15, 30)
+→ home (9) → search (10, 11, 12) → seat request (13, 14) → trips and the group (19, 20) → then the
+driver side (23, 24, 25, 31, 28, 29) → and the live trip last (17, 36, 40, 41).
 
-### حاجات مهمة تعرفها قبل ما تبدأ
+If you would rather see the lifecycle before building any of it, **2.1** walks the whole cycle as an
+ordered sequence of calls, against accounts that are already seeded on staging.
 
-1. **كل رد في نفس الشكل** (`success` · `data` · `meta`؟). الأخطاء برضو شكل واحد فيه `error.code` — اعمل `switch` على الـ `code` مش على النص.
-2. **الفلوس كلها قروش** (`*Piastres`) — أعداد صحيحة، مش كسور. 8000 = 80 ج.م. عمرك ما تقسم على 100 وتخزّن النتيجة.
-3. **الأوقات UTC بصيغة ISO 8601**، ومعاها الوقت المحلي لما يكون مهم للعرض. أي حاجة اسمها `*Local` هي ساعة حيطة للعرض بس — عمرك ما تحسب بيها.
-4. **الأيام bitmask**: السبت 1 · الأحد 2 · الاتنين 4 · التلات 8 · الأربع 16 · الخميس 32 · الجمعة 64. "الأحد للخميس" = 62.
-5. **الخصوصية مبنية في الـ API مش في الشاشة.** التليفون والاسم الكامل والجنس **عمرهم ما يرجعوا** لشخص تاني. ونقطة الالتقاء بترجع **مضبّبة** لحد ما الحجز يتأكد. مش محتاج تخفي حاجة في الواجهة — إحنا مش بنبعتها من الأصل.
-6. **كل List بتكبر مع الاستخدام معمولة paginate.** استخدم `meta.hasMore` مش عدد الصفوف.
-7. **`null` معناها "مش معروف" مش صفر.** تقييم `null` = الشخص ما اتقيّمش لسه، **ماتعرضهاش صفر نجوم**.
+### Seven things to know before you start
 
-### الفايل ده بيتحدث
+1. **Every response has the same shape** (`success` · `data` · `meta`?). Errors do too, carrying
+   `error.code` — **switch on the `code`, never on the message text.** The text is translated and
+   will change; the code will not.
+2. **All money is in piastres** (`*Piastres`) — whole numbers, never decimals. 8000 = EGP 80. Never
+   divide by 100 and store the result.
+3. **Times are UTC in ISO 8601**, with a local wall clock alongside where it matters for display.
+   Anything named `*Local` is for showing only — **never compute with it.**
+4. **Days are a bitmask**: Sat 1 · Sun 2 · Mon 4 · Tue 8 · Wed 16 · Thu 32 · Fri 64. "Sunday to
+   Thursday" is 62.
+5. **Privacy is built into the API, not into the screen.** A phone number, a full name and a gender
+   are **never** returned about another person, and a meeting point comes back **fuzzed** until the
+   booking is confirmed. You do not need to hide anything in the UI — we do not send it.
+6. **Every list that grows with use is paginated.** Use `meta.hasMore`, not the row count.
+7. **`null` means "not known", not zero.** A `null` rating means nobody has rated that person yet —
+   **do not draw it as nought stars.**
 
-مع **كل endpoint جديد وكل مرحلة تخلص**. وفيه اختبار (`tests/Feature/MobileApiGuideTest.php`) بيتأكد إن كل endpoint مذكور هنا موجود فعلًا، وإن مفيش endpoint شغّال مش مذكور — يعني الفايل ده **مايقدرش يتعفّن**. آخر تحديث مكتوب فوق، وسجل التغييرات في آخر الفايل.
+### This file is kept current
+
+Updated with **every new endpoint and every phase completed**, and
+`tests/Feature/MobileApiGuideTest.php` fails the build if it drifts: every endpoint named here must
+exist, every live endpoint must be named here, and the `nextStep` values must match the enum. So
+this file **cannot go stale** without the build going red. The last-updated date is above; the change
+log is at the end.
 
 ---
 
@@ -455,6 +472,60 @@ POST /safety/blocked-users             { userId, reason? }                      
 profile, no active trip. That is deliberate — somebody in trouble at a roadside will not finish
 uploading a national ID first — so **do not gate the safety button in your own navigation either.**
 
+#### The local PIN, concretely — client-side guidance, not a contract
+
+The API has no opinion about how you protect the token; it holds one fact, `device.hasLocalPin`, and
+there is no endpoint that takes a PIN. That leaves a real design question on your side, and it comes
+up often enough to answer here. **This section is a recommendation, not a requirement** — nothing
+below is enforced by the server.
+
+🔴 **Do not store the PIN at all — not the digits, not a hash of them.** Store the **refresh token**,
+encrypted under a key *derived* from the PIN. The PIN then exists nowhere: not on the server, not on
+the device.
+
+```
+Creating it
+  salt = 16 random bytes                 stored in the clear (it is not a secret)
+  key  = PBKDF2(pin, salt, 100_000)      held in memory only, never written
+  blob = AES-GCM(refreshToken, key)
+  store: salt + blob
+
+Unlocking
+  key  = PBKDF2(entered pin, salt, 100_000)
+  AES-GCM-decrypt(blob, key)
+    ✓  you now hold the refresh token  →  POST /auth/session/refresh
+    ✗  wrong PIN
+```
+
+**Why this beats storing a hash of the PIN:** there is nothing to compare against. A wrong PIN is a
+failed decryption, so somebody who pulls the device's storage has no hash to run four digits' worth
+of guesses against — because no hash was ever written.
+
+Put `salt + blob` in `flutter_secure_storage` as well (`AndroidOptions(encryptedSharedPreferences:
+true)`), so there are two layers. Either one alone is weak: the Keystore opens without a PIN, so
+anyone holding an unlocked phone is in; and a PIN-derived key alone leaves the blob sitting in plain
+app storage.
+
+States you have to handle, and the last two are the ones usually missed:
+
+| | |
+|---|---|
+| **PIN length** | From `pinLength` on `/auth/otp/verify` and `/auth/me`. It is 4 today and **server-configurable — do not hard-code it.** |
+| **Repeated wrong PIN** | A local, increasing lockout. The server knows nothing about it, so do not expect it to help. |
+| **Forgot the PIN** | Discard the blob → `POST /auth/otp/request` with **`purpose: "pin_reset"`** → verify → set a new PIN → `PATCH /account/devices/current/security`. There is no PIN recovery, because the server never knew it. |
+| **`refresh` returns 401** | The token is dead — a revoked device, or reuse detected. Clear everything and return to the phone screen. 🔴 **Do not show "wrong PIN"**: the PIN was right, and that message sends somebody retrying something that cannot work. |
+| **Reinstall** | A new `device.publicId` means `hasLocalPin` is false and `nextStep` is `CREATE_PIN`. That is deliberate — a fresh installation does not inherit the previous one's trust. |
+| **Two accounts on one device** (screen 3) | One blob per account, each with its own PIN. `UNIQUE(user_id, device_public_id)` allows it. |
+
+And the only thing the server wants from you:
+
+```http
+PATCH /account/devices/current/security     { "hasLocalPin": true }
+```
+
+🔒 A **flag, not a value.** No field accepts a PIN or a hash of one, and sending it anyway does
+nothing.
+
 #### Accounts seeded on staging
 
 | Phone | Who | What they already have |
@@ -625,6 +696,8 @@ fails if this list and the running routes ever disagree in either direction.
 | `PATCH /bookings/{booking}/cancel` | 4.7 Seat requests and bookings |
 | `POST /bookings/{booking}/dispute` | 4.7 Seat requests and bookings |
 | `GET /driver/bookings` | 4.7 Seat requests and bookings |
+| `GET /driver/balance` | 4.16 Money |
+| `GET /groups/{group}/statement` | 4.16 Money |
 | `GET /driver/seat-requests` | 4.7 Seat requests and bookings |
 | `POST /driver/seat-requests/{seatRequest}/approve` | 4.7 Seat requests and bookings |
 | `POST /driver/seat-requests/{seatRequest}/reject` | 4.7 Seat requests and bookings |
@@ -1989,6 +2062,75 @@ Only the **recipient** can report a message (404 otherwise). It files an ordinar
 safety team, quoting the message, and returns `{ "incidentId" }` — the report then shows in
 `GET /incidents` like any other, with its status and the team's answer.
 
+### 4.16 Money (screen 34, the group's `payments` tab)
+
+🔴 **The fee comes out of the DRIVER's share, at 3%, and the passenger pays the seat price.** That
+was settled on 2026-10-06 and it closes the contradiction this file carried for weeks: an 8000 seat
+means the passenger owes **8000** and the driver keeps **7760**. If you built anything against the
+other reading — a passenger paying 8800 for an 8000 seat — change it.
+
+🔴 **And the consequence your screens exist to make visible:** on a **cash** trip the driver collects
+the whole 8000 at the roadside, so the 240 is not withheld from her — it becomes a **debt she owes
+the platform.** It accrues trip by trip and eventually stops her publishing. A driver who is only
+ever shown "earnings" and then cannot publish has been told nothing.
+
+> ⚠️ **Nothing here moves money.** No payment methods, no card capture, no payouts, no refunds —
+> those wait on a payment provider being chosen (section 7). These two endpoints read what the cash
+> path has already recorded.
+
+#### `GET /driver/balance`
+
+| Response field | Meaning |
+|---|---|
+| `outstandingFeePiastres` | What she owes the platform — fees from cash trips she has already been paid for in full. |
+| `debtCapPiastres` | The limit. **Read it; do not hard-code it** — it is a runtime setting staff can move. |
+| `remainingBeforeBlockPiastres` | The headroom, so you can draw a bar without doing the arithmetic. |
+| `isBlockedFromPublishing` | 🔴 Computed from the **current** cap, not from a stored flag. The flag is a projection a nightly job maintains; the cap is a setting. |
+| `existingRunsContinue` | Always `true`, and **say it on the screen.** Being over the cap stops her publishing something NEW; every run already booked goes ahead, because the passengers on it did nothing wrong. "Account blocked" would be both frightening and untrue. |
+| `blockReason` | Staff's note, when there is one. |
+| `lifetimeEarningsPiastres` · `lastSettledAt` | Her side of the ledger. |
+
+A driver who has never completed a cash trip has no balance row, and this answers **zeros rather
+than 404** — "no such driver" is the wrong answer to "what do I owe".
+
+🔒 Hers alone. There is no endpoint at any access level that reads another driver's income or debt.
+
+#### `GET /groups/{group}/statement` — optional `?weekOf=YYYY-MM-DD`
+
+One row per journey for the week, plus totals. **Saturday to Friday** — the platform's day bitmask
+starts at Saturday and the reference commute runs Sunday to Thursday, so a Monday-start week would
+split every working week across two statements.
+
+🔒 **Who sees which rows differs, and it is the query that differs — not a filter you apply.**
+
+| | The driver sees | A passenger sees |
+|---|---|---|
+| Rows | every passenger's | only her own |
+| `passengerFirstName` | the name | `null` |
+| `platformFeePiastres` · `driverKeepsPiastres` | both, per row and in the totals | `null` |
+
+A passenger's fellow riders may be on **different prices** after a change, and a statement that
+exposed that would turn a lift to work into a negotiation. The fee is out of the driver's share, so
+it is not a passenger's business either.
+
+| Row field | Meaning |
+|---|---|
+| `bookingId` · `tripDate` · `seats` | Which journey. |
+| `pricePiastres` | 🔴 What was **agreed**, read from the booking's snapshot — never recomputed from today's price. A driver who raises her price does not retroactively change what somebody already owed. |
+| `paymentType` | `cash` or `online`. |
+| `paymentStatus` | `NOT_DUE` · `PENDING` · `PAID` · `FAILED` · `REFUNDED` · `DISPUTED`. Cash becomes `PAID` two hours after attendance is confirmed. |
+| `wasNoShow` | Still owed — the seat was held and the car went (decision D18) — but flagged so you can show it differently from an ordinary ride. |
+
+`totals` carries `duePiastres`, `paidPiastres` and `outstandingPiastres` (stated, not left as
+subtraction — it is the number the screen is opened to find), plus the driver's `platformFeePiastres`
+and `driverKeepsPiastres`.
+
+Cancelled and expired bookings are **absent**, not zero-valued: they are not money, they are things
+that did not happen. `404` for a group the caller is not in — and for one that does not exist, so
+neither is distinguishable from the other.
+
+---
+
 ## 5. Shared shapes
 
 These appear inside many responses. Each is described once here.
@@ -2234,7 +2376,7 @@ Nothing below exists. Build the screen shells if you like, but there is no endpo
 |---|---|---|---|
 | **Payments and wallet** | 34, group `payments` tab | **8** | **In progress.** Cash is now recorded (`paymentStatus` → `PAID`, see 5.9) and the driver's fee debt is tracked, with a publishing cap. Still to come: the driver's balance screen, the group's weekly statement, then — once a payment provider is chosen — payment methods, online capture, payouts and refunds. Cancellation fees wait on the cancellation policy. |
 | **Driver cancelling one day** | 43, 45, 46 | **9** | A driver cancelling a single day and the backup search that follows. **Blocked on an open decision** — refunds and reliability, section 8 #3. Route deviation itself is now detected and reported (see `deviationDetectedAt`); the ops ALERT it should trigger needs Phase 12/13. |
-| **Reviews on a profile, trust tier** | reviews on 12, `minRating` filter on 11, history on 19 | **10** | 🔴 **Rating itself is done** — section 4.13 — and the `rating` in every public summary now carries a number once a rating is revealed. Still to come: the list of **other people's** visible reviews on a profile, reporting an abusive review, and the public trust tier (`new` / `trusted` / `highly_trusted`). The underlying score is deliberately internal and will never be returned. |
+| **Public trust tier** | badge on 12 and 21 | **10** | 🔴 **Ratings and reviews are both done** — section 4.13. Rating, the double-blind reveal, the anonymous review list on a commute, "what was said about me", reporting an abusive review and the `minRating` search filter are all live, and the `rating` in every public summary carries a number once a rating is revealed. The only piece left is the **public trust tier** (`new` / `trusted` / `highly_trusted`), which needs a product decision on its thresholds. The score behind it is deliberately internal and will never be returned. |
 | **Auto-share trips** | 26 | **12** | 🔴 **`autoShareTrips` on an emergency contact is stored and nothing acts on it yet.** See 4.12 — read that before you build the toggle. |
 | **Night escort mode** | none | **13** | Not a mobile feature at all, and this corrects an earlier line in this file. It is a **corridor-level night window armed by the ops team** (or automatically, 9pm–5am) with staff monitoring — a dashboard control, not something an app shows or calls. There will be no endpoint for it. |
 | **Push delivery** | all | **12** | The inbox (4.14) and trip chat (4.15) are live. Push is wired but **no provider has been chosen yet**, so nothing reaches a phone — poll `GET /notifications` (`meta.unreadCount`) and the open conversation in the meantime. |
@@ -2268,6 +2410,10 @@ exist, and every live endpoint must be named here.
 | Date | Change |
 |---|---|
 | 2026-10-07 | **Fixed: `GET /search/commutes` 500 "Latitude out of range"** (your bug report). The seeded commutes carried a malformed route; they are repaired, and a commute whose stored route cannot be read is now **skipped** instead of failing the whole search. **A `500` no longer carries internal exception text** in `error.message` — it is the generic localised sentence. **Home `topMatches` now fills:** saving a request (`POST /commute-demands`) matches it against commutes already running, not only against ones published later (no `match_found` notice for those — the person has just seen them). Test accounts were re-seated on upcoming trips, so `nextJourney` is populated again. |
+| 2026-10-06 | **Money — 2 endpoints** (`GET /driver/balance`, `GET /groups/{group}/statement`). Section 4.16. 🔴 **The fee comes out of the driver at 3% and the passenger pays the seat price** — settled, and it closes the contradiction this file carried: an 8000 seat means the passenger owes 8000 and the driver keeps 7760. On a cash trip the fee becomes a **debt the driver owes**, which eventually stops her publishing. Nothing here moves money; capture, payouts and refunds still wait on a provider. |
+| 2026-10-06 | **Correction:** the new English summary said 116 endpoints against a real 124 — the header was right and the summary was not. Fixed, and a test now checks every endpoint count in the prose rather than only the one in the header, which is how the two disagreed. |
+| 2026-10-06 | **This file is now entirely in English.** The Arabic summary became an English one with the same content; no section was dropped. Two stale claims fixed while translating: the summary still listed ratings as not served, and section 7 still said the profile review list and review reporting were to come — all three have been live since 2026-10-02. |
+| 2026-10-06 | **Added to 2.1: the local PIN, concretely** — client-side guidance, explicitly not a contract. Store the refresh token encrypted under a key DERIVED from the PIN rather than storing the PIN or a hash of it, so there is nothing on the device to run guesses against. Plus the states usually missed: `pinLength` comes from the server, a dead refresh token must not be reported as a wrong PIN, and a reinstall deliberately starts without a PIN. Nothing was removed. |
 | 2026-10-06 | **Correction:** `user.profileStatus` is `NOT_STARTED` · `BASIC_COMPLETE` — this file wrongly said `PHONE_ONLY`; the API never changed (5.5). `accountStatus` also lists `PENDING_DELETION`. The basic-profile request now lists every allowed value and the `YYYY-MM-DD` date format (4.2). |
 | 2026-10-06 | **Phase 8 starts — cash is now recorded.** A cash booking's `paymentStatus` turns `PAID` about two hours after the driver confirms the passenger travelled, and `DISPUTED` when the passenger contests the record (5.9). New refusal on `POST /commutes/{commute}/publish` and `/resume`: `DRIVER_DEBT_LIMIT_REACHED` (403) when a driver owes more than the limit in platform fees from cash trips; existing rides continue. No new endpoints. |
 | 2026-10-06 | **New: `POST /trips/{trip}/cancel` — "Cancel today" (screen 23, section 4.9).** A driver calls off one day before it starts; every passenger on it is told (new notification type `trip_day_cancelled`), bookings end as `CANCELLED_BY_DRIVER`, nothing is charged. |

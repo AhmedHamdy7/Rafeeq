@@ -142,6 +142,40 @@ it('states the real number of endpoints in its header', function () {
 });
 
 /**
+ * 🔴 And nowhere else in the file may claim a DIFFERENT number.
+ *
+ * The header check above passed while the summary two sections below said 116 against a real 124,
+ * because the two are worded differently and only one was being read. A reader who starts at the
+ * summary — which is what a summary is for — got the wrong figure from a file whose whole promise
+ * is that it cannot go stale.
+ *
+ * So every "N endpoint(s)" claim in the prose is checked, not just the one in the header. The change
+ * log is excluded: its rows are dated history, and "3 endpoints" in an entry from October is a true
+ * statement about that day rather than a claim about now.
+ */
+it('never states a different endpoint count anywhere else', function () {
+    $guide = mobileApiGuide();
+    $count = count(liveEndpointsAsGuideWritesThem());
+
+    $beforeChangeLog = str_contains($guide, '## 9. Change log')
+        ? strstr($guide, '## 9. Change log', before_needle: true)
+        : $guide;
+
+    preg_match_all('/(\d{2,4})\s+endpoints?\b/i', $beforeChangeLog, $matches);
+
+    $wrong = array_values(array_unique(array_filter(
+        $matches[1],
+        fn (string $claimed) => (int) $claimed !== $count,
+    )));
+
+    expect($wrong)->toBeEmpty(
+        "The guide claims these endpoint counts and the real number is {$count}: "
+        .implode(', ', $wrong)
+        ."\n\nA reader who starts at the summary rather than the header gets whichever one is wrong."
+    );
+});
+
+/**
  * Every screen the designer produced has to appear, so a new one cannot be designed and silently
  * never mapped. Numbers rather than names, because the names in the prototype are shortened in
  * places and a name check would fail on formatting instead of on substance.
