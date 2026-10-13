@@ -194,7 +194,7 @@ it('tells the member why, under which reference, and when — but not the staff 
     $me = test()->withToken($this->token)->getJson('/api/v1/auth/me')->assertOk();
 
     $me->assertJsonPath('data.user.accountStatus', 'SUSPENDED')
-        ->assertJsonPath('data.nextStep', 'ACCOUNT_SUSPENDED')
+        ->assertJsonPath('data.nextStep', 'RESTRICTED_ACCOUNT')
         ->assertJsonPath('data.user.suspension.caseNumber', $hold->case_number)
         ->assertJsonPath('data.user.suspension.reasonCode', 'safety_report')
         ->assertJsonPath('data.user.suspension.reviewDueAt', $hold->review_due_at->toIso8601String())

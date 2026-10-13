@@ -30,7 +30,6 @@ class DeviceFactory extends Factory
             'os_version' => $platform === DevicePlatform::Android ? 'Android 14' : 'iOS 18',
             'app_version' => '1.0.0',
             'is_trusted' => true,
-            'has_local_pin' => true,
             'biometric_enabled' => fake()->boolean(),
             'last_seen_at' => now(),
         ];

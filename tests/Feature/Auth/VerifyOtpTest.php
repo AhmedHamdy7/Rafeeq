@@ -40,9 +40,8 @@ it('creates exactly one account, one device and one session for a new number', f
 
     $response->assertOk()
         ->assertJsonPath('data.accountState', 'NEW_USER')
-        ->assertJsonPath('data.nextStep', 'CREATE_PIN')
-        ->assertJsonPath('data.user.profileStatus', 'NOT_STARTED')
-        ->assertJsonPath('data.pinLength', 4);
+        ->assertJsonPath('data.nextStep', 'BASIC_PROFILE')
+        ->assertJsonPath('data.user.profileStatus', 'NOT_STARTED');
 
     expect(User::count())->toBe(1)
         ->and(Device::count())->toBe(1)
@@ -50,8 +49,9 @@ it('creates exactly one account, one device and one session for a new number', f
         ->and(User::sole()->phone_verified_at)->not->toBeNull()
         // Consent records exist for every document required to use Rafeeq.
         ->and(UserConsent::count())->toBe(2)
-        // No PIN material of any kind reaches the server.
-        ->and(Device::sole()->has_local_pin)->toBeFalse();
+        // 🔴 And no local-PIN column exists to reach at all — the PIN left the MVP (Feature 01
+        // v3 §10), so this asserts the absence rather than a `false` value.
+        ->and(array_keys(Device::sole()->getAttributes()))->not->toContain('has_local_pin');
 });
 
 it('signs the same number back in without ever creating a second account', function () {
@@ -75,7 +75,7 @@ it('treats a reinstall as a new installation of an existing account', function (
     $result = signIn(devicePublicId: 'install-2');
 
     expect($result['accountState'])->toBe('EXISTING_USER')
-        ->and($result['nextStep'])->toBe('CREATE_PIN')
+        ->and($result['nextStep'])->toBe('BASIC_PROFILE')
         ->and(User::count())->toBe(1)
         ->and(Device::count())->toBe(2);
 });
@@ -196,23 +196,20 @@ it('refuses a challenge minted for a purpose this endpoint does not accept', fun
 /**
  * Scenario C — forgot PIN.
  */
-it('clears the local PIN flag when a pin_reset code is verified', function () {
-    signIn(devicePublicId: 'dev-1');
+/**
+ * 🔴 `pin_reset` left with the PIN (Feature 01 v3 §10), and this pins the refusal rather than the
+ * old behaviour. It matters because pitfall #31 is the rule underneath: a code issued for one
+ * purpose must never authorise another, so a purpose that no longer exists must be rejected at the
+ * edge and not quietly treated as `authentication`.
+ */
+it('refuses an OTP requested for the purpose that no longer exists', function () {
+    fakeOtpSender();
 
-    Device::sole()->forceFill(['has_local_pin' => true, 'biometric_enabled' => true])->save();
-
-    $sender = fakeOtpSender();
-    $challengeId = requestCode(purpose: 'pin_reset');
-
-    $result = $this->postJson('/api/v1/auth/otp/verify', [
-        'challengeId' => $challengeId,
-        'code' => $sender->lastCode(),
-        'device' => ['publicId' => 'dev-1', 'platform' => 'android'],
-    ])->assertOk()->json('data');
-
-    expect($result['nextStep'])->toBe('CREATE_PIN')
-        ->and(Device::sole()->has_local_pin)->toBeFalse()
-        ->and(Device::sole()->biometric_enabled)->toBeFalse();
+    $this->postJson('/api/v1/auth/otp/request', [
+        'phone' => '01012345678',
+        'purpose' => 'pin_reset',
+        'device' => ['publicId' => 'dev-1', 'platform' => 'android', 'appVersion' => '1.0.0'],
+    ])->assertStatus(422)->assertJsonPath('error.code', 'VALIDATION_FAILED');
 });
 
 /**
@@ -230,7 +227,7 @@ it('signs a suspended account in but never routes it Home', function () {
     fakeOtpSender();
     $result = signIn(devicePublicId: 'dev-1');
 
-    expect($result['nextStep'])->toBe('ACCOUNT_SUSPENDED')
+    expect($result['nextStep'])->toBe('RESTRICTED_ACCOUNT')
         ->and($result['user']['accountStatus'])->toBe('SUSPENDED')
         ->and($result['session']['accessToken'])->not->toBeEmpty();
 });

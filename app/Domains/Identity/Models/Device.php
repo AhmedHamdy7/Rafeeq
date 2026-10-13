@@ -14,7 +14,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 
 #[Fillable([
     'user_id', 'device_public_id', 'platform', 'device_model', 'os_version',
-    'app_version', 'push_token', 'is_trusted', 'has_local_pin', 'biometric_enabled',
+    'app_version', 'push_token', 'is_trusted', 'biometric_enabled',
 ])]
 #[Hidden(['push_token'])]
 class Device extends Model
@@ -28,7 +28,6 @@ class Device extends Model
             'platform' => DevicePlatform::class,
             'push_token' => 'encrypted',
             'is_trusted' => 'boolean',
-            'has_local_pin' => 'boolean',
             'biometric_enabled' => 'boolean',
             'last_seen_at' => 'datetime',
             'revoked_at' => 'datetime',

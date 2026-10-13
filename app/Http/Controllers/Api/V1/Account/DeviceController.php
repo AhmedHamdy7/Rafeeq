@@ -3,11 +3,9 @@
 namespace App\Http\Controllers\Api\V1\Account;
 
 use App\Domains\Identity\Actions\RevokeSessionAction;
-use App\Domains\Identity\Enums\SecurityEventType;
 use App\Domains\Identity\Enums\SessionRevocationReason;
 use App\Domains\Identity\Models\Device;
 use App\Domains\Identity\Support\CurrentSession;
-use App\Domains\Identity\Support\SecurityLog;
 use App\Domains\Shared\Exceptions\DomainException;
 use App\Domains\Shared\Support\ErrorCode;
 use App\Http\Controllers\Controller;
@@ -53,9 +51,16 @@ final class DeviceController extends Controller
     }
 
     /**
-     * PATCH /v1/account/devices/current/security — the app reporting that a
-     * local PIN or biometric unlock was set up, or handing over a refreshed
-     * push token.
+     * PATCH /v1/account/devices/current/security — a refreshed push token, or a biometric-unlock
+     * preference.
+     *
+     * 🔴 `hasLocalPin` is gone. The local PIN left the MVP (Feature 01 v3 §10): the app no longer
+     * asks for one, nothing routes on it, and the column is dropped. A client still sending the
+     * field is ignored rather than refused, so removing it from the app is not a flag day.
+     *
+     * Biometrics stay as a device PREFERENCE and nothing more. v3 is explicit that they must not be
+     * mandatory, and with no unlock screen left this value drives no decision on the server — it is
+     * recorded so the devices screen can say what the person turned on.
      */
     #[ApiErrors(ErrorCode::SessionInvalid)]
     public function updateSecurity(UpdateDeviceSecurityRequest $request): JsonResponse
@@ -67,30 +72,16 @@ final class DeviceController extends Controller
         }
 
         $device = $session->device;
-        $hadPin = $device->has_local_pin;
 
         $device->fill($request->safe()->collect()
             ->mapWithKeys(fn ($value, string $key) => [
                 match ($key) {
-                    'hasLocalPin' => 'has_local_pin',
                     'biometricEnabled' => 'biometric_enabled',
                     'pushToken' => 'push_token',
                 } => $value,
             ])->all());
 
-        // Setting a PIN is what makes an installation trusted: it means the
-        // person can be asked to prove themselves locally before the app
-        // opens, which is the premise the whole "stay signed in" model rests
-        // on (Chapter 2 §16).
-        if ($device->has_local_pin) {
-            $device->is_trusted = true;
-        }
-
         $device->save();
-
-        if ($device->has_local_pin && ! $hadPin) {
-            SecurityLog::record(SecurityEventType::LocalPinSet, $request->user(), $device);
-        }
 
         return ApiResponse::success(new DeviceResource($device));
     }

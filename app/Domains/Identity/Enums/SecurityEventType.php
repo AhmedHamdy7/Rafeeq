@@ -20,8 +20,6 @@ enum SecurityEventType: string
     case TokenReuse = 'token_reuse';
     case Logout = 'logout';
     case DeviceRevoked = 'device_revoked';
-    case LocalPinSet = 'local_pin_set';
-    case LocalPinReset = 'local_pin_reset';
     case SuspendedAccessAttempt = 'suspended_access_attempt';
 
     // ---- Verification (Phase 3) ---------------------------------------
@@ -52,7 +50,6 @@ enum SecurityEventType: string
 
             self::OtpRateLimited,
             self::DeviceRevoked,
-            self::LocalPinReset,
             self::SuspendedAccessAttempt,
             // A refused upload is either a mistake or a probe, and the two are
             // indistinguishable at the moment it happens.

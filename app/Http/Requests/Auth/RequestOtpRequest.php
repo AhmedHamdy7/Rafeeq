@@ -44,11 +44,15 @@ final class RequestOtpRequest extends FormRequest
             // person typed.
             'phone' => ['required', 'string', 'max:30'],
 
-            // Why the code is being sent. Defaults to `authentication`, which
-            // covers both first-time registration and signing in again. Use
-            // `pin_reset` for the "Forgot PIN?" flow.
+            /*
+             * Why the code is being sent. Defaults to `authentication`, which covers both
+             * first-time registration and signing in again — there is no separate register call.
+             *
+             * 🔴 `pin_reset` is gone with the PIN (Feature 01 v3 §10). `authentication` is the
+             * only purpose this endpoint accepts.
+             */
             'purpose' => ['sometimes', 'string', Rule::enum(OtpPurpose::class)
-                ->only([OtpPurpose::Authentication, OtpPurpose::PinReset])],
+                ->only([OtpPurpose::Authentication])],
 
             'device' => ['required', 'array'],
 

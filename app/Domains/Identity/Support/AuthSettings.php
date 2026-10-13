@@ -47,11 +47,6 @@ final class AuthSettings
         return (int) self::get('auth.session.refresh_ttl_days');
     }
 
-    public static function pinLength(): int
-    {
-        return (int) self::get('auth.pin.length');
-    }
-
     public static function otpRequestsPerPhonePerHour(): int
     {
         return (int) self::get('auth.rate_limits.otp_requests_per_phone_per_hour');

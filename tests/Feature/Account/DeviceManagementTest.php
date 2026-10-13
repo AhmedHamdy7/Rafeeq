@@ -90,36 +90,55 @@ it('answers 404, not 403, for a device belonging to another account', function (
     expect(Device::findOrFail($theirs['device']['id'])->revoked_at)->toBeNull();
 });
 
-it('records that a local PIN exists without ever receiving one', function () {
+/**
+ * 🔴 The local PIN left the MVP (Feature 01 v3 §10). These two replace the tests that used to pin
+ * its behaviour, and they pin its ABSENCE — which is the thing that can quietly come back.
+ */
+it('keeps a biometric preference and a push token, and nothing resembling a secret', function () {
     $signIn = signIn();
 
     $device = $this->withToken($signIn['session']['accessToken'])
         ->patchJson('/api/v1/account/devices/current/security', [
-            'hasLocalPin' => true,
             'biometricEnabled' => true,
+            'pushToken' => 'fcm-token-abc',
         ])->assertOk()->json('data');
 
-    expect($device['hasLocalPin'])->toBeTrue()
-        ->and($device['isTrusted'])->toBeTrue()
-        ->and(SecurityEvent::where('event_type', SecurityEventType::LocalPinSet->value)->count())->toBe(1);
+    expect($device['biometricEnabled'])->toBeTrue()
+        // No PIN field in the payload any more.
+        ->and($device)->not->toHaveKey('hasLocalPin');
 
-    // Nothing resembling a PIN value exists anywhere in the devices table.
+    // And nothing resembling a local verifier exists in the table at all.
     expect(array_keys(Device::sole()->getAttributes()))
-        ->not->toContain('pin', 'pin_hash', 'pin_verifier');
+        ->not->toContain('has_local_pin', 'pin', 'pin_hash', 'pin_verifier');
 });
 
-it('routes a returning device with a PIN straight past the PIN setup step', function () {
-    $signIn = signIn(devicePublicId: 'dev-1');
+/**
+ * 🔒 A client that has not shipped the change yet keeps sending `hasLocalPin`. Ignoring it rather
+ * than refusing is what makes removing it from the app a separate day's work from this deploy.
+ */
+it('ignores a client still sending the old PIN flag', function () {
+    $signIn = signIn();
 
     $this->withToken($signIn['session']['accessToken'])
-        ->patchJson('/api/v1/account/devices/current/security', ['hasLocalPin' => true])
-        ->assertOk();
+        ->patchJson('/api/v1/account/devices/current/security', [
+            'hasLocalPin' => true,
+            'biometricEnabled' => false,
+        ])->assertOk();
+
+    expect(array_keys(Device::sole()->getAttributes()))->not->toContain('has_local_pin');
+});
+
+/**
+ * Session restore is silent now: a returning installation is asked for nothing, so what is left is
+ * whatever the ACCOUNT still owes — here, an unfinished profile.
+ */
+it('asks a returning device for nothing the device itself can satisfy', function () {
+    signIn(devicePublicId: 'dev-1');
 
     fakeOtpSender();
     $again = signIn(devicePublicId: 'dev-1');
 
-    // Profile is still unfinished, so that — not PIN setup — is what is left.
-    expect($again['nextStep'])->toBe('COMPLETE_PROFILE');
+    expect($again['nextStep'])->toBe('BASIC_PROFILE');
 });
 
 it('requires authentication for every account route', function (string $method, string $uri) {

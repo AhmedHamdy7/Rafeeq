@@ -14,7 +14,7 @@
 >
 > **Base URL:** `{host}/api/v1` · **Auth:** bearer token · **Format:** JSON only.
 
-**Last updated:** 2026-10-06 · **126 endpoints live** · Phases 0–7, 9 and 11 complete · 10, 12 and 13 all but a decision each
+**Last updated:** 2026-10-13 · **126 endpoints live** · Phases 0–7, 9 and 11 complete · 10, 12 and 13 all but a decision each
 
 ---
 
@@ -240,7 +240,7 @@ The order that keeps you unblocked. Each step only needs the ones above it.
 |---|---|---|
 | 1 | 5, 6 — phone, OTP | Nothing works without a token. |
 | 2 | 7, 8 — basic profile, role | `profileStatus` gates the `active` tier. Until it is `BASIC_COMPLETE` most endpoints 403. |
-| 3 | 2, 3, 4 — PIN, accounts, forgot PIN | Local storage plus refresh. The PIN never leaves the device. |
+| 3 | ~~2, 3, 4~~ | 🔴 **Gone.** The local PIN, biometric login and account switching left the MVP — no PIN setup, no PIN entry, no "forgot PIN", no account picker. Session restore is silent. Skip straight to step 4. |
 | 4 | 15, 30 — verification centre, identity capture | `verified:government_id` gates seat requests and the whole driver flow. Build it before anything that books. |
 | 5 | 9 — home | One call. Gives you a real screen early and exercises the envelope, the person shape and the verification banner. |
 | 6 | 10, 11, 12 — discover, filters, match details | The search engine. Read 5.3 first; the score breakdown is designed to be shown. |
@@ -282,10 +282,10 @@ order of precedence:
 
 | `nextStep` | Show | Why it outranks what follows |
 |---|---|---|
-| `ACCOUNT_SUSPENDED` | Screen 35 | A suspended account must never be routed home, whatever else is true. |
-| `CREATE_PIN` | Screen 2's setup | This **device** has no local PIN. A reinstall is asked again rather than inheriting the old installation's trust. |
-| `COMPLETE_PROFILE` | Screen 7, then 8 | The profile is unfinished, so it is resumed — never skipped. |
-| `LOCAL_SECURITY_SETUP_OR_HOME` | Screen 9 | Nothing is outstanding. |
+| `PHONE_OTP` | Screen 5 | No usable session. Returned by refresh when the token is dead, so you have one vocabulary for "go back to the phone screen" rather than inferring it from a 401. |
+| `RESTRICTED_ACCOUNT` | Screen 35 | A restricted account must never be routed home, whatever else is true. 🔴 This is the **ACCOUNT** scope. A **driver-only** restriction does NOT return this — that person goes `HOME` with full passenger access and the driver surface refuses on its own. |
+| `BASIC_PROFILE` | Screen 7, then 8 | The profile is unfinished, so it is resumed — never skipped. |
+| `HOME` | Screen 9 | Nothing is outstanding. |
 
 Do not infer the destination from which fields happen to be null, and do not add a fifth case of
 your own: `GET /auth/me` returns the same field and is reachable **while suspended**, which is how
@@ -472,59 +472,28 @@ POST /safety/blocked-users             { userId, reason? }                      
 profile, no active trip. That is deliberate — somebody in trouble at a roadside will not finish
 uploading a national ID first — so **do not gate the safety button in your own navigation either.**
 
-#### The local PIN, concretely — client-side guidance, not a contract
+#### No PIN, no biometric login, no account switching
 
-The API has no opinion about how you protect the token; it holds one fact, `device.hasLocalPin`, and
-there is no endpoint that takes a PIN. That leaves a real design question on your side, and it comes
-up often enough to answer here. **This section is a recommendation, not a requirement** — nothing
-below is enforced by the server.
+🔴 **Removed from the MVP** (Feature 01 v3 §10), and with them screens 2, 3 and 4. If you built
+any of this, it can come out:
 
-🔴 **Do not store the PIN at all — not the digits, not a hash of them.** Store the **refresh token**,
-encrypted under a key *derived* from the PIN. The PIN then exists nowhere: not on the server, not on
-the device.
-
-```
-Creating it
-  salt = 16 random bytes                 stored in the clear (it is not a secret)
-  key  = PBKDF2(pin, salt, 100_000)      held in memory only, never written
-  blob = AES-GCM(refreshToken, key)
-  store: salt + blob
-
-Unlocking
-  key  = PBKDF2(entered pin, salt, 100_000)
-  AES-GCM-decrypt(blob, key)
-    ✓  you now hold the refresh token  →  POST /auth/session/refresh
-    ✗  wrong PIN
-```
-
-**Why this beats storing a hash of the PIN:** there is nothing to compare against. A wrong PIN is a
-failed decryption, so somebody who pulls the device's storage has no hash to run four digits' worth
-of guesses against — because no hash was ever written.
-
-Put `salt + blob` in `flutter_secure_storage` as well (`AndroidOptions(encryptedSharedPreferences:
-true)`), so there are two layers. Either one alone is weak: the Keystore opens without a PIN, so
-anyone holding an unlocked phone is in; and a PIN-derived key alone leaves the blob sitting in plain
-app storage.
-
-States you have to handle, and the last two are the ones usually missed:
-
-| | |
+| Gone | What replaces it |
 |---|---|
-| **PIN length** | From `pinLength` on `/auth/otp/verify` and `/auth/me`. It is 4 today and **server-configurable — do not hard-code it.** |
-| **Repeated wrong PIN** | A local, increasing lockout. The server knows nothing about it, so do not expect it to help. |
-| **Forgot the PIN** | Discard the blob → `POST /auth/otp/request` with **`purpose: "pin_reset"`** → verify → set a new PIN → `PATCH /account/devices/current/security`. There is no PIN recovery, because the server never knew it. |
-| **`refresh` returns 401** | The token is dead — a revoked device, or reuse detected. Clear everything and return to the phone screen. 🔴 **Do not show "wrong PIN"**: the PIN was right, and that message sends somebody retrying something that cannot work. |
-| **Reinstall** | A new `device.publicId` means `hasLocalPin` is false and `nextStep` is `CREATE_PIN`. That is deliberate — a fresh installation does not inherit the previous one's trust. |
-| **Two accounts on one device** (screen 3) | One blob per account, each with its own PIN. `UNIQUE(user_id, device_public_id)` allows it. |
+| PIN setup, PIN entry, forgot/reset PIN | Nothing. Session restore is silent — a valid refresh token gets you in. |
+| `hasLocalPin` on the device payload and request | Nothing. The field is **ignored** rather than refused, so you can drop it from the app whenever suits you. |
+| `pinLength` on auth responses | Nothing. |
+| `purpose: "pin_reset"` on `/auth/otp/request` | Nothing — it is now a `422`. `authentication` is the only purpose. |
+| ~~CREATE_PIN~~, ~~LOCAL_SECURITY_SETUP_OR_HOME~~ | See the `nextStep` table above. |
+| Account switching | Nothing. One account per installation. |
 
-And the only thing the server wants from you:
+**What to keep storing:** the refresh token, in `flutter_secure_storage`
+(`AndroidOptions(encryptedSharedPreferences: true)`) — guarded by the device's own lock if you
+like, but **not** by a PIN of ours. On a `401 AUTH_SESSION_EXPIRED`, refresh once and retry; on a
+`401` from refresh itself the token is dead, so clear storage and return to the phone screen.
 
-```http
-PATCH /account/devices/current/security     { "hasLocalPin": true }
-```
-
-🔒 A **flag, not a value.** No field accepts a PIN or a hash of one, and sending it anyway does
-nothing.
+`biometricEnabled` still exists on `PATCH /account/devices/current/security`, but it is now a
+**preference the devices screen displays** — it unlocks nothing and the server makes no decision
+from it.
 
 #### Accounts seeded on staging
 
@@ -549,9 +518,9 @@ Status: ✅ fully served · ⚠️ served, something named missing · ⛔ no API
 | # | Screen | Endpoints | Status |
 |---|---|---|---|
 | 1 | Splash / welcome | — | 🚫 Language toggle is local. |
-| 2 | Login (PIN) | `POST /auth/session/refresh` | ✅ **The PIN is local to the device by design** — the server never sees its value, only `device.hasLocalPin`. This screen is a local unlock plus a token refresh. |
-| 3 | Use another account | — | ✅ The account list and its tokens are local. `UNIQUE(user_id, device_public_id)` allows two accounts on one device. |
-| 4 | Forgot PIN | `POST /auth/otp/request` with `purpose=pin_reset` → `/auth/otp/verify` → `PATCH /account/devices/current/security` | ✅ |
+| 2 | ~~Login (PIN)~~ | — | 🔴 **Removed from the MVP** (v3). Session restore is silent: a valid refresh token gets you in with no screen at all. |
+| 3 | ~~Use another account~~ | — | 🔴 **Removed from the MVP** (v3). One account per installation. |
+| 4 | ~~Forgot PIN~~ | — | 🔴 **Removed from the MVP** (v3). `purpose=pin_reset` is now a `422`. |
 | 5 | Phone | `POST /auth/otp/request` | ✅ |
 | 6 | OTP | `POST /auth/otp/verify` | ✅ Drive the countdown from `resendAvailableInSeconds`, and on 429 from `Retry-After`. |
 | 7 | Basic profile | `PUT /account/profile/basic` | ⚠️ **Your screen has `firstName` and `lastName`; the endpoint takes one `fullName`.** Also your screen collects workplace/university in the same step, where we have a separate verification endpoint. Needs a product decision — section 8. |
@@ -778,10 +747,11 @@ you hand the URL the server gives you to the operating system's share sheet. See
 
 #### `POST /auth/otp/request` — public
 
-Send a code. Also the entry point for a PIN reset.
+Send a code. **This is also registration** — a number nobody has used before gets an account on verify, so there is no separate register call.
 
 **Request:** `phone` (any Egyptian format; Arabic-Indic digits are normalised), `purpose`
-(`authentication` default, or `pin_reset`), `device.publicId` (a stable id you generate and keep),
+(`authentication` — the only accepted value; `pin_reset` is gone and now returns `422`),
+`device.publicId` (a stable id you generate and keep),
 `device.platform` (`ios`/`android`), `device.model`, `device.osVersion`, `device.appVersion`.
 
 | Response field | Meaning |
@@ -796,7 +766,7 @@ Send a code. Also the entry point for a PIN reset.
 | Response field | Meaning |
 |---|---|
 | `accountState` | `NEW` (just created) or `EXISTING`. Drives whether you show onboarding. |
-| `nextStep` | **The screen to go to next**, decided by the server. Exactly four values: `ACCOUNT_SUSPENDED`, `CREATE_PIN`, `COMPLETE_PROFILE`, `LOCAL_SECURITY_SETUP_OR_HOME` — in that order of precedence, explained in 2.1. Follow it rather than deciding yourself; it accounts for suspension, a device with no PIN, and half-finished profiles you cannot see. Verification is **not** one of them — it is a per-endpoint gate, not a sign-up step. |
+| `nextStep` | **The screen to go to next**, decided by the server. Exactly four values: `PHONE_OTP`, `RESTRICTED_ACCOUNT`, `BASIC_PROFILE`, `HOME` — in that order of precedence, explained in 2.1. Follow it rather than deciding yourself; it accounts for restriction and half-finished profiles you cannot see. 🔴 Verification is **not** one of them — it is a per-endpoint gate on the DRIVER surface, not a sign-up step. |
 | `pinLength` | How many digits your local PIN entry should take (currently 4). Configurable server-side; do not hard-code. |
 | `session` | See 5.2. |
 | `user` | See 5.5. |
@@ -2409,6 +2379,7 @@ exist, and every live endpoint must be named here.
 
 | Date | Change |
 |---|---|
+| 2026-10-13 | 🔴 **BREAKING — the local PIN is gone, and `nextStep` changed with it.** Feature 01 v3 §10 removes the PIN, biometric login and account switching from the MVP, so screens 2, 3 and 4 go too. **`nextStep` now has four values: `PHONE_OTP` · `RESTRICTED_ACCOUNT` · `BASIC_PROFILE` · `HOME`.** The old `CREATE_PIN` and `LOCAL_SECURITY_SETUP_OR_HOME` existed only to serve the PIN; `COMPLETE_PROFILE` is renamed `BASIC_PROFILE` and `ACCOUNT_SUSPENDED` is renamed `RESTRICTED_ACCOUNT` (the **error code** `ACCOUNT_SUSPENDED` is unchanged). Also gone: `pinLength` on auth responses, `hasLocalPin` on the device payload and request, and `purpose: "pin_reset"` (now `422`). `hasLocalPin` sent by a client is **ignored, not refused**, so you can remove it from the app on your own schedule. `biometricEnabled` survives as a display-only preference. |
 | 2026-10-07 | **Fixed: `GET /search/commutes` 500 "Latitude out of range"** (your bug report). The seeded commutes carried a malformed route; they are repaired, and a commute whose stored route cannot be read is now **skipped** instead of failing the whole search. **A `500` no longer carries internal exception text** in `error.message` — it is the generic localised sentence. **Home `topMatches` now fills:** saving a request (`POST /commute-demands`) matches it against commutes already running, not only against ones published later (no `match_found` notice for those — the person has just seen them). Test accounts were re-seated on upcoming trips, so `nextJourney` is populated again. |
 | 2026-10-06 | **Money — 2 endpoints** (`GET /driver/balance`, `GET /groups/{group}/statement`). Section 4.16. 🔴 **The fee comes out of the driver at 3% and the passenger pays the seat price** — settled, and it closes the contradiction this file carried: an 8000 seat means the passenger owes 8000 and the driver keeps 7760. On a cash trip the fee becomes a **debt the driver owes**, which eventually stops her publishing. Nothing here moves money; capture, payouts and refunds still wait on a provider. |
 | 2026-10-06 | **Correction:** the new English summary said 116 endpoints against a real 124 — the header was right and the summary was not. Fixed, and a test now checks every endpoint count in the prose rather than only the one in the header, which is how the two disagreed. |

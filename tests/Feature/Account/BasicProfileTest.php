@@ -27,7 +27,7 @@ it('completes the profile and opens the way Home', function () {
 
     $response = completeProfile($signIn['session']['accessToken'])->assertOk();
 
-    expect($response->json('data.nextStep'))->toBe('LOCAL_SECURITY_SETUP_OR_HOME')
+    expect($response->json('data.nextStep'))->toBe('HOME')
         ->and($response->json('data.user.profileStatus'))->toBe('BASIC_COMPLETE')
         // Derived, not asked for: what other members see.
         ->and($response->json('data.user.publicFirstName'))->toBe('مريم')
@@ -107,7 +107,7 @@ it('blocks a suspended account from editing its profile but not from seeing its 
         ->assertJsonPath('error.code', 'ACCOUNT_SUSPENDED');
 
     $this->withToken($signIn['session']['accessToken'])->getJson('/api/v1/auth/me')
-        ->assertOk()->assertJsonPath('data.nextStep', 'ACCOUNT_SUSPENDED');
+        ->assertOk()->assertJsonPath('data.nextStep', 'RESTRICTED_ACCOUNT');
 
     $this->withToken($signIn['session']['accessToken'])->postJson('/api/v1/auth/logout')->assertOk();
 });

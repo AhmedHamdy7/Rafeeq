@@ -201,7 +201,15 @@ it('accounts for all 47 designed screens', function (int $screen) {
  * will send; an invented one sends them building a screen that never arrives.
  */
 it('names every nextStep the server can actually send, and no others', function () {
-    $guide = mobileApiGuide();
+    /*
+     * The change log is excluded for the same reason the endpoint-count guard excludes it: its rows
+     * are dated history, so naming a value that has since been removed is a true statement about
+     * that day rather than a claim about the contract now. Without this, correcting a value would
+     * require erasing the record of the correction.
+     */
+    $guide = str_contains(mobileApiGuide(), '## 9. Change log')
+        ? strstr(mobileApiGuide(), '## 9. Change log', before_needle: true)
+        : mobileApiGuide();
 
     foreach (NextStep::cases() as $case) {
         expect(str_contains($guide, '`'.$case->value.'`'))->toBeTrue(

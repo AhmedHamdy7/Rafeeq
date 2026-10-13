@@ -37,30 +37,22 @@ final readonly class AuthenticateWithOtpAction
 
     public function execute(string $challengeId, string $code, DeviceIdentity $identity): AuthenticationResult
     {
-        // Both purposes are accepted here: "forgot PIN" (scenario C) is the
-        // same proof-of-phone, spent on a different outcome below. A code
-        // issued for a phone change is NOT accepted — that one is spent by
-        // its own endpoint, on an already-authenticated caller.
+        /*
+         * One purpose only. "Forgot PIN" used to be accepted here as the same proof-of-phone
+         * spent on a different outcome; the PIN left the MVP (Feature 01 v3 §10) and so did that
+         * branch. A code issued for a phone change is still NOT accepted — that one is spent by
+         * its own endpoint, on an already-authenticated caller (pitfall #31).
+         */
         $challenge = $this->verifyOtp->execute($challengeId, $code, [
             OtpPurpose::Authentication,
-            OtpPurpose::PinReset,
         ]);
 
         $phone = PhoneNumber::fromRaw($challenge->phone_e164);
 
-        return DB::transaction(function () use ($phone, $challenge, $identity): AuthenticationResult {
+        return DB::transaction(function () use ($phone, $identity): AuthenticationResult {
             [$user, $accountState] = $this->resolveAccount($phone);
 
             $device = $this->registerDevice->execute($user, $identity);
-
-            if ($challenge->purpose === OtpPurpose::PinReset) {
-                // Scenario C: the old local verifier is gone. The server only
-                // ever knew THAT a PIN existed, so forgetting it is this one
-                // flag — and the app is then routed to CREATE_PIN.
-                $device->forceFill(['has_local_pin' => false, 'biometric_enabled' => false])->save();
-
-                SecurityLog::record(SecurityEventType::LocalPinReset, $user, $device);
-            }
 
             $session = $this->issueSession->execute($user, $device);
 

@@ -9,7 +9,6 @@ namespace App\Domains\Identity\Enums;
 enum OtpPurpose: string
 {
     case Authentication = 'authentication';
-    case PinReset = 'pin_reset';
     case PhoneChange = 'phone_change';
     case HighRiskAction = 'high_risk_action';
 }

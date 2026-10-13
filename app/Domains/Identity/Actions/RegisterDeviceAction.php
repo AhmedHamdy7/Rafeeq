@@ -31,9 +31,8 @@ final readonly class RegisterDeviceAction
             'push_token' => $identity->pushToken,
         ], fn ($value) => $value !== null));
 
-        // A reinstall generates a new `device_public_id`, so it lands here as
-        // a brand-new row with `has_local_pin` false — which is exactly why
-        // scenario B asks for a PIN again without any special-casing.
+        // A reinstall generates a new `device_public_id`, so it lands here as a brand-new row
+        // rather than inheriting the previous installation's trust.
         $device->last_seen_at = now();
 
         $device->save();

@@ -3,7 +3,6 @@
 namespace App\Http\Resources;
 
 use App\Domains\Identity\Support\AuthenticationResult;
-use App\Domains\Identity\Support\AuthSettings;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
 
@@ -23,9 +22,6 @@ final class AuthenticationResource extends JsonResource
         return [
             'accountState' => $this->accountState->value,
             'nextStep' => $this->nextStep->value,
-            // The app needs the length to render the right number of boxes;
-            // sending it avoids a second source of truth in the client.
-            'pinLength' => AuthSettings::pinLength(),
             'session' => new SessionResource($this->session),
             'user' => new UserResource($this->user),
             'device' => new DeviceResource($this->device),

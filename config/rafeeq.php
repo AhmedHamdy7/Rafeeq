@@ -822,16 +822,13 @@ return [
             'refresh_ttl_days' => 60,
         ],
 
-        'pin' => [
-            /*
-             * Informational for the client only — the server NEVER sees a PIN
-             * value, it only records `devices.has_local_pin`. Chapter 2 says
-             * six digits; MASTER_PLAN §13 resolves that conflict in favour of
-             * the prototype's four. Exposed so the app reads one source of
-             * truth instead of hard-coding it.
-             */
-            'length' => 4,
-        ],
+        /*
+         * 🔴 The `pin` block is gone. The local PIN left the MVP (Feature 01 v3 §10): the app no
+         * longer asks for one, `devices.has_local_pin` is dropped, and the two launch-router values
+         * that existed only to serve it — CREATE_PIN and LOCAL_SECURITY_SETUP_OR_HOME — went with
+         * it. Session restore is now silent: a valid refresh token gets you in, an expired one
+         * returns you to the phone screen, and nothing is asked in between.
+         */
 
         /*
          * Abuse controls (Chapter 2 §26, scenario D). Three independent axes:

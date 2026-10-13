@@ -12,7 +12,7 @@
 > **الخريطة دي اتعملت من قراءة كود الشاشات نفسه** — مش من وصفها. الـ bundle مفكوك ومقروء،
 > وكل سطر تحت مبني على حقول وأزرار موجودة فعلًا في الـ prototype.
 
-**آخر تحديث:** 2026-10-02 · **الحالة:** 116 endpoint للموبايل (+ صفحة ويب عامة واحدة) · داشبورد Livewire (توثيق + سائقين) شغّالة
+**آخر تحديث:** 2026-10-13 · **الحالة:** 116 endpoint للموبايل (+ صفحة ويب عامة واحدة) · داشبورد Livewire (توثيق + سائقين) شغّالة
 
 ---
 
@@ -50,9 +50,9 @@
 | # | الشاشة | الـ endpoints | الحالة |
 |---|---|---|---|
 | 1 | SPLASH / WELCOME | — | 🚫 تبديل اللغة محلي |
-| 2 | LOGIN (PIN) | `POST /v1/auth/session/refresh` | ✅ الـ PIN **محلي على الجهاز بالتصميم** — السيرفر عمره ما يشوف قيمته، بيسجّل `devices.has_local_pin` بس. فالشاشة دي فتح محلي + تحديث التوكن |
-| 3 | USE ANOTHER ACCOUNT | — | ✅ قائمة الحسابات وتوكناتهم محلية. `UNIQUE(user_id, device_public_id)` بيسمح بحسابين على نفس الجهاز (فجوة ERD §23.1 #3) |
-| 4 | FORGOT PIN | `POST /v1/auth/otp/request` (`purpose=pin_reset`) → `/verify` → `PATCH /v1/account/devices/current/security` | ✅ `OtpPurpose::PinReset` موجود |
+| 2 | ~~LOGIN (PIN)~~ | — | 🔴 **اتشالت من الـ MVP** (Feature 01 v3 §10). استعادة الجلسة بقت **صامتة**: refresh token صالح بيدخّلك من غير أي شاشة، والميّت بيرجّعك لشاشة الموبايل. عمود `has_local_pin` اتمسح |
+| 3 | ~~USE ANOTHER ACCOUNT~~ | — | 🔴 **اتشالت من الـ MVP** (v3). حساب واحد لكل تثبيت. القيد `UNIQUE(user_id, device_public_id)` سايبينه زي ما هو — مابيضرّش ولو الشاشة رجعت بعدين مش محتاج migration |
+| 4 | ~~FORGOT PIN~~ | — | 🔴 **اتشالت من الـ MVP** (v3). `purpose=pin_reset` بقى **422** — وده مقصود مش إهمال: فخ #31 بيقول إن كود اتصدر لغرض ماينفعش يصرّح بغرض تاني، فغرض مابقاش موجود لازم يترفض عند الحد مش يتعامل معاه كـ`authentication` بهدوء |
 | 5 | PHONE | `POST /v1/auth/otp/request` | ✅ |
 | 6 | OTP | `POST /v1/auth/otp/verify` | ✅ العدّاد التنازلي من `Retry-After` |
 | 7 | BASIC PROFILE | `PUT /v1/account/profile/basic` | ⚠️ **الشاشة فيها `firstName` و`lastName` منفصلين**، والـ endpoint بياخد `fullName` واحد. وكمان الشاشة فيها جهة العمل/الجامعة + اسمها في **نفس الخطوة**، وعندي دي endpoint توثيق منفصلة |

@@ -122,5 +122,5 @@ it('stops a revoked device from refreshing its way back in', function () {
 it('re-evaluates where to send the app on every refresh', function () {
     $signIn = signIn();
 
-    expect(refresh($signIn['session']['refreshToken'])->json('data.nextStep'))->toBe('CREATE_PIN');
+    expect(refresh($signIn['session']['refreshToken'])->json('data.nextStep'))->toBe('BASIC_PROFILE');
 });

@@ -27,7 +27,6 @@ final class DeviceResource extends JsonResource
             'osVersion' => $this->os_version,
             'appVersion' => $this->app_version,
             'isTrusted' => $this->is_trusted,
-            'hasLocalPin' => $this->has_local_pin,
             'biometricEnabled' => $this->biometric_enabled,
             'lastSeenAt' => $this->last_seen_at?->toIso8601String(),
             'revokedAt' => $this->revoked_at?->toIso8601String(),

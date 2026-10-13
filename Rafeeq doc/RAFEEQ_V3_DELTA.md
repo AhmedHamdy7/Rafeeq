@@ -60,6 +60,21 @@ exists and passes tests, and in a year the reason will matter more than the choi
 
 Sequencing: **the order in §5**, so the mobile team is never blocked on a half-finished migration.
 
+### 1.6 Decisions taken inside slice 1 (the PIN removal)
+
+Three judgement calls that nobody asked about, recorded so they can be reversed cheaply rather
+than discovered later.
+
+| Question | Decision | Why, and what reverses it |
+|---|---|---|
+| One breaking `next_step` change, or both old and new values for a release? | **One breaking change.** | A transition window means the server emits a value it wants nobody to use, and the guard that keeps the guide honest cannot tell a deprecated value from a live one. The window's only real benefit is calendar time for the app — and the app has to change anyway, because `CREATE_PIN` leads to a screen v3 deleted. Reverse by returning the old value behind a request-header opt-in. |
+| Which endpoint returns `ROLE_SELECTION`? | **Only `PUT /me/basic-profile`.** A cold start resumes at `BASIC_PROFILE`. | F01 §5 and the acceptance criteria both say to resume at Basic Profile "even if profile fields are already populated". So the launch router never sends `ROLE_SELECTION` — the profile screen does, once, on submit. This is the opposite of what a reader expects from "role missing → ROLE_SELECTION" in the decision tree, which is why it is written down. |
+| Delete `biometric_enabled` too? | **Kept, as an inert device preference.** | v3 says biometrics must not be **mandatory**, which is not the same as "remove them". With no unlock screen left, the value drives no server decision, so dropping the column would be a schema change with no behavioural payoff — and re-adding a column is more expensive than ignoring one. |
+
+🔴 **The mobile team must be told before their build goes red.** The auth endpoints are live with
+them. `COMPLETE_PROFILE` and `ACCOUNT_SUSPENDED` stop being returned the moment this deploys, and a
+client that switches on `next_step` without a default branch will land on no screen at all.
+
 ---
 
 ## 2. 🔴 Direct conflicts with implemented, tested decisions
@@ -202,8 +217,9 @@ Ordered so that nothing is built twice and the mobile team is never blocked on a
 
 | # | Slice | Why here |
 |---|---|---|
-| **0** | Answer §2 | Six conflicts. Each one changes code that exists and is tested |
-| **1** | Remove the PIN · `user_capabilities` · `user_preferences` · `account_restrictions` · new `next_step` | Feature 01 is self-contained, and every screen depends on `next_step` being right |
+| **0** | ✅ Answer §2 | Six conflicts. Each one changes code that exists and is tested. Four answered in §1.5; 2.4–2.6 carried |
+| **1a** | ✅ Remove the PIN · new `next_step` | Feature 01 is self-contained, and every screen depends on `next_step` being right |
+| **1b** | `user_capabilities` · `user_preferences` · `account_restrictions` · `POST /me/initial-role` · `GET /me/onboarding-state` · `PATCH /me/preferences` · then add `ROLE_SELECTION` | Split from 1a because the PIN removal is a **breaking** change the mobile team needs now, and holding it behind three new tables would delay it for no reason. `ROLE_SELECTION` is added **last**, when the server can actually return it |
 | **2** | Reorganise `RAFEEQ_MOBILE_API_GUIDE.md` feature-by-feature | Cheap, and the mobile team reads it while 3–6 are built |
 | **3** | Feature 02: verification items · expiry · vehicle change · organisation evidence · avatar | Independent of the commute re-model |
 | **4** | The commute re-model: templates · weekday schedules · occurrences · promised arrival | The foundation 5 and 6 sit on. The riskiest migration in the list |
