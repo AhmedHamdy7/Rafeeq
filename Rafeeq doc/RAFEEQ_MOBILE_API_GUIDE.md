@@ -283,7 +283,7 @@ order of precedence:
 | `nextStep` | Show | Why it outranks what follows |
 |---|---|---|
 | `PHONE_OTP` | Screen 5 | No usable session. Returned by refresh when the token is dead, so you have one vocabulary for "go back to the phone screen" rather than inferring it from a 401. |
-| `RESTRICTED_ACCOUNT` | Screen 35 | A restricted account must never be routed home, whatever else is true. 🔴 This is the **ACCOUNT** scope. A **driver-only** restriction does NOT return this — that person goes `HOME` with full passenger access and the driver surface refuses on its own. |
+| `RESTRICTED_ACCOUNT` | Screen 35 | A restricted account must never be routed home, whatever else is true. 🔴 This is the **whole account**. A **driver-only** restriction does NOT return this — that person goes `HOME` with full passenger access, and you detect it from `GET /driver/eligibility`, which returns the `driver_suspended` blocker with a message and `nextStep: CONTACT_SUPPORT`. Her commutes also stop appearing in search, and publishing answers `403`. |
 | `BASIC_PROFILE` | Screen 7, then 8 | The profile is unfinished **or no role has been chosen yet**, so it is resumed — never skipped. See the warning below: this is the answer even when the profile looks complete. |
 | `ROLE_SELECTION` | Screen 8 | Passenger / Driver / Both. 🔴 Returned by `PUT /account/profile/basic` **and by nothing else** — see below. |
 | `HOME` | Screen 9 | Nothing is outstanding. Read `user.capabilities` and `activeMode` to pick which home. |

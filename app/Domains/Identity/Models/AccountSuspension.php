@@ -3,7 +3,6 @@
 namespace App\Domains\Identity\Models;
 
 use App\Domains\Admin\Models\AdminUser;
-use App\Domains\Identity\Enums\RestrictionScope;
 use App\Domains\Identity\Enums\SuspensionReason;
 use App\Domains\Safety\Models\Incident;
 use App\Domains\Shared\Concerns\PreventsDeletion;
@@ -29,7 +28,6 @@ class AccountSuspension extends Model
     protected function casts(): array
     {
         return [
-            'scope' => RestrictionScope::class,
             'reason_code' => SuspensionReason::class,
             'suspended_at' => 'datetime',
             'review_due_at' => 'datetime',
@@ -65,26 +63,22 @@ class AccountSuspension extends Model
         $query->whereNull('lifted_at');
     }
 
-    /**
-     * Restrictions of one scope only (Feature 01 v3 §8).
+    /*
+     * ⚠️ There is deliberately no `scope` column here, and the reason is worth keeping.
      *
-     * 🔒 Separated from `inForce` rather than folded into it, because the two questions have
-     * different answers and conflating them is the dangerous direction: "is this account
-     * restricted" must NOT be true for somebody whose driving alone was stopped — she keeps full
-     * passenger access, and treating a driver restriction as an account one would lock her out of
-     * the half of the product she is still entitled to use.
+     * Feature 01 v3 §8 asks for restrictions that cover either the whole ACCOUNT or the DRIVER
+     * capability alone. Both already exist, in two tables that each own their half:
      *
-     * @param  Builder<self>  $query
+     *   - account-wide  → this table. Every row means the person cannot use Rafeeq.
+     *   - driver only   → `driver_profiles.status = suspended`, via
+     *                     `ReviewDriverApplicationAction::suspend()`, which also suspends and
+     *                     deactivates the vehicles and never touches `account_status` — so
+     *                     passenger access survives, exactly as §8 requires.
+     *
+     * A `scope` column here would therefore be a SECOND place a person can be driver-restricted,
+     * and the first code path that checked only one of them would be a hole somebody walks
+     * through. One was added and removed again before it shipped for precisely that reason.
      */
-    public function scopeOfScope(Builder $query, RestrictionScope $scope): void
-    {
-        $query->where('scope', $scope->value);
-    }
-
-    public function restrictsWholeAccount(): bool
-    {
-        return $this->scope === RestrictionScope::Account;
-    }
 
     public function isOverdue(): bool
     {

@@ -28,8 +28,11 @@ enum NextStep: string
      * 🔒 An ACCOUNT-scope restriction. Outranks everything else: a restricted account must never be
      * routed Home whatever else is true about it.
      *
-     * A DRIVER-scope restriction is NOT this — that person keeps full passenger access and goes
-     * Home, with the driver surface refusing on its own. See `AccountRestriction`.
+     * A DRIVER-only restriction is NOT this — that person keeps full passenger access and goes
+     * Home, with the driver surface refusing on its own. That restriction lives in
+     * `driver_profiles.status`, not here: `GET /driver/eligibility` reports it as the
+     * `driver_suspended` blocker, and `CreateCommuteOfferAction`, `SeatAvailabilityChecker` and
+     * `HardFilters` each refuse independently.
      */
     case RestrictedAccount = 'RESTRICTED_ACCOUNT';
 

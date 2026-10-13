@@ -85,6 +85,40 @@ client that switches on `next_step` without a default branch will land on no scr
 | Making a required field optional | **`registeredRole` on the profile endpoint is now `nullable`.** | This is what keeps a schema-level change **additive at the API edge**: every client live today keeps sending it, gets the role enrolled in the same request, and goes straight `HOME` — so the new screen is opt-in and there is no flag day. |
 | Weakening a CHECK constraint | **Yes, and re-scoped rather than dropped.** | `chk_users_basic_profile_complete` required `registered_role`, which made the two-step flow *impossible* — there was no state in which `ROLE_SELECTION` could be correct. It now guarantees the IDENTITY facts (`full_name`, `gender`), and the role got its own invariant (`chk_users_initial_role_selected`). The original migration's actual argument — a half-registered woman silently excluded from women-only matching — is untouched. |
 
+### 1.8 Slice 1c — the column I added in 1b and removed again
+
+**F01 §8 was already fully implemented.** Both halves exist, in two tables that each own one:
+
+| Scope | Where it lives | Written by |
+|---|---|---|
+| whole account | `account_suspensions` + `users.account_status` | `SuspendMemberAction::suspend()` |
+| driver only | `driver_profiles.status = suspended` | `ReviewDriverApplicationAction::suspend()` |
+
+And the driver half is *more* thorough than v3's sketch: it also suspends and deactivates every
+vehicle — explicitly so that "a suspended driver whose car is still approved could otherwise keep
+carrying passengers through any code path that checks only the vehicle" — and it never touches
+`account_status`, so passenger access survives exactly as §8 requires. A suspended driver is then
+refused independently by `CreateCommuteOfferAction`, `SeatAvailabilityChecker` and `HardFilters`,
+and `GET /driver/eligibility` reports it as the `driver_suspended` blocker with a localised message
+and a `CONTACT_SUPPORT` next step.
+
+So the `scope` column I added in 1b was a **second place a person can be driver-restricted** — the
+precise hazard that migration's own comment warned about, applied to the wrong table. It and
+`RestrictionScope` were **removed before they shipped**. `public_message` went with them: nothing
+read it, and a tunable nobody reads is the `auth.pin.length` mistake again.
+
+**What was genuinely missing was not a mechanism but a test.** The requirement was satisfied by four
+refusals in four different domains, and nothing asserted that they add up to the promise — so any
+one could have been relaxed without a failing test. `tests/Feature/Driver/DriverOnlyRestrictionTest.php`
+now pins all of it, including the half that the lazy implementation (flipping `account_status`)
+would have passed while silently destroying.
+
+One thing it pins that looks like a bug and is not: **`GET /home` stays reachable while suspended.**
+It is the screen that tells the person she is restricted, so gating it behind the thing it explains
+would leave her with a dead app and no reason given.
+
+---
+
 🔴 **The one subtlety worth re-reading:** the same account state must give two different answers.
 A cold start with the profile saved but no role answers `BASIC_PROFILE` (F01 §5: resume there "even
 if profile fields are already populated"), while the profile endpoint itself answers
@@ -237,7 +271,7 @@ Ordered so that nothing is built twice and the mobile team is never blocked on a
 | **0** | ✅ Answer §2 | Six conflicts. Each one changes code that exists and is tested. Four answered in §1.5; 2.4–2.6 carried |
 | **1a** | ✅ Remove the PIN · new `next_step` | Feature 01 is self-contained, and every screen depends on `next_step` being right |
 | **1b** | ✅ `user_capabilities` · `user_preferences` · role endpoints · `ROLE_SELECTION` | Split from 1a because the PIN removal is a **breaking** change the mobile team needs now, and holding it behind three new tables would delay it for no reason. `ROLE_SELECTION` was added **last**, once the server could actually return it |
-| **1c** | Driver-scope restriction, end to end: `SuspendMemberAction(scope)` · a `capability:driver` middleware · the admin control · the restriction payload on `auth/me` | Split out when it became clear `suspend()` sets `account_status` unconditionally. Landing the `scope` column without this would lock a driver-restricted person out of the passenger app she is still entitled to use — the exact failure F01 §8 exists to prevent. The column and its enum landed in 1b and are **read** from day one; only the write path is pending |
+| **1c** | ✅ Driver-only restriction — **found already built; the `scope` column was removed again** | See §1.8. Both halves of F01 §8 exist in two tables that each own their own half. What was actually missing was a test proving the four independent refusals add up to the promise |
 | **2** | Reorganise `RAFEEQ_MOBILE_API_GUIDE.md` feature-by-feature | Cheap, and the mobile team reads it while 3–6 are built |
 | **3** | Feature 02: verification items · expiry · vehicle change · organisation evidence · avatar | Independent of the commute re-model |
 | **4** | The commute re-model: templates · weekday schedules · occurrences · promised arrival | The foundation 5 and 6 sit on. The riskiest migration in the list |
