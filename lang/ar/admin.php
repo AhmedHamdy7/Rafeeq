@@ -404,7 +404,6 @@ return [
             'auth__otp__resend_cooldown_seconds' => 'الانتظار قبل إرسال كود جديد',
             'auth__otp__max_attempts' => 'محاولات الكود الغلط المسموحة',
             'auth__otp__max_resends' => 'مرات إعادة إرسال الكود',
-            'auth__pin__length' => 'طول PIN التطبيق',
             'auth__session__access_ttl_minutes' => 'عمر توكن الوصول',
             'auth__session__refresh_ttl_days' => 'مدة بقاء الجهاز داخل',
             'auth__rate_limits__otp_requests_per_phone_per_hour' => 'طلبات الكود لكل رقم',

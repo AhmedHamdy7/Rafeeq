@@ -124,13 +124,27 @@ it('keeps a minimum below its maximum', function () {
     expect(PlatformSetting::find('commute.min_price_piastres'))->toBeNull();
 });
 
+/**
+ * 🔴 The dataset is DERIVED from the catalogue rather than listed by hand.
+ *
+ * It used to name its two keys literally, and when `auth.pin.length` left the catalogue with the
+ * local PIN this test did not fail usefully — it errored with `Undefined array key`, which reads
+ * like a broken test rather than a stale list. Worse, the opposite mistake was silent: locking a
+ * NEW setting added no coverage until somebody remembered to extend the array.
+ *
+ * Derived, both directions are automatic — every locked setting is covered the moment it is
+ * locked, and an unlocked one cannot linger here.
+ */
 it('will not change a locked setting', function (string $key) {
     actingAsAdmin(adminWithRole(AdminRole::SuperAdmin));
 
     changeSetting($key, (string) SettingsCatalogue::ENTRIES[$key]['min'])->assertHasErrors('value');
 
     expect(PlatformSetting::find($key))->toBeNull();
-})->with(['auth.pin.length', 'auth.otp.length']);
+})->with(array_keys(array_filter(
+    SettingsCatalogue::ENTRIES,
+    fn (array $entry): bool => isset($entry['locked']),
+)));
 
 /**
  * Decided 2026-10-06: the fee is deducted from the driver at 3% and staff may change it. A booking

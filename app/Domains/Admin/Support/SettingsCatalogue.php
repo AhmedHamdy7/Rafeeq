@@ -34,8 +34,9 @@ final class SettingsCatalogue
         'auth.otp.resend_cooldown_seconds' => ['group' => 'auth', 'min' => 15, 'max' => 300, 'unit' => 'seconds'],
         'auth.otp.max_attempts' => ['group' => 'auth', 'min' => 3, 'max' => 10, 'unit' => 'attempts'],
         'auth.otp.max_resends' => ['group' => 'auth', 'min' => 1, 'max' => 10, 'unit' => 'times'],
-        'auth.pin.length' => ['group' => 'auth', 'min' => 4, 'max' => 6, 'unit' => 'digits',
-            'locked' => 'client_contract'],
+        // `auth.pin.length` was here. The local PIN left the MVP (Feature 01 v3 §10), so nothing
+        // reads the key any more — and a tunable that no reader consults is worse than no
+        // tunable: an operator changes it, the page confirms the change, and nothing happens.
         'auth.session.access_ttl_minutes' => ['group' => 'auth', 'min' => 5, 'max' => 60, 'unit' => 'minutes'],
         'auth.session.refresh_ttl_days' => ['group' => 'auth', 'min' => 1, 'max' => 180, 'unit' => 'days'],
         'auth.rate_limits.otp_requests_per_phone_per_hour' => ['group' => 'auth', 'min' => 1, 'max' => 20, 'unit' => 'per_hour'],

@@ -407,7 +407,6 @@ return [
             'auth__otp__resend_cooldown_seconds' => 'Wait before a new code can be sent',
             'auth__otp__max_attempts' => 'Wrong codes allowed per challenge',
             'auth__otp__max_resends' => 'Codes that can be re-sent',
-            'auth__pin__length' => 'App PIN length',
             'auth__session__access_ttl_minutes' => 'Access token lifetime',
             'auth__session__refresh_ttl_days' => 'How long a device stays signed in',
             'auth__rate_limits__otp_requests_per_phone_per_hour' => 'Code requests per phone number',
