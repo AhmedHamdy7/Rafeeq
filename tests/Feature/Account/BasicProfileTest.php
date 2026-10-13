@@ -113,8 +113,14 @@ it('blocks a suspended account from editing its profile but not from seeing its 
 });
 
 /**
- * The guarantee behind making `gender` and `registered_role` nullable: the
- * database itself refuses to call a profile complete while they are unknown.
+ * The guarantee behind making the identity fields nullable: the database itself refuses to call a
+ * profile complete while they are unknown.
+ *
+ * 🔴 `registered_role` used to be part of this constraint and no longer is. Feature 01 v3 makes
+ * the role its own step, so a profile can legitimately be complete before one is chosen — see
+ * `InitialRoleTest`. What stayed is the part the original migration actually argued for:
+ * `gender` and `full_name` are what every downstream consumer reads, and a half-registered woman
+ * silently excluded from women-only matching is still the failure this prevents.
  */
 it('cannot be marked complete in the database while identity fields are missing', function () {
     signIn();

@@ -75,6 +75,23 @@ than discovered later.
 them. `COMPLETE_PROFILE` and `ACCOUNT_SUSPENDED` stop being returned the moment this deploys, and a
 client that switches on `next_step` without a default branch will land on no screen at all.
 
+### 1.7 Decisions taken inside slice 1b (capabilities and the role step)
+
+| Question | Decision | Why, and what reverses it |
+|---|---|---|
+| v3's `/me/*` paths, or the repo's `/account/*`? | **`/account/*`.** | `PUT /me/basic-profile` already ships as `PUT /account/profile/basic` and is live with the mobile team. Two namespaces for one account would mean the guide documenting two base paths, and v3's own delivery contract asks for this adaptation: *"reuse compatible conventions, do not duplicate APIs"*. Reversing means adding `/me/*` aliases, not moving anything. |
+| Does `user_capabilities` replace `users.registered_role`? | **No. `registered_role` becomes immutable history; the rows are the live authority.** | One column cannot record WHEN each capability began (which decides whether the driver walkthrough has run), cannot carry two independent statuses, and would have to be MUTATED from `passenger` to `both` — destroying the only record of what somebody originally signed up as. They can therefore legitimately disagree, and the guide now says to drive the UI from `capabilities`. |
+| Is `account_restrictions` a new table? | **No — two columns on `account_suspensions`.** | It already has `user_id`, `reason_code`, admin attribution, `lifted_at`, and a `scopeInForce()` that **is** v3's `status`. A parallel table would mean teaching the admin screens, `EnsureAccountIsActive`, `SuspensionSummary` and `SuspendMemberAction` about a second place a person can be restricted, and the first one missed is a hole somebody walks through. A stored `status` was deliberately NOT added: beside a nullable `lifted_at` it is two sources of truth that disagree the first time one is written alone. |
+| Making a required field optional | **`registeredRole` on the profile endpoint is now `nullable`.** | This is what keeps a schema-level change **additive at the API edge**: every client live today keeps sending it, gets the role enrolled in the same request, and goes straight `HOME` — so the new screen is opt-in and there is no flag day. |
+| Weakening a CHECK constraint | **Yes, and re-scoped rather than dropped.** | `chk_users_basic_profile_complete` required `registered_role`, which made the two-step flow *impossible* — there was no state in which `ROLE_SELECTION` could be correct. It now guarantees the IDENTITY facts (`full_name`, `gender`), and the role got its own invariant (`chk_users_initial_role_selected`). The original migration's actual argument — a half-registered woman silently excluded from women-only matching — is untouched. |
+
+🔴 **The one subtlety worth re-reading:** the same account state must give two different answers.
+A cold start with the profile saved but no role answers `BASIC_PROFILE` (F01 §5: resume there "even
+if profile fields are already populated"), while the profile endpoint itself answers
+`ROLE_SELECTION`. Forcing one method to serve both does not produce a wrong screen — it produces an
+**infinite loop**: submit the profile, be told to submit the profile. Hence two named methods on
+`LaunchRouter`, and a test that pins the loop closed.
+
 ---
 
 ## 2. 🔴 Direct conflicts with implemented, tested decisions
@@ -219,7 +236,8 @@ Ordered so that nothing is built twice and the mobile team is never blocked on a
 |---|---|---|
 | **0** | ✅ Answer §2 | Six conflicts. Each one changes code that exists and is tested. Four answered in §1.5; 2.4–2.6 carried |
 | **1a** | ✅ Remove the PIN · new `next_step` | Feature 01 is self-contained, and every screen depends on `next_step` being right |
-| **1b** | `user_capabilities` · `user_preferences` · `account_restrictions` · `POST /me/initial-role` · `GET /me/onboarding-state` · `PATCH /me/preferences` · then add `ROLE_SELECTION` | Split from 1a because the PIN removal is a **breaking** change the mobile team needs now, and holding it behind three new tables would delay it for no reason. `ROLE_SELECTION` is added **last**, when the server can actually return it |
+| **1b** | ✅ `user_capabilities` · `user_preferences` · role endpoints · `ROLE_SELECTION` | Split from 1a because the PIN removal is a **breaking** change the mobile team needs now, and holding it behind three new tables would delay it for no reason. `ROLE_SELECTION` was added **last**, once the server could actually return it |
+| **1c** | Driver-scope restriction, end to end: `SuspendMemberAction(scope)` · a `capability:driver` middleware · the admin control · the restriction payload on `auth/me` | Split out when it became clear `suspend()` sets `account_status` unconditionally. Landing the `scope` column without this would lock a driver-restricted person out of the passenger app she is still entitled to use — the exact failure F01 §8 exists to prevent. The column and its enum landed in 1b and are **read** from day one; only the write path is pending |
 | **2** | Reorganise `RAFEEQ_MOBILE_API_GUIDE.md` feature-by-feature | Cheap, and the mobile team reads it while 3–6 are built |
 | **3** | Feature 02: verification items · expiry · vehicle change · organisation evidence · avatar | Independent of the commute re-model |
 | **4** | The commute re-model: templates · weekday schedules · occurrences · promised arrival | The foundation 5 and 6 sit on. The riskiest migration in the list |

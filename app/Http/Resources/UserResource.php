@@ -4,7 +4,9 @@ namespace App\Http\Resources;
 
 use App\Domains\Identity\Actions\RecordConsentAction;
 use App\Domains\Identity\Enums\AccountStatus;
+use App\Domains\Identity\Enums\CapabilityStatus;
 use App\Domains\Identity\Models\User;
+use App\Domains\Identity\Models\UserCapability;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
 
@@ -53,6 +55,22 @@ final class UserResource extends JsonResource
                 fn () => SuspensionSummary::for($this->resource),
             ),
             'profileStatus' => strtoupper($this->profile_status->value),
+            /*
+             * What this account may actually do: `["PASSENGER"]`, `["DRIVER"]` or both. Empty
+             * until the role step is done.
+             *
+             * 🔴 Read THIS, not `registeredRole`, to decide which surfaces to show. The two can
+             * legitimately differ: somebody who joined as a passenger and later added driving
+             * keeps `registeredRole: passenger` — that field records what she originally came
+             * for, and only this list says what is open to her now.
+             */
+            'capabilities' => $this->capabilityValues(),
+            /*
+             * Whether the role step has been completed. The app should not infer this from
+             * `capabilities` being empty, because the two are set together and this is the one
+             * `nextStep` is derived from.
+             */
+            'initialRoleSelected' => $this->initial_role_selected_at !== null,
             'registeredRole' => $this->registered_role?->value,
             'orgType' => $this->org_type?->value,
             'organizationId' => $this->organization_id,
@@ -61,5 +79,32 @@ final class UserResource extends JsonResource
             // Drives the forced re-acceptance prompt when new terms ship.
             'outstandingConsents' => RecordConsentAction::outstandingFor($this->resource),
         ];
+    }
+
+    /**
+     * The active capabilities, upper-cased like every other enum in the API.
+     *
+     * Its own method with a declared return type so the OpenAPI document gets `string[]` rather
+     * than an untyped array — a `RatingResource` field published as `mixed` once already, and the
+     * mobile team cannot generate a client from `mixed`.
+     *
+     * @return array<int, string>
+     */
+    private function capabilityValues(): array
+    {
+        /*
+         * `loadMissing`, not a bare `$this->capabilities`. Strict mode turns an implicit lazy load
+         * into an exception, and this Resource is built from a User that callers hand over without
+         * eager-loading — `auth/me`, the profile submission and the sign-in response all do. An
+         * explicit load is also a no-op when the relation is already there, so the one caller that
+         * does eager-load pays nothing.
+         */
+        $this->resource->loadMissing('capabilities');
+
+        return $this->capabilities
+            ->where('status', CapabilityStatus::Active)
+            ->map(fn (UserCapability $row): string => strtoupper($row->capability->value))
+            ->values()
+            ->all();
     }
 }

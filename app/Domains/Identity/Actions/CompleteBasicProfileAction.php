@@ -20,6 +20,8 @@ use Illuminate\Support\Str;
  */
 final readonly class CompleteBasicProfileAction
 {
+    public function __construct(private EnrollInitialRoleAction $enrollInitialRole) {}
+
     /**
      * @param  array<string, mixed>  $attributes  already validated upstream
      */
@@ -34,7 +36,6 @@ final readonly class CompleteBasicProfileAction
             // is derived here rather than left to each Resource to shorten.
             'public_first_name' => $attributes['publicFirstName'] ?? self::firstNameOf($fullName),
             'gender' => Gender::from((string) $attributes['gender'])->value,
-            'registered_role' => RegisteredRole::from((string) $attributes['registeredRole'])->value,
         ]);
 
         if (array_key_exists('dateOfBirth', $attributes) && $attributes['dateOfBirth'] !== null) {
@@ -56,6 +57,27 @@ final readonly class CompleteBasicProfileAction
         $user->profile_status = ProfileStatus::BasicComplete->value;
 
         $user->save();
+
+        /*
+         * 🔴 The role is now OPTIONAL here (Feature 01 v3 makes it its own step), and this branch
+         * is what keeps the change additive at the API edge.
+         *
+         * A client that still sends `registeredRole` with the profile — which is every client
+         * live today — has its role enrolled in the same request and is routed straight Home,
+         * exactly as before. A client that omits it gets `ROLE_SELECTION` and calls
+         * `POST /account/initial-role` next. Both work, so the app can adopt the new screen on its
+         * own schedule instead of on deploy day.
+         *
+         * Enrolment is delegated rather than duplicated: capability rows, `registered_role`,
+         * `initial_role_selected_at` and the default mode all have to move together, and a second
+         * copy of that here is a second place for them to fall out of step.
+         */
+        if (($attributes['registeredRole'] ?? null) !== null) {
+            $user = $this->enrollInitialRole->execute(
+                $user,
+                RegisteredRole::from((string) $attributes['registeredRole']),
+            );
+        }
 
         return $user;
     }

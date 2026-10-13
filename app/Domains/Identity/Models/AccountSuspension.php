@@ -3,6 +3,7 @@
 namespace App\Domains\Identity\Models;
 
 use App\Domains\Admin\Models\AdminUser;
+use App\Domains\Identity\Enums\RestrictionScope;
 use App\Domains\Identity\Enums\SuspensionReason;
 use App\Domains\Safety\Models\Incident;
 use App\Domains\Shared\Concerns\PreventsDeletion;
@@ -28,6 +29,7 @@ class AccountSuspension extends Model
     protected function casts(): array
     {
         return [
+            'scope' => RestrictionScope::class,
             'reason_code' => SuspensionReason::class,
             'suspended_at' => 'datetime',
             'review_due_at' => 'datetime',
@@ -61,6 +63,27 @@ class AccountSuspension extends Model
     public function scopeInForce(Builder $query): void
     {
         $query->whereNull('lifted_at');
+    }
+
+    /**
+     * Restrictions of one scope only (Feature 01 v3 §8).
+     *
+     * 🔒 Separated from `inForce` rather than folded into it, because the two questions have
+     * different answers and conflating them is the dangerous direction: "is this account
+     * restricted" must NOT be true for somebody whose driving alone was stopped — she keeps full
+     * passenger access, and treating a driver restriction as an account one would lock her out of
+     * the half of the product she is still entitled to use.
+     *
+     * @param  Builder<self>  $query
+     */
+    public function scopeOfScope(Builder $query, RestrictionScope $scope): void
+    {
+        $query->where('scope', $scope->value);
+    }
+
+    public function restrictsWholeAccount(): bool
+    {
+        return $this->scope === RestrictionScope::Account;
     }
 
     public function isOverdue(): bool

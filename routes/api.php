@@ -2,6 +2,7 @@
 
 use App\Http\Controllers\Api\V1\Account\ConsentController;
 use App\Http\Controllers\Api\V1\Account\DeviceController;
+use App\Http\Controllers\Api\V1\Account\OnboardingController;
 use App\Http\Controllers\Api\V1\Account\ProfileController;
 use App\Http\Controllers\Api\V1\Account\StatsController;
 use App\Http\Controllers\Api\V1\Account\VerificationController;
@@ -111,10 +112,37 @@ Route::prefix('v1')->group(function (): void {
             Route::post('verifications/{type}/submit', [VerificationController::class, 'submit']);
         });
 
+        /*
+         * Where an interrupted sign-up resumes (Feature 01 v3 §5).
+         *
+         * 🔴 Behind `auth:sanctum` and NOTHING else, which is the whole point. Its job is to
+         * answer "how far did this account get", so gating it on a complete profile would make it
+         * unavailable in exactly the state it exists to describe. It stays reachable while
+         * suspended too — it is the call that returns `RESTRICTED_ACCOUNT`, and a client that
+         * could not ask would have no way to learn why it is stuck.
+         */
+        Route::get('onboarding-state', [OnboardingController::class, 'state']);
+
+        /*
+         * Preferences likewise: the intro slides are seen BEFORE the profile exists, so recording
+         * that they were seen cannot require one. Nothing here grants anything, so there is no
+         * reason to hold it behind account standing either.
+         */
+        Route::patch('preferences', [OnboardingController::class, 'updatePreferences']);
+
         // Completing the profile is blocked while suspended — it is a
         // profile-sensitive action, which scenario H lists explicitly.
         Route::middleware('account.active')->group(function (): void {
             Route::put('profile/basic', [ProfileController::class, 'storeBasic']);
+
+            /*
+             * The role step comes immediately after the profile, so a complete profile is
+             * required: it enforces the documented order rather than trusting the app to follow
+             * it, and F01 §5 is explicit that somebody who skipped ahead is sent back to the
+             * profile first.
+             */
+            Route::post('initial-role', [OnboardingController::class, 'storeInitialRole'])
+                ->middleware('profile.complete');
         });
     });
 

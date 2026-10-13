@@ -7,7 +7,7 @@ use App\Domains\Identity\Support\LaunchRouter;
 /**
  * Where the app should send the person next. Never persisted.
  *
- * 🔴 These five replace the four that came before, and the change is breaking rather than additive:
+ * 🔴 These five replace a different four, and the change was breaking rather than additive:
  * `CREATE_PIN` and `LOCAL_SECURITY_SETUP_OR_HOME` existed only because of the local PIN, and the PIN
  * is out of the MVP (Feature 01 §10). So the set could not be extended — it had to be replaced, and
  * the mobile guide's change log says so in one entry rather than two.
@@ -44,15 +44,22 @@ enum NextStep: string
      */
     case BasicProfile = 'BASIC_PROFILE';
 
+    /**
+     * Passenger, Driver or Both — the last step of onboarding.
+     *
+     * 🔴 Returned by `PUT /account/profile/basic` and by nothing else, which is the opposite of
+     * what the decision tree's "role missing → ROLE_SELECTION" reads like, so it is written down
+     * here rather than left to be rediscovered.
+     *
+     * A cold start with no role answers `BASIC_PROFILE`, because F01 §5 says to resume there
+     * "even if profile fields are already populated". Only submitting the profile moves somebody
+     * forward to Role. Letting the launch router return this instead would mean a person who
+     * closed the app on the role screen lands straight back on it with no context behind it —
+     * and letting the profile endpoint return `BASIC_PROFILE` would be an infinite loop: submit
+     * the profile, be told to submit the profile.
+     */
+    case RoleSelection = 'ROLE_SELECTION';
+
     /** Nothing outstanding. The client reads capabilities and the active mode to decide which home. */
     case Home = 'HOME';
-
-    /*
-     * 🔴 `ROLE_SELECTION` is deliberately NOT here yet.
-     *
-     * It belongs to the next slice, with `user_capabilities` and `initial_role_selected_at`. Adding
-     * the case now would publish a value the server cannot yet return — which is exactly the fault
-     * that cost a correction in the mobile guide a week ago, when it listed `VERIFY_IDENTITY` as a
-     * `nextStep` and the mobile team could have branched on something that never arrives.
-     */
 }

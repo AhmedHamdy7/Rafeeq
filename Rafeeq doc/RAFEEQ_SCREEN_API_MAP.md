@@ -56,7 +56,9 @@
 | 5 | PHONE | `POST /v1/auth/otp/request` | ✅ |
 | 6 | OTP | `POST /v1/auth/otp/verify` | ✅ العدّاد التنازلي من `Retry-After` |
 | 7 | BASIC PROFILE | `PUT /v1/account/profile/basic` | ⚠️ **الشاشة فيها `firstName` و`lastName` منفصلين**، والـ endpoint بياخد `fullName` واحد. وكمان الشاشة فيها جهة العمل/الجامعة + اسمها في **نفس الخطوة**، وعندي دي endpoint توثيق منفصلة |
-| 8 | ROLE | نفس الـ endpoint (`registeredRole`) | ✅ |
+| 8 | ROLE | `POST /v1/account/initial-role` | ✅ **بقت endpoint لوحدها** (v3). بتوصلها لما `PUT /v1/account/profile/basic` يرجّع `nextStep: ROLE_SELECTION` — وده بيحصل لو مابعتّش `registeredRole`. لو الكلاينت لسه بيبعته مع البروفايل، الشاشة دي بتتخطّى زي ما هي دلوقتي. آمنة للتكرار: التسجيل مرتين = مرة واحدة. و`both` بتبدأ على هوم الراكب، ومشي السائق التعريفي بيجري أول مرة يفتح جزء السواقة |
+| — | استرجاع التسجيل | `GET /v1/account/onboarding-state` | ✅ مش شاشة — بتتنادى عند فتح التطبيق لمعرفة الشاشة الصح بعد تسجيل اتقطع. شغّالة قبل وجود البروفايل وأثناء الإيقاف كمان |
+| — | تفضيلات الواجهة | `PATCH /v1/account/preferences` | ✅ الوضع النشط · السلايدز والمشي التعريفي (اتشافوا) · اللغة · الثيم. 🔒 **مابتدّيش أي صلاحية** — `activeMode` بيختار شاشة مش إذن |
 
 ---
 

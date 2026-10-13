@@ -14,7 +14,7 @@
 >
 > **Base URL:** `{host}/api/v1` · **Auth:** bearer token · **Format:** JSON only.
 
-**Last updated:** 2026-10-13 · **126 endpoints live** · Phases 0–7, 9 and 11 complete · 10, 12 and 13 all but a decision each
+**Last updated:** 2026-10-13 · **129 endpoints live** · Phases 0–7, 9 and 11 complete · 10, 12 and 13 all but a decision each
 
 ---
 
@@ -22,7 +22,7 @@
 
 ### What is ready
 
-**126 endpoints live** and tested, across the 47 designed screens:
+**129 endpoints live** and tested, across the 47 designed screens:
 
 | | Count | Covers |
 |---|---|---|
@@ -277,19 +277,35 @@ driver's call are both needed for the step to complete.
 ```
 
 🔴 **`nextStep` is the router for the whole app, and reading it is the difference between a client
-that works and one that guesses.** There are exactly four values, and the server picks one in this
+that works and one that guesses.** There are exactly five values, and the server picks one in this
 order of precedence:
 
 | `nextStep` | Show | Why it outranks what follows |
 |---|---|---|
 | `PHONE_OTP` | Screen 5 | No usable session. Returned by refresh when the token is dead, so you have one vocabulary for "go back to the phone screen" rather than inferring it from a 401. |
 | `RESTRICTED_ACCOUNT` | Screen 35 | A restricted account must never be routed home, whatever else is true. 🔴 This is the **ACCOUNT** scope. A **driver-only** restriction does NOT return this — that person goes `HOME` with full passenger access and the driver surface refuses on its own. |
-| `BASIC_PROFILE` | Screen 7, then 8 | The profile is unfinished, so it is resumed — never skipped. |
-| `HOME` | Screen 9 | Nothing is outstanding. |
+| `BASIC_PROFILE` | Screen 7, then 8 | The profile is unfinished **or no role has been chosen yet**, so it is resumed — never skipped. See the warning below: this is the answer even when the profile looks complete. |
+| `ROLE_SELECTION` | Screen 8 | Passenger / Driver / Both. 🔴 Returned by `PUT /account/profile/basic` **and by nothing else** — see below. |
+| `HOME` | Screen 9 | Nothing is outstanding. Read `user.capabilities` and `activeMode` to pick which home. |
 
-Do not infer the destination from which fields happen to be null, and do not add a fifth case of
+Do not infer the destination from which fields happen to be null, and do not add a sixth case of
 your own: `GET /auth/me` returns the same field and is reachable **while suspended**, which is how
 the app recovers if it ever loses its place.
+
+> 🔴 **`ROLE_SELECTION` comes from one endpoint only, and this surprises everybody once.**
+>
+> A **cold start** with the profile saved but no role chosen answers **`BASIC_PROFILE`**, not
+> `ROLE_SELECTION`. That is deliberate (Feature 01 §5): somebody who closed the app on the role
+> screen comes back to her profile, sees the name and date she entered, confirms them, and is then
+> asked for the role. Dropping her straight on Role would show a screen with no context behind it.
+>
+> So the sequence is: `PUT /account/profile/basic` → `ROLE_SELECTION` → `POST /account/initial-role`
+> → `HOME`. If you ask `GET /auth/me` or `GET /account/onboarding-state` in the middle of that, you
+> get `BASIC_PROFILE` — and submitting the profile again is the correct way forward, not a loop.
+>
+> **If you still send `registeredRole` with the profile, nothing changes for you.** The role is
+> recorded in the same request and you go straight to `HOME`, exactly as before. The new screen is
+> opt-in, so you can adopt it whenever suits you.
 
 > ⚠️ **Identity verification is not in this list, on purpose.** It is not a step in sign-up — it is a
 > gate on specific endpoints, which answer `403 VERIFICATION_REQUIRED` naming the levels they want.
@@ -298,12 +314,32 @@ the app recovers if it ever loses its place.
 > `nextStep`.
 
 ```
-3  PUT /account/profile/basic      { fullName, gender, registeredRole, dateOfBirth }
-   → 200   profileStatus becomes BASIC_COMPLETE
+3  PUT /account/profile/basic      { fullName, gender, dateOfBirth }
+   → 200   profileStatus becomes BASIC_COMPLETE, nextStep: ROLE_SELECTION
+
+3b POST /account/initial-role      { role: "passenger" | "driver" | "both" }
+   → 200   capabilities filled in, nextStep: HOME
 ```
 
-Until that call succeeds most endpoints answer `403 ACCOUNT_PROFILE_INCOMPLETE`. The seeded accounts
-are already past this step.
+Until step 3 succeeds most endpoints answer `403 ACCOUNT_PROFILE_INCOMPLETE`. The seeded accounts
+are already past both steps.
+
+**Step 3b is new and step 3 did not change for you.** If you keep sending `registeredRole` in step
+3 — as every build does today — the role is recorded there, `nextStep` is `HOME`, and you can skip
+3b entirely. Omit it and you get the role screen instead. Both are supported; pick whichever suits
+your release.
+
+Two things about 3b worth knowing before you wire it:
+
+- **It is safe to retry.** Enrolling twice is the same as enrolling once, so a timeout you are not
+  sure committed can simply be sent again.
+- **`both` starts on the Passenger home**, and the driver walkthrough runs the first time the driver
+  side is opened — not at the end of sign-up. Record that it was shown with
+  `PATCH /account/preferences { driverWalkthroughSeen: true }` so a second device does not replay it.
+
+If the app is killed anywhere in this sequence, ask `GET /account/onboarding-state` at launch and
+follow its `nextStep`. It is reachable before the profile exists and while suspended, which is
+exactly when you need it.
 
 ```
 4  POST /account/verifications/government_id/documents    multipart: kind, file
@@ -524,7 +560,8 @@ Status: ✅ fully served · ⚠️ served, something named missing · ⛔ no API
 | 5 | Phone | `POST /auth/otp/request` | ✅ |
 | 6 | OTP | `POST /auth/otp/verify` | ✅ Drive the countdown from `resendAvailableInSeconds`, and on 429 from `Retry-After`. |
 | 7 | Basic profile | `PUT /account/profile/basic` | ⚠️ **Your screen has `firstName` and `lastName`; the endpoint takes one `fullName`.** Also your screen collects workplace/university in the same step, where we have a separate verification endpoint. Needs a product decision — section 8. |
-| 8 | Role | same call (`registeredRole`) | ✅ |
+| 8 | Role | `POST /account/initial-role` | ✅ **Now its own endpoint** (v3). Reached when `PUT /account/profile/basic` answers `nextStep: ROLE_SELECTION` — which happens when you omit `registeredRole`. Keep sending it in step 7 and this screen is skipped, exactly as today. |
+| — | Onboarding recovery | `GET /account/onboarding-state` | ✅ Not a screen — call it at launch to find out which of 5–9 to open after an interrupted sign-up. |
 
 ### Search and matching
 
@@ -621,6 +658,9 @@ fails if this list and the running routes ever disagree in either direction.
 | `GET /account/devices` | 4.2 Account, devices, consents |
 | `PATCH /account/devices/current/security` | 4.2 Account, devices, consents |
 | `DELETE /account/devices/{device}/session` | 4.2 Account, devices, consents |
+| `POST /account/initial-role` | 4.2 Account, devices, consents |
+| `GET /account/onboarding-state` | 4.2 Account, devices, consents |
+| `PATCH /account/preferences` | 4.2 Account, devices, consents |
 | `PUT /account/profile/basic` | 4.2 Account, devices, consents |
 | `GET /account/stats` | 4.2 Account, devices, consents |
 | `GET /account/verifications` | 4.3 Verification |
@@ -766,7 +806,7 @@ Send a code. **This is also registration** — a number nobody has used before g
 | Response field | Meaning |
 |---|---|
 | `accountState` | `NEW` (just created) or `EXISTING`. Drives whether you show onboarding. |
-| `nextStep` | **The screen to go to next**, decided by the server. Exactly four values: `PHONE_OTP`, `RESTRICTED_ACCOUNT`, `BASIC_PROFILE`, `HOME` — in that order of precedence, explained in 2.1. Follow it rather than deciding yourself; it accounts for restriction and half-finished profiles you cannot see. 🔴 Verification is **not** one of them — it is a per-endpoint gate on the DRIVER surface, not a sign-up step. |
+| `nextStep` | **The screen to go to next**, decided by the server. Exactly five values: `PHONE_OTP`, `RESTRICTED_ACCOUNT`, `BASIC_PROFILE`, `ROLE_SELECTION`, `HOME` — in that order of precedence, explained in 2.1. Follow it rather than deciding yourself; it accounts for restriction and half-finished profiles you cannot see. 🔴 `ROLE_SELECTION` comes from `PUT /account/profile/basic` only — a cold start answers `BASIC_PROFILE`, see 2.1. 🔴 Verification is **not** one of them — it is a per-endpoint gate on the DRIVER surface, not a sign-up step. |
 | `pinLength` | How many digits your local PIN entry should take (currently 4). Configurable server-side; do not hard-code. |
 | `session` | See 5.2. |
 | `user` | See 5.5. |
@@ -825,7 +865,7 @@ and there never will be. `pushToken` is stored encrypted.
 |---|---|---|
 | `fullName` | required | Arabic or Latin letters; spaces, `-`, `'`, `.` allowed; at least one letter. Length bounds are a platform setting. |
 | `gender` | required | `woman` · `man` · `prefer_not_to_say`. 🔒 Never returned by any endpoint. |
-| `registeredRole` | required | `driver` · `passenger` · `both` |
+| `registeredRole` | **optional** | `driver` · `passenger` · `both`. 🔴 Was required. Send it to finish in one step and go straight to `HOME`; omit it and the response answers `nextStep: ROLE_SELECTION`, which you satisfy with `POST /account/initial-role`. Both paths are supported — nothing breaks if you keep sending it. |
 | `dateOfBirth` | optional | **`YYYY-MM-DD`** only. Must make the person at least the minimum age (18 today — a platform setting, do not hard-code it) and no more than 120. |
 | `publicFirstName` | optional | Up to 50 characters. Defaults to the first word of `fullName`. |
 | `preferredLanguage` | optional | `ar` · `en` |
@@ -835,7 +875,69 @@ and there never will be. `pushToken` is stored encrypted.
 All values are **lower-case** in the request; the response returns statuses upper-case (see 5.5).
 Idempotent — sending it again overwrites rather than failing.
 
-Returns `user`. See screen 7 above: the split-name question is open.
+Returns `user` and `nextStep`. See screen 7 above: the split-name question is open.
+
+#### `POST /account/initial-role` — signed-in, active account, profile complete
+
+The last step of onboarding. **Request:** `role` — `passenger` · `driver` · `both`.
+
+**Safe to send again.** Enrolling twice is the same as enrolling once, so a retry after a dropped
+connection needs no special handling — it will not create duplicate capabilities or move the
+original timestamp.
+
+Returns `user` (with `capabilities` filled in) and `nextStep`, which is `HOME` once this succeeds.
+
+| Choosing | You get | Where to start |
+|---|---|---|
+| `passenger` | `["PASSENGER"]` | Passenger home |
+| `driver` | `["DRIVER"]` | Driver walkthrough, then driver home |
+| `both` | `["PASSENGER", "DRIVER"]` | **Passenger** home. The driver walkthrough runs the first time the driver side is opened, not now. |
+
+> 🔒 **This is not driver approval.** Choosing `driver` records what the person came for and opens
+> the driver surface so they can apply. Publishing a commute still needs an approved driver profile
+> and a verified vehicle — see 4.4. Never treat a successful call here as permission to drive.
+
+Calling this before the profile is complete answers `403`; finish `PUT /account/profile/basic`
+first.
+
+#### `GET /account/onboarding-state` — signed-in
+
+Where an interrupted sign-up resumes. **Safe to call at launch**, before anything else is known,
+and reachable **while suspended** — it is how the app learns it is restricted.
+
+| Field | Means |
+|---|---|
+| `nextStep` | **The field to act on.** Computed by the same router as sign-in and refresh, so the three can never disagree. |
+| `profileComplete` | Whether name and gender are saved. |
+| `initialRoleSelected` | Whether the role step is done. Do not infer this from `capabilities` being empty. |
+| `capabilities` | `["PASSENGER"]`, `["DRIVER"]`, both, or empty. |
+| `onboardingSeen` | Whether the three intro slides were shown on any device. |
+| `driverWalkthroughSeen` | Whether the driver walkthrough was shown. |
+| `activeMode` | `passenger` · `driver` · `null` — which home was last open. |
+
+The booleans are there so a screen can explain itself ("we kept your name"). Do not recombine them
+into your own routing rule — `nextStep` already is that rule, and it accounts for restriction
+states you cannot see.
+
+#### `PATCH /account/preferences` — signed-in
+
+UI state kept across devices. Every field is optional; send only what changed.
+
+| Field | Values |
+|---|---|
+| `activeMode` | `passenger` · `driver` — which home to open next launch. |
+| `onboardingSeen` | `true` once the intro slides have been shown. |
+| `driverWalkthroughSeen` | `true` once the driver walkthrough has been shown. |
+| `language` | `ar` · `en` — used for **notifications we send you**. The language of a *response* always follows that request's `Accept-Language` header instead. |
+| `theme` | `light` · `dark` · `system` |
+
+> 🔒 **This grants nothing.** `activeMode` picks a screen, not a permission. Setting it to `driver`
+> without the driver capability stores the preference and every driver action is still refused —
+> capability is checked on each protected request, never taken from a client flag.
+
+The two `...Seen` flags are **one-way**. Sending `true` records the first time only, and sending
+`false` does not clear them: the stored date is what tells support whether somebody had seen the
+safety explanation before a given trip. Re-showing a walkthrough is a support action.
 
 #### `GET /account/stats` — signed-in
 
@@ -2195,7 +2297,9 @@ deserves to see *why* one ranked above the other:
 | `suspensionReason` | Present only while suspended: **one sentence, already in the request's language**, saying why in general terms (e.g. "A safety report is under review, so new bookings are paused."). Show it as written. It is a category, never the note staff wrote, and never names anybody. |
 | `suspension` | Present only while suspended: `caseNumber` (the reference the member quotes, e.g. `RF-482913`), `reasonCode` (`safety_report` · `identity_check` · `payment_issue` · `policy_breach` — for an icon or analytics, not for wording), `suspendedAt`, `reviewDueAt` (the promised "expected update" time — show it as a time, and keep showing it if it has passed rather than hiding it). `caseNumber` can be `null` only for an account suspended before holds were recorded. |
 | `profileStatus` | `NOT_STARTED` (signed in with a phone, basic profile not filled yet) · `BASIC_COMPLETE` (after `PUT /account/profile/basic` succeeds). **Until `BASIC_COMPLETE` the `active` tier refuses most endpoints** with `403 ACCOUNT_PROFILE_INCOMPLETE` — send the person to screen 7. *(An earlier version of this file said `PHONE_ONLY`; the API has always returned `NOT_STARTED`.)* |
-| `registeredRole` | `passenger` · `driver` · `both`. |
+| `capabilities[]` | 🔴 **What this account may actually do:** `["PASSENGER"]`, `["DRIVER"]`, both, or empty before the role step. **Drive your UI from this, not from `registeredRole`.** |
+| `initialRoleSelected` | Whether the role step is done. Do not infer it from `capabilities` being empty — this is the field `nextStep` is derived from. |
+| `registeredRole` | `passenger` · `driver` · `both` — **what they signed up as, which is history.** 🔴 It can legitimately disagree with `capabilities`: somebody who joined as a passenger and later added driving keeps `registeredRole: passenger` while holding both capabilities. Use it for analytics, never for deciding what to show. |
 | `orgType` / `organizationId` | Their claimed workplace or university. |
 | `preferredLanguage` | `ar` · `en`. |
 | `trustLevel` | `0`–`4`, recomputed from the rows rather than incremented. |
@@ -2379,6 +2483,7 @@ exist, and every live endpoint must be named here.
 
 | Date | Change |
 |---|---|
+| 2026-10-13 | ✅ **Additive — choosing a role is now its own step, and `capabilities` tells you what an account may do.** Three new endpoints: `POST /account/initial-role`, `GET /account/onboarding-state`, `PATCH /account/preferences`. `registeredRole` on `PUT /account/profile/basic` is **now optional** — keep sending it and you still go straight to `HOME`, exactly as today; omit it and you get the new `nextStep: ROLE_SELECTION`. **Nothing you have built breaks.** New on `user`: `capabilities[]` and `initialRoleSelected` — drive the UI from `capabilities`, because `registeredRole` is now history and can legitimately disagree with it. 🔴 `ROLE_SELECTION` is returned by the profile endpoint **only**; a cold start with no role answers `BASIC_PROFILE` by design (Feature 01 §5), so re-submitting the profile is the way forward and not a loop. |
 | 2026-10-13 | 🔴 **BREAKING — the local PIN is gone, and `nextStep` changed with it.** Feature 01 v3 §10 removes the PIN, biometric login and account switching from the MVP, so screens 2, 3 and 4 go too. **`nextStep` now has four values: `PHONE_OTP` · `RESTRICTED_ACCOUNT` · `BASIC_PROFILE` · `HOME`.** The old `CREATE_PIN` and `LOCAL_SECURITY_SETUP_OR_HOME` existed only to serve the PIN; `COMPLETE_PROFILE` is renamed `BASIC_PROFILE` and `ACCOUNT_SUSPENDED` is renamed `RESTRICTED_ACCOUNT` (the **error code** `ACCOUNT_SUSPENDED` is unchanged). Also gone: `pinLength` on auth responses, `hasLocalPin` on the device payload and request, and `purpose: "pin_reset"` (now `422`). `hasLocalPin` sent by a client is **ignored, not refused**, so you can remove it from the app on your own schedule. `biometricEnabled` survives as a display-only preference. |
 | 2026-10-07 | **Fixed: `GET /search/commutes` 500 "Latitude out of range"** (your bug report). The seeded commutes carried a malformed route; they are repaired, and a commute whose stored route cannot be read is now **skipped** instead of failing the whole search. **A `500` no longer carries internal exception text** in `error.message` — it is the generic localised sentence. **Home `topMatches` now fills:** saving a request (`POST /commute-demands`) matches it against commutes already running, not only against ones published later (no `match_found` notice for those — the person has just seen them). Test accounts were re-seated on upcoming trips, so `nextJourney` is populated again. |
 | 2026-10-06 | **Money — 2 endpoints** (`GET /driver/balance`, `GET /groups/{group}/statement`). Section 4.16. 🔴 **The fee comes out of the driver at 3% and the passenger pays the seat price** — settled, and it closes the contradiction this file carried: an 8000 seat means the passenger owes 8000 and the driver keeps 7760. On a cash trip the fee becomes a **debt the driver owes**, which eventually stops her publishing. Nothing here moves money; capture, payouts and refunds still wait on a provider. |

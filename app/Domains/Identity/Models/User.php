@@ -33,11 +33,17 @@ use Illuminate\Notifications\Notifiable;
 use Laravel\Sanctum\HasApiTokens;
 
 /**
- * One account per person (Bible §1.4) — passenger capability is always on,
- * driver capability unlocks once a `DriverProfile` is approved. There is
- * deliberately no `password` column: authentication is phone + OTP + a
- * locally-verified PIN that the server never sees (Bible §Part 2, pitfall
- * #33).
+ * One account per person (Bible §1.4). There is deliberately no `password`
+ * column: authentication is phone + OTP and nothing else.
+ *
+ * 🔴 What this account may DO is `user_capabilities`, not a column here.
+ * `registered_role` records the intent declared once at sign-up and is
+ * immutable history; the capability rows are the live authority. Driver
+ * capability still requires an approved `DriverProfile` on top — enrolling
+ * says what the person came for, not that they have been checked.
+ *
+ * (A local PIN was described here until the PIN left the MVP with Feature 01
+ * v3 §10. Nothing on the server ever saw it, and nothing asks for one now.)
  */
 #[Fillable([
     'phone_e164', 'full_name', 'public_first_name', 'profile_photo_path',
@@ -66,6 +72,7 @@ class User extends Authenticatable
             'account_status' => AccountStatus::class,
             'profile_status' => ProfileStatus::class,
             'registered_role' => RegisteredRole::class,
+            'initial_role_selected_at' => 'datetime',
             'org_type' => OrgType::class,
             'trust_level' => 'integer',
         ];
@@ -79,6 +86,25 @@ class User extends Authenticatable
     public function devices(): HasMany
     {
         return $this->hasMany(Device::class);
+    }
+
+    /**
+     * What this account is enrolled to do. Includes withdrawn rows — callers that mean "what may
+     * she do now" use `->active()` on {@see UserCapability}, which is a scope precisely so the
+     * three readers of this cannot disagree.
+     */
+    public function capabilities(): HasMany
+    {
+        return $this->hasMany(UserCapability::class);
+    }
+
+    /**
+     * Cross-device UI state. Absent until something is chosen, so every reader must handle null —
+     * a person who has never set a preference is the normal case, not an error.
+     */
+    public function preference(): HasOne
+    {
+        return $this->hasOne(UserPreference::class);
     }
 
     public function authSessions(): HasMany

@@ -56,9 +56,11 @@ final class CompleteBasicProfileRequest extends FormRequest
             // never returned by any endpoint, including this one.
             'gender' => ['required', Rule::enum(Gender::class)],
 
-            // Which capability the person came for. Both are always available
-            // on the account; this only shapes onboarding.
-            'registeredRole' => ['required', Rule::enum(RegisteredRole::class)],
+            // Which capability the person came for: `passenger`, `driver` or
+            // `both`. Optional — send it here to finish in one step and go
+            // straight Home, or omit it and the response asks for it with
+            // `nextStep: ROLE_SELECTION`.
+            'registeredRole' => ['nullable', Rule::enum(RegisteredRole::class)],
 
             // ISO date. Must put the person at or above the minimum supported
             // age, which is a platform setting and may change.
