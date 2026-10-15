@@ -14,7 +14,7 @@
 >
 > **Base URL:** `{host}/api/v1` · **Auth:** bearer token · **Format:** JSON only.
 
-**Last updated:** 2026-10-16 · **131 endpoints live** · Phases 0–7, 9 and 11 complete · 10, 12 and 13 all but a decision each
+**Last updated:** 2026-10-16 · **133 endpoints live** · Phases 0–7, 9 and 11 complete · 10, 12 and 13 all but a decision each
 
 ---
 
@@ -22,7 +22,7 @@
 
 ### What is ready
 
-**131 endpoints live** and tested, across the 47 designed screens:
+**133 endpoints live** and tested, across the 47 designed screens:
 
 | | Count | Covers |
 |---|---|---|
@@ -694,6 +694,8 @@ fails if this list and the running routes ever disagree in either direction.
 | `GET /account/stats` | 4.2 Account, devices, consents |
 | `GET /users/{user}/public-profile` | 4.2 Account, devices, consents |
 | `GET /users/{user}/avatar` | 4.2 Account, devices, consents |
+| `GET /account/comfort-preferences` | 4.2 Account, devices, consents |
+| `PATCH /account/comfort-preferences` | 4.2 Account, devices, consents |
 | `GET /account/verifications` | 4.3 Verification |
 | `GET /account/verifications/documents/{document}` | 4.3 Verification |
 | `POST /account/verifications/organization` | 4.3 Verification |
@@ -986,6 +988,37 @@ UI state kept across devices. Every field is optional; send only what changed.
 The two `...Seen` flags are **one-way**. Sending `true` records the first time only, and sending
 `false` does not clear them: the stored date is what tells support whether somebody had seen the
 safety explanation before a given trip. Re-showing a walkthrough is a support action.
+
+#### `GET /account/comfort-preferences` · `PATCH /account/comfort-preferences` — signed-in
+
+What the inside of the car should be like. **One screen whose content changes with the active
+mode**, so the `GET` returns **both** modes in one call and you can switch without a round trip.
+
+```
+GET  → { passenger: {...}, driver: {...} }
+PATCH  { mode: "passenger", smoking: "no", music: "either" }
+```
+
+| Field | Values |
+|---|---|
+| `mode` | `passenger` · `driver` — **required on PATCH.** |
+| `smoking` · `music` · `conversation` · `airConditioning` | `yes` · `no` · `either`. Optional — send only what changed. |
+
+🔴 **`either` means "no preference", and it is the default. Do not render it as "no".** Every
+question starts there, which is why it is a third value rather than a boolean: somebody who has
+never opened the screen has not refused music.
+
+**The same answer means opposite things in each mode**, which is why `mode` is required rather than
+taken from the active one: as a **passenger** you are saying what you would like, as a **driver**
+you are saying what your car allows. Submitting one as the other overwrites the wrong row.
+
+> 🔒 **These are not filters, and nothing in search reads them.** A test asserts it. Do not tell
+> people a commute was hidden because of a comfort answer, and do not build a UI that implies it —
+> the matching rules for this have not been decided, and a passenger silently excluded from every
+> commute because she ticked a box would have an empty result she cannot explain.
+
+**Reading never creates a row**, so a `GET` from somebody who has never opened the screen returns
+the defaults without recording that they looked.
 
 #### `GET /users/{user}/public-profile` — active, profile complete
 
@@ -2657,6 +2690,7 @@ exist, and every live endpoint must be named here.
 
 | Date | Change |
 |---|---|
+| 2026-10-16 | ✅ **New: `GET` / `PATCH /account/comfort-preferences`** — smoking, music, conversation and AC, **per mode**, because the same answer means opposite things on each side (as a passenger what you want; as a driver what your car allows). The `GET` returns both modes in one call. `either` is "no preference" and the default — a third value rather than a boolean, so somebody who never opened the screen does not read as refusing music. 🔒 **Not filters:** nothing in search reads them and a test holds that, because the matching rules have not been decided and a passenger silently excluded for ticking a box would have an empty result she cannot explain. |
 | 2026-10-16 | 🚗 **Vehicle replacement works, and it used to be impossible.** An approved driver could not add a vehicle at all — it answered `409 DRIVER_APPLICATION_LOCKED` — so she could not change her car without losing her approval first. Now she adds a replacement, it is reviewed on its own while her current car keeps working, and activating it moves her commutes across. 🔴 `POST /driver/vehicles/{vehicle}/activate` now **refuses an unapproved vehicle** with `422 VEHICLE_NOT_ALLOWED`, and refuses the whole swap with `422` if a live commute sells more seats than the replacement has — nothing is half-applied. Confirmed future bookings are **kept**, and each passenger gets the new `booking_vehicle_changed` notification **naming the car and plate**. |
 | 2026-10-16 | ✅ **New: `GET /users/{user}/public-profile`** — another member's profile as a stranger sees it, which is what a passenger opens to check out her driver. Public handle, avatar-or-initials, join month, per-role trips/rating/on-time, and the five most recent reviews. `isVerifiedDriver` is **true only when a reviewer actually approved her**. A suspended account answers the same `404` as an id that never existed. No `area` field, and never a full name, phone, email, date of birth, gender or document. Readable by an unverified passenger on purpose — checking out your driver is the thing we most want you to do. |
 | 2026-10-16 | 📌 **Three product answers now fixed, so you can build against them.** (1) **On-time tolerance is 5 minutes** — a pickup counts as on time within 5 minutes of the agreed time. The metric publishes `metricVersion` and the raw counts beside the percentage, so if the tolerance ever changes you can tell that it did. (2) **When a driver replaces her vehicle, confirmed future bookings are KEPT, not cancelled** — every affected passenger is notified, and 🔴 **the notification carries the new vehicle**, because the plate she was shown has changed and that is what she needs before standing on a kerb at 7am. (3) **Trusted contacts stay at 5**, not the 3 in the design docs — nobody loses a contact they already saved. |

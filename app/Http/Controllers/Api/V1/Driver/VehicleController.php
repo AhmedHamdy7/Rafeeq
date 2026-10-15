@@ -73,7 +73,12 @@ final class VehicleController extends Controller
      * POST /v1/driver/vehicles/{vehicle}/activate — Chapter 3 §16 story 5:
      * commutes follow whichever vehicle is active.
      */
-    #[ApiErrors(ErrorCode::NotFound)]
+    #[ApiErrors(
+        ErrorCode::NotFound,
+        // An unapproved replacement, or one too small for a commute that would move onto it.
+        ErrorCode::VehicleNotAllowed,
+        ErrorCode::ValidationFailed,
+    )]
     public function activate(Request $request, string $vehicle, ManageVehicleAction $action): JsonResponse
     {
         $profile = $this->profile($request);

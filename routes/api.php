@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\Api\V1\Account\AvatarController;
+use App\Http\Controllers\Api\V1\Account\ComfortPreferenceController;
 use App\Http\Controllers\Api\V1\Account\ConsentController;
 use App\Http\Controllers\Api\V1\Account\DeviceController;
 use App\Http\Controllers\Api\V1\Account\OnboardingController;
@@ -131,6 +132,15 @@ Route::prefix('v1')->group(function (): void {
          * reason to hold it behind account standing either.
          */
         Route::patch('preferences', [OnboardingController::class, 'updatePreferences']);
+
+        /*
+         * What the inside of the car should be like, per mode (Feature 02 v3).
+         *
+         * 🔒 Stored and returned, and nothing else — nothing in search or matching reads these.
+         * v3: "Avoid claiming these are strict filters until matching rules are defined."
+         */
+        Route::get('comfort-preferences', [ComfortPreferenceController::class, 'index']);
+        Route::patch('comfort-preferences', [ComfortPreferenceController::class, 'update']);
 
         // Completing the profile is blocked while suspended — it is a
         // profile-sensitive action, which scenario H lists explicitly.
