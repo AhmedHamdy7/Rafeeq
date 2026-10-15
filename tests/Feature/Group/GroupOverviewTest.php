@@ -140,12 +140,23 @@ it('hides a group completely from anybody not in it', function () {
         ->assertJsonCount(0, 'data');
 });
 
-it('requires a verified identity, like the rest of getting into a car', function () {
+/**
+ * 🔴 Inverted, not deleted — passenger identity verification is gone (Feature 02 v3), and a gate
+ * that crept back here would hide a passenger's own groups from her.
+ *
+ * 🔒 What still protects this list is membership, not verification, and that was always the real
+ * guard: every group route is reachable only by a member of the group in question, and a miss
+ * answers 404 rather than 403. A member list is a set of real first names, trust levels and the
+ * days each person reliably travels — which is also when they are not at home. Removing the
+ * verification tier did not widen that by one row, and the empty result below is the proof.
+ */
+it('shows an unverified passenger her own groups, and nobody else they belong to', function () {
     $unverified = signIn(phone: '01555556666', devicePublicId: 'pax-unverified')['session']['accessToken'];
 
     completeBasicProfile($unverified);
 
-    test()->withToken($unverified)->getJson('/api/v1/groups')
-        ->assertStatus(403)
-        ->assertJsonPath('error.code', 'VERIFICATION_REQUIRED');
+    $response = test()->withToken($unverified)->getJson('/api/v1/groups')->assertOk();
+
+    // She is in none, so she sees none — not the groups that exist in this fixture.
+    expect($response->json('data'))->toBe([]);
 });

@@ -4,6 +4,7 @@ use App\Http\Controllers\Api\V1\Account\ConsentController;
 use App\Http\Controllers\Api\V1\Account\DeviceController;
 use App\Http\Controllers\Api\V1\Account\OnboardingController;
 use App\Http\Controllers\Api\V1\Account\ProfileController;
+use App\Http\Controllers\Api\V1\Account\PublicProfileController;
 use App\Http\Controllers\Api\V1\Account\StatsController;
 use App\Http\Controllers\Api\V1\Account\VerificationController;
 use App\Http\Controllers\Api\V1\Auth\OtpController;
@@ -350,6 +351,17 @@ Route::prefix('v1')->group(function (): void {
      * anybody else — drivers included.
      */
     Route::middleware(['auth:sanctum', 'account.active', 'profile.complete'])->group(function (): void {
+        /*
+         * A member's profile as a stranger sees it (Feature 02 v3).
+         *
+         * 🔒 Here rather than in the public tier despite being called a "public profile": it is the
+         * one payload reachable for an ARBITRARY user id, so left unauthenticated it is a scraper's
+         * index of the platform's drivers. Deliberately NOT behind the verified tier either — a
+         * passenger needs no verification to check out the driver she is about to ride with, and
+         * that is the thing we most want her to do.
+         */
+        Route::get('users/{user}/public-profile', [PublicProfileController::class, 'show']);
+
         Route::get('search/commutes', [SearchController::class, 'commutes']);
 
         Route::get('commute-demands', [CommuteDemandController::class, 'index']);

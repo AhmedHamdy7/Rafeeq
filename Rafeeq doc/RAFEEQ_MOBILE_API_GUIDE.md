@@ -14,7 +14,7 @@
 >
 > **Base URL:** `{host}/api/v1` · **Auth:** bearer token · **Format:** JSON only.
 
-**Last updated:** 2026-10-16 · **129 endpoints live** · Phases 0–7, 9 and 11 complete · 10, 12 and 13 all but a decision each
+**Last updated:** 2026-10-16 · **130 endpoints live** · Phases 0–7, 9 and 11 complete · 10, 12 and 13 all but a decision each
 
 ---
 
@@ -22,7 +22,7 @@
 
 ### What is ready
 
-**129 endpoints live** and tested, across the 47 designed screens:
+**130 endpoints live** and tested, across the 47 designed screens:
 
 | | Count | Covers |
 |---|---|---|
@@ -577,7 +577,7 @@ Status: ✅ fully served · ⚠️ served, something named missing · ⛔ no API
 | 4 | ~~Forgot PIN~~ | — | 🔴 **Removed from the MVP** (v3). `purpose=pin_reset` is now a `422`. |
 | 5 | Phone | `POST /auth/otp/request` | ✅ |
 | 6 | OTP | `POST /auth/otp/verify` | ✅ Drive the countdown from `resendAvailableInSeconds`, and on 429 from `Retry-After`. |
-| 7 | Basic profile | `PUT /account/profile/basic` | ⚠️ **Your screen has `firstName` and `lastName`; the endpoint takes one `fullName`.** Also your screen collects workplace/university in the same step, where we have a separate verification endpoint. Needs a product decision — section 8. |
+| 7 | Basic profile | `PUT /account/profile/basic` | ✅ **Settled: one `fullName`** (v3 — "a single free-form full-name field", `Sara` or `Sara Ahmed`). Collect one field; a single name is valid. ⚠️ Still open: your screen collects workplace/university in the same step, where we have a separate verification endpoint — section 8. |
 | 8 | Role | `POST /account/initial-role` | ✅ **Now its own endpoint** (v3). Reached when `PUT /account/profile/basic` answers `nextStep: ROLE_SELECTION` — which happens when you omit `registeredRole`. Keep sending it in step 7 and this screen is skipped, exactly as today. |
 | — | Onboarding recovery | `GET /account/onboarding-state` | ✅ Not a screen — call it at launch to find out which of 5–9 to open after an interrupted sign-up. |
 
@@ -692,6 +692,7 @@ fails if this list and the running routes ever disagree in either direction.
 | `PATCH /account/preferences` | 4.2 Account, devices, consents |
 | `PUT /account/profile/basic` | 4.2 Account, devices, consents |
 | `GET /account/stats` | 4.2 Account, devices, consents |
+| `GET /users/{user}/public-profile` | 4.2 Account, devices, consents |
 | `GET /account/verifications` | 4.3 Verification |
 | `GET /account/verifications/documents/{document}` | 4.3 Verification |
 | `POST /account/verifications/organization` | 4.3 Verification |
@@ -984,6 +985,34 @@ UI state kept across devices. Every field is optional; send only what changed.
 The two `...Seen` flags are **one-way**. Sending `true` records the first time only, and sending
 `false` does not clear them: the stored date is what tells support whether somebody had seen the
 safety explanation before a given trip. Re-showing a walkthrough is a support action.
+
+#### `GET /users/{user}/public-profile` — active, profile complete
+
+Another member's profile, as somebody who has never met her sees it. This is what a passenger opens
+to check out the driver she is about to ride with.
+
+| Field | Means |
+|---|---|
+| `id` · `publicFirstName` | 🔒 **The public handle, never the full name.** |
+| `avatarPath` | The approved identity photo, or **`null`** — which is the normal case. Draw initials from `publicFirstName` when it is null. A photo only exists after a **driver's** identity is approved; a passenger-only account never has one. |
+| `joinedMonth` | `YYYY-MM`. Month precision on purpose — see the note on reviews. |
+| `trustLevel` · `verifiedLevels[]` | As in the `person` shape (**5**). |
+| `isVerifiedDriver` | 🔴 **`true` only when a reviewer has actually approved her.** Applying is not approval, and this is the field a passenger uses to decide a stranger is safe. |
+| `asPassenger` | `completedTrips`, `rating`, `onTimeRate`. |
+| `asDriver` | The same three — **absent entirely** for somebody who does not drive, rather than zeroed. A `0` renders as a driver with a terrible record instead of a person who has never driven. |
+| `reviews` | `count`, and `items[]` — the five most recent, in the same shape as a commute's reviews: no reviewer, month precision. |
+
+> 🔒 **What this never returns, for anybody:** full name, phone, email, date of birth, gender, any
+> document or document path, staff notes, or any booking id. A test asserts each one separately.
+
+**A suspended account answers `404`, and it is the same `404` as an id that never existed.** Do not
+read anything into which you got — telling the two apart would make this an oracle for "this person
+is suspended", which is nobody's business outside the safety team.
+
+**No `area` field**, although the design's subtitle shows one (`Joined Mar 2025 · New Cairo`). The
+only way to produce it today is to derive it from where she lives, and a district derived from
+somebody's home address handed to a stranger who typed a user id is a rough answer to "where does
+she live". If it is wanted, it should be a field she fills in and can leave blank.
 
 #### `GET /account/stats` — signed-in
 
@@ -2568,7 +2597,7 @@ Do not design around either side of these. Ask before you build the screen.
 | # | Question | Affects |
 |---|---|---|
 | 1 | ~~**Which way does the platform fee go, and what is the rate?**~~ ✅ **Decided 2026-10-06:** deducted from the driver's price, 3% by default, changeable by operations. Screens 12 and 24 need new copy (see 4.7). | 12, 24, all money |
-| 2 | **`firstName` + `lastName`, or one `fullName`?** Screen 7 splits them; the endpoint takes one. | 7 |
+| 2 | ~~**`firstName` + `lastName`, or one `fullName`?**~~ ✅ **Decided 2026-10-16: one `fullName`.** Feature 02 v3 settles it — "initial name is a **single free-form full-name field**, accepting `Sara` or `Sara Ahmed`". That is what `PUT /account/profile/basic` already takes, so **nothing changes on the server**; the screen should collect one field. A single name is valid. | 7 |
 | 3 | ~~**A single day cancelled by the driver**~~ ✅ **Decided and built 2026-10-06:** `POST /trips/{trip}/cancel` (4.9). | 23, 46 |
 | 4 | **"5 min late" as a third declared attendance state.** Screen 36 has the button; the model has `coming`/`away` only. It is also exactly what a wait timer exists to act on. | 36, 41 |
 | 5 | **`Seat belts (all seats)`** is not modelled anywhere, and **`Air conditioning`** is per commute, not per vehicle as screen 31 has it. | 31 |
@@ -2587,6 +2616,8 @@ exist, and every live endpoint must be named here.
 
 | Date | Change |
 |---|---|
+| 2026-10-16 | ✅ **New: `GET /users/{user}/public-profile`** — another member's profile as a stranger sees it, which is what a passenger opens to check out her driver. Public handle, avatar-or-initials, join month, per-role trips/rating/on-time, and the five most recent reviews. `isVerifiedDriver` is **true only when a reviewer actually approved her**. A suspended account answers the same `404` as an id that never existed. No `area` field, and never a full name, phone, email, date of birth, gender or document. Readable by an unverified passenger on purpose — checking out your driver is the thing we most want you to do. |
+| 2026-10-16 | 📌 **Three product answers now fixed, so you can build against them.** (1) **On-time tolerance is 5 minutes** — a pickup counts as on time within 5 minutes of the agreed time. The metric publishes `metricVersion` and the raw counts beside the percentage, so if the tolerance ever changes you can tell that it did. (2) **When a driver replaces her vehicle, confirmed future bookings are KEPT, not cancelled** — every affected passenger is notified, and 🔴 **the notification carries the new vehicle**, because the plate she was shown has changed and that is what she needs before standing on a kerb at 7am. (3) **Trusted contacts stay at 5**, not the 3 in the design docs — nobody loses a contact they already saved. |
 | 2026-10-16 | 🟢 **Passenger identity verification is GONE. A passenger now books with a verified phone number and nothing else.** Feature 02 v3: "No passenger verification." 38 endpoints moved from the `verified` tier to `active, profile complete` — seat requests, bookings, pickup points, groups, the live trip, wait timers and the money views. **This only ever removes a 403, so nothing you have built breaks**; if you were sending people to the verification centre before letting them book, you can stop. `VERIFICATION_REQUIRED` is now returned **only** by the driver surface. 🔒 The driver side is unchanged and still needs `government_id` plus admin approval plus a verified vehicle — the person carrying strangers is checked, the person riding is vouched for by the driver who agreed to carry her. Still build screens 15 and 30: verification drives the home banner, the trust level a driver sees when deciding on a request, and her optional trust filters. |
 | 2026-10-16 | 📖 **Reorganised feature by feature. No contract change — nothing you call behaves differently.** 4.1 to 4.16 are now one chapter per feature, and each stands on its own: the response shapes that used to sit together in section 5 have moved into the chapter that returns them, so you no longer read two places a few hundred lines apart to understand one call. Every chapter starts with a card naming its screens and what else it needs. `person` stays in **5** because it belongs to no single feature. **Section numbers did not change** — any link or note you have to 4.9, 6, 7 or 8 still resolves; only references to the old 5.2–5.10 were repointed to the chapters that now own those shapes. |
 | 2026-10-13 | ✅ **Additive — choosing a role is now its own step, and `capabilities` tells you what an account may do.** Three new endpoints: `POST /account/initial-role`, `GET /account/onboarding-state`, `PATCH /account/preferences`. `registeredRole` on `PUT /account/profile/basic` is **now optional** — keep sending it and you still go straight to `HOME`, exactly as today; omit it and you get the new `nextStep: ROLE_SELECTION`. **Nothing you have built breaks.** New on `user`: `capabilities[]` and `initialRoleSelected` — drive the UI from `capabilities`, because `registeredRole` is now history and can legitimately disagree with it. 🔴 `ROLE_SELECTION` is returned by the profile endpoint **only**; a cold start with no role answers `BASIC_PROFILE` by design (Feature 01 §5), so re-submitting the profile is the way forward and not a loop. |
