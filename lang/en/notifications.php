@@ -55,6 +55,15 @@ return [
         'title' => 'A seat was cancelled',
         'body' => ':name cancelled the booking for :date.',
     ],
+    /*
+     * 🔴 The plate is in the BODY, not left for the person to go and look up. She is going to stand
+     * at a kerb and get into whichever car matches what she was told, so the one fact that has
+     * changed is the one fact the message has to carry.
+     */
+    'booking_vehicle_changed' => [
+        'title' => 'Your ride is in a different car',
+        'body' => ':name changed vehicle. Look for a :vehicle, plate :plate.',
+    ],
     'match_found' => [
         'title' => 'A commute that fits your request',
         'body' => 'A new commute matches the trip you saved. Take a look before the seats go.',

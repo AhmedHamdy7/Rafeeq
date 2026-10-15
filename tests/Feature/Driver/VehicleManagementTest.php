@@ -1,5 +1,6 @@
 <?php
 
+use App\Domains\Driver\Enums\VehicleVerificationStatus;
 use App\Domains\Driver\Models\Vehicle;
 use App\Domains\Driver\Models\VehicleDocument;
 use App\Domains\Verification\Support\DocumentStorage;
@@ -27,6 +28,21 @@ function addVehicle(string $token, array $overrides = [])
         'seats' => 5,
         'fuelType' => 'petrol',
     ], $overrides));
+}
+
+/**
+ * 🔴 Activation now REFUSES an unapproved vehicle (Feature 02 v3: "prevent new driving on
+ * unapproved replacement"), so a test that switches vehicles has to get the target approved first.
+ *
+ * Written straight to the column rather than through the review flow: these tests are about the
+ * active flag, and routing each one through a reviewer would quietly turn them into tests about
+ * verification.
+ */
+function approveVehicleRow(string $vehicleId): void
+{
+    Vehicle::findOrFail($vehicleId)
+        ->forceFill(['verification_status' => VehicleVerificationStatus::Approved->value])
+        ->save();
 }
 
 it('adds a vehicle and makes the first one active', function () {
@@ -112,6 +128,8 @@ it('moves the active flag rather than ever having two', function () {
     expect(Vehicle::find($first)->is_active)->toBeTrue()
         ->and(Vehicle::find($second)->is_active)->toBeFalse();
 
+    approveVehicleRow($second);
+
     $this->withToken($this->token)->postJson("/api/v1/driver/vehicles/{$second}/activate")->assertOk();
 
     expect(Vehicle::find($first)->fresh()->is_active)->toBeFalse()
@@ -136,6 +154,8 @@ it('is the database that forbids two active vehicles, not just the code', functi
 it('lists vehicles with the active one first', function () {
     addVehicle($this->token)->assertStatus(201);
     $second = addVehicle($this->token, ['plateNumber' => 'XYZ 9876'])->assertStatus(201)->json('data.id');
+
+    approveVehicleRow($second);
 
     $this->withToken($this->token)->postJson("/api/v1/driver/vehicles/{$second}/activate")->assertOk();
 

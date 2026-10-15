@@ -37,6 +37,16 @@ enum NotificationType: string
     case RatingDueRiders = 'rating_due_riders';
     case RatingReminder = 'rating_reminder';
 
+    /**
+     * 🔴 The driver replaced her car, and the plate the passenger was shown is no longer the car
+     * that will collect her (Feature 02 v3: vehicle replacement, with confirmed bookings kept).
+     *
+     * `Booking` rather than `Trip`: it is news about a booking she already holds, and it has to
+     * reach her the same way a seat approval does. Somebody who has muted trip chatter must still
+     * learn that a different car is coming.
+     */
+    case BookingVehicleChanged = 'booking_vehicle_changed';
+
     public function category(): NotificationCategory
     {
         return match ($this) {
@@ -50,6 +60,7 @@ enum NotificationType: string
             self::SeatApproved,
             self::SeatDeclined,
             self::BookingCancelled,
+            self::BookingVehicleChanged,
             self::TripDayCancelled,
             self::MatchFound => NotificationCategory::Booking,
 

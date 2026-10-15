@@ -1198,7 +1198,24 @@ missing, so gating it would leave them with a refusal and no explanation.
 
 #### `POST /driver/vehicles/{vehicle}/activate` — verified
 
-Makes this the active vehicle and deactivates the others, in one transaction.
+🔴 **This is how a driver replaces her car**, and three rules changed here.
+
+| | |
+|---|---|
+| **The replacement must be approved first** | `422 VEHICLE_NOT_ALLOWED` otherwise. Add the vehicle, upload its documents, wait for a reviewer — then activate. An unapproved car cannot enter service. |
+| **An approved driver can now add a vehicle** | She could not before: adding one answered `409 DRIVER_APPLICATION_LOCKED` once she was approved, so changing her car was impossible. The replacement starts `pending` and is reviewed on its own, while her current car keeps working. |
+| **Her commutes move with her, and her passengers are told** | Confirmed bookings on future days are **kept, not cancelled**. Each affected passenger gets a `booking_vehicle_changed` notification **naming the new car and plate** — she matches a car at the kerb, so the plate is in the message rather than somewhere she has to go and look. |
+
+**It can be refused for seats.** If a live commute sells more seats than the replacement has, the
+whole swap answers `422` and nothing moves. The alternatives were cancelling somebody's booked seat
+or leaving the commute bound to a car that is no longer active — so the driver finds out while she
+can still choose. Deactivate or re-price the commute first, or use a bigger car.
+
+**The old vehicle is kept**, inactive, with its documents. It is what carried every completed
+journey and the evidence that it was allowed to.
+
+Makes this the active vehicle and deactivates the others, in one transaction — so there is never a
+moment with none active, and never one with two.
 
 #### `POST /driver/vehicles/{vehicle}/documents` — verified
 
@@ -2397,7 +2414,7 @@ hold must still be able to read the notice that says so.
 
 | Response field | Meaning |
 |---|---|
-| `type` | What happened — route on this. Today: `seat_requested` (driver) · `seat_approved` · `seat_declined` · `booking_cancelled` (to the other side) · `trip_day_cancelled` (the driver called off a day — `data.tripId`, `data.bookingId`) · `match_found` (a saved request matched — `data.commuteId`) · `trip_started` · `chat_message` · `rating_due` (passenger, `data.bookingId`) · `rating_due_riders` (driver, once per run, `data.tripId`) · `rating_reminder` (last day of the window, once) · `sos_picked_up` · `report_resolved` · `report_closed` · `account_on_hold` · `account_reinstated`. **Expect new values**; show an unknown one as a plain message. |
+| `type` | What happened — route on this. Today: `seat_requested` (driver) · `seat_approved` · `seat_declined` · `booking_cancelled` (to the other side) · `booking_vehicle_changed` (the driver replaced her car — your seat stands, and the body names the new car and plate; `data.bookingId`, `data.vehicleId`) · `trip_day_cancelled` (the driver called off a day — `data.tripId`, `data.bookingId`) · `match_found` (a saved request matched — `data.commuteId`) · `trip_started` · `chat_message` · `rating_due` (passenger, `data.bookingId`) · `rating_due_riders` (driver, once per run, `data.tripId`) · `rating_reminder` (last day of the window, once) · `sos_picked_up` · `report_resolved` · `report_closed` · `account_on_hold` · `account_reinstated`. **Expect new values**; show an unknown one as a plain message. |
 | `category` | `booking` · `payment` · `trip` · `safety` · `marketing`. |
 | `title` / `body` | **Already in the member's language** — rendered when the message was sent, and stored as written. Show them as they are. They never contain a phone number, an address or a full name: a push body appears on a lock screen. |
 | `data` | Ids for the screen to open: `seatRequestId`, `commuteId`, `tripId`, `sosId`, `incidentId`. Never names. |
@@ -2640,6 +2657,7 @@ exist, and every live endpoint must be named here.
 
 | Date | Change |
 |---|---|
+| 2026-10-16 | 🚗 **Vehicle replacement works, and it used to be impossible.** An approved driver could not add a vehicle at all — it answered `409 DRIVER_APPLICATION_LOCKED` — so she could not change her car without losing her approval first. Now she adds a replacement, it is reviewed on its own while her current car keeps working, and activating it moves her commutes across. 🔴 `POST /driver/vehicles/{vehicle}/activate` now **refuses an unapproved vehicle** with `422 VEHICLE_NOT_ALLOWED`, and refuses the whole swap with `422` if a live commute sells more seats than the replacement has — nothing is half-applied. Confirmed future bookings are **kept**, and each passenger gets the new `booking_vehicle_changed` notification **naming the car and plate**. |
 | 2026-10-16 | ✅ **New: `GET /users/{user}/public-profile`** — another member's profile as a stranger sees it, which is what a passenger opens to check out her driver. Public handle, avatar-or-initials, join month, per-role trips/rating/on-time, and the five most recent reviews. `isVerifiedDriver` is **true only when a reviewer actually approved her**. A suspended account answers the same `404` as an id that never existed. No `area` field, and never a full name, phone, email, date of birth, gender or document. Readable by an unverified passenger on purpose — checking out your driver is the thing we most want you to do. |
 | 2026-10-16 | 📌 **Three product answers now fixed, so you can build against them.** (1) **On-time tolerance is 5 minutes** — a pickup counts as on time within 5 minutes of the agreed time. The metric publishes `metricVersion` and the raw counts beside the percentage, so if the tolerance ever changes you can tell that it did. (2) **When a driver replaces her vehicle, confirmed future bookings are KEPT, not cancelled** — every affected passenger is notified, and 🔴 **the notification carries the new vehicle**, because the plate she was shown has changed and that is what she needs before standing on a kerb at 7am. (3) **Trusted contacts stay at 5**, not the 3 in the design docs — nobody loses a contact they already saved. |
 | 2026-10-16 | 🟢 **Passenger identity verification is GONE. A passenger now books with a verified phone number and nothing else.** Feature 02 v3: "No passenger verification." 38 endpoints moved from the `verified` tier to `active, profile complete` — seat requests, bookings, pickup points, groups, the live trip, wait timers and the money views. **This only ever removes a 403, so nothing you have built breaks**; if you were sending people to the verification centre before letting them book, you can stop. `VERIFICATION_REQUIRED` is now returned **only** by the driver surface. 🔒 The driver side is unchanged and still needs `government_id` plus admin approval plus a verified vehicle — the person carrying strangers is checked, the person riding is vouched for by the driver who agreed to carry her. Still build screens 15 and 30: verification drives the home banner, the trust level a driver sees when deciding on a request, and her optional trust filters. |
