@@ -5,6 +5,7 @@ namespace App\Http\Resources;
 use App\Domains\Driver\Enums\DriverProfileStatus;
 use App\Domains\Identity\Models\User;
 use App\Domains\Rating\Models\Rating;
+use App\Domains\Verification\Support\Avatar;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
 
@@ -65,14 +66,14 @@ final class PublicProfileResource extends JsonResource
             'publicFirstName' => $person->public_first_name,
 
             /*
-             * The derived avatar, or null for initials. Null is the normal case: the photo only
-             * exists once an identity has been APPROVED, and a passenger-only account never gets
-             * one (F02 §2). The client draws initials from `publicFirstName` when this is null.
+             * The derived avatar, or null for initials. Null is the normal case — including for a
+             * passenger who HAS verified her identity, because {@see Avatar} publishes a photo only
+             * for an approved driver (F02 §2). The client draws initials from `publicFirstName`.
              *
-             * 🔒 This is a separate, resized image derived at approval — never the identity
-             * document itself, which the same section forbids showing to anybody.
+             * 🔒 A separate, re-encoded image derived at approval — never the identity document
+             * itself, which the same section forbids showing to anybody.
              */
-            'avatarPath' => $person->profile_photo_path,
+            'avatarPath' => Avatar::pathFor($person),
 
             // Month precision, like the public reviews, and for the same reason: a join DATE is a
             // fact about one person that nothing on this screen needs.

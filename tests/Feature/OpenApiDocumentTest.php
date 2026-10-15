@@ -120,6 +120,7 @@ it('generates a document describing every /v1 route', function () {
         'PATCH /v1/account/preferences',
         'GET /v1/account/stats',
         'GET /v1/users/{user}/public-profile',
+        'GET /v1/users/{user}/avatar',
         'GET /v1/account/verifications',
         'GET /v1/account/verifications/documents/{document}',
         'POST /v1/account/verifications/organization',

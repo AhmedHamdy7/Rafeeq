@@ -14,7 +14,7 @@
 >
 > **Base URL:** `{host}/api/v1` · **Auth:** bearer token · **Format:** JSON only.
 
-**Last updated:** 2026-10-16 · **130 endpoints live** · Phases 0–7, 9 and 11 complete · 10, 12 and 13 all but a decision each
+**Last updated:** 2026-10-16 · **131 endpoints live** · Phases 0–7, 9 and 11 complete · 10, 12 and 13 all but a decision each
 
 ---
 
@@ -22,7 +22,7 @@
 
 ### What is ready
 
-**130 endpoints live** and tested, across the 47 designed screens:
+**131 endpoints live** and tested, across the 47 designed screens:
 
 | | Count | Covers |
 |---|---|---|
@@ -693,6 +693,7 @@ fails if this list and the running routes ever disagree in either direction.
 | `PUT /account/profile/basic` | 4.2 Account, devices, consents |
 | `GET /account/stats` | 4.2 Account, devices, consents |
 | `GET /users/{user}/public-profile` | 4.2 Account, devices, consents |
+| `GET /users/{user}/avatar` | 4.2 Account, devices, consents |
 | `GET /account/verifications` | 4.3 Verification |
 | `GET /account/verifications/documents/{document}` | 4.3 Verification |
 | `POST /account/verifications/organization` | 4.3 Verification |
@@ -1014,6 +1015,29 @@ only way to produce it today is to derive it from where she lives, and a distric
 somebody's home address handed to a stranger who typed a user id is a rough answer to "where does
 she live". If it is wanted, it should be a field she fills in and can leave blank.
 
+#### `GET /users/{user}/avatar` — active, profile complete
+
+**The image behind `avatarPath`.** This is the display-URL flow this file used to say was undecided.
+
+Returns the JPEG inline (`image/jpeg`, `nosniff`, `Cache-Control: private, max-age=3600`), so you
+can point an image view straight at it with your bearer token. **`404` means "draw initials"** — it
+is the normal answer, not an error worth showing.
+
+| You get a photo when | You get initials when |
+|---|---|
+| the person is an **approved driver** whose selfie a reviewer approved | everything else |
+
+> 🔒 **A verified passenger still shows initials, and that is deliberate.** Many passengers verify
+> their identity — it raises their trust level and some drivers ask for it — but her photo was
+> collected to prove who she is to a reviewer, not to be published to strangers. Publishing it
+> because she happened to verify would change what she handed it over for. A driver's photo is
+> published because she is the one offering to put strangers in her car.
+>
+> 🔒 **There is no upload-photo endpoint, and will not be one.** The avatar is a consequence of an
+> approved identity — which is exactly what makes it worth something to the passenger looking at
+> it: the face on the profile is the face a human being checked against an ID. What you receive is a
+> separate, re-encoded 256×256 image, never the identity document.
+
 #### `GET /account/stats` — signed-in
 
 The caller's **own** numbers only. See 4.2.
@@ -1028,7 +1052,7 @@ The caller's **own** numbers only. See 4.2.
 | `id` | |
 | `phone` / `phoneVerified` | 🔒 **Your own only.** Never present for anybody else. |
 | `fullName` / `publicFirstName` | Same rule. |
-| `profilePhotoPath` | Storage path; ask us for the display URL flow before wiring it. |
+| `profilePhotoPath` | Storage path, and **your own only**. ✅ The display flow is settled: fetch `GET /users/{user}/avatar`, which streams the image inline. Note this field is set as soon as your selfie is approved, while the **avatar endpoint publishes a photo only for an approved driver** — so a verified passenger has a path here and still shows initials to everybody, including herself. |
 | `dateOfBirth`, `email` | Own only. |
 | `accountStatus` | `ACTIVE` · `SUSPENDED` · `PENDING_DELETION` · `DELETED`. `PENDING_DELETION` is reserved for the 30-day grace after a deletion request (not built yet); treat any value you do not know as "not active". |
 | `suspensionReason` | Present only while suspended: **one sentence, already in the request's language**, saying why in general terms (e.g. "A safety report is under review, so new bookings are paused."). Show it as written. It is a category, never the note staff wrote, and never names anybody. |

@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\Api\V1\Account\AvatarController;
 use App\Http\Controllers\Api\V1\Account\ConsentController;
 use App\Http\Controllers\Api\V1\Account\DeviceController;
 use App\Http\Controllers\Api\V1\Account\OnboardingController;
@@ -361,6 +362,10 @@ Route::prefix('v1')->group(function (): void {
          * that is the thing we most want her to do.
          */
         Route::get('users/{user}/public-profile', [PublicProfileController::class, 'show']);
+
+        // The image behind `avatarPath`. Inline-renderable because it is re-encoded on approval
+        // rather than being the uploaded document — see the controller.
+        Route::get('users/{user}/avatar', [AvatarController::class, 'show']);
 
         Route::get('search/commutes', [SearchController::class, 'commutes']);
 

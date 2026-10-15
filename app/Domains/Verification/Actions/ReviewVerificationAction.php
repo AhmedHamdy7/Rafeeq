@@ -26,7 +26,10 @@ use Illuminate\Support\Facades\DB;
  */
 final readonly class ReviewVerificationAction
 {
-    public function __construct(private RecomputeTrustLevelAction $recomputeTrustLevel) {}
+    public function __construct(
+        private RecomputeTrustLevelAction $recomputeTrustLevel,
+        private DeriveAvatarAction $deriveAvatar,
+    ) {}
 
     public function approve(UserVerification $verification, AdminUser $reviewer, ?\DateTimeInterface $expiresAt = null): UserVerification
     {
@@ -48,6 +51,17 @@ final readonly class ReviewVerificationAction
             $verification->save();
 
             $this->recomputeTrustLevel->execute($verification->user);
+
+            /*
+             * An approved selfie becomes the person's avatar (Feature 02 v3 §2). Here rather than
+             * in the admin controller, because it is a consequence of the DECISION and not of the
+             * screen the decision was made on — the Livewire queue, a console command and a test
+             * all reach this same method, and only one of them would have remembered.
+             *
+             * A no-op for every other level, and silent when there is nothing to derive from: the
+             * review still stands if the file was already destroyed by the retention sweep.
+             */
+            $this->deriveAvatar->execute($verification);
 
             SecurityLog::record(SecurityEventType::VerificationApproved, $verification->user, metadata: [
                 'verification_type' => $verification->type->value,
