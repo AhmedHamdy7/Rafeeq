@@ -14,7 +14,7 @@
 >
 > **Base URL:** `{host}/api/v1` · **Auth:** bearer token · **Format:** JSON only.
 
-**Last updated:** 2026-10-13 · **129 endpoints live** · Phases 0–7, 9 and 11 complete · 10, 12 and 13 all but a decision each
+**Last updated:** 2026-10-16 · **129 endpoints live** · Phases 0–7, 9 and 11 complete · 10, 12 and 13 all but a decision each
 
 ---
 
@@ -39,6 +39,14 @@ driver side (23, 24, 25, 31, 28, 29) → and the live trip last (17, 36, 40, 41)
 
 If you would rather see the lifecycle before building any of it, **2.1** walks the whole cycle as an
 ordered sequence of calls, against accounts that are already seeded on staging.
+
+**How this file is laid out.** Sections 1 to 3 are global: the conventions every response obeys, the
+suggested build order, and the index of all 47 screens. Then **4.1 to 4.16 are one chapter per
+feature** — auth, account, verification, driver, commutes, search, bookings, pickup points, the live
+trip, groups, home, safety, ratings, notifications, chat, money. Open the chapter for the feature you
+are building: its endpoints, the shapes they return, and a card naming its screens are all in that
+one place. 4.0 is a flat index of every endpoint if you only need to find where something is
+described.
 
 ### Seven things to know before you start
 
@@ -243,7 +251,7 @@ The order that keeps you unblocked. Each step only needs the ones above it.
 | 3 | ~~2, 3, 4~~ | 🔴 **Gone.** The local PIN, biometric login and account switching left the MVP — no PIN setup, no PIN entry, no "forgot PIN", no account picker. Session restore is silent. Skip straight to step 4. |
 | 4 | 15, 30 — verification centre, identity capture | `verified:government_id` gates seat requests and the whole driver flow. Build it before anything that books. |
 | 5 | 9 — home | One call. Gives you a real screen early and exercises the envelope, the person shape and the verification banner. |
-| 6 | 10, 11, 12 — discover, filters, match details | The search engine. Read 5.3 first; the score breakdown is designed to be shown. |
+| 6 | 10, 11, 12 — discover, filters, match details | The search engine. Read 4.6 first; the score breakdown is designed to be shown. |
 | 7 | 13, 14 — seat request, done | First write path with a domain refusal you must render properly. |
 | 8 | 19, 20 — trips, group | The lists. Pagination matters here. |
 | 9 | 23, 24, 25, 31 — driver home, publish, review, vehicle | The driver side. 31 needs the document upload flow from step 4. |
@@ -420,7 +428,7 @@ membership returns one per committed day — one response shape for both.
 
 Only now does the passenger get the **exact** meeting point and the vehicle's **plate**:
 `BookingStatus::grantsExactDetails()` gates both until the booking is `CONFIRMED`. Before that the
-point is deliberately fuzzed — see 1.9 and 5.2. Do not treat the coarse point as a bug.
+point is deliberately fuzzed — see 1.9 and 4.1. Do not treat the coarse point as a bug.
 
 #### D. The day of the trip
 
@@ -641,6 +649,17 @@ Status: ✅ fully served · ⚠️ served, something named missing · ⛔ no API
 Every field below is what you actually receive. Types are in the OpenAPI document; the column
 here says what the value **means** and when it is `null`.
 
+**One chapter per feature, and each one stands on its own.** 4.1 to 4.16 are the features; open the
+one you are building and it has the endpoints, the shapes those endpoints return, and a card at the
+top naming its screens and anything else it needs. The response shapes used to live together in
+their own section at the end of the file, which meant reading two places a few hundred lines apart
+to understand one call — so each shape now sits in the chapter that returns it. The only exception is
+`person`, in **5**: it comes back from search, member lists, request reviews, attendance rows and
+wait timers, so it belongs to no single feature.
+
+Everything before this point is **global** — the envelope, auth, pagination, time, money and the
+privacy rules in **1** apply to every chapter below, and are worth reading once before any of them.
+
 ### 4.0 Complete endpoint index
 
 Every endpoint the API serves today, and where it is described below. `tests/Feature/MobileApiGuideTest.php`
@@ -783,7 +802,11 @@ the page a trusted contact opens. It is not under `/v1`, it takes no auth token,
 rather than the envelope — a web page for a person, not an endpoint for the app. You never call it;
 you hand the URL the server gives you to the operating system's share sheet. See 4.12.
 
-### 4.1 Auth and session
+## 4.1 Auth and session
+
+> Proving a phone number and keeping a session alive. Every other chapter assumes you have a token from here.
+>
+> **Screens** 1 · 5 · 6 · **Shapes** `session`, at the end of this chapter
 
 #### `POST /auth/otp/request` — public
 
@@ -808,9 +831,9 @@ Send a code. **This is also registration** — a number nobody has used before g
 | `accountState` | `NEW` (just created) or `EXISTING`. Drives whether you show onboarding. |
 | `nextStep` | **The screen to go to next**, decided by the server. Exactly five values: `PHONE_OTP`, `RESTRICTED_ACCOUNT`, `BASIC_PROFILE`, `ROLE_SELECTION`, `HOME` — in that order of precedence, explained in 2.1. Follow it rather than deciding yourself; it accounts for restriction and half-finished profiles you cannot see. 🔴 `ROLE_SELECTION` comes from `PUT /account/profile/basic` only — a cold start answers `BASIC_PROFILE`, see 2.1. 🔴 Verification is **not** one of them — it is a per-endpoint gate on the DRIVER surface, not a sign-up step. |
 | `pinLength` | How many digits your local PIN entry should take (currently 4). Configurable server-side; do not hard-code. |
-| `session` | See 5.2. |
-| `user` | See 5.5. |
-| `device` | See 5.6. |
+| `session` | See 4.1. |
+| `user` | See 4.2. |
+| `device` | See 4.2. |
 
 #### `POST /auth/session/refresh` — public
 
@@ -830,11 +853,24 @@ Returns `{"revoked": true}`. Revokes this device's session only.
 
 ---
 
-### 4.2 Account, devices, consents
+
+#### The `session` shape
+
+| Field | Meaning |
+|---|---|
+| `accessToken` | Bearer token, 15 minutes. |
+| `refreshToken` | 60 days, **single use**. |
+| `accessExpiresAt` / `refreshExpiresAt` | UTC instants. Refresh a little before the first rather than waiting for a 401. |
+
+## 4.2 Account, devices, consents
+
+> The account itself: the profile, the role step, signed-in devices, consents and the restricted-account state.
+>
+> **Screens** 7 · 8 · 21 · 27 · 35 · **Shapes** `user`, `device` and `stats`, at the end of this chapter
 
 #### `GET /account/devices` — signed-in, paginated
 
-An array of `device` (5.6). `isCurrent` marks the one you are calling from.
+An array of `device` (4.2). `isCurrent` marks the one you are calling from.
 
 #### `DELETE /account/devices/{device}/session` — signed-in
 
@@ -872,7 +908,7 @@ and there never will be. `pushToken` is stored encrypted.
 | `orgType` | optional | `work` · `university` · `school` |
 | `organizationId` | optional | A 26-character organisation id. |
 
-All values are **lower-case** in the request; the response returns statuses upper-case (see 5.5).
+All values are **lower-case** in the request; the response returns statuses upper-case (see 4.2).
 Idempotent — sending it again overwrites rather than failing.
 
 Returns `user` and `nextStep`. See screen 7 above: the split-name question is open.
@@ -941,11 +977,61 @@ safety explanation before a given trip. Re-showing a walkthrough is a support ac
 
 #### `GET /account/stats` — signed-in
 
-The caller's **own** numbers only. See 5.7.
+The caller's **own** numbers only. See 4.2.
 
 ---
 
-### 4.3 Verification
+
+#### The `user` shape
+
+| Field | Meaning |
+|---|---|
+| `id` | |
+| `phone` / `phoneVerified` | 🔒 **Your own only.** Never present for anybody else. |
+| `fullName` / `publicFirstName` | Same rule. |
+| `profilePhotoPath` | Storage path; ask us for the display URL flow before wiring it. |
+| `dateOfBirth`, `email` | Own only. |
+| `accountStatus` | `ACTIVE` · `SUSPENDED` · `PENDING_DELETION` · `DELETED`. `PENDING_DELETION` is reserved for the 30-day grace after a deletion request (not built yet); treat any value you do not know as "not active". |
+| `suspensionReason` | Present only while suspended: **one sentence, already in the request's language**, saying why in general terms (e.g. "A safety report is under review, so new bookings are paused."). Show it as written. It is a category, never the note staff wrote, and never names anybody. |
+| `suspension` | Present only while suspended: `caseNumber` (the reference the member quotes, e.g. `RF-482913`), `reasonCode` (`safety_report` · `identity_check` · `payment_issue` · `policy_breach` — for an icon or analytics, not for wording), `suspendedAt`, `reviewDueAt` (the promised "expected update" time — show it as a time, and keep showing it if it has passed rather than hiding it). `caseNumber` can be `null` only for an account suspended before holds were recorded. |
+| `profileStatus` | `NOT_STARTED` (signed in with a phone, basic profile not filled yet) · `BASIC_COMPLETE` (after `PUT /account/profile/basic` succeeds). **Until `BASIC_COMPLETE` the `active` tier refuses most endpoints** with `403 ACCOUNT_PROFILE_INCOMPLETE` — send the person to screen 7. *(An earlier version of this file said `PHONE_ONLY`; the API has always returned `NOT_STARTED`.)* |
+| `capabilities[]` | 🔴 **What this account may actually do:** `["PASSENGER"]`, `["DRIVER"]`, both, or empty before the role step. **Drive your UI from this, not from `registeredRole`.** |
+| `initialRoleSelected` | Whether the role step is done. Do not infer it from `capabilities` being empty — this is the field `nextStep` is derived from. |
+| `registeredRole` | `passenger` · `driver` · `both` — **what they signed up as, which is history.** 🔴 It can legitimately disagree with `capabilities`: somebody who joined as a passenger and later added driving keeps `registeredRole: passenger` while holding both capabilities. Use it for analytics, never for deciding what to show. |
+| `orgType` / `organizationId` | Their claimed workplace or university. |
+| `preferredLanguage` | `ar` · `en`. |
+| `trustLevel` | `0`–`4`, recomputed from the rows rather than incremented. |
+| `outstandingConsents[]` | Which consents are stale at the current version. Non-empty means show the acceptance screen. |
+
+#### The `device` shape
+
+| Field | Meaning |
+|---|---|
+| `id`, `platform`, `model`, `osVersion`, `appVersion` | As registered. |
+| `isTrusted` | |
+| `hasLocalPin` | 🔒 A **flag**. The server never sees the PIN's value. |
+| `biometricEnabled` | |
+| `lastSeenAt`, `revokedAt` | |
+| `isCurrent` | The device you are calling from. Do not offer "revoke" on it without a confirmation. |
+
+#### The `stats` shape
+
+| Field | Meaning |
+|---|---|
+| `completedTripsAsPassenger` / `completedTripsAsDriver` | Counts. |
+| `ratingAsPassenger` / `ratingAsDriver` | `null` until Phase 10. |
+| `onTimeRate` / `cancellationRate` | `0`–`100`, or `null` when not yet computed. |
+| `noShowCount` | |
+| `computedAt` | When these were last recalculated. `null` means never. |
+
+🔴 **Every rate is `null` rather than `0` when it has not been computed.** Rendering 0% would tell
+a brand-new member they are unreliable.
+
+## 4.3 Verification
+
+> Submitting identity evidence and reading back what was approved. A gate on other chapters, not a step in sign-up.
+>
+> **Screens** 15 · 30 · **Shapes** —
 
 #### `GET /account/verifications` — signed-in
 
@@ -994,7 +1080,11 @@ read `error.fields` for which.
 
 ---
 
-### 4.4 Driver application and vehicles
+## 4.4 Driver application and vehicles
+
+> Becoming a driver: the application, the licence, the vehicle and its documents. Needs 4.3 approved first.
+>
+> **Screens** 31 · **Shapes** —
 
 All of these need `verified:government_id` except `eligibility`.
 
@@ -1053,11 +1143,15 @@ Makes this the active vehicle and deactivates the others, in one transaction.
 
 ---
 
-### 4.5 Commutes (driver)
+## 4.5 Commutes (driver)
+
+> A driver publishing a commute — the route, the weekly schedule, the price, and pausing or archiving it.
+>
+> **Screens** 24 · 25 · **Shapes** the commute offer, at the end of this chapter
 
 #### `GET /commutes` · `GET /commutes/{commute}` — verified
 
-The caller's own commutes. Full shape in 5.8.
+The caller's own commutes. Full shape in 4.5.
 
 #### `POST /commutes` — verified
 
@@ -1123,7 +1217,32 @@ Archives. Nothing is deleted: history stays, and only future days nobody has tak
 
 ---
 
-### 4.6 Search, demands, saved searches
+
+#### The commute-offer shape
+
+| Field | Meaning |
+|---|---|
+| `id`, `status` | `DRAFT` · `PUBLISHED` · `PAUSED` · `ARCHIVED`. |
+| `commuteType` | `recurring` · `one_time`. |
+| `direction` | `to_work` · `to_home`. |
+| `vehicleId`, `seatsTotal` | `seatsTotal` is bookable seats, already excluding the driver. |
+| `pricePerSeatPiastres`, `currency` | Always `EGP` today. |
+| `maxDetourMinutes` / `maxWalkMinutes` | The driver's limits. |
+| `audience`, `minTrustLevel` | Who may join. |
+| `allowsCustomPickup` | **Defaults to false.** |
+| `routePolyline`, `routeDistanceMeters`, `routeDurationSeconds` | Computed at publish; `null` on a draft. **Only ever returned to the commute's own driver.** |
+| `publishedAt`, `pausedAt`, `pausedReason`, `archivedAt` | `pausedReason` is `by_driver` · `vehicle_suspended` · `licence_expired` — the last two are automatic, so show the right copy. |
+| `missing[]` | What still has to be done before it can be published. Drive the wizard from this. |
+| `locations[]` | `{id, type, lat, lng, address, placeId, sequence}`; type is `origin` · `pickup` · `dropoff` · `destination`. |
+| `schedule` | `{daysMask, departureTime, timezone, startDate, endDate, generatedUntil}`. `generatedUntil` is **how far ahead bookable days currently exist**, rolled forward daily — not the end of the commute. |
+| `rules` | A map of `{key: bool}`. |
+| `upcomingTrips[]` | The next generated days (4.7). |
+
+## 4.6 Search, demands, saved searches
+
+> A passenger finding a commute, saving a search, or registering demand where nothing runs yet.
+>
+> **Screens** 10 · 11 · 12 · 18 · 42 · **Shapes** the match result, at the end of this chapter · `person` in 5
 
 #### `GET /search/commutes` — active, profile complete
 
@@ -1137,7 +1256,7 @@ verifying for. What they are *eligible* to see is decided inside the query from 
 a women-only commute is excluded for a non-woman before anything is scored, so you will never
 receive a result they cannot then request.
 
-Returns an array of match results — see 5.3, which explains the score breakdown.
+Returns an array of match results — see 4.6, which explains the score breakdown.
 
 #### `GET` / `POST` / `DELETE /commute-demands/{demand}` — active, profile complete
 
@@ -1186,7 +1305,48 @@ point has no reason to be verified first. Returns `id`, `name`, `nameAr`, `type`
 
 ---
 
-### 4.7 Seat requests and bookings
+
+#### The match-result shape
+
+| Field | Meaning |
+|---|---|
+| `commuteId` | The commute. |
+| `tripId` / `tripDate` | **The specific day this card matched on** — the soonest that fits. This is what you pass as `scheduledTripId` for a trial. |
+| `departureAt` / `departureLocal` | The instant, and the wall clock to display. |
+| `seatsAvailable` | On that day. |
+| `pricePerSeatPiastres` | Snapshotted on the day — a later price change does not move it. |
+| `audience` | `women_only` · `any_verified`. |
+| `driver` | A `person` (5.1) plus `completedTrips` from the driver profile. |
+| `vehicle` | `make`, `model`, `colour`. 🔒 **No plate** — a search result has not earned it. |
+| `meetingPoint` | `{lat, lng, address, walkMinutes}` — where they would meet and how far they would walk. |
+| `score` | The breakdown, below. |
+| `detourMinutes` | What this passenger would add to the driver's run. |
+| `rules` | A map, e.g. `{"nonsmoking": true, "quiet": true}`. |
+| `otherDays[]` | The other days of the same commute that also fit — `{id, tripDate, departureAt, seatsAvailable}`. **One commute is one card**, not twenty near-identical ones. |
+
+🔒 **No route polyline.** A passenger deciding between commutes needs the meeting point, the time
+and the price. The full road a driver takes every day, handed to anyone who searches, is a movement
+pattern nobody agreed to publish.
+
+**The score is designed to be shown, not trusted.** A passenger choosing between two commutes
+deserves to see *why* one ranked above the other:
+
+| Component | Max | What it measures |
+|---|---|---|
+| `overlap` | 30 | How much of their route runs along the driver's. |
+| `schedule` | 25 | How well the departure fits the arrival window. Decays over 30 minutes; half an hour out scores 0. |
+| `detour` | 15 | How little the driver is inconvenienced. |
+| `audience` | 10 | Whether it matches the audience they asked for. **Never decides eligibility** — that is settled in the query. |
+| `comfort` | 10 | How many requested rules the commute actually has. Somebody who asked for nothing gets full marks, not zero. |
+| `price` | 5 | Against the **monthly** budget, divided by the rides that budget has to cover. |
+| `reliability` | 5 | From the driver's record. **A driver with no history gets full marks** — starting everyone at zero would mean they are never matched, so they never build the history that would let them be matched. |
+| `total` | 100 | The parts always add up to the whole. |
+
+## 4.7 Seat requests and bookings
+
+> Asking for a seat, the driver answering, and the booking that results — including cancelling and disputing one.
+>
+> **Screens** 13 · 14 · 19 · 28 · 46 · **Shapes** the seat request, the scheduled trip and the booking, at the end of this chapter
 
 #### `POST /commutes/{commute}/seat-requests` — verified
 
@@ -1202,7 +1362,7 @@ at 21:00 the night before), `BOOKING_ALREADY_REQUESTED` (one open request per co
 
 #### `GET /seat-requests` — verified, paginated
 
-The caller's own requests. See 5.4 for the shape.
+The caller's own requests. See 4.7 for the shape.
 
 #### `DELETE /seat-requests/{seatRequest}` — verified
 
@@ -1238,7 +1398,7 @@ to change. Section 8.)
 
 #### `GET /my-bookings` — verified, paginated
 
-The caller's seats, newest first. See 5.9.
+The caller's seats, newest first. See 4.7.
 
 #### `GET /driver/bookings` — verified, paginated
 
@@ -1269,7 +1429,73 @@ attendance decision acceptable, and it is the passenger's only move.
 
 ---
 
-### 4.8 Pickup points
+
+#### The seat-request shape
+
+| Field | Meaning |
+|---|---|
+| `id`, `commuteId`, `tripId` | `tripId` is set for a trial request. |
+| `status` | `PENDING` · `APPROVED` · `REJECTED` · `WAITLISTED` · `WITHDRAWN` · `EXPIRED` · `ENDED`. `ENDED` means the approval outlived the membership it created — it frees the slot so the person can ask to rejoin. |
+| `commitment` | `trial` · `recurring`. |
+| `requestedDaysMask` | For recurring. |
+| `seats` | 1–4. |
+| `meetingPreference` | `gate` · `street` · `landmark` · `custom`. |
+| `introMessage` | As they typed it. Filtered for abuse and phone numbers on the way in. |
+| `paymentType` | `cash` · `online`. |
+| `agreedToRulesAt` | **A moment, not a flag** — in a dispute what matters is when they agreed. |
+| `waitlistPosition` | Only while waiting for a seat. |
+| `responseNote` / `respondedAt` | The driver's answer. |
+| `expiresAt` | A request nobody answers expires after 48 hours, so it stops holding the one open request. |
+| `passenger` | A `person` (5.1), on the driver's inbox. |
+
+#### The scheduled-trip and booking shapes
+
+**Trip** — one bookable day. Passengers always book these, never a recurrence rule.
+
+| Field | Meaning |
+|---|---|
+| `id` | Pass as `scheduledTripId`. |
+| `tripDate` | The **local** day. |
+| `departureAt` / `departureLocal` | Compute from the first; display the second. They do not differ by a constant across a DST change. |
+| `status` | `SCHEDULED` · `PREPARING` · `EN_ROUTE` · `IN_PROGRESS` · `COMPLETED` · `CANCELLED`. |
+| `seatsTotal` / `seatsTaken` / `seatsAvailable` | Snapshotted when the day was generated — a later change to the commute does not retroactively move them. |
+| `pricePerSeatPiastres` | Snapshotted the same way. |
+| `bookingDeadlineAt` | **21:00 the night before.** After this, requests are refused with `BOOKING_DEADLINE_PASSED`. |
+
+**Booking** — one seat on one day.
+
+| Field | Meaning |
+|---|---|
+| `id`, `tripId`, `commuteGroupId` | |
+| `status` | `PENDING` · `CONFIRMED` · `COMPLETED` · `CANCELLED_BY_PASSENGER` · `CANCELLED_BY_DRIVER` · `EXPIRED` · `NO_SHOW`. A booking is created **already `CONFIRMED`**: the driver has just approved a request she read, so leaving it pending would invent a second approval nobody performs. |
+| `seatsReserved` | |
+| `price.totalPiastres` | What the seat costs. |
+| `price.platformFeePiastres` | The platform's share. |
+| `price.driverAmountPiastres` | What reaches the driver. |
+| `paymentType` | `cash` · `online`. |
+| `paymentStatus` | `NOT_DUE` (nothing recorded yet) · `PENDING` · `PAID` · `FAILED` · `REFUNDED` · `DISPUTED`. **Cash:** the passenger pays in the car; the booking turns `PAID` about **two hours after the driver confirms they travelled** (the delay lets a wrong tap be noticed). A no-show stays `NOT_DUE`. `DISPUTED` as soon as the passenger contests the attendance record, until staff decide. |
+| `meetingPoint` | `{lat, lng, isExact}`, or **`null` for the standard point** — which is the run's origin. |
+| `cancelledAt`, `cancelledReason`, `cancellationFeePiastres` | The fee is always `0` today. |
+| `trip` | The scheduled trip above, when loaded. |
+
+🔒 **All three money figures are frozen at approval and never recomputed.** A driver raising her
+price, or the platform changing its percentage, moves nothing here. And the meeting point is
+**fuzzed to ~110m until the booking is confirmed** — a pickup point is often somebody's front
+door, and a pending or cancelled booking has not earned it.
+
+✅ **The fee direction is decided (2026-10-06): the fee is deducted from the driver's price.**
+`totalPiastres = platformFee + driverAmount`; the passenger pays the published seat price and
+nothing on top. The rate is 3% by default and the operations team can change it, so **never
+hard-code a percentage** — render the figures you are given. ⚠️ **Screens 12 and 24 need new copy:**
+screen 12 must not show the fee as a line added to the seat price, and screen 24's *"You keep the
+full contribution; Rafeeq's fee is charged to passengers separately"* is wrong — the driver keeps
+the price minus the fee.
+
+## 4.8 Pickup points
+
+> Agreeing where a passenger is actually picked up, when it is not the published meeting point.
+>
+> **Screens** 29 · **Shapes** —
 
 #### `POST /commutes/{commute}/pickup-preview` — verified
 
@@ -1323,7 +1549,11 @@ The passenger accepting the driver's counter-offer.
 
 ---
 
-### 4.9 Live trip
+## 4.9 Live trip
+
+> The journey as it happens: starting, check-in, no-shows, wait timers, live position and completing the run.
+>
+> **Screens** 17 · 36 · 39 · 40 · 41 · 43 · 45 · **Shapes** the trip session, at the end of this chapter · **realtime: 6**
 
 The driver drives the run; a passenger on it may watch. Both halves are in this section because
 they are two sides of the same state.
@@ -1338,7 +1568,7 @@ May only be called within **90 minutes before departure** (`TRIP_TOO_EARLY_TO_ST
 `departureAt` and `windowMinutes` in `error.fields`). **There is no lower bound** — a run whose
 departure has passed is exactly the one a late driver needs to start.
 
-Returns the trip session (5.10) and opens a `pending` attendance row per confirmed seat.
+Returns the trip session (4.9) and opens a `pending` attendance row per confirmed seat.
 
 #### `POST /trips/{trip}/status` — verified, driver only
 
@@ -1379,7 +1609,7 @@ has the count for today).
 
 #### `GET /trips/{trip}` — verified, driver or anybody on the run
 
-The trip session (5.10). `TRIP_NOT_STARTED` (409) if the run has not begun — a real answer rather
+The trip session (4.9). `TRIP_NOT_STARTED` (409) if the run has not begun — a real answer rather
 than an empty session.
 
 #### `GET /trips/{trip}/attendance` — verified, **driver only**
@@ -1495,7 +1725,35 @@ stop is exactly what a live map is for and exactly where a socket fails to open.
 
 ---
 
-### 4.10 Groups
+
+#### The trip-session shape
+
+| Field | Meaning |
+|---|---|
+| `id` | **Use this as the WebSocket channel id** (section 6), not the trip id. |
+| `tripId` | |
+| `status` | `PREPARING` · `EN_ROUTE` · `AT_PICKUP` · `IN_PROGRESS` · `COMPLETED` · `CANCELLED` · `EMERGENCY`. |
+| `startedAt` | When the driver tapped "start" — **not** when the car moved. |
+| `departedAt` | When the car actually set off (first entry into `IN_PROGRESS`). `null` before that. This is what the on-time rate is measured from. |
+| `completedAt` | |
+| `durationSeconds` | Measured from `departedAt`, not from `startedAt`. |
+| `distanceTravelledMeters` | `null` until there are GPS points to measure it from. **Not** the route's planned distance — that would present a figure we did not observe as one we did. |
+| `isUnderway` | Stated rather than left for you to infer which statuses count. |
+| `lastLocationAt` | When the last GPS reading arrived. **A client showing a live map needs this** — without it you draw a car that stopped reporting twenty minutes ago as though it were still there. |
+| `deviationDetectedAt` | **Screen 39.** When the run FIRST went off its published route. `null` on the overwhelming majority of runs — this is an exception report, not a measurement, so do not render "0 m off route" on a normal morning. Checked only while the run is `IN_PROGRESS`: on the way to collect people, being off the direct line is the job. |
+| `deviationDistanceMeters` | The FURTHEST it got, not where it is now. Together with the moment above, that is when it started and how far it went. `null` when there was no deviation. |
+| `trip` | The scheduled trip, when loaded. |
+
+🔒 **No GPS trail.** A passenger needs the car's position now, not the history of where it has
+been.
+
+---
+
+## 4.10 Groups
+
+> The standing group a recurring booking creates — its members, attendance and planned absences.
+>
+> **Screens** 20 · **Shapes** `person` in 5
 
 #### `GET /groups` — verified, paginated · `GET /groups/{group}` — verified
 
@@ -1566,7 +1824,11 @@ Planned absence — "I'm away next week".
 
 ---
 
-### 4.11 Home aggregates
+## 4.11 Home aggregates
+
+> The two screens the app opens on. One call each, so a cold start is not six requests.
+>
+> **Screens** 9 · 23 · **Shapes** —
 
 Both are **one call each** and **not paginated** — see 1.3 for why.
 
@@ -1580,7 +1842,7 @@ they explain.
 |---|---|
 | `greetingName` | Their public first name. |
 | `verification` | `{level, of, percentage, isComplete}` — the same numbers as the Verification Centre, so the banner cannot disagree with the screen behind it. |
-| `nextJourney` | The soonest journey that has not finished, or **`null`**. Contains the full booking (5.9) plus `originLabel`, `destinationLabel`, `departureAt`, `departureLocal`, `departsInMinutes`, `isToday`, `attendance`, `isTrial`, `driver` (5.1), `vehicle`. |
+| `nextJourney` | The soonest journey that has not finished, or **`null`**. Contains the full booking (4.7) plus `originLabel`, `destinationLabel`, `departureAt`, `departureLocal`, `departsInMinutes`, `isToday`, `attendance`, `isTrial`, `driver` (5.1), `vehicle`. |
 | `nextJourney.attendance` | `{coming, away, awaiting, total}` — **four counts, not "2 of 3"**. Somebody who said they are away and somebody who has not answered are not the same person to a driver deciding whether to wait, so the server does not collapse them. `total` includes the driver. |
 | `nextJourney.vehicle` | `make`, `model`, `colour`, `seats`, and `plateNumber` **only when the booking is confirmed**. |
 | `nextJourney.meetingPoint` | `null` means the standard point — which is the run's own origin, already in `originLabel`. A non-null value is a specifically agreed pickup. |
@@ -1608,12 +1870,16 @@ role switch lives on this screen, and a 404 would make tapping "drive" look brok
 | `nextRun.passengers[].pickup` | `{lat, lng}` exactly — she has to drive there, and she approved it. **`null` means the standard meeting point**, i.e. the run's origin. |
 | `nextRun.passengers[].attendanceStatus` | The **declared** answer (`coming`/`away`), or `null` when they have not answered. Null is not "away". |
 | `pendingRequests.count` | **Every** waiting request, not the length of the list. A driver with eleven should see 11. |
-| `pendingRequests.items[]` | The first 5, oldest first, each a seat request (5.4) with its `passenger`. |
+| `pendingRequests.items[]` | The first 5, oldest first, each a seat request (4.7) with its `passenger`. |
 | `stats.onTimeRate` | `null` until it has been computed from completed runs. **Show a dash, not 0%** — a 0% badge on somebody's first morning is a number nobody earned. |
 | `stats.completedTrips` | |
 | `stats.avgDetourMinutes` | Averaged over approved custom pickups. `0` is true and means nobody has one; `null` means she has no commutes at all. |
 
-### 4.12 Safety (screens 16, 26, 32, 44)
+## 4.12 Safety (screens 16, 26, 32, 44)
+
+> SOS, trusted contacts, incident reports with evidence, blocking somebody, and sharing a live trip.
+>
+> **Screens** 16 · 26 · 32 · 44 · **Shapes** —
 
 🔴 **Everything in this section is reachable by a signed-in account and nothing more.** No
 verification gate, no complete-profile requirement, no active trip. That is deliberate and it is the
@@ -1899,7 +2165,11 @@ token was once real.
 
 ---
 
-### 4.13 Ratings (screen 37)
+## 4.13 Ratings (screen 37)
+
+> Rating each other after a journey, the public reviews that result, and reporting an abusive one.
+>
+> **Screens** 37 · **Shapes** —
 
 🔴 **Double-blind.** Neither person can see what the other wrote until **both have rated, or seven
 days pass.** This is not a UI rule you are being asked to honour — the API does not return the other
@@ -2042,7 +2312,11 @@ stars**.
 
 ---
 
-### 4.14 Notifications (screen 22)
+## 4.14 Notifications (screen 22)
+
+> The notification list and what the person has chosen to be told about.
+>
+> **Screens** 22 · **Shapes** —
 
 What the platform tells a member on its own initiative. Every message lands in the **inbox**
 (`in_app`) and, if the member allows it, is also **pushed** to each signed-in phone.
@@ -2089,7 +2363,11 @@ One switch per `category` × `channel` (`push`, `in_app`), each with `enabled` a
 the inbox only — a phone that buzzes in a car with the person it was raised about is the one thing the
 silent alert promised would not happen. Do not add a local notification for it either.
 
-### 4.15 Trip chat (the "Message" button on screen 41)
+## 4.15 Trip chat (the "Message" button on screen 41)
+
+> The scoped chat between a driver and a passenger who share a confirmed booking.
+>
+> **Screens** 41, the Message button · **Shapes** —
 
 One conversation per **booking**, between that day's passenger and driver. Chapter 11 scopes it:
 pickup clarification, arrival updates, minor delays — "not intended for long-term messaging". The
@@ -2134,7 +2412,11 @@ Only the **recipient** can report a message (404 otherwise). It files an ordinar
 safety team, quoting the message, and returns `{ "incidentId" }` — the report then shows in
 `GET /incidents` like any other, with its status and the team's answer.
 
-### 4.16 Money (screen 34, the group's `payments` tab)
+## 4.16 Money (screen 34, the group's `payments` tab)
+
+> A driver's fee balance and a group's weekly statement. Online payment is not built — see 7.
+>
+> **Screens** 34 · **Shapes** —
 
 🔴 **The fee comes out of the DRIVER's share, at 3%, and the passenger pays the seat price.** That
 was settled on 2026-10-06 and it closes the contradiction this file carried for weeks: an 8000 seat
@@ -2203,9 +2485,14 @@ neither is distinguishable from the other.
 
 ---
 
-## 5. Shared shapes
+## 5. The one shape every feature shares
 
-These appear inside many responses. Each is described once here.
+Every other response shape is documented in the chapter that returns it. This one is not, because it
+belongs to no single feature: it is how **one member appears to another**, and it comes back from
+search, member lists, request reviews, attendance rows and wait timers alike.
+
+It is also where most of the privacy rules land, which is the other reason it is described once —
+a second copy is a second chance for one of them to be written down slightly wrong.
 
 ### 5.1 `person` — how one member appears to another
 
@@ -2221,199 +2508,6 @@ screens showed the same handful of facts, so they come from one place and cannot
 | `rating` | `null` **until ratings exist (Phase 10)**. Null is the honest answer: a driver who has not been rated has no rating, and 0 would show a new driver a zero-star badge nobody earned. **Do not render 0.** |
 | `completedTrips` | Completed journeys in the relevant role. |
 | `onTimeRate` | `0`–`100`, or `null` until computed. Same rule: show a dash. |
-
-### 5.2 `session`
-
-| Field | Meaning |
-|---|---|
-| `accessToken` | Bearer token, 15 minutes. |
-| `refreshToken` | 60 days, **single use**. |
-| `accessExpiresAt` / `refreshExpiresAt` | UTC instants. Refresh a little before the first rather than waiting for a 401. |
-
-### 5.3 Match result (search)
-
-| Field | Meaning |
-|---|---|
-| `commuteId` | The commute. |
-| `tripId` / `tripDate` | **The specific day this card matched on** — the soonest that fits. This is what you pass as `scheduledTripId` for a trial. |
-| `departureAt` / `departureLocal` | The instant, and the wall clock to display. |
-| `seatsAvailable` | On that day. |
-| `pricePerSeatPiastres` | Snapshotted on the day — a later price change does not move it. |
-| `audience` | `women_only` · `any_verified`. |
-| `driver` | A `person` (5.1) plus `completedTrips` from the driver profile. |
-| `vehicle` | `make`, `model`, `colour`. 🔒 **No plate** — a search result has not earned it. |
-| `meetingPoint` | `{lat, lng, address, walkMinutes}` — where they would meet and how far they would walk. |
-| `score` | The breakdown, below. |
-| `detourMinutes` | What this passenger would add to the driver's run. |
-| `rules` | A map, e.g. `{"nonsmoking": true, "quiet": true}`. |
-| `otherDays[]` | The other days of the same commute that also fit — `{id, tripDate, departureAt, seatsAvailable}`. **One commute is one card**, not twenty near-identical ones. |
-
-🔒 **No route polyline.** A passenger deciding between commutes needs the meeting point, the time
-and the price. The full road a driver takes every day, handed to anyone who searches, is a movement
-pattern nobody agreed to publish.
-
-**The score is designed to be shown, not trusted.** A passenger choosing between two commutes
-deserves to see *why* one ranked above the other:
-
-| Component | Max | What it measures |
-|---|---|---|
-| `overlap` | 30 | How much of their route runs along the driver's. |
-| `schedule` | 25 | How well the departure fits the arrival window. Decays over 30 minutes; half an hour out scores 0. |
-| `detour` | 15 | How little the driver is inconvenienced. |
-| `audience` | 10 | Whether it matches the audience they asked for. **Never decides eligibility** — that is settled in the query. |
-| `comfort` | 10 | How many requested rules the commute actually has. Somebody who asked for nothing gets full marks, not zero. |
-| `price` | 5 | Against the **monthly** budget, divided by the rides that budget has to cover. |
-| `reliability` | 5 | From the driver's record. **A driver with no history gets full marks** — starting everyone at zero would mean they are never matched, so they never build the history that would let them be matched. |
-| `total` | 100 | The parts always add up to the whole. |
-
-### 5.4 Seat request
-
-| Field | Meaning |
-|---|---|
-| `id`, `commuteId`, `tripId` | `tripId` is set for a trial request. |
-| `status` | `PENDING` · `APPROVED` · `REJECTED` · `WAITLISTED` · `WITHDRAWN` · `EXPIRED` · `ENDED`. `ENDED` means the approval outlived the membership it created — it frees the slot so the person can ask to rejoin. |
-| `commitment` | `trial` · `recurring`. |
-| `requestedDaysMask` | For recurring. |
-| `seats` | 1–4. |
-| `meetingPreference` | `gate` · `street` · `landmark` · `custom`. |
-| `introMessage` | As they typed it. Filtered for abuse and phone numbers on the way in. |
-| `paymentType` | `cash` · `online`. |
-| `agreedToRulesAt` | **A moment, not a flag** — in a dispute what matters is when they agreed. |
-| `waitlistPosition` | Only while waiting for a seat. |
-| `responseNote` / `respondedAt` | The driver's answer. |
-| `expiresAt` | A request nobody answers expires after 48 hours, so it stops holding the one open request. |
-| `passenger` | A `person` (5.1), on the driver's inbox. |
-
-### 5.5 `user`
-
-| Field | Meaning |
-|---|---|
-| `id` | |
-| `phone` / `phoneVerified` | 🔒 **Your own only.** Never present for anybody else. |
-| `fullName` / `publicFirstName` | Same rule. |
-| `profilePhotoPath` | Storage path; ask us for the display URL flow before wiring it. |
-| `dateOfBirth`, `email` | Own only. |
-| `accountStatus` | `ACTIVE` · `SUSPENDED` · `PENDING_DELETION` · `DELETED`. `PENDING_DELETION` is reserved for the 30-day grace after a deletion request (not built yet); treat any value you do not know as "not active". |
-| `suspensionReason` | Present only while suspended: **one sentence, already in the request's language**, saying why in general terms (e.g. "A safety report is under review, so new bookings are paused."). Show it as written. It is a category, never the note staff wrote, and never names anybody. |
-| `suspension` | Present only while suspended: `caseNumber` (the reference the member quotes, e.g. `RF-482913`), `reasonCode` (`safety_report` · `identity_check` · `payment_issue` · `policy_breach` — for an icon or analytics, not for wording), `suspendedAt`, `reviewDueAt` (the promised "expected update" time — show it as a time, and keep showing it if it has passed rather than hiding it). `caseNumber` can be `null` only for an account suspended before holds were recorded. |
-| `profileStatus` | `NOT_STARTED` (signed in with a phone, basic profile not filled yet) · `BASIC_COMPLETE` (after `PUT /account/profile/basic` succeeds). **Until `BASIC_COMPLETE` the `active` tier refuses most endpoints** with `403 ACCOUNT_PROFILE_INCOMPLETE` — send the person to screen 7. *(An earlier version of this file said `PHONE_ONLY`; the API has always returned `NOT_STARTED`.)* |
-| `capabilities[]` | 🔴 **What this account may actually do:** `["PASSENGER"]`, `["DRIVER"]`, both, or empty before the role step. **Drive your UI from this, not from `registeredRole`.** |
-| `initialRoleSelected` | Whether the role step is done. Do not infer it from `capabilities` being empty — this is the field `nextStep` is derived from. |
-| `registeredRole` | `passenger` · `driver` · `both` — **what they signed up as, which is history.** 🔴 It can legitimately disagree with `capabilities`: somebody who joined as a passenger and later added driving keeps `registeredRole: passenger` while holding both capabilities. Use it for analytics, never for deciding what to show. |
-| `orgType` / `organizationId` | Their claimed workplace or university. |
-| `preferredLanguage` | `ar` · `en`. |
-| `trustLevel` | `0`–`4`, recomputed from the rows rather than incremented. |
-| `outstandingConsents[]` | Which consents are stale at the current version. Non-empty means show the acceptance screen. |
-
-### 5.6 `device`
-
-| Field | Meaning |
-|---|---|
-| `id`, `platform`, `model`, `osVersion`, `appVersion` | As registered. |
-| `isTrusted` | |
-| `hasLocalPin` | 🔒 A **flag**. The server never sees the PIN's value. |
-| `biometricEnabled` | |
-| `lastSeenAt`, `revokedAt` | |
-| `isCurrent` | The device you are calling from. Do not offer "revoke" on it without a confirmation. |
-
-### 5.7 `stats` (`GET /account/stats`)
-
-| Field | Meaning |
-|---|---|
-| `completedTripsAsPassenger` / `completedTripsAsDriver` | Counts. |
-| `ratingAsPassenger` / `ratingAsDriver` | `null` until Phase 10. |
-| `onTimeRate` / `cancellationRate` | `0`–`100`, or `null` when not yet computed. |
-| `noShowCount` | |
-| `computedAt` | When these were last recalculated. `null` means never. |
-
-🔴 **Every rate is `null` rather than `0` when it has not been computed.** Rendering 0% would tell
-a brand-new member they are unreliable.
-
-### 5.8 Commute offer
-
-| Field | Meaning |
-|---|---|
-| `id`, `status` | `DRAFT` · `PUBLISHED` · `PAUSED` · `ARCHIVED`. |
-| `commuteType` | `recurring` · `one_time`. |
-| `direction` | `to_work` · `to_home`. |
-| `vehicleId`, `seatsTotal` | `seatsTotal` is bookable seats, already excluding the driver. |
-| `pricePerSeatPiastres`, `currency` | Always `EGP` today. |
-| `maxDetourMinutes` / `maxWalkMinutes` | The driver's limits. |
-| `audience`, `minTrustLevel` | Who may join. |
-| `allowsCustomPickup` | **Defaults to false.** |
-| `routePolyline`, `routeDistanceMeters`, `routeDurationSeconds` | Computed at publish; `null` on a draft. **Only ever returned to the commute's own driver.** |
-| `publishedAt`, `pausedAt`, `pausedReason`, `archivedAt` | `pausedReason` is `by_driver` · `vehicle_suspended` · `licence_expired` — the last two are automatic, so show the right copy. |
-| `missing[]` | What still has to be done before it can be published. Drive the wizard from this. |
-| `locations[]` | `{id, type, lat, lng, address, placeId, sequence}`; type is `origin` · `pickup` · `dropoff` · `destination`. |
-| `schedule` | `{daysMask, departureTime, timezone, startDate, endDate, generatedUntil}`. `generatedUntil` is **how far ahead bookable days currently exist**, rolled forward daily — not the end of the commute. |
-| `rules` | A map of `{key: bool}`. |
-| `upcomingTrips[]` | The next generated days (5.9). |
-
-### 5.9 Scheduled trip and booking
-
-**Trip** — one bookable day. Passengers always book these, never a recurrence rule.
-
-| Field | Meaning |
-|---|---|
-| `id` | Pass as `scheduledTripId`. |
-| `tripDate` | The **local** day. |
-| `departureAt` / `departureLocal` | Compute from the first; display the second. They do not differ by a constant across a DST change. |
-| `status` | `SCHEDULED` · `PREPARING` · `EN_ROUTE` · `IN_PROGRESS` · `COMPLETED` · `CANCELLED`. |
-| `seatsTotal` / `seatsTaken` / `seatsAvailable` | Snapshotted when the day was generated — a later change to the commute does not retroactively move them. |
-| `pricePerSeatPiastres` | Snapshotted the same way. |
-| `bookingDeadlineAt` | **21:00 the night before.** After this, requests are refused with `BOOKING_DEADLINE_PASSED`. |
-
-**Booking** — one seat on one day.
-
-| Field | Meaning |
-|---|---|
-| `id`, `tripId`, `commuteGroupId` | |
-| `status` | `PENDING` · `CONFIRMED` · `COMPLETED` · `CANCELLED_BY_PASSENGER` · `CANCELLED_BY_DRIVER` · `EXPIRED` · `NO_SHOW`. A booking is created **already `CONFIRMED`**: the driver has just approved a request she read, so leaving it pending would invent a second approval nobody performs. |
-| `seatsReserved` | |
-| `price.totalPiastres` | What the seat costs. |
-| `price.platformFeePiastres` | The platform's share. |
-| `price.driverAmountPiastres` | What reaches the driver. |
-| `paymentType` | `cash` · `online`. |
-| `paymentStatus` | `NOT_DUE` (nothing recorded yet) · `PENDING` · `PAID` · `FAILED` · `REFUNDED` · `DISPUTED`. **Cash:** the passenger pays in the car; the booking turns `PAID` about **two hours after the driver confirms they travelled** (the delay lets a wrong tap be noticed). A no-show stays `NOT_DUE`. `DISPUTED` as soon as the passenger contests the attendance record, until staff decide. |
-| `meetingPoint` | `{lat, lng, isExact}`, or **`null` for the standard point** — which is the run's origin. |
-| `cancelledAt`, `cancelledReason`, `cancellationFeePiastres` | The fee is always `0` today. |
-| `trip` | The scheduled trip above, when loaded. |
-
-🔒 **All three money figures are frozen at approval and never recomputed.** A driver raising her
-price, or the platform changing its percentage, moves nothing here. And the meeting point is
-**fuzzed to ~110m until the booking is confirmed** — a pickup point is often somebody's front
-door, and a pending or cancelled booking has not earned it.
-
-✅ **The fee direction is decided (2026-10-06): the fee is deducted from the driver's price.**
-`totalPiastres = platformFee + driverAmount`; the passenger pays the published seat price and
-nothing on top. The rate is 3% by default and the operations team can change it, so **never
-hard-code a percentage** — render the figures you are given. ⚠️ **Screens 12 and 24 need new copy:**
-screen 12 must not show the fee as a line added to the seat price, and screen 24's *"You keep the
-full contribution; Rafeeq's fee is charged to passengers separately"* is wrong — the driver keeps
-the price minus the fee.
-
-### 5.10 Trip session
-
-| Field | Meaning |
-|---|---|
-| `id` | **Use this as the WebSocket channel id** (section 6), not the trip id. |
-| `tripId` | |
-| `status` | `PREPARING` · `EN_ROUTE` · `AT_PICKUP` · `IN_PROGRESS` · `COMPLETED` · `CANCELLED` · `EMERGENCY`. |
-| `startedAt` | When the driver tapped "start" — **not** when the car moved. |
-| `departedAt` | When the car actually set off (first entry into `IN_PROGRESS`). `null` before that. This is what the on-time rate is measured from. |
-| `completedAt` | |
-| `durationSeconds` | Measured from `departedAt`, not from `startedAt`. |
-| `distanceTravelledMeters` | `null` until there are GPS points to measure it from. **Not** the route's planned distance — that would present a figure we did not observe as one we did. |
-| `isUnderway` | Stated rather than left for you to infer which statuses count. |
-| `lastLocationAt` | When the last GPS reading arrived. **A client showing a live map needs this** — without it you draw a car that stopped reporting twenty minutes ago as though it were still there. |
-| `deviationDetectedAt` | **Screen 39.** When the run FIRST went off its published route. `null` on the overwhelming majority of runs — this is an exception report, not a measurement, so do not render "0 m off route" on a normal morning. Checked only while the run is `IN_PROGRESS`: on the way to collect people, being off the direct line is the job. |
-| `deviationDistanceMeters` | The FURTHEST it got, not where it is now. Together with the moment above, that is when it started and how far it went. `null` when there was no deviation. |
-| `trip` | The scheduled trip, when loaded. |
-
-🔒 **No GPS trail.** A passenger needs the car's position now, not the history of where it has
-been.
-
----
 
 ## 6. Realtime
 
@@ -2448,7 +2542,7 @@ Nothing below exists. Build the screen shells if you like, but there is no endpo
 
 | Area | Screens | Phase | What is missing |
 |---|---|---|---|
-| **Payments and wallet** | 34, group `payments` tab | **8** | **In progress.** Cash is now recorded (`paymentStatus` → `PAID`, see 5.9) and the driver's fee debt is tracked, with a publishing cap. Still to come: the driver's balance screen, the group's weekly statement, then — once a payment provider is chosen — payment methods, online capture, payouts and refunds. Cancellation fees wait on the cancellation policy. |
+| **Payments and wallet** | 34, group `payments` tab | **8** | **In progress.** Cash is now recorded (`paymentStatus` → `PAID`, see 4.7) and the driver's fee debt is tracked, with a publishing cap. Still to come: the driver's balance screen, the group's weekly statement, then — once a payment provider is chosen — payment methods, online capture, payouts and refunds. Cancellation fees wait on the cancellation policy. |
 | **Driver cancelling one day** | 43, 45, 46 | **9** | A driver cancelling a single day and the backup search that follows. **Blocked on an open decision** — refunds and reliability, section 8 #3. Route deviation itself is now detected and reported (see `deviationDetectedAt`); the ops ALERT it should trigger needs Phase 12/13. |
 | **Public trust tier** | badge on 12 and 21 | **10** | 🔴 **Ratings and reviews are both done** — section 4.13. Rating, the double-blind reveal, the anonymous review list on a commute, "what was said about me", reporting an abusive review and the `minRating` search filter are all live, and the `rating` in every public summary carries a number once a rating is revealed. The only piece left is the **public trust tier** (`new` / `trusted` / `highly_trusted`), which needs a product decision on its thresholds. The score behind it is deliberately internal and will never be returned. |
 | **Auto-share trips** | 26 | **12** | 🔴 **`autoShareTrips` on an emergency contact is stored and nothing acts on it yet.** See 4.12 — read that before you build the toggle. |
@@ -2463,7 +2557,7 @@ Do not design around either side of these. Ask before you build the screen.
 
 | # | Question | Affects |
 |---|---|---|
-| 1 | ~~**Which way does the platform fee go, and what is the rate?**~~ ✅ **Decided 2026-10-06:** deducted from the driver's price, 3% by default, changeable by operations. Screens 12 and 24 need new copy (see 5.9). | 12, 24, all money |
+| 1 | ~~**Which way does the platform fee go, and what is the rate?**~~ ✅ **Decided 2026-10-06:** deducted from the driver's price, 3% by default, changeable by operations. Screens 12 and 24 need new copy (see 4.7). | 12, 24, all money |
 | 2 | **`firstName` + `lastName`, or one `fullName`?** Screen 7 splits them; the endpoint takes one. | 7 |
 | 3 | ~~**A single day cancelled by the driver**~~ ✅ **Decided and built 2026-10-06:** `POST /trips/{trip}/cancel` (4.9). | 23, 46 |
 | 4 | **"5 min late" as a third declared attendance state.** Screen 36 has the button; the model has `coming`/`away` only. It is also exactly what a wait timer exists to act on. | 36, 41 |
@@ -2483,6 +2577,7 @@ exist, and every live endpoint must be named here.
 
 | Date | Change |
 |---|---|
+| 2026-10-16 | 📖 **Reorganised feature by feature. No contract change — nothing you call behaves differently.** 4.1 to 4.16 are now one chapter per feature, and each stands on its own: the response shapes that used to sit together in section 5 have moved into the chapter that returns them, so you no longer read two places a few hundred lines apart to understand one call. Every chapter starts with a card naming its screens and what else it needs. `person` stays in **5** because it belongs to no single feature. **Section numbers did not change** — any link or note you have to 4.9, 6, 7 or 8 still resolves; only references to the old 5.2–5.10 were repointed to the chapters that now own those shapes. |
 | 2026-10-13 | ✅ **Additive — choosing a role is now its own step, and `capabilities` tells you what an account may do.** Three new endpoints: `POST /account/initial-role`, `GET /account/onboarding-state`, `PATCH /account/preferences`. `registeredRole` on `PUT /account/profile/basic` is **now optional** — keep sending it and you still go straight to `HOME`, exactly as today; omit it and you get the new `nextStep: ROLE_SELECTION`. **Nothing you have built breaks.** New on `user`: `capabilities[]` and `initialRoleSelected` — drive the UI from `capabilities`, because `registeredRole` is now history and can legitimately disagree with it. 🔴 `ROLE_SELECTION` is returned by the profile endpoint **only**; a cold start with no role answers `BASIC_PROFILE` by design (Feature 01 §5), so re-submitting the profile is the way forward and not a loop. |
 | 2026-10-13 | 🔴 **BREAKING — the local PIN is gone, and `nextStep` changed with it.** Feature 01 v3 §10 removes the PIN, biometric login and account switching from the MVP, so screens 2, 3 and 4 go too. **`nextStep` now has four values: `PHONE_OTP` · `RESTRICTED_ACCOUNT` · `BASIC_PROFILE` · `HOME`.** The old `CREATE_PIN` and `LOCAL_SECURITY_SETUP_OR_HOME` existed only to serve the PIN; `COMPLETE_PROFILE` is renamed `BASIC_PROFILE` and `ACCOUNT_SUSPENDED` is renamed `RESTRICTED_ACCOUNT` (the **error code** `ACCOUNT_SUSPENDED` is unchanged). Also gone: `pinLength` on auth responses, `hasLocalPin` on the device payload and request, and `purpose: "pin_reset"` (now `422`). `hasLocalPin` sent by a client is **ignored, not refused**, so you can remove it from the app on your own schedule. `biometricEnabled` survives as a display-only preference. |
 | 2026-10-07 | **Fixed: `GET /search/commutes` 500 "Latitude out of range"** (your bug report). The seeded commutes carried a malformed route; they are repaired, and a commute whose stored route cannot be read is now **skipped** instead of failing the whole search. **A `500` no longer carries internal exception text** in `error.message` — it is the generic localised sentence. **Home `topMatches` now fills:** saving a request (`POST /commute-demands`) matches it against commutes already running, not only against ones published later (no `match_found` notice for those — the person has just seen them). Test accounts were re-seated on upcoming trips, so `nextJourney` is populated again. |
@@ -2490,10 +2585,10 @@ exist, and every live endpoint must be named here.
 | 2026-10-06 | **Correction:** the new English summary said 116 endpoints against a real 124 — the header was right and the summary was not. Fixed, and a test now checks every endpoint count in the prose rather than only the one in the header, which is how the two disagreed. |
 | 2026-10-06 | **This file is now entirely in English.** The Arabic summary became an English one with the same content; no section was dropped. Two stale claims fixed while translating: the summary still listed ratings as not served, and section 7 still said the profile review list and review reporting were to come — all three have been live since 2026-10-02. |
 | 2026-10-06 | **Added to 2.1: the local PIN, concretely** — client-side guidance, explicitly not a contract. Store the refresh token encrypted under a key DERIVED from the PIN rather than storing the PIN or a hash of it, so there is nothing on the device to run guesses against. Plus the states usually missed: `pinLength` comes from the server, a dead refresh token must not be reported as a wrong PIN, and a reinstall deliberately starts without a PIN. Nothing was removed. |
-| 2026-10-06 | **Correction:** `user.profileStatus` is `NOT_STARTED` · `BASIC_COMPLETE` — this file wrongly said `PHONE_ONLY`; the API never changed (5.5). `accountStatus` also lists `PENDING_DELETION`. The basic-profile request now lists every allowed value and the `YYYY-MM-DD` date format (4.2). |
-| 2026-10-06 | **Phase 8 starts — cash is now recorded.** A cash booking's `paymentStatus` turns `PAID` about two hours after the driver confirms the passenger travelled, and `DISPUTED` when the passenger contests the record (5.9). New refusal on `POST /commutes/{commute}/publish` and `/resume`: `DRIVER_DEBT_LIMIT_REACHED` (403) when a driver owes more than the limit in platform fees from cash trips; existing rides continue. No new endpoints. |
+| 2026-10-06 | **Correction:** `user.profileStatus` is `NOT_STARTED` · `BASIC_COMPLETE` — this file wrongly said `PHONE_ONLY`; the API never changed (4.2). `accountStatus` also lists `PENDING_DELETION`. The basic-profile request now lists every allowed value and the `YYYY-MM-DD` date format (4.2). |
+| 2026-10-06 | **Phase 8 starts — cash is now recorded.** A cash booking's `paymentStatus` turns `PAID` about two hours after the driver confirms the passenger travelled, and `DISPUTED` when the passenger contests the record (4.7). New refusal on `POST /commutes/{commute}/publish` and `/resume`: `DRIVER_DEBT_LIMIT_REACHED` (403) when a driver owes more than the limit in platform fees from cash trips; existing rides continue. No new endpoints. |
 | 2026-10-06 | **New: `POST /trips/{trip}/cancel` — "Cancel today" (screen 23, section 4.9).** A driver calls off one day before it starts; every passenger on it is told (new notification type `trip_day_cancelled`), bookings end as `CANCELLED_BY_DRIVER`, nothing is charged. |
-| 2026-10-06 | **Two product decisions.** (1) **The platform fee is deducted from the driver's price**, 3% by default and changeable by operations — screens 12 and 24 need new copy (5.9). (2) A driver may cancel a single day — `POST /trips/{trip}/cancel`. |
+| 2026-10-06 | **Two product decisions.** (1) **The platform fee is deducted from the driver's price**, 3% by default and changeable by operations — screens 12 and 24 need new copy (4.7). (2) A driver may cancel a single day — `POST /trips/{trip}/cancel`. |
 | 2026-10-06 | **Trip chat now refuses phone numbers and emails** (4.15): `POST /bookings/{booking}/messages` answers `422 CHAT_CONTACT_INFO_NOT_ALLOWED` and stores nothing. `containsContactInfo` stays in the shape and is always `false` for new messages. |
 | 2026-10-05 | **Five more notification types** (4.14): `booking_cancelled`, `match_found` (your saved request matched), `rating_due` / `rating_due_riders` when a run completes, and one `rating_reminder` on the last day of the rating window. No endpoint changes. `autoShareTrips` is still inactive — it needs an SMS/WhatsApp provider, not the in-app inbox (4.12). |
 | 2026-10-05 | **New: section 4.15 — trip chat.** Three endpoints: read a booking's conversation, send, report a message. Open from 24h before departure to 2h after the run; a blocked pair gets the same `CHAT_NOT_OPEN` as a closed window. Numbers and emails are allowed but flagged (`containsContactInfo`) — warn before acting on them. |
