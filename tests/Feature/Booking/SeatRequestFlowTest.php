@@ -361,16 +361,42 @@ it('refuses to cancel a booking twice', function () {
         ->assertJsonPath('error.code', 'BOOKING_NOT_CANCELLABLE');
 });
 
-it('requires a verified identity to ask for a seat, unlike searching', function () {
+/**
+ * 🔴 This test used to assert the OPPOSITE — that asking for a seat needed a verified identity —
+ * and it is inverted rather than deleted, because an accidentally reinstated gate would lock every
+ * passenger out of the product and no other test would notice.
+ *
+ * Feature 02 v3: "No passenger verification. Passenger can book without ID verification",
+ * confirmed as a product decision. What replaced the gate is the driver: she approves every seat
+ * request by hand and sees the passenger's trust level before she does.
+ */
+it('lets an unverified passenger ask for a seat, with nothing but a verified phone', function () {
     fakeOtpSender();
     $unverified = signIn(phone: '01223338888', devicePublicId: 'pax-unverified')['session']['accessToken'];
     completeBasicProfile($unverified);
 
-    // Searching is allowed — it is how someone decides whether Rafeeq is worth
-    // verifying for. Getting into a stranger's car is not.
     search($unverified)->assertOk();
 
     requestSeat($unverified, $this->commuteId, ['scheduledTripId' => $this->tripId])
+        ->assertStatus(201);
+});
+
+/**
+ * 🔒 And the asymmetry that makes the above safe: the person CARRYING strangers is still checked.
+ *
+ * Asserted here, next to the relaxation, so that anybody loosening the passenger side again has to
+ * walk past the reason it was safe to do so.
+ */
+it('still refuses an unverified identity the driver surface', function () {
+    fakeOtpSender();
+    $unverified = signIn(phone: '01223337777', devicePublicId: 'drv-unverified')['session']['accessToken'];
+    completeBasicProfile($unverified);
+
+    test()->withToken($unverified)->getJson('/api/v1/driver/application')
+        ->assertStatus(403)
+        ->assertJsonPath('error.code', 'VERIFICATION_REQUIRED');
+
+    test()->withToken($unverified)->postJson('/api/v1/commutes', [])
         ->assertStatus(403)
         ->assertJsonPath('error.code', 'VERIFICATION_REQUIRED');
 });

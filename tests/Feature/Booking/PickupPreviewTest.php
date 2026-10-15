@@ -134,12 +134,19 @@ it('reports the run total as zero on a commute with no detours yet', function ()
     expect((float) $preview['runTotalMinutes'])->toBeLessThan(2.0);
 });
 
-it('needs a verified identity, like requesting a seat does', function () {
+/**
+ * 🔴 Inverted, not deleted. This asserted that previewing a pickup needed a verified identity;
+ * passenger verification is gone (Feature 02 v3), and a gate that crept back would block the
+ * screen on which a passenger decides where to be collected.
+ *
+ * It matters here specifically because the preview is read BEFORE any request exists — it is how
+ * screen 13 shows the detour beside the pin while she is still composing. Gating it would mean she
+ * cannot even find out whether her corner is acceptable.
+ */
+it('previews a pickup for an unverified passenger, like asking for a seat does', function () {
     $unverified = signIn(phone: '01555556666', devicePublicId: 'pax-unverified')['session']['accessToken'];
 
     completeBasicProfile($unverified);
 
-    previewPickup($unverified, $this->commuteId, onTheWay())
-        ->assertStatus(403)
-        ->assertJsonPath('error.code', 'VERIFICATION_REQUIRED');
+    previewPickup($unverified, $this->commuteId, onTheWay())->assertOk();
 });

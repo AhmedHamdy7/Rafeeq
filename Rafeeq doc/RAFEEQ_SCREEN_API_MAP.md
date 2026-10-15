@@ -79,7 +79,7 @@
 
 | # | الشاشة | الـ endpoints | الحالة |
 |---|---|---|---|
-| 15 | **VERIFICATION CENTRE** | `GET /v1/account/verifications` | ✅ `level`/`of`/`percentage` · `actionNeededReason` بيوصل للشخص **بالحرف** (والـ Action بترفض سبب فاضي) · `expectedReviewMinutes` · `attemptsRemaining`. **تصحيح:** الصف ده كان بيقول إن الأرقام والسبب ناقصين — ماكانوش، كتبته قبل ما أقرا `VerificationCentre` كويس |
+| 15 | **VERIFICATION CENTRE** | `GET /v1/account/verifications` | 🔴 **مابقاش بيمنع الحجز** (F02 v3): توثيق الراكب اتشال، فالتوثيق بقى بيحكم **جزء السائق بس**. الشاشة لسه مهمة — هي اللي بتسوق بانر الهوم ومستوى الثقة اللي السائقة بتشوفه قبل ما توافق.  ✅ `level`/`of`/`percentage` · `actionNeededReason` بيوصل للشخص **بالحرف** (والـ Action بترفض سبب فاضي) · `expectedReviewMinutes` · `attemptsRemaining`. **تصحيح:** الصف ده كان بيقول إن الأرقام والسبب ناقصين — ماكانوش، كتبته قبل ما أقرا `VerificationCentre` كويس |
 | 30 | IDENTITY CAPTURE | `POST /v1/account/verifications/{type}/documents` · `/submit` · `POST /v1/account/consents` | ⚠️ الشاشة فيها **selfie / liveness** كخطوة صريحة — لازم أتأكد إن `selfie` نوع مستند مقبول. والموافقة الصريحة على **البيومترية** موجودة كـ consent ✓ |
 
 ---

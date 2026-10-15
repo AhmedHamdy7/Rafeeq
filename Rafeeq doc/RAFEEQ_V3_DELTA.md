@@ -302,7 +302,8 @@ Ordered so that nothing is built twice and the mobile team is never blocked on a
 | **1b** | ✅ `user_capabilities` · `user_preferences` · role endpoints · `ROLE_SELECTION` | Split from 1a because the PIN removal is a **breaking** change the mobile team needs now, and holding it behind three new tables would delay it for no reason. `ROLE_SELECTION` was added **last**, once the server could actually return it |
 | **1c** | ✅ Driver-only restriction — **found already built; the `scope` column was removed again** | See §1.8. Both halves of F01 §8 exist in two tables that each own their own half. What was actually missing was a test proving the four independent refusals add up to the promise |
 | **2** | ✅ Reorganise `RAFEEQ_MOBILE_API_GUIDE.md` feature-by-feature | Cheap, and the mobile team reads it while 3–6 are built. Done **without renumbering** — see §1.9 |
-| **3** | Feature 02: verification items · expiry · vehicle change · organisation evidence · avatar | Independent of the commute re-model |
+| **3a** | ✅ Remove the passenger verification gate | Decided in §1.5 (2.2) and the one F02 item that unblocks real users. 38 endpoints left the `verified` tier; the driver surface is untouched |
+| **3** | Feature 02 remainder: verification items · expiry · vehicle change · organisation evidence · avatar | Independent of the commute re-model |
 | **4** | The commute re-model: templates · weekday schedules · occurrences · promised arrival | The foundation 5 and 6 sit on. The riskiest migration in the list |
 | **5** | Seat offers · the waiting list fan-out · the acceptance transaction | Needs occurrences to exist |
 | **6** | Booking switch · change proposals | Needs 4 and 5 |

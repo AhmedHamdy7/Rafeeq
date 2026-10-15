@@ -140,13 +140,23 @@ of them will kill the session. Serialise refreshes behind a single lock.
 On `401` with `AUTH_DEVICE_REVOKED` the device was signed out remotely — clear local state and
 go to the phone screen. On plain `UNAUTHENTICATED`, refresh once and retry.
 
-**Three access tiers.** A 403 is not always a bug:
+**Four access tiers.** A 403 is not always a bug:
 
 | Tier | Means | Reachable with |
 |---|---|---|
 | public | no credential | OTP + refresh only |
-| signed-in | valid token, account may be suspended or profile half-finished | `auth/me`, logout, devices, consents, verification centre |
-| active | not suspended, profile complete | everything else |
+| signed-in | valid token, account may be suspended or profile half-finished | `auth/me`, logout, devices, consents, preferences, onboarding state, verification centre |
+| active, profile complete | not suspended, profile complete | **everything a passenger does** — search, seat requests, bookings, groups, the live trip, ratings, safety |
+| verified | the above **plus** an approved `government_id` | **the driver surface only** — the application, vehicles, and publishing or managing a commute |
+
+🔴 **A passenger needs no identity verification.** She books with a verified phone number and
+nothing more. The driver approves each seat request by hand and sees the passenger's trust level
+before she does, and a driver who wants a higher bar sets her own `minRating` and trust filters —
+her choice rather than a blanket platform rule.
+
+The asymmetry is deliberate: the person **carrying** strangers is checked, the person riding is
+vouched for by the driver who agreed to carry her. So `VERIFICATION_REQUIRED` now only ever comes
+back from the driver surface.
 
 `ACCOUNT_SUSPENDED` and `ACCOUNT_PROFILE_INCOMPLETE` are **403, deliberately not 401** — the
 session is fine, so do not throw it away and restart at the phone screen.
@@ -249,7 +259,7 @@ The order that keeps you unblocked. Each step only needs the ones above it.
 | 1 | 5, 6 — phone, OTP | Nothing works without a token. |
 | 2 | 7, 8 — basic profile, role | `profileStatus` gates the `active` tier. Until it is `BASIC_COMPLETE` most endpoints 403. |
 | 3 | ~~2, 3, 4~~ | 🔴 **Gone.** The local PIN, biometric login and account switching left the MVP — no PIN setup, no PIN entry, no "forgot PIN", no account picker. Session restore is silent. Skip straight to step 4. |
-| 4 | 15, 30 — verification centre, identity capture | `verified:government_id` gates seat requests and the whole driver flow. Build it before anything that books. |
+| 4 | 15, 30 — verification centre, identity capture | 🔴 **No longer blocks booking.** `verified:government_id` now gates **only the driver flow** — the application, vehicles, and publishing. A passenger books with a verified phone number and nothing else, so you can build steps 5–8 before this one. Still build it: it drives the home banner, the trust level a driver sees when deciding on your request, and her optional `minRating`/trust filters. |
 | 5 | 9 — home | One call. Gives you a real screen early and exercises the envelope, the person shape and the verification banner. |
 | 6 | 10, 11, 12 — discover, filters, match details | The search engine. Read 4.6 first; the score breakdown is designed to be shown. |
 | 7 | 13, 14 — seat request, done | First write path with a domain refusal you must render properly. |
@@ -1348,7 +1358,7 @@ deserves to see *why* one ranked above the other:
 >
 > **Screens** 13 · 14 · 19 · 28 · 46 · **Shapes** the seat request, the scheduled trip and the booking, at the end of this chapter
 
-#### `POST /commutes/{commute}/seat-requests` — verified
+#### `POST /commutes/{commute}/seat-requests` — active, profile complete
 
 **Request:** `commitment` (`trial`/`recurring`), `scheduledTripId` (**required for a trial**),
 `requestedDaysMask` (**required for recurring**), `seats` (1–4), `meetingPreference`
@@ -1360,20 +1370,20 @@ when they agreed. Expected refusals: `SEAT_UNAVAILABLE`, `BOOKING_DEADLINE_PASSE
 at 21:00 the night before), `BOOKING_ALREADY_REQUESTED` (one open request per commute),
 `BOOKING_OWN_COMMUTE`, `BOOKING_RECURRING_DAYS_NOT_OFFERED`.
 
-#### `GET /seat-requests` — verified, paginated
+#### `GET /seat-requests` — active, profile complete, paginated
 
 The caller's own requests. See 4.7 for the shape.
 
-#### `DELETE /seat-requests/{seatRequest}` — verified
+#### `DELETE /seat-requests/{seatRequest}` — active, profile complete
 
 Withdraws it, freeing the one-open-request slot.
 
-#### `GET /driver/seat-requests` — verified, paginated
+#### `GET /driver/seat-requests` — active, profile complete, paginated
 
 The driver's inbox, **oldest first** — the person who has waited longest is the one whose answer
 is most overdue, and a request expires after 48 hours. Each carries a `passenger` (5.1).
 
-#### `POST /driver/seat-requests/{seatRequest}/approve` — verified
+#### `POST /driver/seat-requests/{seatRequest}/approve` — active, profile complete
 
 One call handles both a trial and a recurring membership.
 
@@ -1385,31 +1395,31 @@ One call handles both a trial and a recurring membership.
 | `seatedDays` | How many days were successfully booked. |
 | `skippedDays` | Days that could not be booked because they were already full. **Show these** — a member who thinks they have five days and has four will find out on the wrong morning. |
 
-#### `POST /driver/seat-requests/{seatRequest}/reject` — verified
+#### `POST /driver/seat-requests/{seatRequest}/reject` — active, profile complete
 
 **Request:** `responseNote` (optional).
 
-#### `POST /driver/seat-requests/{seatRequest}/waitlist` — verified
+#### `POST /driver/seat-requests/{seatRequest}/waitlist` — active, profile complete
 
 Moves the request to the waitlist and sets `waitlistPosition`. When a seat frees up the promotion
 goes to **the driver's inbox as a decision**, not straight to a booking — the driver decides who
 rides in her car. (Your screen 20 says "waitlist fills empty seats automatically"; that text needs
 to change. Section 8.)
 
-#### `GET /my-bookings` — verified, paginated
+#### `GET /my-bookings` — active, profile complete, paginated
 
 The caller's seats, newest first. See 4.7.
 
-#### `GET /driver/bookings` — verified, paginated
+#### `GET /driver/bookings` — active, profile complete, paginated
 
 Every seat the caller has approved. The largest list in the API.
 
-#### `GET /bookings/{booking}` — verified
+#### `GET /bookings/{booking}` — active, profile complete
 
 Visible to its passenger or its driver; **404 for anybody else**, because a 403 would confirm the
 id exists.
 
-#### `PATCH /bookings/{booking}/cancel` — verified
+#### `PATCH /bookings/{booking}/cancel` — active, profile complete
 
 **Request:** `reason` (optional).
 
@@ -1420,7 +1430,7 @@ cancellation as the driver's, which would move the blame for a missed ride.
 **No fee is charged.** The cancellation policy is still an open question and a guessed fee would
 take money from a real person on an assumption. `cancellationFeePiastres` is always `0` today.
 
-#### `POST /bookings/{booking}/dispute` — verified
+#### `POST /bookings/{booking}/dispute` — active, profile complete
 
 **Request:** `reason` (10–255 characters, free text).
 
@@ -1497,7 +1507,7 @@ the price minus the fee.
 >
 > **Screens** 29 · **Shapes** —
 
-#### `POST /commutes/{commute}/pickup-preview` — verified
+#### `POST /commutes/{commute}/pickup-preview` — active, profile complete
 
 **Request:** `lat`, `lng`, `label`.
 
@@ -1511,11 +1521,11 @@ the person commits.
 | `maxDetourMinutes` | The driver's own limit. |
 | `withinLimit` | Whether a request would be accepted. Show the consequence before they ask. |
 
-#### `POST /seat-requests/{seatRequest}/pickup-request` — verified
+#### `POST /seat-requests/{seatRequest}/pickup-request` — active, profile complete
 
 For a **new joiner**, before their seat is approved.
 
-#### `POST /groups/{group}/pickup-request` — verified
+#### `POST /groups/{group}/pickup-request` — active, profile complete
 
 For an **existing member** — "could you collect me somewhere else from now on". Use this one once
 the seat is approved; the seat-request route refuses with `SEAT_REQUEST_NOT_PENDING`.
@@ -1526,7 +1536,7 @@ Refusals: `PICKUP_NOT_ON_COMMUTE` (too far off the route), `PICKUP_DETOUR_TOO_LO
 driver's limit for the whole run), `PICKUP_ALREADY_REQUESTED`. A commute with
 `allowsCustomPickup: false` refuses all of them.
 
-#### `GET /pickup-requests` · `GET /driver/pickup-requests` — verified, paginated
+#### `GET /pickup-requests` · `GET /driver/pickup-requests` — active, profile complete, paginated
 
 | Field | Meaning |
 |---|---|
@@ -1537,13 +1547,13 @@ driver's limit for the whole run), `PICKUP_ALREADY_REQUESTED`. A commute with
 | `effectiveFrom` | `next_trip` today. |
 | `alternativePlaceId` | Set when the driver countered with a different place. |
 
-#### `POST /driver/pickup-requests/{pickupRequest}/approve` · `/suggest-alternative` · `/reject` — verified
+#### `POST /driver/pickup-requests/{pickupRequest}/approve` · `/suggest-alternative` · `/reject` — active, profile complete
 
 The three buttons on screen 29. `suggest-alternative` takes `placeId` and **moves nothing until
 the passenger accepts**. Approving writes the agreed point onto the upcoming bookings, so the
 meeting point and the decision cannot disagree.
 
-#### `POST /pickup-requests/{pickupRequest}/accept-alternative` — verified
+#### `POST /pickup-requests/{pickupRequest}/accept-alternative` — active, profile complete
 
 The passenger accepting the driver's counter-offer.
 
@@ -1558,7 +1568,7 @@ The passenger accepting the driver's counter-offer.
 The driver drives the run; a passenger on it may watch. Both halves are in this section because
 they are two sides of the same state.
 
-#### `POST /trips/{trip}/start` — verified, driver only
+#### `POST /trips/{trip}/start` — active, profile complete, driver only
 
 "Start Today's Commute". Re-checks **everything**: account approved, licence valid, vehicle
 approved and active, the day not cancelled. Each was true when the commute was published and may
@@ -1570,7 +1580,7 @@ departure has passed is exactly the one a late driver needs to start.
 
 Returns the trip session (4.9) and opens a `pending` attendance row per confirmed seat.
 
-#### `POST /trips/{trip}/status` — verified, driver only
+#### `POST /trips/{trip}/status` — active, profile complete, driver only
 
 **Request:** `status` — one of `EN_ROUTE`, `AT_PICKUP`, `IN_PROGRESS`.
 
@@ -1584,13 +1594,13 @@ either: once people are in the car the run finishes or becomes an emergency.
 **render those**, because a driver who taps the wrong button needs to be told what to do, not that
 the transition was invalid.
 
-#### `POST /trips/{trip}/complete` — verified, driver only
+#### `POST /trips/{trip}/complete` — active, profile complete, driver only
 
 Closes the session, completes the bookings, updates the counters, and clears the live position.
 **No money moves** — there is a two-hour delay before collection so a driver who tapped the wrong
 name can notice (and Phase 8 is not built).
 
-#### `POST /trips/{trip}/cancel` — verified, driver only — "Cancel today" (screen 23)
+#### `POST /trips/{trip}/cancel` — active, profile complete, driver only — "Cancel today" (screen 23)
 
 `{ "reason"?: "..." }` (optional, up to 255). Calls off **one day**; the commute and every other day
 stand. `200` with the day (`ScheduledTrip`, `status: "CANCELLED"`, `seatsTaken: 0`).
@@ -1607,17 +1617,17 @@ stand. `200` with the day (`ScheduledTrip`, `status: "CANCELLED"`, `seatsTaken: 
 Ask for confirmation first, and say how many people will be told (`GET /driver/home` already
 has the count for today).
 
-#### `GET /trips/{trip}` — verified, driver or anybody on the run
+#### `GET /trips/{trip}` — active, profile complete, driver or anybody on the run
 
 The trip session (4.9). `TRIP_NOT_STARTED` (409) if the run has not begun — a real answer rather
 than an empty session.
 
-#### `GET /trips/{trip}/attendance` — verified, **driver only**
+#### `GET /trips/{trip}/attendance` — active, profile complete, **driver only**
 
 Who is aboard. Not offered to passengers: who was marked absent this morning is not something to
 hand a fellow passenger.
 
-#### `POST /trips/{trip}/check-in` — verified, driver only
+#### `POST /trips/{trip}/check-in` — active, profile complete, driver only
 
 **Request:** `bookingId`, `lat`, `lng` (both optional, both-or-neither).
 
@@ -1629,7 +1639,7 @@ never asked to judge somebody's punctuality.
 a basement car park, and the driver would learn to check people in from the street to make it
 work. Sending nothing is completely normal.
 
-#### `POST /trips/{trip}/no-show` — verified, driver only
+#### `POST /trips/{trip}/no-show` — active, profile complete, driver only
 
 **Request:** `bookingId`.
 
@@ -1660,17 +1670,17 @@ she did not do.
 passenger charged on Monday must not become absent on Friday, or the dispute window would protect
 nothing. A mistake is corrected by the passenger disputing and a reviewer overturning.
 
-#### `POST /trips/{trip}/wait-timers` — verified, driver only
+#### `POST /trips/{trip}/wait-timers` — active, profile complete, driver only
 
 **Request:** `bookingId`. There is no `graceSeconds` field: how long the platform asks a driver to
 wait is policy, not something the app decides.
 
-#### `POST /trips/{trip}/wait-timers/{timer}/extend` — verified, driver only
+#### `POST /trips/{trip}/wait-timers/{timer}/extend` — active, profile complete, driver only
 
 The "+2 min" button. **Allowed even after the grace has expired** — a driver who sees somebody
 running for the car at 5:10 should be able to give them two more minutes.
 
-#### `GET /trips/{trip}/wait-timers` — verified, driver only
+#### `GET /trips/{trip}/wait-timers` — active, profile complete, driver only
 
 Finished timers included: a run where the driver waited nine minutes for one person and left
 another after ninety seconds is a run somebody may ask about.
@@ -1692,7 +1702,7 @@ no-show & depart" is the no-show; both close it in the same call.
 leaving after ninety seconds of a five-minute grace is a different morning from leaving after the
 grace ran out. **The outcome is decided by the clock, not by anything the app sends.**
 
-#### `POST /trips/{trip}/location` — verified, driver only
+#### `POST /trips/{trip}/location` — active, profile complete, driver only
 
 **Request:** `points[]` (1–60), each `{lat, lng, recordedAt, accuracyMeters, speedKmh}`.
 
@@ -1708,7 +1718,7 @@ Points are dropped, not refused, when they are from the future (beyond a 2-minut
 before the run could have begun, or the phone's accuracy figure is hopeless (over 500m). A batch
 of six with one bad point delivers five.
 
-#### `GET /trips/{trip}/location` — verified, driver or a **live** booking
+#### `GET /trips/{trip}/location` — active, profile complete, driver or a **live** booking
 
 | Field | Meaning |
 |---|---|
@@ -1755,7 +1765,7 @@ been.
 >
 > **Screens** 20 · **Shapes** `person` in 5
 
-#### `GET /groups` — verified, paginated · `GET /groups/{group}` — verified
+#### `GET /groups` — active, profile complete, paginated · `GET /groups/{group}` — active, profile complete
 
 🔒 Reachable only by a member of that group, 404 otherwise. A member list is a set of real first
 names, trust levels and the days each person reliably travels — which is also when they are not at
@@ -1774,7 +1784,7 @@ home. There is no access level at which somebody outside the group can read it.
 | `commute` | The commute it belongs to. |
 | `members[]` | See below. |
 
-#### `GET /groups/{group}/members` — verified, paginated
+#### `GET /groups/{group}/members` — active, profile complete, paginated
 
 | Field | Meaning |
 |---|---|
@@ -1785,13 +1795,13 @@ home. There is no access level at which somebody outside the group can read it.
 | `leavesOn` | The date their notice completes, when `notice_given`. |
 | `person` | See 5.1. |
 
-#### `POST /groups/{group}/leave` — verified
+#### `POST /groups/{group}/leave` — active, profile complete
 
 Gives notice. The member stays until the notice period completes — a driver who planned her month
 around four passengers should not discover on Sunday night that one is gone. A **driver cannot
 leave her own group** (`GROUP_DRIVER_CANNOT_LEAVE`, 403); she pauses or archives the commute.
 
-#### `GET` / `POST /groups/{group}/attendance` — verified, paginated
+#### `GET` / `POST /groups/{group}/attendance` — active, profile complete, paginated
 
 **This is screen 36.** The **declared** intention — "I'm coming tomorrow" — which is a different
 table from the boarding confirmation in 4.9, on purpose: only the check-in decides money.
@@ -1808,7 +1818,7 @@ table from the boarding confirmation in 4.9, on purpose: only the check-in decid
 `GROUP_ATTENDANCE_NOT_DECLARABLE` (409) once it is too close to departure — after that the driver
 is already planning around the answer she was given.
 
-#### `GET` / `POST` / `DELETE /groups/{group}/absences/{absence}` — verified, paginated
+#### `GET` / `POST` / `DELETE /groups/{group}/absences/{absence}` — active, profile complete, paginated
 
 Planned absence — "I'm away next week".
 
@@ -2577,6 +2587,7 @@ exist, and every live endpoint must be named here.
 
 | Date | Change |
 |---|---|
+| 2026-10-16 | 🟢 **Passenger identity verification is GONE. A passenger now books with a verified phone number and nothing else.** Feature 02 v3: "No passenger verification." 38 endpoints moved from the `verified` tier to `active, profile complete` — seat requests, bookings, pickup points, groups, the live trip, wait timers and the money views. **This only ever removes a 403, so nothing you have built breaks**; if you were sending people to the verification centre before letting them book, you can stop. `VERIFICATION_REQUIRED` is now returned **only** by the driver surface. 🔒 The driver side is unchanged and still needs `government_id` plus admin approval plus a verified vehicle — the person carrying strangers is checked, the person riding is vouched for by the driver who agreed to carry her. Still build screens 15 and 30: verification drives the home banner, the trust level a driver sees when deciding on a request, and her optional trust filters. |
 | 2026-10-16 | 📖 **Reorganised feature by feature. No contract change — nothing you call behaves differently.** 4.1 to 4.16 are now one chapter per feature, and each stands on its own: the response shapes that used to sit together in section 5 have moved into the chapter that returns them, so you no longer read two places a few hundred lines apart to understand one call. Every chapter starts with a card naming its screens and what else it needs. `person` stays in **5** because it belongs to no single feature. **Section numbers did not change** — any link or note you have to 4.9, 6, 7 or 8 still resolves; only references to the old 5.2–5.10 were repointed to the chapters that now own those shapes. |
 | 2026-10-13 | ✅ **Additive — choosing a role is now its own step, and `capabilities` tells you what an account may do.** Three new endpoints: `POST /account/initial-role`, `GET /account/onboarding-state`, `PATCH /account/preferences`. `registeredRole` on `PUT /account/profile/basic` is **now optional** — keep sending it and you still go straight to `HOME`, exactly as today; omit it and you get the new `nextStep: ROLE_SELECTION`. **Nothing you have built breaks.** New on `user`: `capabilities[]` and `initialRoleSelected` — drive the UI from `capabilities`, because `registeredRole` is now history and can legitimately disagree with it. 🔴 `ROLE_SELECTION` is returned by the profile endpoint **only**; a cold start with no role answers `BASIC_PROFILE` by design (Feature 01 §5), so re-submitting the profile is the way forward and not a loop. |
 | 2026-10-13 | 🔴 **BREAKING — the local PIN is gone, and `nextStep` changed with it.** Feature 01 v3 §10 removes the PIN, biometric login and account switching from the MVP, so screens 2, 3 and 4 go too. **`nextStep` now has four values: `PHONE_OTP` · `RESTRICTED_ACCOUNT` · `BASIC_PROFILE` · `HOME`.** The old `CREATE_PIN` and `LOCAL_SECURITY_SETUP_OR_HOME` existed only to serve the PIN; `COMPLETE_PROFILE` is renamed `BASIC_PROFILE` and `ACCOUNT_SUSPENDED` is renamed `RESTRICTED_ACCOUNT` (the **error code** `ACCOUNT_SUSPENDED` is unchanged). Also gone: `pinLength` on auth responses, `hasLocalPin` on the device payload and request, and `purpose: "pin_reset"` (now `422`). `hasLocalPin` sent by a client is **ignored, not refused**, so you can remove it from the app on your own schedule. `biometricEnabled` survives as a display-only preference. |

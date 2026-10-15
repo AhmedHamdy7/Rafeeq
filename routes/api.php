@@ -365,160 +365,181 @@ Route::prefix('v1')->group(function (): void {
         /*
          * Seat requests and bookings (Chapter 6).
          *
-         * A verified identity IS required here, unlike searching: looking at
-         * commutes is how someone decides whether Rafeeq is worth verifying for,
-         * but getting into a stranger's car is not. The driver's own
-         * `min_trust_level` can require more on top.
+         * 🔴 **Passenger verification was REMOVED here** (Feature 02 v3: "No passenger
+         * verification. Passenger can book without ID verification", confirmed as a product
+         * decision). These routes used to sit behind `verified:government_id`.
+         *
+         * The comment that stood here argued the opposite — "looking at commutes is how someone
+         * decides whether Rafeeq is worth verifying for, but getting into a stranger's car is
+         * not" — and it is worth saying plainly what replaced that reasoning rather than deleting
+         * it quietly, because it was not a bad argument. What changed is WHO is relied on to make
+         * the judgement:
+         *
+         *   - the DRIVER approves every single seat request by hand, and she sees the passenger's
+         *     trust level and verified levels before she does. That approval is now the check.
+         *   - a driver who wants more can still set her own `min_trust_level`, which is a HARD
+         *     filter, so "verified passengers only" remains available to anybody who wants it —
+         *     as her choice rather than the platform's blanket rule.
+         *
+         * 🔒 What did NOT get cheaper: the DRIVER side. Publishing and starting a commute still
+         * require `verified:government_id` plus an admin-approved driver profile and a verified
+         * vehicle — see the `driver` and `commutes` groups above. The asymmetry is deliberate: the
+         * person carrying strangers is checked, the person riding is vouched for by the driver who
+         * agreed to carry her.
+         *
+         * The driver-side routes in this block (`driver/seat-requests`, `driver/bookings`,
+         * `driver/balance`, `driver/pickup-requests`) lost the middleware too, and keep working
+         * exactly as before: each one is scoped to a commute the caller owns, and owning a
+         * published commute already requires an approved driver profile, which already requires
+         * this verification. The gate was redundant there and only ever bit passengers.
          */
-        Route::middleware('verified:government_id')->group(function (): void {
-            Route::post('commutes/{commute}/seat-requests', [SeatRequestController::class, 'store']);
-            Route::get('seat-requests', [SeatRequestController::class, 'index']);
-            Route::delete('seat-requests/{seatRequest}', [SeatRequestController::class, 'withdraw']);
+        Route::post('commutes/{commute}/seat-requests', [SeatRequestController::class, 'store']);
+        Route::get('seat-requests', [SeatRequestController::class, 'index']);
+        Route::delete('seat-requests/{seatRequest}', [SeatRequestController::class, 'withdraw']);
 
-            Route::get('my-bookings', [BookingController::class, 'mine']);
-            Route::get('bookings/{booking}', [BookingController::class, 'show']);
-            Route::patch('bookings/{booking}/cancel', [BookingController::class, 'cancel']);
+        Route::get('my-bookings', [BookingController::class, 'mine']);
+        Route::get('bookings/{booking}', [BookingController::class, 'show']);
+        Route::patch('bookings/{booking}/cancel', [BookingController::class, 'cancel']);
 
-            // The driver's side of the same conversation.
-            Route::get('driver/seat-requests', [SeatRequestController::class, 'inbox']);
-            Route::post('driver/seat-requests/{seatRequest}/approve', [SeatRequestController::class, 'approve']);
-            Route::post('driver/seat-requests/{seatRequest}/reject', [SeatRequestController::class, 'reject']);
-            Route::post('driver/seat-requests/{seatRequest}/waitlist', [SeatRequestController::class, 'waitlist']);
-            Route::get('driver/bookings', [BookingController::class, 'forDriver']);
+        // The driver's side of the same conversation.
+        Route::get('driver/seat-requests', [SeatRequestController::class, 'inbox']);
+        Route::post('driver/seat-requests/{seatRequest}/approve', [SeatRequestController::class, 'approve']);
+        Route::post('driver/seat-requests/{seatRequest}/reject', [SeatRequestController::class, 'reject']);
+        Route::post('driver/seat-requests/{seatRequest}/waitlist', [SeatRequestController::class, 'waitlist']);
+        Route::get('driver/bookings', [BookingController::class, 'forDriver']);
 
-            /*
-             * The money, as the two people in the car see it (Phase 8, Bible §8).
-             *
-             * 🔴 Nothing here MOVES money. No payment method, no capture, no payout, no refund —
-             * those need a provider that has not been chosen, and a half-built capture path is
-             * worse than none. These two read what the cash path has already recorded.
-             *
-             * 🔒 `driver/balance` is hers alone: there is no endpoint at any access level that
-             * reads another driver's income or debt. The group statement shows a passenger only her
-             * own rows — what her fellow passengers pay is not her business, and they may be on
-             * different prices after a change.
-             */
-            Route::get('driver/balance', [MoneyController::class, 'driverBalance']);
-            Route::get('groups/{group}/statement', [MoneyController::class, 'groupStatement']);
+        /*
+         * The money, as the two people in the car see it (Phase 8, Bible §8).
+         *
+         * 🔴 Nothing here MOVES money. No payment method, no capture, no payout, no refund —
+         * those need a provider that has not been chosen, and a half-built capture path is
+         * worse than none. These two read what the cash path has already recorded.
+         *
+         * 🔒 `driver/balance` is hers alone: there is no endpoint at any access level that
+         * reads another driver's income or debt. The group statement shows a passenger only her
+         * own rows — what her fellow passengers pay is not her business, and they may be on
+         * different prices after a change.
+         */
+        Route::get('driver/balance', [MoneyController::class, 'driverBalance']);
+        Route::get('groups/{group}/statement', [MoneyController::class, 'groupStatement']);
 
-            /*
-             * Custom meeting points. Two ways in, because the schema has two: a
-             * passenger still joining proposes against their seat request, and one
-             * already riding proposes against their membership (ERD §23.1 added
-             * `group_member_id` for exactly that screen).
-             *
-             * 🔴 The detour is measured by us from the driver's published route, never
-             * accepted from the request, and checked against the driver's own
-             * `max_detour_minutes` before the proposal is even recorded.
-             */
-            /*
-             * What a meeting point would cost, before anything is created. Screen 13 shows
-             * the detour beside the pin while the passenger is still composing the
-             * request — the figure is what tells them whether to propose that point at
-             * all.
-             */
-            Route::post('commutes/{commute}/pickup-preview', [PickupPreviewController::class, 'show']);
+        /*
+         * Custom meeting points. Two ways in, because the schema has two: a
+         * passenger still joining proposes against their seat request, and one
+         * already riding proposes against their membership (ERD §23.1 added
+         * `group_member_id` for exactly that screen).
+         *
+         * 🔴 The detour is measured by us from the driver's published route, never
+         * accepted from the request, and checked against the driver's own
+         * `max_detour_minutes` before the proposal is even recorded.
+         */
+        /*
+         * What a meeting point would cost, before anything is created. Screen 13 shows
+         * the detour beside the pin while the passenger is still composing the
+         * request — the figure is what tells them whether to propose that point at
+         * all.
+         */
+        Route::post('commutes/{commute}/pickup-preview', [PickupPreviewController::class, 'show']);
 
-            Route::post('seat-requests/{seatRequest}/pickup-request', [PickupPointRequestController::class, 'storeForSeatRequest']);
-            Route::post('groups/{group}/pickup-request', [PickupPointRequestController::class, 'storeForMember']);
-            Route::get('pickup-requests', [PickupPointRequestController::class, 'mine']);
-            Route::post('pickup-requests/{pickupRequest}/accept-alternative', [PickupPointRequestController::class, 'acceptAlternative']);
+        Route::post('seat-requests/{seatRequest}/pickup-request', [PickupPointRequestController::class, 'storeForSeatRequest']);
+        Route::post('groups/{group}/pickup-request', [PickupPointRequestController::class, 'storeForMember']);
+        Route::get('pickup-requests', [PickupPointRequestController::class, 'mine']);
+        Route::post('pickup-requests/{pickupRequest}/accept-alternative', [PickupPointRequestController::class, 'acceptAlternative']);
 
-            Route::get('driver/pickup-requests', [PickupPointRequestController::class, 'inbox']);
-            Route::post('driver/pickup-requests/{pickupRequest}/approve', [PickupPointRequestController::class, 'approve']);
-            Route::post('driver/pickup-requests/{pickupRequest}/suggest-alternative', [PickupPointRequestController::class, 'suggestAlternative']);
-            Route::post('driver/pickup-requests/{pickupRequest}/reject', [PickupPointRequestController::class, 'reject']);
+        Route::get('driver/pickup-requests', [PickupPointRequestController::class, 'inbox']);
+        Route::post('driver/pickup-requests/{pickupRequest}/approve', [PickupPointRequestController::class, 'approve']);
+        Route::post('driver/pickup-requests/{pickupRequest}/suggest-alternative', [PickupPointRequestController::class, 'suggestAlternative']);
+        Route::post('driver/pickup-requests/{pickupRequest}/reject', [PickupPointRequestController::class, 'reject']);
 
-            /*
-             * The group itself (Master Plan §889).
-             *
-             * 🔒 Every one of these is reachable only by a member of the group in
-             * question, and a miss is a 404 rather than a 403. A member list is a set
-             * of real first names, trust levels and the days each person reliably
-             * travels — which is also when they are not at home. There is no access
-             * level at which somebody outside the group can read it.
-             */
-            Route::get('groups', [GroupController::class, 'index']);
-            Route::get('groups/{group}', [GroupController::class, 'show']);
-            Route::get('groups/{group}/members', [GroupController::class, 'members']);
-            Route::post('groups/{group}/leave', [GroupController::class, 'leave']);
+        /*
+         * The group itself (Master Plan §889).
+         *
+         * 🔒 Every one of these is reachable only by a member of the group in
+         * question, and a miss is a 404 rather than a 403. A member list is a set
+         * of real first names, trust levels and the days each person reliably
+         * travels — which is also when they are not at home. There is no access
+         * level at which somebody outside the group can read it.
+         */
+        Route::get('groups', [GroupController::class, 'index']);
+        Route::get('groups/{group}', [GroupController::class, 'show']);
+        Route::get('groups/{group}/members', [GroupController::class, 'members']);
+        Route::post('groups/{group}/leave', [GroupController::class, 'leave']);
 
-            Route::get('groups/{group}/attendance', [GroupAttendanceController::class, 'index']);
-            Route::post('groups/{group}/attendance', [GroupAttendanceController::class, 'store']);
+        Route::get('groups/{group}/attendance', [GroupAttendanceController::class, 'index']);
+        Route::post('groups/{group}/attendance', [GroupAttendanceController::class, 'store']);
 
-            Route::get('groups/{group}/absences', [GroupAbsenceController::class, 'index']);
-            Route::post('groups/{group}/absences', [GroupAbsenceController::class, 'store']);
-            Route::delete('groups/{group}/absences/{absence}', [GroupAbsenceController::class, 'destroy']);
+        Route::get('groups/{group}/absences', [GroupAbsenceController::class, 'index']);
+        Route::post('groups/{group}/absences', [GroupAbsenceController::class, 'store']);
+        Route::delete('groups/{group}/absences/{absence}', [GroupAbsenceController::class, 'destroy']);
 
-            /*
-             * The run itself, while it is happening (Chapter 8).
-             *
-             * 🔒 Reading and acting are scoped differently, and that split is the
-             * chapter's security design: the DRIVER drives the run, so starting,
-             * advancing and completing are hers alone — they are statements about what
-             * the car is doing. A PASSENGER on the run may read it, because the point of
-             * a live trip is that the person waiting can see where it got to. Everybody
-             * else gets a 404, a cancelled booking included.
-             */
-            Route::get('trips/{trip}', [TripController::class, 'show']);
-            Route::post('trips/{trip}/start', [TripController::class, 'start']);
-            Route::post('trips/{trip}/status', [TripController::class, 'advance']);
-            Route::post('trips/{trip}/complete', [TripController::class, 'complete']);
-            // "Cancel today" — one day off, before it starts; the commute stands (screen 23).
-            Route::post('trips/{trip}/cancel', [TripController::class, 'cancel']);
+        /*
+         * The run itself, while it is happening (Chapter 8).
+         *
+         * 🔒 Reading and acting are scoped differently, and that split is the
+         * chapter's security design: the DRIVER drives the run, so starting,
+         * advancing and completing are hers alone — they are statements about what
+         * the car is doing. A PASSENGER on the run may read it, because the point of
+         * a live trip is that the person waiting can see where it got to. Everybody
+         * else gets a 404, a cancelled booking included.
+         */
+        Route::get('trips/{trip}', [TripController::class, 'show']);
+        Route::post('trips/{trip}/start', [TripController::class, 'start']);
+        Route::post('trips/{trip}/status', [TripController::class, 'advance']);
+        Route::post('trips/{trip}/complete', [TripController::class, 'complete']);
+        // "Cancel today" — one day off, before it starts; the commute stands (screen 23).
+        Route::post('trips/{trip}/cancel', [TripController::class, 'cancel']);
 
-            /*
-             * Who actually travelled (decision D18).
-             *
-             * 🔒 The two halves are deliberately asymmetric and neither side can do the
-             * other's. The DRIVER records, because she is the only one who knows who got
-             * in. The PASSENGER contests, and that is not a courtesy — it is what makes
-             * one party deciding the other's bill acceptable at all (§15.6), which is why
-             * the dispute route ships alongside the confirmation and not a phase later.
-             */
-            Route::get('trips/{trip}/attendance', [AttendanceController::class, 'index']);
-            Route::post('trips/{trip}/check-in', [AttendanceController::class, 'checkIn']);
-            Route::post('trips/{trip}/no-show', [AttendanceController::class, 'noShow']);
+        /*
+         * Who actually travelled (decision D18).
+         *
+         * 🔒 The two halves are deliberately asymmetric and neither side can do the
+         * other's. The DRIVER records, because she is the only one who knows who got
+         * in. The PASSENGER contests, and that is not a courtesy — it is what makes
+         * one party deciding the other's bill acceptable at all (§15.6), which is why
+         * the dispute route ships alongside the confirmation and not a phase later.
+         */
+        Route::get('trips/{trip}/attendance', [AttendanceController::class, 'index']);
+        Route::post('trips/{trip}/check-in', [AttendanceController::class, 'checkIn']);
+        Route::post('trips/{trip}/no-show', [AttendanceController::class, 'noShow']);
 
-            Route::post('bookings/{booking}/dispute', [AttendanceController::class, 'dispute']);
+        Route::post('bookings/{booking}/dispute', [AttendanceController::class, 'dispute']);
 
-            /*
-             * Waiting at a gate for somebody who is not there yet (screen 41).
-             *
-             * 🔴 Nothing here ENDS a wait. "She's here" is a check-in and "Mark no-show &
-             * depart" is a no-show — both above, and both close the timer as part of the
-             * same call. A separate stop route would let the two records disagree, and the
-             * disagreement always lands the same way: a timer left running on a passenger
-             * who was marked present reads, months later, as somebody abandoned at a gate.
-             */
-            Route::get('trips/{trip}/wait-timers', [WaitTimerController::class, 'index']);
-            Route::post('trips/{trip}/wait-timers', [WaitTimerController::class, 'store']);
-            Route::post('trips/{trip}/wait-timers/{timer}/extend', [WaitTimerController::class, 'extend']);
+        /*
+         * Waiting at a gate for somebody who is not there yet (screen 41).
+         *
+         * 🔴 Nothing here ENDS a wait. "She's here" is a check-in and "Mark no-show &
+         * depart" is a no-show — both above, and both close the timer as part of the
+         * same call. A separate stop route would let the two records disagree, and the
+         * disagreement always lands the same way: a timer left running on a passenger
+         * who was marked present reads, months later, as somebody abandoned at a gate.
+         */
+        Route::get('trips/{trip}/wait-timers', [WaitTimerController::class, 'index']);
+        Route::post('trips/{trip}/wait-timers', [WaitTimerController::class, 'store']);
+        Route::post('trips/{trip}/wait-timers/{timer}/extend', [WaitTimerController::class, 'extend']);
 
-            /*
-             * Where the car is (Chapter 8, Live Location).
-             *
-             * 🔒 The driver REPORTS and a passenger on the run READS the current position.
-             * Nobody reads the trail: `trip_locations` is a minute-by-minute record of where
-             * a real person was, kept solely because a no-show dispute has no other evidence,
-             * and no endpoint at any access level returns it.
-             *
-             * 🔴 A polling endpoint beside the WebSocket on purpose. The broadcast is the
-             * fast path and this is the fallback — a phone on a bad connection at a bus stop
-             * is exactly what a live map is for, and exactly where a socket fails to open.
-             */
-            /*
-             * Trip chat (Phase 12, Chapter 11). In the active + verified tier with the bookings
-             * themselves: a member on hold keeps their inbox but not new messages.
-             */
-            Route::get('bookings/{booking}/messages', [ChatController::class, 'index']);
-            Route::post('bookings/{booking}/messages', [ChatController::class, 'store'])
-                ->middleware('throttle:chat-messages');
-            Route::post('messages/{message}/report', [ChatController::class, 'report'])
-                ->middleware('throttle:safety-reports');
+        /*
+         * Where the car is (Chapter 8, Live Location).
+         *
+         * 🔒 The driver REPORTS and a passenger on the run READS the current position.
+         * Nobody reads the trail: `trip_locations` is a minute-by-minute record of where
+         * a real person was, kept solely because a no-show dispute has no other evidence,
+         * and no endpoint at any access level returns it.
+         *
+         * 🔴 A polling endpoint beside the WebSocket on purpose. The broadcast is the
+         * fast path and this is the fallback — a phone on a bad connection at a bus stop
+         * is exactly what a live map is for, and exactly where a socket fails to open.
+         */
+        /*
+         * Trip chat (Phase 12, Chapter 11). In the active + verified tier with the bookings
+         * themselves: a member on hold keeps their inbox but not new messages.
+         */
+        Route::get('bookings/{booking}/messages', [ChatController::class, 'index']);
+        Route::post('bookings/{booking}/messages', [ChatController::class, 'store'])
+            ->middleware('throttle:chat-messages');
+        Route::post('messages/{message}/report', [ChatController::class, 'report'])
+            ->middleware('throttle:safety-reports');
 
-            Route::post('trips/{trip}/location', [TripLocationController::class, 'store']);
-            Route::get('trips/{trip}/location', [TripLocationController::class, 'show']);
-        });
+        Route::post('trips/{trip}/location', [TripLocationController::class, 'store']);
+        Route::get('trips/{trip}/location', [TripLocationController::class, 'show']);
     });
 });
