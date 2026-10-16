@@ -1,8 +1,10 @@
 <?php
 
 use App\Domains\Booking\Enums\BookingStatus;
+use App\Domains\Booking\Enums\SeatOfferStatus;
 use App\Domains\Booking\Enums\SeatRequestStatus;
 use App\Domains\Booking\Models\Booking;
+use App\Domains\Booking\Models\SeatOffer;
 use App\Domains\Booking\Models\SeatRequest;
 use App\Domains\Commute\Models\ScheduledTrip;
 use App\Domains\Driver\Models\Vehicle;
@@ -159,8 +161,18 @@ it('offers a released seat to the waiting list', function () {
         'releasesSeat' => true,
     ])->assertStatus(201);
 
+    /*
+     * 🔴 She is OFFERED the seat, not moved into the driver's inbox.
+     *
+     * A planned absence releasing a seat goes through the same fan-out as a cancellation
+     * (`OfferSeatToWaitlistAction`), so she stays `waitlisted` until she accepts — the offer is a
+     * chance at the seat rather than the seat. This test asserted the old single-promotion model,
+     * where she became `pending` and still needed the driver to approve her.
+     */
     expect(SeatRequest::query()->whereKey($waitingId)->sole()->status)
-        ->toBe(SeatRequestStatus::Pending);
+        ->toBe(SeatRequestStatus::Waitlisted)
+        ->and(SeatOffer::query()->where('seat_request_id', $waitingId)->sole()->status)
+        ->toBe(SeatOfferStatus::Open);
 });
 
 it('refuses an absence that overlaps one already recorded', function () {

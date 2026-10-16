@@ -3,11 +3,15 @@
 namespace App\Http\Controllers\Api\V1\Booking;
 
 use App\Domains\Booking\Actions\AcceptSeatOfferAction;
+use App\Domains\Booking\Enums\BookingStatus;
+use App\Domains\Booking\Enums\SwitchReason;
+use App\Domains\Booking\Models\Booking;
 use App\Domains\Booking\Models\SeatOffer;
 use App\Domains\Shared\Exceptions\DomainException;
 use App\Domains\Shared\Support\ErrorCode;
 use App\Http\Controllers\Controller;
 use App\Http\OpenApi\ApiErrors;
+use App\Http\Requests\Booking\AcceptSeatOfferRequest;
 use App\Http\Resources\BookingResource;
 use App\Http\Resources\SeatOfferResource;
 use App\Http\Responses\ApiResponse;
@@ -50,8 +54,8 @@ final class SeatOfferController extends Controller
      * A loser gets `409 SEAT_OFFER_CLOSED` with `error.fields.status` saying which — `taken_by_other`
      * means somebody was quicker. Show that, not an error.
      */
-    #[ApiErrors(ErrorCode::NotFound, ErrorCode::SeatOfferClosed)]
-    public function accept(Request $request, string $offer, AcceptSeatOfferAction $action): JsonResponse
+    #[ApiErrors(ErrorCode::NotFound, ErrorCode::SeatOfferClosed, ErrorCode::AlreadyBooked)]
+    public function accept(AcceptSeatOfferRequest $request, string $offer, AcceptSeatOfferAction $action): JsonResponse
     {
         $target = SeatOffer::query()
             ->whereKey($offer)
@@ -67,6 +71,35 @@ final class SeatOfferController extends Controller
             throw DomainException::of(ErrorCode::NotFound);
         }
 
-        return ApiResponse::success(new BookingResource($action->execute($target)));
+        /*
+         * 🔒 The booking she is leaving must be HER OWN, found through her own id rather than
+         * trusted from the payload. Without that, a passenger could pass somebody else's booking
+         * id and have their seat released on her behalf.
+         *
+         * A 404-shaped miss for the same reason as the offer: a 403 would confirm the id exists.
+         */
+        $switchFrom = null;
+
+        if ($request->filled('switchFromBookingId')) {
+            $switchFrom = Booking::query()
+                ->whereKey($request->validated('switchFromBookingId'))
+                ->where('passenger_user_id', $request->user()->id)
+                ->where('status', BookingStatus::Confirmed->value)
+                ->with('scheduledTrip', 'seatRequest')
+                ->first();
+
+            if ($switchFrom === null) {
+                throw DomainException::of(ErrorCode::NotFound);
+            }
+        }
+
+        $booking = $action->execute(
+            $target,
+            $switchFrom,
+            SwitchReason::from((string) ($request->validated('switchReason') ?? SwitchReason::Voluntary->value)),
+            (bool) ($request->validated('joinOldWaitlist') ?? false),
+        );
+
+        return ApiResponse::success(new BookingResource($booking));
     }
 }

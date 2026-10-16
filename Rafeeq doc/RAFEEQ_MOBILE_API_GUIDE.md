@@ -1643,6 +1643,29 @@ wrong"** — it is a state refusal, not a fault of hers.
 
 Somebody else's offer answers **`404`**, not `403`. A `403` would confirm the id exists.
 
+**Switching a seat — the same call, three optional fields.** This is how a passenger moves from one
+commute to another without ever holding two seats or losing both.
+
+```
+POST /seat-offers/{offer}/accept
+{ switchFromBookingId: "...", switchReason: "voluntary" | "driver_delay", joinOldWaitlist: true }
+```
+
+| Field | Means |
+|---|---|
+| `switchFromBookingId` | The confirmed booking she is giving up. **One transaction**, so there is no instant where both are confirmed and no way to end up with neither. Omit for a plain acceptance. |
+| `switchReason` | `voluntary` applies the **normal cancellation policy** to the seat she leaves. `driver_delay` carries **no cancellation fee** and records the old booking as cancelled **by the driver** — so a driver running late does not land on the passenger's record. |
+| `joinOldWaitlist` | `true` rejoins the old driver's waiting list for that day. **She does not approve it again** — the passenger already held a seat in that car. It **reserves nothing**: she waits for an offer like anybody else, and the seat may go to somebody quicker. |
+
+> 🔴 **It never leaves two overlapping confirmed bookings** — if she already holds a confirmed seat
+> on the target day, the call answers `409 BOOKING_ALREADY_BOOKED` and nothing moves.
+>
+> 🔒 The booking in `switchFromBookingId` must be **hers**. Somebody else's answers `404`.
+
+**Not built:** a standalone switch endpoint on the booking itself (v3 proposes one; this is the offer path instead), and **recurring/future-weekday scope**.
+Only a single date switches today. A half-built recurring scope would silently release days she
+still wanted, so it waits rather than shipping partly done.
+
 #### `GET /my-bookings` — active, profile complete, paginated
 
 The caller's seats, newest first. See 4.7.
@@ -2825,6 +2848,7 @@ exist, and every live endpoint must be named here.
 
 | Date | Change |
 |---|---|
+| 2026-10-16 | 🔄 **Switching a seat works, on the offer you already accept.** `POST /seat-offers/{offer}/accept` takes three optional fields — `switchFromBookingId`, `switchReason` (`voluntary` or `driver_delay`) and `joinOldWaitlist`. One transaction, so there is **never** an instant with two confirmed seats and never a way to lose both; if she already holds the target day it answers `409 BOOKING_ALREADY_BOOKED` and nothing moves. `driver_delay` charges **no cancellation fee** and records the old booking as cancelled **by the driver**, so a driver running late does not land on the passenger record. `joinOldWaitlist` rejoins the old list **without that driver approving again** (she already had a seat in that car) and **reserves nothing**. A plain acceptance still sends an empty body. **Not built:** a standalone switch endpoint on the booking itself, and recurring/future-weekday scope — single date only, because a half-built recurring scope would silently release days she still wanted. |
 | 2026-10-16 | 🎟️ **A freed seat is now OFFERED to everybody on the waitlist, and the first acceptance wins.** Two new endpoints: `GET /seat-offers` and `POST /seat-offers/{offer}/accept`, which returns the **booking** — no second driver approval, because everybody on the list was already approved when she waitlisted them. **So your screen 20 was right: the waitlist does now fill empty seats automatically.** It previously promoted one person into the driver inbox as a fresh decision, which could leave a seat empty for 48 hours waiting on one reply. ⚠️ **`waitlistPosition` is now an ESTIMATE** — keep showing it, never say it entitles her to the next seat; position only decides who is notified first, and number 2 can win. A loser gets `409 SEAT_OFFER_CLOSED` with `error.fields.status`: show **TAKEN_BY_OTHER** ("somebody was quicker") differently from **CLOSED** ("the seat stopped existing"). |
 | 2026-10-16 | 📅 **Each weekday of a commute can now have its own departure, promised arrival, price and capacity** (Feature 03). `PUT /commutes/{commute}/schedule` takes two new optional fields — `promisedArrivalTime` and `perDay`, keyed by the day's bit. **Sending neither behaves exactly as before**, so nothing you have built changes. Each day's occurrences are generated from that day's own values and snapshot them, so a cheaper Thursday produces cheaper Thursdays while the rest of the week is untouched. Re-sending the schedule **replaces** the week rather than merging. ⚠️ A `promisedArrivalTime` is a commitment: arriving later than it counts against the driver's on-time rate outside a five-minute tolerance, so omit it rather than guessing. |
 | 2026-10-16 | 🔒 **New: `boardingCode`** — a four-digit number on every booking, for the line your design draws under the car: `Plate ﺱ 4821 · PIN 7391`. It answers **"is this the right car?"**, which the passenger asks at the kerb while comparing the plate. **Both sides see the same number** (otherwise nobody could confirm it): the passenger on `GET /bookings/{booking}`, the driver there and on `GET /trips/{trip}/attendance`. One per journey, so it changes daily. 🔴 **It decides nothing** — `check-in` takes no code and never will. Attendance is the driver's tap (decision D18); the Master Plan rejected a code for that job outright, because "a PIN fails when somebody is running for the car". Do not block boarding, payment or no-show on it: a flat battery must never lock somebody out of a car she has already verified by plate and sight. It appears in no payload other passengers can read. |
