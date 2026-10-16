@@ -44,6 +44,13 @@ final readonly class GenerateScheduledTripsAction
     {
         $schedule = $offer->schedule;
 
+        /*
+         * Loaded once, up front: `createTrip` reads the weekday row for every date in the horizon,
+         * and strict mode would turn a lazy load there into an exception — or, worse in production,
+         * into one query per generated day.
+         */
+        $offer->loadMissing('weekdaySchedules');
+
         if ($schedule === null || $offer->status !== CommuteOfferStatus::Published) {
             // Only a published offer produces bookable days. A paused one keeps
             // the trips it already had (Chapter 4: "paused commutes keep
@@ -130,9 +137,24 @@ final readonly class GenerateScheduledTripsAction
 
     private function createTrip(CommuteOffer $offer, CommuteSchedule $schedule, CarbonImmutable $date): void
     {
+        /*
+         * 🔴 The weekday's own row decides the time, the price and the capacity (Feature 03 v3:
+         * "each weekday has independent departure, promised arrival, price and capacity"). This is
+         * where that independence actually takes effect — everything upstream merely records it.
+         *
+         * Falls back to the schedule's derived `departure_time` if a row is somehow missing, so a
+         * commute never stops generating trips over a data gap. That fallback should be
+         * unreachable: the save action writes one row per day in the mask, in the same
+         * transaction.
+         */
+        $weekday = $offer->weekdaySchedules
+            ->firstWhere('weekday_bit', DaysMask::bitForDate($date));
+
+        $departureTime = $weekday->departure_time ?? $schedule->departure_time;
+
         $departureAt = DepartureTimeCalculator::toUtc(
             $date->toDateString(),
-            $schedule->departure_time,
+            $departureTime,
             $schedule->timezone,
         );
 
@@ -143,12 +165,20 @@ final readonly class GenerateScheduledTripsAction
             'commute_schedule_id' => $schedule->id,
             'trip_date' => $date->toDateString(),
             'departure_at' => $departureAt,
-            'departure_local' => $date->toDateString().' '.$schedule->departure_time,
-            // Snapshots, deliberately: Chapter 4 §6 says a price change affects
-            // only FUTURE trips. A booked passenger's day keeps the terms they
-            // agreed to, so these are copied rather than read through the offer.
-            'seats_total' => $offer->seats_total,
-            'price_snapshot_piastres' => $offer->price_per_seat_piastres,
+            'departure_local' => $date->toDateString().' '.$departureTime,
+            /*
+             * Snapshots, deliberately: Chapter 4 §6 says a price change affects only FUTURE trips.
+             * A booked passenger's day keeps the terms they agreed to, so these are copied rather
+             * than read through the offer — and now they are copied from the WEEKDAY, which falls
+             * back to the commute when she has not priced that day differently.
+             */
+            'seats_total' => $weekday?->seatsFor($offer) ?? $offer->seats_total,
+            'price_snapshot_piastres' => $weekday?->priceFor($offer) ?? $offer->price_per_seat_piastres,
+            'promised_arrival_at' => $weekday?->promised_arrival_time === null ? null : DepartureTimeCalculator::toUtc(
+                $date->toDateString(),
+                $weekday->promised_arrival_time,
+                $schedule->timezone,
+            ),
             'booking_deadline_at' => $this->bookingDeadline($date, $schedule->timezone),
         ]);
 

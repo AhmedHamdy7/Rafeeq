@@ -1356,6 +1356,33 @@ now on, never to a day somebody already booked.** Route and schedule lock once p
 **Request:** `daysMask`, `departureTime` (`HH:MM:SS`, **local wall clock**), `timezone`,
 `startDate`, `endDate` (**mandatory** — there are no infinite commutes).
 
+**New: each weekday can differ.** Two optional fields, and **sending neither behaves exactly as
+before** — one time, one price, one seat count for the whole week.
+
+| Field | Means |
+|---|---|
+| `promisedArrivalTime` | `HH:MM:SS` local. When you promise to arrive, applied to every day unless a day overrides it. ⚠️ **Arriving later than this counts against the driver's on-time rate**, outside a five-minute tolerance. Omit it and no promise is recorded — and nothing is scored. |
+| `perDay` | Per-day differences, **keyed by the day's bit**: `{"2": {"departureTime": "06:30:00", "pricePerSeatPiastres": 2500, "seatsTotal": 2}}` sets Sunday only. Each day accepts `departureTime`, `promisedArrivalTime`, `pricePerSeatPiastres`, `seatsTotal`. |
+
+```
+PUT { daysMask: 62, departureTime: "07:05:00", startDate: "...", endDate: "...",
+      promisedArrivalTime: "08:00:00",
+      perDay: { "2": { departureTime: "06:30:00", pricePerSeatPiastres: 2500 } } }
+```
+
+The bits are the same ones `daysMask` uses: **1** Sat · **2** Sun · **4** Mon · **8** Tue ·
+**16** Wed · **32** Thu · **64** Fri.
+
+Anything you leave out of a day follows the top-level values, and a day you do not mention runs like
+the rest of the week. **Use it when a day genuinely differs** — an early Sunday, a cheaper Thursday,
+one fewer seat on the day she takes her own child.
+
+> 🔴 **Each day's trips are generated from that day's own values**, and the trip snapshots them. So a
+> Sunday priced at 2500 produces Sunday occurrences at 2500 while the rest of the week keeps the
+> commute's price — and a later price change still only affects **future** trips.
+>
+> Sending the whole thing again **replaces** the week; it never merges. A day you drop disappears.
+
 #### `GET /commutes/{commute}/price-suggestion` — verified
 
 The fair-price number for screen 24, with its reasoning.
@@ -2754,6 +2781,7 @@ exist, and every live endpoint must be named here.
 
 | Date | Change |
 |---|---|
+| 2026-10-16 | 📅 **Each weekday of a commute can now have its own departure, promised arrival, price and capacity** (Feature 03). `PUT /commutes/{commute}/schedule` takes two new optional fields — `promisedArrivalTime` and `perDay`, keyed by the day's bit. **Sending neither behaves exactly as before**, so nothing you have built changes. Each day's occurrences are generated from that day's own values and snapshot them, so a cheaper Thursday produces cheaper Thursdays while the rest of the week is untouched. Re-sending the schedule **replaces** the week rather than merging. ⚠️ A `promisedArrivalTime` is a commitment: arriving later than it counts against the driver's on-time rate outside a five-minute tolerance, so omit it rather than guessing. |
 | 2026-10-16 | 🔒 **New: `boardingCode`** — a four-digit number on every booking, for the line your design draws under the car: `Plate ﺱ 4821 · PIN 7391`. It answers **"is this the right car?"**, which the passenger asks at the kerb while comparing the plate. **Both sides see the same number** (otherwise nobody could confirm it): the passenger on `GET /bookings/{booking}`, the driver there and on `GET /trips/{trip}/attendance`. One per journey, so it changes daily. 🔴 **It decides nothing** — `check-in` takes no code and never will. Attendance is the driver's tap (decision D18); the Master Plan rejected a code for that job outright, because "a PIN fails when somebody is running for the car". Do not block boarding, payment or no-show on it: a flat battery must never lock somebody out of a car she has already verified by plate and sight. It appears in no payload other passengers can read. |
 | 2026-10-16 | ✅ **New: `GET /driver/verification`** — the five-item checklist the driver card is drawn from (`government_id` · `selfie` · `driving_licence` · `vehicle_registration` · `vehicle_details`), with `completed` / `of`, a per-item `status`, a **per-item `rejectionReason`** so you can say "replace only that document", and one of seven `overall` headlines matching the design's card states. Reachable **without** verification, because it is the screen that explains what is missing. `expiring` keeps the verified badge; `suspended` outranks everything. ⚠️ `completed` can read 4 while `overall` is `verified` — approval does not currently require a selfie, and we have flagged that rather than hiding it. |
 | 2026-10-16 | ✅ **`PUT /account/profile/basic` now takes `firstName` + `lastName`, as the design draws it** — or `fullName`, exactly as today. Nothing breaks, so build the two-field screen whenever you like. `lastName` is optional (a single name is a real name). When you send the two fields, `publicFirstName` becomes the **given name** rather than the first token of a joined string — which is the difference between showing "عبد الرحمن" and showing "عبد". |

@@ -59,6 +59,37 @@ final readonly class DaysMask
         return ($this->value & $bit) > 0;
     }
 
+    /**
+     * The individual day bits this mask contains, in week order (Saturday first).
+     *
+     * Added for the per-weekday schedule model (Feature 03): a commute now carries a row per day,
+     * and both the save action and the trip generator need to walk the mask rather than only ask
+     * whether one day is in it. Week order rather than ascending value so that anything built from
+     * this reads Saturday-to-Friday, the way the product talks about a week.
+     *
+     * @return array<int, int>
+     */
+    public function bits(): array
+    {
+        $order = [
+            self::SATURDAY, self::SUNDAY, self::MONDAY, self::TUESDAY,
+            self::WEDNESDAY, self::THURSDAY, self::FRIDAY,
+        ];
+
+        return array_values(array_filter($order, fn (int $bit): bool => $this->includes($bit)));
+    }
+
+    /**
+     * A mask from day bits — the inverse of {@see bits()}, so the derived `days_mask` on a schedule
+     * is a sum of its weekday rows rather than a second thing to keep in step by hand.
+     *
+     * @param  array<int, int>  $bits
+     */
+    public static function fromBitList(array $bits): self
+    {
+        return self::fromBits(array_reduce($bits, fn (int $carry, int $bit): int => $carry | $bit, 0));
+    }
+
     public function includesDate(CarbonInterface $date): bool
     {
         return $this->includes(self::bitForDate($date));

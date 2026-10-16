@@ -5,6 +5,7 @@ namespace App\Domains\Commute\Actions;
 use App\Domains\Commute\Enums\CommuteType;
 use App\Domains\Commute\Models\CommuteOffer;
 use App\Domains\Commute\Models\CommuteSchedule;
+use App\Domains\Commute\Models\CommuteWeekdaySchedule;
 use App\Domains\Shared\Exceptions\DomainException;
 use App\Domains\Shared\Support\ErrorCode;
 use App\Domains\Shared\ValueObjects\DaysMask;
@@ -58,8 +59,68 @@ final readonly class SaveCommuteScheduleAction
 
             $schedule->save();
 
-            return $offer->load('schedule');
+            $this->saveWeekdays($offer, $daysMask, $input);
+
+            return $offer->load(['schedule', 'weekdaySchedules']);
         });
+    }
+
+    /**
+     * Write one row per weekday, and make the parent's derived columns agree with them.
+     *
+     * 🔴 This method is the only writer of `commute_schedules.days_mask` and `departure_time`.
+     * Feature 03 moves the per-day facts into their own table, but search compares the mask inside
+     * the query and must not join to do it — so the mask stays on the parent as a cache, and the
+     * way to keep a cache honest is to give it exactly one owner.
+     *
+     * `perDay` is optional and sparse. A driver who leaves at the same time every day sends
+     * nothing, gets the single `departureTime` on every weekday, and inherits the commute's price
+     * and capacity — which is precisely how this behaved before the table existed.
+     *
+     * @param  array<string, mixed>  $input
+     */
+    private function saveWeekdays(CommuteOffer $offer, int $daysMask, array $input): void
+    {
+        // Replaced, not patched, for the same reason as the schedule itself: a half-updated set
+        // could describe a weekday the mask no longer contains.
+        $offer->weekdaySchedules()->delete();
+
+        /** @var array<int|string, array<string, mixed>> $perDay */
+        $perDay = $input['perDay'] ?? [];
+
+        $bits = DaysMask::fromBits($daysMask)->bits();
+
+        foreach ($bits as $bit) {
+            $day = $perDay[$bit] ?? $perDay[(string) $bit] ?? [];
+
+            $weekday = new CommuteWeekdaySchedule;
+
+            $weekday->commute_offer_id = $offer->id;
+            $weekday->weekday_bit = $bit;
+            $weekday->departure_time = $day['departureTime'] ?? $input['departureTime'];
+            $weekday->promised_arrival_time = $day['promisedArrivalTime'] ?? ($input['promisedArrivalTime'] ?? null);
+            // Null, not a copy of the parent: null means "follow the commute", so a later price
+            // change reaches every day she did not deliberately price differently.
+            $weekday->price_per_seat_piastres = $day['pricePerSeatPiastres'] ?? null;
+            $weekday->seats_total = $day['seatsTotal'] ?? null;
+
+            $weekday->save();
+        }
+
+        /*
+         * The derived columns, recomputed from what was just written rather than from the input —
+         * so they describe the rows that exist, even if the input and the rows ever disagree.
+         *
+         * `departure_time` becomes the EARLIEST departure across the week. It is used for display
+         * and ordering, and the earliest is the honest single answer to "when does this leave":
+         * it is the time a passenger has to be ready by on her earliest day.
+         */
+        $saved = $offer->weekdaySchedules()->get();
+
+        $offer->schedule()->update([
+            'days_mask' => DaysMask::fromBitList($saved->pluck('weekday_bit')->all())->value,
+            'departure_time' => $saved->min('departure_time'),
+        ]);
     }
 
     private function assertUsable(

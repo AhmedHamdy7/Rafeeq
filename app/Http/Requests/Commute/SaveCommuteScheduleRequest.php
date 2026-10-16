@@ -45,6 +45,36 @@ final class SaveCommuteScheduleRequest extends FormRequest
             // Last day it runs. Required: a commute cannot be open-ended. For a
             // one-time commute this is ignored and set to the start date.
             'endDate' => ['required', 'date', 'date_format:Y-m-d', 'after_or_equal:startDate'],
+
+            /*
+             * When you promise to arrive, on your own clock. Optional, and the default for every
+             * day unless a day overrides it below.
+             *
+             * ⚠️ Arriving later than this counts against your on-time rate, outside a five-minute
+             * tolerance. Leave it out if you would rather not promise a time.
+             */
+            'promisedArrivalTime' => ['sometimes', 'nullable', 'string', 'date_format:H:i:s'],
+
+            /*
+             * Per-day differences, keyed by the day's bit: `{"2": {"departureTime": "06:45:00"}}`
+             * sets Sunday only. Everything you leave out follows the values above, and a day you
+             * do not mention runs exactly like the rest of the week.
+             *
+             * Use it when one day genuinely differs — an early Sunday, a cheaper Thursday, one
+             * fewer seat on the day you take your own child.
+             */
+            'perDay' => ['sometimes', 'array'],
+
+            // The day's bit: 1 Sat, 2 Sun, 4 Mon, 8 Tue, 16 Wed, 32 Thu, 64 Fri.
+            'perDay.*.departureTime' => ['sometimes', 'string', 'date_format:H:i:s'],
+
+            'perDay.*.promisedArrivalTime' => ['sometimes', 'nullable', 'string', 'date_format:H:i:s'],
+
+            // What a seat costs on this day, in piastres. Omit to charge your usual price.
+            'perDay.*.pricePerSeatPiastres' => ['sometimes', 'integer', 'min:0'],
+
+            // How many seats you offer on this day. Omit to offer your usual number.
+            'perDay.*.seatsTotal' => ['sometimes', 'integer', 'min:1', 'max:7'],
         ];
     }
 }

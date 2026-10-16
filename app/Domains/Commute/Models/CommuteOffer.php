@@ -77,9 +77,27 @@ class CommuteOffer extends Model
         return $this->hasMany(CommuteLocation::class);
     }
 
+    /**
+     * The commute-wide window: start, end, timezone, how far trips have been generated.
+     *
+     * ⚠️ Its `days_mask` and `departure_time` are **derived** from {@see weekdaySchedules()} and
+     * maintained by `SaveCommuteScheduleAction`. They are kept on this row because search compares
+     * the mask inside the query and must not join to do it — but they are a cache, not the source
+     * of truth, and writing to them by hand will be overwritten.
+     */
     public function schedule(): HasOne
     {
         return $this->hasOne(CommuteSchedule::class);
+    }
+
+    /**
+     * One row per weekday this commute runs, each with its own departure, promised arrival, price
+     * and capacity (Feature 03 v3). This is the source of truth for when it leaves and what a seat
+     * costs.
+     */
+    public function weekdaySchedules(): HasMany
+    {
+        return $this->hasMany(CommuteWeekdaySchedule::class);
     }
 
     public function rules(): HasMany
