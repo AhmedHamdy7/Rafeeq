@@ -129,3 +129,67 @@ it('cannot be marked complete in the database while identity fields are missing'
         'profile_status' => ProfileStatus::BasicComplete->value,
     ])->save())->toThrow(QueryException::class);
 });
+
+/**
+ * 🔴 The design collects `firstName` and `lastName`; every client live today sends one `fullName`.
+ * Both work, so the split screen can ship without a flag day (Feature 02 v3 §2 vs the prototype's
+ * `L_firstName` / `L_lastName` inputs — the design wins here, and the earlier `fullName`-only
+ * reading was corrected).
+ */
+it('accepts the two name fields the design collects', function () {
+    $signIn = signIn();
+
+    $response = test()->withToken($signIn['session']['accessToken'])
+        ->putJson('/api/v1/account/profile/basic', [
+            'firstName' => 'مريم',
+            'lastName' => 'سعد',
+            'gender' => 'woman',
+        ])->assertOk();
+
+    expect($response->json('data.user.fullName'))->toBe('مريم سعد')
+        ->and($response->json('data.user.publicFirstName'))->toBe('مريم');
+});
+
+/**
+ * A single name is a real name. The design's last-name field is optional for exactly this reason,
+ * and F02 says the free-form field accepts `Sara` as well as `Sara Ahmed`.
+ */
+it('accepts somebody who has only one name', function () {
+    $signIn = signIn();
+
+    $response = test()->withToken($signIn['session']['accessToken'])
+        ->putJson('/api/v1/account/profile/basic', [
+            'firstName' => 'Sara',
+            'gender' => 'woman',
+        ])->assertOk();
+
+    expect($response->json('data.user.fullName'))->toBe('Sara')
+        ->and($response->json('data.user.publicFirstName'))->toBe('Sara');
+});
+
+/**
+ * 🔴 The case that makes the given name worth trusting over a token split: a two-word given name.
+ * Splitting "عبد الرحمن سعد" on whitespace would show other members "عبد", which is not her name.
+ */
+it('shows the given name a two-word first name, not its first token', function () {
+    $signIn = signIn();
+
+    $response = test()->withToken($signIn['session']['accessToken'])
+        ->putJson('/api/v1/account/profile/basic', [
+            'firstName' => 'عبد الرحمن',
+            'lastName' => 'سعد',
+            'gender' => 'man',
+        ])->assertOk();
+
+    expect($response->json('data.user.fullName'))->toBe('عبد الرحمن سعد')
+        ->and($response->json('data.user.publicFirstName'))->toBe('عبد الرحمن');
+});
+
+it('still refuses a profile with no name at all', function () {
+    $signIn = signIn();
+
+    test()->withToken($signIn['session']['accessToken'])
+        ->putJson('/api/v1/account/profile/basic', ['gender' => 'woman'])
+        ->assertStatus(422)
+        ->assertJsonStructure(['error' => ['fields' => ['fullName']]]);
+});

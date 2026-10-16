@@ -27,14 +27,35 @@ final readonly class CompleteBasicProfileAction
      */
     public function execute(User $user, array $attributes): User
     {
-        $fullName = trim((string) $attributes['fullName']);
+        /*
+         * The design collects `firstName` and `lastName`; the live clients send one `fullName`.
+         * Both are accepted and composed here, in one place, so no caller has to know which the
+         * app happened to send.
+         *
+         * 🔴 When the two fields arrive, `public_first_name` is the GIVEN name rather than the
+         * first token of a composed string. They are usually the same, and the difference is
+         * exactly the case worth getting right: somebody whose given name is two words ("Abdel
+         * Rahman Saad") would otherwise be shown to other members as "Abdel", which is not her
+         * name. The design makes the promise explicit on the screen — "only your first name and
+         * photo are shown to other members" — so when the app tells us which part is the first
+         * name, we use it.
+         */
+        $firstName = isset($attributes['firstName'])
+            ? trim((string) $attributes['firstName'])
+            : null;
+
+        $fullName = $firstName !== null
+            ? trim($firstName.' '.trim((string) ($attributes['lastName'] ?? '')))
+            : trim((string) $attributes['fullName']);
 
         $user->fill([
             'full_name' => $fullName,
             // What other members actually see (Bible §15.2 / pitfall #21):
             // full names stay private within the group, so the public handle
             // is derived here rather than left to each Resource to shorten.
-            'public_first_name' => $attributes['publicFirstName'] ?? self::firstNameOf($fullName),
+            'public_first_name' => $attributes['publicFirstName']
+                ?? $firstName
+                ?? self::firstNameOf($fullName),
             'gender' => Gender::from((string) $attributes['gender'])->value,
         ]);
 

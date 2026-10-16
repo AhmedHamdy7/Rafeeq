@@ -35,16 +35,40 @@ final class CompleteBasicProfileRequest extends FormRequest
     public function rules(): array
     {
         return [
-            // The person's real name, in Arabic or Latin script. Spaces,
-            // hyphens, apostrophes and full stops are allowed; it must contain
-            // at least one letter. If they later become a driver, this should
-            // match their identity documents.
+            /*
+             * The person's real name, in Arabic or Latin script. Spaces, hyphens, apostrophes and
+             * full stops are allowed; it must contain at least one letter. If they later become a
+             * driver, this should match their identity documents.
+             *
+             * Send EITHER `fullName`, or `firstName` and `lastName` — the design collects two
+             * fields and we compose them. Sending `fullName` keeps working exactly as before.
+             */
             'fullName' => [
-                'required', 'string',
+                'required_without_all:firstName,lastName', 'string',
                 'min:'.ProfileSettings::fullNameMinLength(),
                 'max:'.ProfileSettings::fullNameMaxLength(),
                 'regex:/^[\p{Arabic}\p{Latin}\s\'\-\.]+$/u',
                 'regex:/\p{L}/u',
+            ],
+
+            /*
+             * Given name. Required when `fullName` is not sent. This is also what other members
+             * see — the design says so on the screen: "Only your first name and photo are shown to
+             * other members."
+             */
+            'firstName' => [
+                'required_without:fullName', 'string', 'min:2', 'max:50',
+                'regex:/^[\p{Arabic}\p{Latin}\s\'\-\.]+$/u',
+                'regex:/\p{L}/u',
+            ],
+
+            /*
+             * Family name. Optional even when sending the two fields, because a single name is a
+             * valid name — somebody called only `Sara` must be able to finish signing up.
+             */
+            'lastName' => [
+                'nullable', 'string', 'max:50',
+                'regex:/^[\p{Arabic}\p{Latin}\s\'\-\.]+$/u',
             ],
 
             // What other members see. Derived from the first word of
