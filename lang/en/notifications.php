@@ -60,6 +60,15 @@ return [
      * at a kerb and get into whichever car matches what she was told, so the one fact that has
      * changed is the one fact the message has to carry.
      */
+    /*
+     * 🔴 "First to accept gets it" is in the body on purpose. She is being told a race has started,
+     * and a message that implied the seat was already hers would make losing it feel like it was
+     * taken from her.
+     */
+    'seat_offered' => [
+        'title' => 'A seat just opened up',
+        'body' => 'A seat is free on :date. First to accept gets it.',
+    ],
     'booking_vehicle_changed' => [
         'title' => 'Your ride is in a different car',
         'body' => ':name changed vehicle. Look for a :vehicle, plate :plate.',

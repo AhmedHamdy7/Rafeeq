@@ -14,6 +14,7 @@ use App\Http\Controllers\Api\V1\Auth\SessionController;
 use App\Http\Controllers\Api\V1\Booking\BookingController;
 use App\Http\Controllers\Api\V1\Booking\PickupPointRequestController;
 use App\Http\Controllers\Api\V1\Booking\PickupPreviewController;
+use App\Http\Controllers\Api\V1\Booking\SeatOfferController;
 use App\Http\Controllers\Api\V1\Booking\SeatRequestController;
 use App\Http\Controllers\Api\V1\Driver\CommuteController;
 use App\Http\Controllers\Api\V1\Driver\DriverApplicationController;
@@ -429,6 +430,16 @@ Route::prefix('v1')->group(function (): void {
          */
         Route::post('commutes/{commute}/seat-requests', [SeatRequestController::class, 'store']);
         Route::get('seat-requests', [SeatRequestController::class, 'index']);
+
+        /*
+         * Seats offered to her while she waits (Feature 03 v3).
+         *
+         * 🔒 Both are scoped to her own waiting requests, and a miss is a 404 rather than a 403 —
+         * a 403 would confirm the id exists, which turns this into an oracle for who is waiting on
+         * which commute.
+         */
+        Route::get('seat-offers', [SeatOfferController::class, 'index']);
+        Route::post('seat-offers/{offer}/accept', [SeatOfferController::class, 'accept']);
         Route::delete('seat-requests/{seatRequest}', [SeatRequestController::class, 'withdraw']);
 
         Route::get('my-bookings', [BookingController::class, 'mine']);

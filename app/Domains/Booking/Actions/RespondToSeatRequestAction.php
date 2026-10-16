@@ -4,6 +4,7 @@ namespace App\Domains\Booking\Actions;
 
 use App\Domains\Booking\Enums\SeatRequestStatus;
 use App\Domains\Booking\Models\SeatRequest;
+use App\Domains\Booking\Support\WaitlistPositions;
 use App\Domains\Identity\Models\User;
 use App\Domains\Notification\Enums\NotificationType;
 use App\Domains\Notification\Support\Notifier;
@@ -21,7 +22,7 @@ use Illuminate\Support\Facades\DB;
  */
 final readonly class RespondToSeatRequestAction
 {
-    public function __construct(private PromoteFromWaitlistAction $waitlist) {}
+    
 
     /**
      * A driver declining. The note is optional here, unlike a verification
@@ -173,7 +174,7 @@ final readonly class RespondToSeatRequestAction
     private function closeTheirPlaceInTheQueue(SeatRequest $request, bool $wasWaiting): void
     {
         if ($wasWaiting) {
-            $this->waitlist->renumber($request->commute_offer_id);
+            WaitlistPositions::renumber($request->commute_offer_id);
         }
     }
 

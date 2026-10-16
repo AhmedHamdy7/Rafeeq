@@ -14,7 +14,7 @@
 >
 > **Base URL:** `{host}/api/v1` · **Auth:** bearer token · **Format:** JSON only.
 
-**Last updated:** 2026-10-16 · **134 endpoints live** · Phases 0–7, 9 and 11 complete · 10, 12 and 13 all but a decision each
+**Last updated:** 2026-10-16 · **136 endpoints live** · Phases 0–7, 9 and 11 complete · 10, 12 and 13 all but a decision each
 
 ---
 
@@ -22,7 +22,7 @@
 
 ### What is ready
 
-**134 endpoints live** and tested, across the 47 designed screens:
+**136 endpoints live** and tested, across the 47 designed screens:
 
 | | Count | Covers |
 |---|---|---|
@@ -746,6 +746,8 @@ fails if this list and the running routes ever disagree in either direction.
 | `POST /driver/seat-requests/{seatRequest}/reject` | 4.7 Seat requests and bookings |
 | `POST /driver/seat-requests/{seatRequest}/waitlist` | 4.7 Seat requests and bookings |
 | `GET /my-bookings` | 4.7 Seat requests and bookings |
+| `GET /seat-offers` | 4.7 Seat requests and bookings |
+| `POST /seat-offers/{offer}/accept` | 4.7 Seat requests and bookings |
 | `GET /seat-requests` | 4.7 Seat requests and bookings |
 | `DELETE /seat-requests/{seatRequest}` | 4.7 Seat requests and bookings |
 | `POST /seat-requests/{seatRequest}/pickup-request` | 4.7 Seat requests and bookings |
@@ -1594,10 +1596,52 @@ One call handles both a trial and a recurring membership.
 
 #### `POST /driver/seat-requests/{seatRequest}/waitlist` — active, profile complete
 
-Moves the request to the waitlist and sets `waitlistPosition`. When a seat frees up the promotion
-goes to **the driver's inbox as a decision**, not straight to a booking — the driver decides who
-rides in her car. (Your screen 20 says "waitlist fills empty seats automatically"; that text needs
-to change. Section 8.)
+Moves the request to the waitlist and sets `waitlistPosition`.
+
+🔴 **This changed, and your screen 20 was right all along.** It used to promote **one** person into
+the driver's inbox as a fresh decision. Now, when a seat frees, it is **offered to everybody
+eligible at once** and the **first acceptance wins** — because everybody on the list is already
+driver-approved: she approved them when she waitlisted them. So there is no second decision to wait
+for, and "waitlist fills empty seats automatically" is now accurate.
+
+⚠️ **`waitlistPosition` is an ESTIMATE, not a queue.** Keep showing it — the design's
+"Position 1 of 2 · Est. seat within ~1 week" is deliberate — but **never tell her it entitles her to
+the next seat.** The person at position 2 can and does win; position only decides who is *notified*
+first. Nothing in the allocation path reads it.
+
+#### `GET /seat-offers` — active, profile complete, paginated
+
+Seats she has been offered while waiting. Open ones first, then history.
+
+| Field | Means |
+|---|---|
+| `status` | `OPEN` · `ACCEPTED` · `TAKEN_BY_OTHER` · `INELIGIBLE` · `CLOSED` |
+| `tripId` · `seatRequestId` | Which day, and which waiting request it came from. |
+| `trip` | `date`, `departureAt`, `departureLocal`, `pricePiastres` — so the list reads without a second call. A seat on Wednesday is a different decision from a seat tomorrow. |
+| `offeredAt` · `closedAt` | |
+
+🔴 **`TAKEN_BY_OTHER` and `CLOSED` are different and the wording matters.** The first means somebody
+was quicker; the second that the seat stopped existing (the day was cancelled, or the driver filled
+it herself). Show them differently — otherwise somebody believes she keeps losing races she never
+ran.
+
+> 🔒 There is **no** field here for her position, how many others were offered it, or who they are.
+> A waiting list is a set of people who all want the same commute, and telling each of them who they
+> are racing would turn a seat into a social problem.
+
+#### `POST /seat-offers/{offer}/accept` — active, profile complete
+
+Takes the seat. Returns the **booking** on success — no further driver approval.
+
+**First acceptance wins, decided by server transaction order.** Not by whose tap was first: who
+reaches us first depends on her signal and her distance from our servers, which is not a fair basis
+for giving away a seat.
+
+If she was slower: **`409 SEAT_OFFER_CLOSED`**, with `error.fields.status` saying which
+(`taken_by_other`, `closed`, `ineligible`). **Show "somebody was quicker", never "something went
+wrong"** — it is a state refusal, not a fault of hers.
+
+Somebody else's offer answers **`404`**, not `403`. A `403` would confirm the id exists.
 
 #### `GET /my-bookings` — active, profile complete, paginated
 
@@ -2781,6 +2825,7 @@ exist, and every live endpoint must be named here.
 
 | Date | Change |
 |---|---|
+| 2026-10-16 | 🎟️ **A freed seat is now OFFERED to everybody on the waitlist, and the first acceptance wins.** Two new endpoints: `GET /seat-offers` and `POST /seat-offers/{offer}/accept`, which returns the **booking** — no second driver approval, because everybody on the list was already approved when she waitlisted them. **So your screen 20 was right: the waitlist does now fill empty seats automatically.** It previously promoted one person into the driver inbox as a fresh decision, which could leave a seat empty for 48 hours waiting on one reply. ⚠️ **`waitlistPosition` is now an ESTIMATE** — keep showing it, never say it entitles her to the next seat; position only decides who is notified first, and number 2 can win. A loser gets `409 SEAT_OFFER_CLOSED` with `error.fields.status`: show **TAKEN_BY_OTHER** ("somebody was quicker") differently from **CLOSED** ("the seat stopped existing"). |
 | 2026-10-16 | 📅 **Each weekday of a commute can now have its own departure, promised arrival, price and capacity** (Feature 03). `PUT /commutes/{commute}/schedule` takes two new optional fields — `promisedArrivalTime` and `perDay`, keyed by the day's bit. **Sending neither behaves exactly as before**, so nothing you have built changes. Each day's occurrences are generated from that day's own values and snapshot them, so a cheaper Thursday produces cheaper Thursdays while the rest of the week is untouched. Re-sending the schedule **replaces** the week rather than merging. ⚠️ A `promisedArrivalTime` is a commitment: arriving later than it counts against the driver's on-time rate outside a five-minute tolerance, so omit it rather than guessing. |
 | 2026-10-16 | 🔒 **New: `boardingCode`** — a four-digit number on every booking, for the line your design draws under the car: `Plate ﺱ 4821 · PIN 7391`. It answers **"is this the right car?"**, which the passenger asks at the kerb while comparing the plate. **Both sides see the same number** (otherwise nobody could confirm it): the passenger on `GET /bookings/{booking}`, the driver there and on `GET /trips/{trip}/attendance`. One per journey, so it changes daily. 🔴 **It decides nothing** — `check-in` takes no code and never will. Attendance is the driver's tap (decision D18); the Master Plan rejected a code for that job outright, because "a PIN fails when somebody is running for the car". Do not block boarding, payment or no-show on it: a flat battery must never lock somebody out of a car she has already verified by plate and sight. It appears in no payload other passengers can read. |
 | 2026-10-16 | ✅ **New: `GET /driver/verification`** — the five-item checklist the driver card is drawn from (`government_id` · `selfie` · `driving_licence` · `vehicle_registration` · `vehicle_details`), with `completed` / `of`, a per-item `status`, a **per-item `rejectionReason`** so you can say "replace only that document", and one of seven `overall` headlines matching the design's card states. Reachable **without** verification, because it is the screen that explains what is missing. `expiring` keeps the verified badge; `suspended` outranks everything. ⚠️ `completed` can read 4 while `overall` is `verified` — approval does not currently require a selfie, and we have flagged that rather than hiding it. |

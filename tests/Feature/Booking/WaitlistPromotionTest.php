@@ -1,8 +1,13 @@
 <?php
 
+use App\Domains\Booking\Actions\AcceptSeatOfferAction;
+use App\Domains\Booking\Actions\OfferSeatToWaitlistAction;
+use App\Domains\Booking\Enums\SeatOfferStatus;
 use App\Domains\Booking\Enums\SeatRequestStatus;
 use App\Domains\Booking\Models\Booking;
+use App\Domains\Booking\Models\SeatOffer;
 use App\Domains\Booking\Models\SeatRequest;
+use App\Domains\Shared\Exceptions\DomainException;
 use App\Domains\Commute\Models\ScheduledTrip;
 use App\Domains\Driver\Models\Vehicle;
 use App\Domains\Identity\Models\User;
@@ -61,10 +66,16 @@ it('gives each waiting passenger their own place in the queue', function () {
 });
 
 /**
- * 🔴 The heart of it: the seat reaches the person who was waiting, as a question for
- * the driver rather than a booking.
+ * 🔴 The heart of it, and it changed: a freed seat is OFFERED to everybody eligible, and the first
+ * acceptance wins (Feature 03 v3, product decision 2026-10-16).
+ *
+ * The previous model promoted one person to `pending` and still needed the driver to approve her,
+ * which meant a freed seat could sit empty for up to 48 hours waiting on one reply while four
+ * people waited behind her. Everybody on this list is already driver-approved — she approved them
+ * when she waitlisted them — so acceptance IS the seat, and the others are told somebody was
+ * quicker rather than being refused.
  */
-it('promotes the first in line when a seat comes free, without booking them', function () {
+it('offers a freed seat to everybody waiting, without booking anybody', function () {
     $first = joinWaitlist('01222220001', 'pax-2', $this->commuteId, $this->trip->id);
     $second = joinWaitlist('01222220002', 'pax-3', $this->commuteId, $this->trip->id);
 
@@ -72,64 +83,133 @@ it('promotes the first in line when a seat comes free, without booking them', fu
         ->patchJson("/api/v1/bookings/{$this->bookingId}/cancel", ['reason' => 'Plans changed'])
         ->assertOk();
 
-    $promoted = SeatRequest::query()->whereKey($first['id'])->sole();
+    $offers = SeatOffer::query()->where('scheduled_trip_id', $this->trip->id)->get();
 
-    expect($promoted->status)->toBe(SeatRequestStatus::Pending)
-        // No longer waiting, so no place in a queue.
-        ->and($promoted->waitlist_position)->toBeNull()
-        // NOT booked. The driver still decides.
-        ->and(Booking::query()
-            ->where('passenger_user_id', $promoted->passenger_user_id)
-            ->exists())->toBeFalse();
+    expect($offers)->toHaveCount(2)
+        ->and($offers->pluck('status')->unique()->all())->toBe([SeatOfferStatus::Open])
+        ->and($offers->pluck('seat_request_id')->sort()->values()->all())
+        ->toBe(collect([$first['id'], $second['id']])->sort()->values()->all());
 
-    // And they are now in the driver's inbox to be answered.
-    test()->withToken($this->driverToken)->getJson('/api/v1/driver/seat-requests')
-        ->assertOk()
-        ->assertJsonCount(3, 'data');
+    // Still waiting, and still nobody's seat: an offer promises nothing until it is accepted.
+    expect(SeatRequest::query()->whereKey($first['id'])->sole()->status)
+        ->toBe(SeatRequestStatus::Waitlisted)
+        ->and(Booking::query()->where('status', 'confirmed')->count())->toBe(0);
 
-    // The person behind them moves up rather than being left at number two.
-    expect(SeatRequest::query()->whereKey($second['id'])->sole()->waitlist_position)->toBe(1);
-});
-
-it('promotes only one person per freed seat', function () {
-    joinWaitlist('01222220001', 'pax-2', $this->commuteId, $this->trip->id);
-    joinWaitlist('01222220002', 'pax-3', $this->commuteId, $this->trip->id);
-    joinWaitlist('01222220003', 'pax-4', $this->commuteId, $this->trip->id);
-
-    test()->withToken($this->riderToken)
-        ->patchJson("/api/v1/bookings/{$this->bookingId}/cancel")->assertOk();
-
-    // One seat freed, one promotion. Promoting the queue would leave three hopeful
-    // people competing for one seat and two of them finding out by refusal.
-    expect(SeatRequest::query()->where('status', SeatRequestStatus::Pending->value)->count())->toBe(1)
-        ->and(SeatRequest::query()->where('status', SeatRequestStatus::Waitlisted->value)->count())->toBe(2);
+    // One cancellation is one event, however many people it reached.
+    expect($offers->pluck('release_event_id')->unique())->toHaveCount(1);
 });
 
 /**
- * The clock restarts on promotion. The 48 hours were spent waiting for a seat, not
- * waiting for an answer, and expiring a request the driver has only just been shown
- * would refuse it on their behalf.
+ * 🔴 One seat, one winner — the guarantee the old single-promotion model got by never offering
+ * twice, and which this model has to earn under a lock.
  */
-it('gives a promoted request a fresh window to be answered in', function () {
+it('gives the seat to the first acceptance and tells the rest it is gone', function () {
     $first = joinWaitlist('01222220001', 'pax-2', $this->commuteId, $this->trip->id);
-
-    /*
-     * The request is aged in the database rather than by travelling the clock: an
-     * access token does not survive 47 hours, so a time-travelling version of this
-     * test would be asserting about the session instead of the queue.
-     */
-    SeatRequest::query()->whereKey($first['id'])->update(['expires_at' => now()->addHour()]);
+    $second = joinWaitlist('01222220002', 'pax-3', $this->commuteId, $this->trip->id);
+    $third = joinWaitlist('01222220003', 'pax-4', $this->commuteId, $this->trip->id);
 
     test()->withToken($this->riderToken)
         ->patchJson("/api/v1/bookings/{$this->bookingId}/cancel")->assertOk();
 
-    $promoted = SeatRequest::query()->whereKey($first['id'])->sole();
+    $winner = SeatOffer::query()->where('seat_request_id', $second['id'])->sole();
 
-    expect($promoted->status)->toBe(SeatRequestStatus::Pending)
-        // The full window again, not the hour that was left of the old one.
-        ->and($promoted->expires_at->isAfter(now()->addHours(
-            (int) config('rafeeq.booking.request_expiry_hours') - 1
-        )))->toBeTrue();
+    app(AcceptSeatOfferAction::class)->execute($winner);
+
+    $offers = SeatOffer::query()->get()->keyBy('seat_request_id');
+
+    expect($offers[$second['id']]->status)->toBe(SeatOfferStatus::Accepted)
+        /*
+         * The other two are `taken_by_other`, not `closed` and not a refusal. Somebody was quicker,
+         * which is what a waiting list means — and the word has to be the true one, because a
+         * person reading her own history should be able to tell that apart from a seat that
+         * evaporated.
+         */
+        ->and($offers[$first['id']]->status)->toBe(SeatOfferStatus::TakenByOther)
+        ->and($offers[$third['id']]->status)->toBe(SeatOfferStatus::TakenByOther);
+
+    /*
+     * The winner is booked without a second approval, and only she is. Counted per passenger
+     * rather than globally: the fixture already contains confirmed bookings, so a global count
+     * would be asserting about the setup instead of about the race.
+     */
+    $winnerRequest = SeatRequest::query()->whereKey($second['id'])->sole();
+
+    expect($winnerRequest->status)->toBe(SeatRequestStatus::Approved)
+        ->and(Booking::query()->where('passenger_user_id', $winnerRequest->passenger_user_id)->count())->toBe(1)
+        ->and(Booking::query()->whereIn('passenger_user_id', [
+            SeatRequest::query()->whereKey($first['id'])->sole()->passenger_user_id,
+            SeatRequest::query()->whereKey($third['id'])->sole()->passenger_user_id,
+        ])->count())->toBe(0);
+});
+
+/**
+ * 🔒 The race, decided by the server rather than by whose phone was quicker.
+ *
+ * v3 is explicit that accepting "first accept" does **not** authorise first-device-tap priority:
+ * who reaches us first depends on her signal and her distance from the data centre, neither of
+ * which is a fair basis for giving away a seat. So the loser is refused under the same lock that
+ * seat approval uses, with a code that says what happened.
+ */
+it('refuses a second acceptance of the same seat, as a state refusal and not a fault', function () {
+    $first = joinWaitlist('01222220001', 'pax-2', $this->commuteId, $this->trip->id);
+    $second = joinWaitlist('01222220002', 'pax-3', $this->commuteId, $this->trip->id);
+
+    test()->withToken($this->riderToken)
+        ->patchJson("/api/v1/bookings/{$this->bookingId}/cancel")->assertOk();
+
+    app(AcceptSeatOfferAction::class)->execute(
+        SeatOffer::query()->where('seat_request_id', $first['id'])->sole()
+    );
+
+    $late = SeatOffer::query()->where('seat_request_id', $second['id'])->sole();
+
+    expect(fn () => app(AcceptSeatOfferAction::class)->execute($late))
+        ->toThrow(DomainException::class);
+
+    // And no seat was invented for her.
+    $loser = SeatRequest::query()->whereKey($second['id'])->sole();
+
+    expect(Booking::query()->where('passenger_user_id', $loser->passenger_user_id)->count())->toBe(0)
+        ->and($loser->status)->toBe(SeatRequestStatus::Waitlisted);
+});
+
+/**
+ * Position survives as a FORECAST, which was the product decision: the design shows
+ * "Position 1 of 2 · Est. seat within ~1 week", and that is kept as an estimate rather than a
+ * promise of order. Nothing in the allocation path reads it.
+ */
+it('still keeps the queue numbered, even though the seat is a race', function () {
+    joinWaitlist('01222220001', 'pax-2', $this->commuteId, $this->trip->id);
+    $second = joinWaitlist('01222220002', 'pax-3', $this->commuteId, $this->trip->id);
+
+    test()->withToken($this->riderToken)
+        ->patchJson("/api/v1/bookings/{$this->bookingId}/cancel")->assertOk();
+
+    // The person at position 2 wins, which a strict queue would have forbidden.
+    app(AcceptSeatOfferAction::class)->execute(
+        SeatOffer::query()->where('seat_request_id', $second['id'])->sole()
+    );
+
+    // She leaves the list, so the one behind her moves up to 1.
+    expect(SeatRequest::query()->where('status', SeatRequestStatus::Waitlisted->value)
+        ->pluck('waitlist_position')->all())->toBe([1]);
+});
+
+/**
+ * An offer is not sent twice for the same seat. A retried job or an overlapping run must not give
+ * one person two chances, and the unique index is what makes that true rather than care.
+ */
+it('does not offer the same seat to the same person twice', function () {
+    $first = joinWaitlist('01222220001', 'pax-2', $this->commuteId, $this->trip->id);
+
+    test()->withToken($this->riderToken)
+        ->patchJson("/api/v1/bookings/{$this->bookingId}/cancel")->assertOk();
+
+    // The fan-out runs again, as a retry would.
+    $offered = app(OfferSeatToWaitlistAction::class)->forTrip($this->trip->refresh(), 1);
+
+    expect($offered)->toBe(0)
+        ->and(SeatOffer::query()->where('seat_request_id', $first['id'])->count())->toBe(1);
 });
 
 it('does not promote somebody waiting for a different day', function () {
@@ -206,7 +286,7 @@ it('never hands out a position somebody else already holds', function () {
         ->and($positions->count())->toBe($positions->unique()->count());
 });
 
-it('does not promote an expired request', function () {
+it('does not offer the seat to an expired request', function () {
     $first = joinWaitlist('01222220001', 'pax-2', $this->commuteId, $this->trip->id);
     $second = joinWaitlist('01222220002', 'pax-3', $this->commuteId, $this->trip->id);
 
@@ -216,10 +296,14 @@ it('does not promote an expired request', function () {
     test()->withToken($this->riderToken)
         ->patchJson("/api/v1/bookings/{$this->bookingId}/cancel")->assertOk();
 
-    expect(SeatRequest::query()->whereKey($first['id'])->sole()->status)
-        ->toBe(SeatRequestStatus::Waitlisted)
-        ->and(SeatRequest::query()->whereKey($second['id'])->sole()->status)
-        ->toBe(SeatRequestStatus::Pending);
+    /*
+     * 🔴 She is skipped entirely rather than offered and then refused. An expired request is not a
+     * person who is still hoping, and sending her "a seat just opened up" would be waking somebody
+     * up about a commute she stopped waiting for.
+     */
+    expect(SeatOffer::query()->where('seat_request_id', $first['id'])->exists())->toBeFalse()
+        ->and(SeatOffer::query()->where('seat_request_id', $second['id'])->sole()->status)
+        ->toBe(SeatOfferStatus::Open);
 });
 
 it('does not promote somebody who needs more seats than came free', function () {
@@ -346,4 +430,62 @@ it('refuses to park anybody once the queue is full', function () {
         ->postJson("/api/v1/driver/seat-requests/{$requestId}/waitlist")
         ->assertStatus(409)
         ->assertJsonPath('error.code', 'BOOKING_WAITLIST_FULL');
+});
+
+/**
+ * The endpoints a waiting passenger actually uses.
+ */
+it('lets her see and take the seat over HTTP, and refuses the one who was slower', function () {
+    $first = joinWaitlist('01222220001', 'pax-2', $this->commuteId, $this->trip->id);
+    $second = joinWaitlist('01222220002', 'pax-3', $this->commuteId, $this->trip->id);
+
+    test()->withToken($this->riderToken)
+        ->patchJson("/api/v1/bookings/{$this->bookingId}/cancel")->assertOk();
+
+    $firstToken = $first['token'];
+    $secondToken = $second['token'];
+
+    // She sees exactly her own offer — never the other person's.
+    $listed = test()->withToken($firstToken)->getJson('/api/v1/seat-offers')
+        ->assertOk()->json('data');
+
+    expect($listed)->toHaveCount(1)
+        ->and($listed[0]['status'])->toBe('OPEN')
+        ->and($listed[0]['seatRequestId'])->toBe($first['id'])
+        // 🔒 No position, no "first in line", nothing about who else is racing.
+        ->and($listed[0])->not->toHaveKey('position');
+
+    test()->withToken($firstToken)
+        ->postJson("/api/v1/seat-offers/{$listed[0]['id']}/accept")
+        ->assertOk()
+        ->assertJsonPath('data.status', 'CONFIRMED');
+
+    // The slower one is told somebody was quicker — a 409 with the reason, not a 500.
+    $hers = test()->withToken($secondToken)->getJson('/api/v1/seat-offers')
+        ->assertOk()->json('data.0');
+
+    test()->withToken($secondToken)
+        ->postJson("/api/v1/seat-offers/{$hers['id']}/accept")
+        ->assertStatus(409)
+        ->assertJsonPath('error.code', 'SEAT_OFFER_CLOSED');
+});
+
+/**
+ * 🔒 Somebody else's offer is a 404, not a 403: a 403 would confirm the id exists, which turns the
+ * endpoint into an oracle for who is waiting on which commute.
+ */
+it('answers 404 for an offer that is not hers', function () {
+    $first = joinWaitlist('01222220001', 'pax-2', $this->commuteId, $this->trip->id);
+    joinWaitlist('01222220002', 'pax-3', $this->commuteId, $this->trip->id);
+
+    test()->withToken($this->riderToken)
+        ->patchJson("/api/v1/bookings/{$this->bookingId}/cancel")->assertOk();
+
+    $hers = SeatOffer::query()->where('seat_request_id', $first['id'])->sole();
+
+    $stranger = verifiedPassenger('01222229999', device: 'pax-stranger');
+
+    test()->withToken($stranger)
+        ->postJson("/api/v1/seat-offers/{$hers->id}/accept")
+        ->assertStatus(404);
 });

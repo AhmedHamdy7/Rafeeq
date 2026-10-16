@@ -81,6 +81,17 @@ enum ErrorCode: string
     case SeatUnavailable = 'SEAT_UNAVAILABLE';
     case RulesNotAgreed = 'BOOKING_RULES_NOT_AGREED';
     case AlreadyRequested = 'BOOKING_ALREADY_REQUESTED';
+
+    /**
+     * A freed seat was offered to everybody waiting, and this offer is no longer live — usually
+     * because somebody accepted first (Feature 03 v3: "first eligible server-committed acceptance
+     * wins").
+     *
+     * 🔴 A refusal, but not a fault. `error.fields.status` says which: `taken_by_other` means
+     * somebody was quicker, `closed` that the seat stopped existing, `ineligible` that she stopped
+     * qualifying. Show "somebody was quicker", never "something went wrong".
+     */
+    case SeatOfferClosed = 'SEAT_OFFER_CLOSED';
     case AlreadyBooked = 'BOOKING_ALREADY_BOOKED';
     case BookingDeadlinePassed = 'BOOKING_DEADLINE_PASSED';
     case SeatRequestNotPending = 'SEAT_REQUEST_NOT_PENDING';
@@ -244,6 +255,8 @@ enum ErrorCode: string
              */
             self::SeatUnavailable,
             self::AlreadyRequested,
+            // She lost a race, which is a state refusal rather than a bad request.
+            self::SeatOfferClosed,
             self::AlreadyBooked,
             self::SeatRequestNotPending,
             self::WaitlistFull,

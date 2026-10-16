@@ -215,6 +215,8 @@ it('generates a document describing every /v1 route', function () {
 
         // Phase 7 — seat requests, bookings and groups (Chapter 6, §889).
         'POST /v1/commutes/{commute}/seat-requests',
+        'GET /v1/seat-offers',
+        'POST /v1/seat-offers/{offer}/accept',
         'GET /v1/seat-requests',
         'DELETE /v1/seat-requests/{seatRequest}',
         'GET /v1/my-bookings',

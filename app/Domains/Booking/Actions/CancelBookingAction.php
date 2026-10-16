@@ -34,7 +34,7 @@ use Illuminate\Support\Facades\DB;
  */
 final readonly class CancelBookingAction
 {
-    public function __construct(private PromoteFromWaitlistAction $promote) {}
+    public function __construct(private OfferSeatToWaitlistAction $offerSeat) {}
 
     /**
      * @param  bool  $notify  false for the bulk paths (a planned absence, leaving a group), which
@@ -139,9 +139,9 @@ final readonly class CancelBookingAction
                  * moved to the front of a queue for nothing.
                  *
                  * Promotion moves them into the driver's inbox — it does not seat
-                 * them. See {@see PromoteFromWaitlistAction}.
+                 * them. See {@see OfferSeatToWaitlistAction}.
                  */
-                $this->promote->forTrip($trip, $release);
+                $this->offerSeat->forTrip($trip, $release);
             }
 
             BookingEventLog::record(

@@ -65,6 +65,7 @@ return [
 
     // طلبات المقاعد والحجوزات.
     'SEAT_UNAVAILABLE' => 'المقاعد في اليوم ده اتحجزت حالًا.',
+    'SEAT_OFFER_CLOSED' => 'المقعد ده روح لحد تاني.',
     'BOOKING_RULES_NOT_AGREED' => 'وافق على قواعد المجموعة قبل ما تطلب مقعد.',
     'BOOKING_ALREADY_REQUESTED' => 'عندك طلب مفتوح على الرحلة دي بالفعل.',
     'BOOKING_ALREADY_BOOKED' => 'عندك مقعد في اليوم ده بالفعل.',

@@ -65,6 +65,8 @@ return [
 
     // Seat requests and bookings.
     'SEAT_UNAVAILABLE' => 'The seats on that day have just been taken.',
+    // Somebody was quicker. Not a fault of hers, and the wording should not imply one.
+    'SEAT_OFFER_CLOSED' => 'That seat has already gone to someone else.',
     'BOOKING_RULES_NOT_AGREED' => 'Please agree to the group rules before requesting a seat.',
     'BOOKING_ALREADY_REQUESTED' => 'You already have a request open for this commute.',
     'BOOKING_ALREADY_BOOKED' => 'You already have a seat on that day.',

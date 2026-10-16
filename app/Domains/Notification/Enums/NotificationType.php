@@ -47,6 +47,15 @@ enum NotificationType: string
      */
     case BookingVehicleChanged = 'booking_vehicle_changed';
 
+    /**
+     * A seat she was waiting for came free and is being offered to her — and to everybody else on
+     * the list at the same time (Feature 03 v3: first acceptance wins).
+     *
+     * 🔴 The wording must not promise her the seat. She is being told a race has started, and the
+     * notification is the starting gun rather than the prize.
+     */
+    case SeatOffered = 'seat_offered';
+
     public function category(): NotificationCategory
     {
         return match ($this) {
@@ -61,6 +70,7 @@ enum NotificationType: string
             self::SeatDeclined,
             self::BookingCancelled,
             self::BookingVehicleChanged,
+            self::SeatOffered,
             self::TripDayCancelled,
             self::MatchFound => NotificationCategory::Booking,
 

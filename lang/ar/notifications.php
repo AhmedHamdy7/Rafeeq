@@ -51,6 +51,10 @@ return [
         'title' => 'حجز اتلغى',
         'body' => 'الحجز بتاع يوم :date اتلغى من :name.',
     ],
+    'seat_offered' => [
+        'title' => 'مقعد فضي',
+        'body' => 'في مقعد فاضي يوم :date. أول حد يقبل بياخده.',
+    ],
     'booking_vehicle_changed' => [
         'title' => 'العربية اتغيّرت',
         'body' => ':name غيّرت العربية. هتيجي لك :vehicle، لوحة :plate.',
