@@ -403,6 +403,33 @@ return [
         'on_time_threshold_minutes' => 10,
 
         /*
+         * How late a run may ARRIVE against the driver's promised arrival and still count as on
+         * time. Product decision, 2026-10-16: five minutes.
+         *
+         * 🔴 Tighter than the ten allowed for departure, and deliberately so. Leaving late is
+         * partly the city's fault; arriving late against a time SHE chose and published is a
+         * promise she made to somebody planning a working day around it. The passenger's whole
+         * reason for picking a commute over a taxi is that the arrival is predictable.
+         *
+         * A run whose day carries no promise is not measured against this at all — no promise, no
+         * breach. See `CompleteTripAction::recomputeOnTimeRate()`.
+         */
+        'arrival_tolerance_minutes' => 5,
+
+        /*
+         * Which definition of `on_time_rate` a stored figure was computed under.
+         *
+         * 🔴 Bumped whenever the rule changes — a new tolerance, a new numerator, a new exclusion.
+         * Without it, a percentage whose DEFINITION moved is indistinguishable from a driver who
+         * got worse, and v3 asks for exactly this: "expose metric version and counts to avoid
+         * silently changing scores."
+         *
+         * 2 = departure within `on_time_threshold_minutes` AND, where a promise exists, arrival
+         * within `arrival_tolerance_minutes`. (1 was departure alone.)
+         */
+        'on_time_metric_version' => 2,
+
+        /*
          * The wait timer's grace period — Bible §7, "5 minutes".
          *
          * 🔴 A passenger who is two minutes away is not a no-show, and a driver who

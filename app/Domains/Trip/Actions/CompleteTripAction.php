@@ -230,7 +230,13 @@ final readonly class CompleteTripAction
      * judged either way, and counting it as late would penalise a driver for a gap in our
      * own data.
      */
-    private function recomputeOnTimeRate(DriverProfile $profile): void
+    /**
+     * Public because recomputing a driver's punctuality from her rows is a legitimate operation on
+     * its own, not only a side effect of completing a run: a backfill after the rule changes, an
+     * admin correcting a disputed record, or a test pinning the rule all want exactly this. It is
+     * idempotent by construction — it counts rows rather than adjusting a stored figure.
+     */
+    public function recomputeOnTimeRate(DriverProfile $profile): void
     {
         $threshold = (int) config('rafeeq.trip.on_time_threshold_minutes');
 
@@ -250,13 +256,61 @@ final readonly class CompleteTripAction
         }
 
         $onTime = $sessions->filter(
-            fn (TripSession $session) => $session->scheduledTrip->departure_at
-                ->diffInMinutes($session->departed_at, absolute: false) <= $threshold,
+            fn (TripSession $session) => $this->ranToTime($session, $threshold),
         )->count();
 
         $profile->forceFill([
             'on_time_rate' => round($onTime / $sessions->count() * 100, 2),
+            /*
+             * Stamped with the rule that produced it, and the number of runs behind it.
+             *
+             * A percentage whose DEFINITION moved is indistinguishable from a driver whose driving
+             * got worse, and this figure is shown to strangers deciding whether to get into her
+             * car. 88% over nine runs and 88% over four hundred are also different claims.
+             */
+            'on_time_metric_version' => (int) config('rafeeq.trip.on_time_metric_version'),
+            'on_time_sample_size' => $sessions->count(),
         ])->save();
+    }
+
+    /**
+     * Whether one completed run counts as on time.
+     *
+     * 🔴 Two conditions, and the second is new (Feature 03 v3, product decision 2026-10-16: a
+     * missed promised arrival counts against her, within a five-minute tolerance).
+     *
+     * Arrival is ADDED rather than substituted. Departure punctuality is a real signal and is
+     * already published; replacing it would silently discard the metric for every commute published
+     * before promises existed. And a day with no promise is judged exactly as it is today — **no
+     * promise, no breach** — which is the same principle `promised_arrival_at` was created under.
+     *
+     * The actual arrival is `completed_at`: the driver completing the run IS the arrival, so
+     * nothing extra is recorded to know it.
+     *
+     * The tolerance is tighter than departure's ten minutes on purpose. Leaving late is partly the
+     * city's fault; arriving late against a time SHE chose and published is a promise she made to
+     * somebody planning a working day around it.
+     */
+    private function ranToTime(TripSession $session, int $departureThreshold): bool
+    {
+        $trip = $session->scheduledTrip;
+
+        $leftOnTime = $trip->departure_at
+            ->diffInMinutes($session->departed_at, absolute: false) <= $departureThreshold;
+
+        if (! $leftOnTime) {
+            return false;
+        }
+
+        // No promise, or no recorded arrival — neither can be judged, and counting either as late
+        // would penalise her for a gap in our own data rather than for her driving.
+        if ($trip->promised_arrival_at === null || $session->completed_at === null) {
+            return true;
+        }
+
+        return $trip->promised_arrival_at
+            ->diffInMinutes($session->completed_at, absolute: false)
+            <= (int) config('rafeeq.trip.arrival_tolerance_minutes');
     }
 
     /**

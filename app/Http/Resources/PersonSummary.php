@@ -74,9 +74,37 @@ final class PersonSummary
                 ? (int) ($stats->completed_trips_as_driver ?? 0)
                 : (int) ($stats->completed_trips_as_passenger ?? 0),
 
-            // Also null until Phase 9 computes it from real trips, for the same reason.
-            'onTimeRate' => $stats?->on_time_rate === null ? null : (float) $stats->on_time_rate,
+            /*
+             * 🔴 Read from the driver profile when this is the DRIVER side, and that is a fix
+             * rather than a nicety.
+             *
+             * `CompleteTripAction` computes a driver's punctuality into
+             * `driver_profiles.on_time_rate`. This method used to read `user_stats.on_time_rate`
+             * for both roles — a column no production code writes, only the seeders — so a real
+             * driver's computed rate was never shown to anybody. It stayed null for ever while the
+             * guide said "null until computed", which made a discarded number look deliberate.
+             *
+             * Still null for a passenger, and honestly so: nothing computes passenger punctuality
+             * yet, and v3 says the two "must be calculated separately".
+             */
+            'onTimeRate' => self::onTimeRate($person, $stats, $asDriver),
         ];
+    }
+
+    /**
+     * Whichever of the two punctuality figures belongs to the role being shown.
+     */
+    private static function onTimeRate(User $person, mixed $stats, bool $asDriver): ?float
+    {
+        if ($asDriver) {
+            $person->loadMissing('driverProfile');
+
+            $rate = $person->driverProfile?->on_time_rate;
+
+            return $rate === null ? null : (float) $rate;
+        }
+
+        return $stats?->on_time_rate === null ? null : (float) $stats->on_time_rate;
     }
 
     /**

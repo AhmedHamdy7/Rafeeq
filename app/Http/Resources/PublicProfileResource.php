@@ -100,6 +100,19 @@ final class PublicProfileResource extends JsonResource
                 'completedTrips' => $asDriver['completedTrips'],
                 'rating' => $asDriver['rating'],
                 'onTimeRate' => $asDriver['onTimeRate'],
+                /*
+                 * 🔴 How that percentage was computed, and over how many runs.
+                 *
+                 * Published because the number is shown to a stranger deciding whether to get into
+                 * her car, and two drivers at "88%" computed under different rules are not
+                 * comparable — nothing else in the payload would say so. 88% over nine runs and
+                 * 88% over four hundred are different claims too.
+                 *
+                 * Null on a rate computed before the rule was recorded, which is the honest answer
+                 * rather than stamping it with today's version.
+                 */
+                'onTimeMetricVersion' => $person->driverProfile?->on_time_metric_version,
+                'onTimeSampleSize' => $person->driverProfile?->on_time_sample_size,
             ]),
 
             'reviews' => [

@@ -56,6 +56,10 @@ class DriverProfile extends Model
             'completed_trips_count' => 'integer',
             'cancellation_rate' => 'decimal:2',
             'on_time_rate' => 'decimal:2',
+            // Which rule produced the rate, and over how many runs. Null on a figure computed
+            // before the rule was recorded — see the migration on why that is not backfilled.
+            'on_time_metric_version' => 'integer',
+            'on_time_sample_size' => 'integer',
         ];
     }
 
