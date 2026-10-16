@@ -42,6 +42,21 @@ final class BookingResource extends JsonResource
             'seatsReserved' => $this->seats_reserved,
 
             /*
+             * The code to check against the car at the kerb, shown beside the plate.
+             *
+             * 🔒 Returned to BOTH sides on purpose, and that is what makes it usable: a code only
+             * the passenger can see is a code nobody can confirm. She asks, the driver reads it
+             * off her own list, and the plate and the number agree or they do not.
+             *
+             * This Resource is already scoped to the two people on the booking — the passenger who
+             * holds it and the driver who approved it — so there is nobody else it reaches.
+             *
+             * ⚠️ It decides nothing: D18 gives attendance to the driver's tap, and the Master Plan
+             * rejected a code for that job ("a PIN fails when somebody is running for the car").
+             */
+            'boardingCode' => $this->boarding_code,
+
+            /*
              * Frozen at approval and never recomputed. A driver raising their price
              * tomorrow, or the platform changing its percentage, moves nothing here.
              */

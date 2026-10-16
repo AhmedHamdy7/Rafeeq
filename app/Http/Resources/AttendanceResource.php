@@ -27,6 +27,18 @@ final class AttendanceResource extends JsonResource
             'status' => strtoupper($this->status->value),
 
             /*
+             * The passenger's boarding code, so the DRIVER can confirm the number she is told at
+             * the kerb. This list is the driver's own run, and the attendance endpoint is already
+             * driver-only.
+             *
+             * 🔒 It is a cross-check, not a credential, and it must not become one: attendance is
+             * still decided by `check-in` (D18), which deliberately takes no code — "a PIN fails
+             * when somebody is running for the car". A driver whose passenger cannot produce the
+             * number still checks her in if it is plainly her.
+             */
+            'boardingCode' => $this->booking?->boarding_code,
+
+            /*
              * Stated rather than inferred from the status, because the client would have
              * to hard-code which values count as having travelled — and then disagree with
              * the server the first time one is added.

@@ -53,6 +53,20 @@ final readonly class CreateBookingAction
         ]);
 
         /*
+         * The code the passenger checks against the car at the kerb, shown beside the plate on the
+         * active-trip screen.
+         *
+         * 🔴 Minted here, with the booking, rather than at departure — she needs it the evening
+         * before, when she is looking at tomorrow's journey and deciding whether to go.
+         *
+         * 🔒 It decides NOTHING. D18 gives attendance to the driver's tap, and the Master Plan
+         * rejected a code for that job outright: "a PIN fails when somebody is running for the
+         * car." This answers the other question — "is this the right car?" — and no money, no-show
+         * or refusal may ever depend on it.
+         */
+        $booking->boarding_code = self::newBoardingCode();
+
+        /*
          * Confirmed on creation, not pending.
          *
          * Chapter 6 shows `pending -> confirmed`, and that sequence belongs to
@@ -80,5 +94,23 @@ final readonly class CreateBookingAction
         );
 
         return $booking;
+    }
+
+    /**
+     * Four digits, read aloud through a car window.
+     *
+     * 🔒 `random_int`, not `rand`: it is cryptographically seeded, and the cost of getting this
+     * wrong is that somebody can predict the code a stranger is about to be asked for. Four digits
+     * is only 10,000 possibilities, so predictability is the whole of its strength — guessing is
+     * already cheap, which is exactly why this may never be the thing that decides anything.
+     *
+     * Not checked for uniqueness, deliberately. It is scoped to one passenger on one journey and
+     * compared by a person who already has the plate in front of her, so two passengers sharing
+     * `7391` on different mornings collide with nothing. A uniqueness loop would imply a guarantee
+     * the field does not make.
+     */
+    private static function newBoardingCode(): string
+    {
+        return str_pad((string) random_int(0, 9999), 4, '0', STR_PAD_LEFT);
     }
 }
