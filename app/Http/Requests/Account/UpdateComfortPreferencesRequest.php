@@ -2,23 +2,22 @@
 
 namespace App\Http\Requests\Account;
 
+use App\Domains\Commute\Enums\CommuteRuleKey;
 use App\Domains\Identity\Enums\Capability;
-use App\Domains\Identity\Enums\ComfortPreference;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
 
 /**
- * What a person wants the inside of the car to be like.
+ * The comfort chips a person wants remembered.
  *
  * ---
  *
  * Maintainer notes (comments above the rules are published as field descriptions in the OpenAPI
  * document, so they are written for the mobile team — binding standard #38):
  *
- * The same four questions mean opposite things in the two modes, which is why `mode` is required
- * rather than inferred from the active one: a passenger is describing what she wants, a driver is
- * setting rules for her own car, and submitting one as the other would quietly overwrite the wrong
- * row.
+ * The chips are the same vocabulary a commute's rules and a search's `requiredRules` already use,
+ * on purpose: saving a default is only useful if it can prefill a search, and it can only do that
+ * if it speaks the same words.
  */
 final class UpdateComfortPreferencesRequest extends FormRequest
 {
@@ -27,25 +26,26 @@ final class UpdateComfortPreferencesRequest extends FormRequest
         return [
             /*
              * Which side you are answering as: `passenger` or `driver`. Required, because the same
-             * answers mean different things — as a passenger you are saying what you would like,
-             * as a driver you are saying what your car allows.
+             * chips mean different things — as a passenger you are saying what you would like, as
+             * a driver what your car offers.
              */
             'mode' => ['required', 'string', Rule::enum(Capability::class)],
 
             /*
-             * Each answer is `yes`, `no` or `either`, and every field is optional — send only what
-             * changed. `either` means no preference and is the default; it is not the same as `no`.
+             * The chips you want remembered, as a list: `nonsmoking`, `quiet`, `ac`, `nofood`,
+             * `luggage`, `front`. Send the whole list — it replaces what was stored.
              *
-             * As a passenger: whether you want it. As a driver: whether your car allows it.
+             * An empty list is a real answer ("none of them") and is kept as one. Omit the field
+             * entirely and nothing changes.
              */
-            'smoking' => ['sometimes', 'nullable', 'string', Rule::enum(ComfortPreference::class)],
+            /*
+             * 🔴 `present`, not `required`. Laravel's `required` rejects an empty array, which
+             * would make "none of them" — a real answer somebody chose — impossible to send, and
+             * leave the client no way to clear a saved list.
+             */
+            'rules' => ['present', 'array'],
 
-            'music' => ['sometimes', 'nullable', 'string', Rule::enum(ComfortPreference::class)],
-
-            // `yes` means happy to chat.
-            'conversation' => ['sometimes', 'nullable', 'string', Rule::enum(ComfortPreference::class)],
-
-            'airConditioning' => ['sometimes', 'nullable', 'string', Rule::enum(ComfortPreference::class)],
+            'rules.*' => ['string', Rule::enum(CommuteRuleKey::class)],
         ];
     }
 }

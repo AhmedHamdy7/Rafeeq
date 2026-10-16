@@ -2,45 +2,47 @@
 
 namespace App\Domains\Identity\Actions;
 
+use App\Domains\Commute\Enums\CommuteRuleKey;
 use App\Domains\Identity\Enums\Capability;
-use App\Domains\Identity\Enums\ComfortPreference;
 use App\Domains\Identity\Models\User;
-use App\Domains\Identity\Models\UserComfortPreference;
+use App\Domains\Identity\Models\UserPreference;
 
 /**
- * Saving what somebody wants the inside of the car to be like, for one mode.
+ * Saving the comfort chips somebody wants remembered (Feature 02 v3: "Comfort & atmosphere").
  *
- * 🔒 Grants nothing and filters nothing. Four stored answers, and the only thing reading them is
- * the screen that shows them back — see the migration for why that restraint is deliberate rather
- * than unfinished.
+ * 🔴 Writes `CommuteRuleKey` values onto `user_preferences`, rather than a vocabulary of its own.
+ * An earlier version of this created a parallel `user_comfort_preferences` table with its own enum;
+ * it duplicated the six chips `CommuteRuleKey` already defines, and nothing read it. See the
+ * migration that removed it.
+ *
+ * 🔒 Saving a default does not filter anything. The passenger's chips reach the matcher as
+ * `requiredRules` on a search, where they are a SOFT score (`comfort_score`) and never an
+ * exclusion — which is what v3 asks for: "avoid claiming these are strict filters until matching
+ * rules are defined." Remembering her answer changes which searches are prefilled, not which
+ * commutes exist.
  */
 final readonly class UpdateComfortPreferencesAction
 {
-    /** The only fields this will write, mapped from payload name to column. */
-    private const array FIELDS = [
-        'smoking' => 'smoking',
-        'music' => 'music',
-        'conversation' => 'conversation',
-        'airConditioning' => 'air_conditioning',
-    ];
-
     /**
-     * @param  array<string, mixed>  $attributes  already validated upstream
+     * @param  array<int, string>  $rules  already validated as CommuteRuleKey values
      */
-    public function execute(User $user, Capability $mode, array $attributes): UserComfortPreference
+    public function execute(User $user, Capability $mode, array $rules): UserPreference
     {
-        $preference = UserComfortPreference::forUserAndMode($user, $mode);
+        $preference = UserPreference::forUser($user);
 
-        /*
-         * An allow-list rather than a loop over whatever arrived. v3 says "validate only agreed
-         * fields", and this is the second half of honouring that: the FormRequest decides what is
-         * acceptable, and this decides what is writable. A field added to the payload later cannot
-         * reach a column until somebody adds it here on purpose.
-         */
-        foreach (self::FIELDS as $field => $column) {
-            if (array_key_exists($field, $attributes) && $attributes[$field] !== null) {
-                $preference->{$column} = ComfortPreference::from((string) $attributes[$field]);
-            }
+        // Normalised and de-duplicated, so `['quiet','quiet']` from a double-tap stores once and
+        // the stored order is stable enough to compare in a test.
+        $clean = array_values(array_unique(array_map(
+            fn (string $rule): string => CommuteRuleKey::from($rule)->value,
+            $rules,
+        )));
+
+        sort($clean);
+
+        if ($mode === Capability::Driver) {
+            $preference->driver_comfort_rules = $clean;
+        } else {
+            $preference->passenger_comfort_rules = $clean;
         }
 
         $preference->save();

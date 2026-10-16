@@ -991,34 +991,47 @@ safety explanation before a given trip. Re-showing a walkthrough is a support ac
 
 #### `GET /account/comfort-preferences` · `PATCH /account/comfort-preferences` — signed-in
 
-What the inside of the car should be like. **One screen whose content changes with the active
-mode**, so the `GET` returns **both** modes in one call and you can switch without a round trip.
+The comfort chips you want remembered, so a passenger does not re-tick them on every search. **One
+screen whose content changes with the active mode**, so the `GET` returns **both** modes in one
+call and you can switch without a round trip.
 
 ```
-GET  → { passenger: {...}, driver: {...} }
-PATCH  { mode: "passenger", smoking: "no", music: "either" }
+GET  → { passenger: { chosen: true,  rules: ["nonsmoking","quiet"] },
+         driver:    { chosen: false, rules: [] } }
+
+PATCH  { mode: "passenger", rules: ["quiet", "nonsmoking"] }
+     → the same both-modes shape back
 ```
 
 | Field | Values |
 |---|---|
-| `mode` | `passenger` · `driver` — **required on PATCH.** |
-| `smoking` · `music` · `conversation` · `airConditioning` | `yes` · `no` · `either`. Optional — send only what changed. |
+| `mode` | `passenger` · `driver` — **required.** |
+| `rules[]` | `nonsmoking` · `quiet` · `ac` · `nofood` · `luggage` · `front`. **Replaces** the saved list. |
+| `chosen` | Whether she has ever answered for that mode. |
 
-🔴 **`either` means "no preference", and it is the default. Do not render it as "no".** Every
-question starts there, which is why it is a third value rather than a boolean: somebody who has
-never opened the screen has not refused music.
+🔴 **These are the same six chips a commute offers and a search already accepts** — the exact values
+you pass as `requiredRules` on `GET /search/commutes`, and the exact values a driver sets as the
+rules on her own commute. That is the point: a saved list can be handed straight to a search with no
+translation.
 
-**The same answer means opposite things in each mode**, which is why `mode` is required rather than
-taken from the active one: as a **passenger** you are saying what you would like, as a **driver**
-you are saying what your car allows. Submitting one as the other overwrites the wrong row.
+🔴 **`chosen: false` and `chosen: true, rules: []` are different, and the difference matters.** The
+first is "never answered" — do not send it to a search. The second is "none of them", a real answer
+she gave. Send `rules: []` to record that, or to clear a saved list.
 
-> 🔒 **These are not filters, and nothing in search reads them.** A test asserts it. Do not tell
-> people a commute was hidden because of a comfort answer, and do not build a UI that implies it —
-> the matching rules for this have not been decided, and a passenger silently excluded from every
-> commute because she ticked a box would have an empty result she cannot explain.
+*(This is a boolean rather than `null` vs `[]` on purpose: those two are one `?.` apart and read the
+same in most languages, so the distinction would have been lost in the first client that touched
+it.)*
 
-**Reading never creates a row**, so a `GET` from somebody who has never opened the screen returns
-the defaults without recording that they looked.
+**The same chip means opposite things in each mode**, which is why `mode` is required: as a
+**passenger** you are saying what you would like, as a **driver** what your car offers.
+
+> 🔒 **Saving a default filters nothing.** Your chips reach the matcher as `requiredRules`, where
+> they are a **soft score** (`score.comfort`) and never an exclusion — a commute offering none of
+> them is still returned, just lower. A test holds this. Do not tell somebody a commute was hidden
+> because of a comfort chip.
+
+**Reading never creates anything**, so a `GET` from somebody who has never opened the screen returns
+two nulls.
 
 #### `GET /users/{user}/public-profile` — active, profile complete
 
@@ -2690,7 +2703,7 @@ exist, and every live endpoint must be named here.
 
 | Date | Change |
 |---|---|
-| 2026-10-16 | ✅ **New: `GET` / `PATCH /account/comfort-preferences`** — smoking, music, conversation and AC, **per mode**, because the same answer means opposite things on each side (as a passenger what you want; as a driver what your car allows). The `GET` returns both modes in one call. `either` is "no preference" and the default — a third value rather than a boolean, so somebody who never opened the screen does not read as refusing music. 🔒 **Not filters:** nothing in search reads them and a test holds that, because the matching rules have not been decided and a passenger silently excluded for ticking a box would have an empty result she cannot explain. |
+| 2026-10-16 | ✅ **New: `GET` / `PATCH /account/comfort-preferences`** — the comfort chips you want remembered, **per mode**, so a passenger stops re-ticking them on every search. They are **the same six values a search already accepts** (`nonsmoking` · `quiet` · `ac` · `nofood` · `luggage` · `front`), so a saved list goes straight into `requiredRules` with no translation. `chosen` tells "never answered" apart from "none of them". 🔒 **Saving a default filters nothing** — the chips are a soft `score.comfort`, never an exclusion, and a test holds it. *(An earlier draft of this entry described four fields named `smoking`/`music`/`conversation`/`airConditioning` with `yes`/`no`/`either` values. That shape was replaced before release: it invented a second vocabulary for chips the matcher already understood, and nothing read it. If you built against it, switch to `rules[]`.)* |
 | 2026-10-16 | 🚗 **Vehicle replacement works, and it used to be impossible.** An approved driver could not add a vehicle at all — it answered `409 DRIVER_APPLICATION_LOCKED` — so she could not change her car without losing her approval first. Now she adds a replacement, it is reviewed on its own while her current car keeps working, and activating it moves her commutes across. 🔴 `POST /driver/vehicles/{vehicle}/activate` now **refuses an unapproved vehicle** with `422 VEHICLE_NOT_ALLOWED`, and refuses the whole swap with `422` if a live commute sells more seats than the replacement has — nothing is half-applied. Confirmed future bookings are **kept**, and each passenger gets the new `booking_vehicle_changed` notification **naming the car and plate**. |
 | 2026-10-16 | ✅ **New: `GET /users/{user}/public-profile`** — another member's profile as a stranger sees it, which is what a passenger opens to check out her driver. Public handle, avatar-or-initials, join month, per-role trips/rating/on-time, and the five most recent reviews. `isVerifiedDriver` is **true only when a reviewer actually approved her**. A suspended account answers the same `404` as an id that never existed. No `area` field, and never a full name, phone, email, date of birth, gender or document. Readable by an unverified passenger on purpose — checking out your driver is the thing we most want you to do. |
 | 2026-10-16 | 📌 **Three product answers now fixed, so you can build against them.** (1) **On-time tolerance is 5 minutes** — a pickup counts as on time within 5 minutes of the agreed time. The metric publishes `metricVersion` and the raw counts beside the percentage, so if the tolerance ever changes you can tell that it did. (2) **When a driver replaces her vehicle, confirmed future bookings are KEPT, not cancelled** — every affected passenger is notified, and 🔴 **the notification carries the new vehicle**, because the plate she was shown has changed and that is what she needs before standing on a kerb at 7am. (3) **Trusted contacts stay at 5**, not the 3 in the design docs — nobody loses a contact they already saved. |
