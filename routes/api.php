@@ -174,6 +174,13 @@ Route::prefix('v1')->group(function (): void {
             // with a refusal and no explanation.
             Route::get('eligibility', [DriverApplicationController::class, 'eligibility']);
 
+            /*
+             * The five-item checklist (Feature 02 v3). Outside the gate for the same reason as
+             * `eligibility`: it is the screen that explains what is missing, so requiring the
+             * thing it explains would make it unreachable in the one state it exists for.
+             */
+            Route::get('verification', [DriverApplicationController::class, 'verification']);
+
             Route::middleware('verified:government_id')->group(function (): void {
                 Route::get('application', [DriverApplicationController::class, 'show']);
                 Route::post('application', [DriverApplicationController::class, 'store']);

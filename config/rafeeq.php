@@ -66,6 +66,16 @@ return [
 
     'verification' => [
         /*
+         * How long before a licence expires the driver card starts warning her.
+         *
+         * A policy number, so it belongs here with a `platform_settings` override rather than as a
+         * literal in the read model (standard #11). Feature 02 v3 says renewal deadlines are
+         * configurable and explicitly "don't assume 30 days" — thirty is a starting point, not a
+         * rule, and an operator can move it without a deploy.
+         */
+        'licence_expiry_warning_days' => 30,
+
+        /*
          * DEPLOY-ONLY. Which filesystem disk holds identity documents.
          *
          * Decision D7: a private S3-compatible bucket, never a public URL.

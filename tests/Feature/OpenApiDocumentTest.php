@@ -129,6 +129,7 @@ it('generates a document describing every /v1 route', function () {
         'POST /v1/account/verifications/{type}/documents',
         'POST /v1/account/verifications/{type}/submit',
         'GET /v1/driver/eligibility',
+        'GET /v1/driver/verification',
         'GET /v1/driver/application',
         'POST /v1/driver/application',
         'PUT /v1/driver/application/licence',

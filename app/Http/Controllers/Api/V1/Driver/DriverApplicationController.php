@@ -6,6 +6,7 @@ use App\Domains\Driver\Actions\RecordLicenceDetailsAction;
 use App\Domains\Driver\Actions\StartDriverApplicationAction;
 use App\Domains\Driver\Actions\SubmitDriverApplicationAction;
 use App\Domains\Driver\Models\DriverProfile;
+use App\Domains\Driver\Support\DriverChecklist;
 use App\Domains\Driver\Support\DriverEligibility;
 use App\Domains\Shared\Exceptions\DomainException;
 use App\Domains\Shared\Support\ErrorCode;
@@ -29,6 +30,24 @@ final class DriverApplicationController extends Controller
     public function eligibility(Request $request): JsonResponse
     {
         return ApiResponse::success(DriverEligibility::for($request->user()));
+    }
+
+    /**
+     * GET /v1/driver/verification — the five-item checklist the driver card is drawn from
+     * (Feature 02 v3).
+     *
+     * 🔴 Outside the verification gate, alongside `eligibility`, and for the same reason: this
+     * endpoint exists to TELL somebody what she is missing. Putting it behind
+     * `verified:government_id` would mean the screen that explains the requirement is unreachable
+     * until the requirement is met — which is the one state it is for.
+     *
+     * A read model over rows that already exist; it decides nothing. Publishing and starting are
+     * gated by `CreateCommuteOfferAction` and `usableVehicle()`, which read those rows directly, so
+     * a bug here shows a wrong progress bar rather than letting anybody drive.
+     */
+    public function verification(Request $request): JsonResponse
+    {
+        return ApiResponse::success(DriverChecklist::for($request->user()));
     }
 
     /**

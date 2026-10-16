@@ -14,7 +14,7 @@
 >
 > **Base URL:** `{host}/api/v1` · **Auth:** bearer token · **Format:** JSON only.
 
-**Last updated:** 2026-10-16 · **133 endpoints live** · Phases 0–7, 9 and 11 complete · 10, 12 and 13 all but a decision each
+**Last updated:** 2026-10-16 · **134 endpoints live** · Phases 0–7, 9 and 11 complete · 10, 12 and 13 all but a decision each
 
 ---
 
@@ -22,7 +22,7 @@
 
 ### What is ready
 
-**133 endpoints live** and tested, across the 47 designed screens:
+**134 endpoints live** and tested, across the 47 designed screens:
 
 | | Count | Covers |
 |---|---|---|
@@ -707,6 +707,7 @@ fails if this list and the running routes ever disagree in either direction.
 | `PUT /driver/application/licence` | 4.4 Driver application and vehicles |
 | `POST /driver/application/submit` | 4.4 Driver application and vehicles |
 | `GET /driver/eligibility` | 4.4 Driver application and vehicles |
+| `GET /driver/verification` | 4.4 Driver application and vehicles |
 | `GET /driver/vehicles` | 4.4 Driver application and vehicles |
 | `POST /driver/vehicles` | 4.4 Driver application and vehicles |
 | `PATCH /driver/vehicles/{vehicle}` | 4.4 Driver application and vehicles |
@@ -1198,6 +1199,53 @@ read `error.fields` for which.
 > **Screens** 31 · **Shapes** —
 
 All of these need `verified:government_id` except `eligibility`.
+
+#### `GET /driver/verification` — active, profile complete
+
+**The five-item checklist your driver card is drawn from.** Reachable **without** any verification,
+on purpose: it is the screen that explains what is missing.
+
+```
+{ overall: "in_progress", completed: 3, of: 5, licenceExpiresAt: null,
+  items: [ { key: "government_id",       status: "approved",     rejectionReason: null, expiresAt: "..." },
+           { key: "selfie",              status: "not_started",  ... },
+           { key: "driving_licence",     status: "action_needed", rejectionReason: "The licence photo is too blurry to read.", ... },
+           { key: "vehicle_registration", status: "under_review", ... },
+           { key: "vehicle_details",     status: "not_started",  ... } ] }
+```
+
+**The five items, in this order, and they can be done in any order:** `government_id` · `selfie` ·
+`driving_licence` · `vehicle_registration` · `vehicle_details`.
+
+| `status` | Means |
+|---|---|
+| `not_started` | Nothing submitted. |
+| `in_progress` | Something uploaded, not submitted for review. |
+| `under_review` | With a reviewer. |
+| `approved` | Checked and accepted. |
+| `action_needed` | Rejected — **`rejectionReason` says which document and why.** |
+| `expired` | Was approved; the date has passed. |
+
+🔴 **`rejectionReason` is per item, so you can say "replace only that document".** Rejecting one
+item never clears the others — a test holds that. Do not send somebody back to re-upload all five.
+
+| `overall` | Headline to show |
+|---|---|
+| `not_started` | "Complete driver verification" |
+| `in_progress` | "Finish the remaining steps in any order, then submit for review" |
+| `under_review` | "Driver verification in review" |
+| `verified` | Approved. |
+| `expiring` | "Licence expires soon" — ⚠️ **still verified.** Show the warning, keep the verified badge, and use `licenceExpiresAt` for the date. |
+| `renewal_required` | Licence expired. Publishing and driving are paused. |
+| `suspended` | Driver access suspended — **passenger mode still works** (see 4.1 on `nextStep`). |
+
+**`suspended` outranks everything**, including an expired licence: it is the state a person decided,
+and the one that explains why her commutes stopped.
+
+> ⚠️ **`completed` can be 4 while `overall` is `verified`.** Approval today requires a valid licence
+> and a reviewer's decision — it does **not** require a selfie — so an approved driver may still
+> have an outstanding item. Render the count honestly; it is not a bug. We have flagged this as a
+> gap in the approval gate rather than hiding it here.
 
 #### `GET /driver/eligibility` — active, profile complete
 
@@ -2705,6 +2753,7 @@ exist, and every live endpoint must be named here.
 
 | Date | Change |
 |---|---|
+| 2026-10-16 | ✅ **New: `GET /driver/verification`** — the five-item checklist the driver card is drawn from (`government_id` · `selfie` · `driving_licence` · `vehicle_registration` · `vehicle_details`), with `completed` / `of`, a per-item `status`, a **per-item `rejectionReason`** so you can say "replace only that document", and one of seven `overall` headlines matching the design's card states. Reachable **without** verification, because it is the screen that explains what is missing. `expiring` keeps the verified badge; `suspended` outranks everything. ⚠️ `completed` can read 4 while `overall` is `verified` — approval does not currently require a selfie, and we have flagged that rather than hiding it. |
 | 2026-10-16 | ✅ **`PUT /account/profile/basic` now takes `firstName` + `lastName`, as the design draws it** — or `fullName`, exactly as today. Nothing breaks, so build the two-field screen whenever you like. `lastName` is optional (a single name is a real name). When you send the two fields, `publicFirstName` becomes the **given name** rather than the first token of a joined string — which is the difference between showing "عبد الرحمن" and showing "عبد". |
 | 2026-10-16 | ✅ **New: `GET` / `PATCH /account/comfort-preferences`** — the comfort chips you want remembered, **per mode**, so a passenger stops re-ticking them on every search. They are **the same six values a search already accepts** (`nonsmoking` · `quiet` · `ac` · `nofood` · `luggage` · `front`), so a saved list goes straight into `requiredRules` with no translation. `chosen` tells "never answered" apart from "none of them". 🔒 **Saving a default filters nothing** — the chips are a soft `score.comfort`, never an exclusion, and a test holds it. *(An earlier draft of this entry described four fields named `smoking`/`music`/`conversation`/`airConditioning` with `yes`/`no`/`either` values. That shape was replaced before release: it invented a second vocabulary for chips the matcher already understood, and nothing read it. If you built against it, switch to `rules[]`.)* |
 | 2026-10-16 | 🚗 **Vehicle replacement works, and it used to be impossible.** An approved driver could not add a vehicle at all — it answered `409 DRIVER_APPLICATION_LOCKED` — so she could not change her car without losing her approval first. Now she adds a replacement, it is reviewed on its own while her current car keeps working, and activating it moves her commutes across. 🔴 `POST /driver/vehicles/{vehicle}/activate` now **refuses an unapproved vehicle** with `422 VEHICLE_NOT_ALLOWED`, and refuses the whole swap with `422` if a live commute sells more seats than the replacement has — nothing is half-applied. Confirmed future bookings are **kept**, and each passenger gets the new `booking_vehicle_changed` notification **naming the car and plate**. |
