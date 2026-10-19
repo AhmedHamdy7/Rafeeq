@@ -49,7 +49,19 @@ class Booking extends Model
             'payment_type' => PaymentType::class,
             'payment_status' => PaymentStatus::class,
             'status' => BookingStatus::class,
+
+            /*
+             * The pickup and drop-off as agreed for THIS day, snapshotted when the booking was
+             * created (Feature 03 v5 §5). Not fillable: they are copied from a seat request whose
+             * points the server resolved and validated, and a mass-assignable pickup would let a
+             * client move the place somebody is standing.
+             */
             'pickup_point' => SpatialPoint::class,
+            'pickup_lat' => 'decimal:7',
+            'pickup_lng' => 'decimal:7',
+            'dropoff_point' => SpatialPoint::class,
+            'dropoff_lat' => 'decimal:7',
+            'dropoff_lng' => 'decimal:7',
             'cancelled_at' => 'datetime',
             'cancellation_fee_piastres' => 'integer',
         ];

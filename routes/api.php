@@ -16,6 +16,7 @@ use App\Http\Controllers\Api\V1\Booking\PickupPointRequestController;
 use App\Http\Controllers\Api\V1\Booking\PickupPreviewController;
 use App\Http\Controllers\Api\V1\Booking\SeatOfferController;
 use App\Http\Controllers\Api\V1\Booking\SeatRequestController;
+use App\Http\Controllers\Api\V1\Booking\WaitlistController;
 use App\Http\Controllers\Api\V1\Driver\CommuteController;
 use App\Http\Controllers\Api\V1\Driver\DriverApplicationController;
 use App\Http\Controllers\Api\V1\Driver\VehicleController;
@@ -452,6 +453,18 @@ Route::prefix('v1')->group(function (): void {
         Route::post('driver/seat-requests/{seatRequest}/reject', [SeatRequestController::class, 'reject']);
         Route::post('driver/seat-requests/{seatRequest}/waitlist', [SeatRequestController::class, 'waitlist']);
         Route::get('driver/bookings', [BookingController::class, 'forDriver']);
+
+        /*
+         * Her waiting list, and the one place a driver hands out seats herself (Feature 03 v5).
+         *
+         * 🔴 This is v5's named exception to the automatic fan-out. Everywhere else a seat that
+         * frees goes out to everybody waiting and the first acceptance wins; resuming a paused
+         * commute means refilling a whole car for weeks of mornings, and v5 lets her choose — and
+         * favour the passengers she had before. She still only decides WHO may race.
+         */
+        Route::get('driver/commutes/{commute}/waitlist', [WaitlistController::class, 'index']);
+        Route::post('driver/commutes/{commute}/waitlist/offers', [WaitlistController::class, 'offer']);
+        Route::delete('driver/seat-offers/{offer}', [WaitlistController::class, 'withdrawOffer']);
 
         /*
          * The money, as the two people in the car see it (Phase 8, Bible §8).

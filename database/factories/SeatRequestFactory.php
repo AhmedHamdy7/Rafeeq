@@ -4,11 +4,13 @@ namespace Database\Factories;
 
 use App\Domains\Booking\Enums\MeetingPreference;
 use App\Domains\Booking\Enums\PaymentType;
+use App\Domains\Booking\Enums\PointSource;
 use App\Domains\Booking\Enums\SeatRequestCommitment;
 use App\Domains\Booking\Enums\SeatRequestStatus;
 use App\Domains\Booking\Models\SeatRequest;
 use App\Domains\Commute\Models\CommuteOffer;
 use App\Domains\Identity\Models\User;
+use App\Domains\Shared\ValueObjects\Coordinate;
 use Illuminate\Database\Eloquent\Factories\Factory;
 
 /**
@@ -29,6 +31,25 @@ class SeatRequestFactory extends Factory
             'commitment' => SeatRequestCommitment::Trial,
             'seats' => 1,
             'meeting_preference' => MeetingPreference::Gate,
+
+            /*
+             * Both points, because Feature 03 v5 §2 makes them required and the columns are NOT
+             * NULL. The coordinates sit along the corridor the commute factories publish, and are
+             * marked `custom_map` — a factory row stands for a passenger who chose her own pins,
+             * which is the case with nothing else attached to it.
+             */
+            'requested_pickup_point' => new Coordinate(30.0624, 31.3614),
+            'requested_pickup_lat' => 30.0624,
+            'requested_pickup_lng' => 31.3614,
+            'requested_pickup_label' => 'Ring Road, Rehab exit',
+            'requested_pickup_source' => PointSource::CustomMap,
+
+            'requested_dropoff_point' => new Coordinate(30.0684, 31.1015),
+            'requested_dropoff_lat' => 30.0684,
+            'requested_dropoff_lng' => 31.1015,
+            'requested_dropoff_label' => 'Mehwar, Sheikh Zayed',
+            'requested_dropoff_source' => PointSource::CustomMap,
+
             'intro_message' => 'أهلاً! بتنقل يوميًا نفس الطريق وحابة أجرب مجموعتك.',
             'agreed_to_rules_at' => now(),
             'payment_type' => PaymentType::Cash,

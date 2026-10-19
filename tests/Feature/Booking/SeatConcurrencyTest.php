@@ -2,6 +2,7 @@
 
 use App\Domains\Booking\Actions\ApproveSeatRequestAction;
 use App\Domains\Booking\Actions\CancelBookingAction;
+use App\Domains\Booking\Enums\PointSource;
 use App\Domains\Booking\Enums\SeatRequestStatus;
 use App\Domains\Booking\Models\Booking;
 use App\Domains\Booking\Models\SeatRequest;
@@ -10,6 +11,7 @@ use App\Domains\Driver\Models\Vehicle;
 use App\Domains\Identity\Models\User;
 use App\Domains\Shared\Exceptions\DomainException;
 use App\Domains\Shared\Support\ErrorCode;
+use App\Domains\Shared\ValueObjects\Coordinate;
 use Illuminate\Database\QueryException;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
@@ -94,9 +96,40 @@ function pendingRequestFor(string $commuteId, string $tripId, int $index): SeatR
     ]);
 
     $request->status = SeatRequestStatus::Pending->value;
+
+    /*
+     * The two points Feature 03 v5 §2 makes required, written past the fillable list the way the
+     * Action does. This helper builds a request straight in the database on purpose — the whole
+     * file is about what happens when ten approvals race, and going through the endpoint would
+     * spend the test on everything except the race.
+     */
+    $request->forceFill(pointsOnTheCorridor());
     $request->save();
 
     return $request;
+}
+
+/**
+ * Two points on the corridor the commute helpers publish — a quarter and three quarters along it,
+ * so they add no meaningful detour and are the right way round.
+ *
+ * @return array<string, mixed>
+ */
+function pointsOnTheCorridor(): array
+{
+    return [
+        'requested_pickup_point' => new Coordinate(30.0624, 31.3614),
+        'requested_pickup_lat' => 30.0624,
+        'requested_pickup_lng' => 31.3614,
+        'requested_pickup_label' => 'Ring Road, Rehab exit',
+        'requested_pickup_source' => PointSource::CustomMap->value,
+
+        'requested_dropoff_point' => new Coordinate(30.0684, 31.1015),
+        'requested_dropoff_lat' => 30.0684,
+        'requested_dropoff_lng' => 31.1015,
+        'requested_dropoff_label' => 'Mehwar, Sheikh Zayed',
+        'requested_dropoff_source' => PointSource::CustomMap->value,
+    ];
 }
 
 /**
@@ -304,6 +337,7 @@ it('lets a passenger be seated again on a day they cancelled', function () {
     ]);
 
     $second->status = SeatRequestStatus::Pending->value;
+    $second->forceFill(pointsOnTheCorridor());
     $second->save();
 
     $again = app(ApproveSeatRequestAction::class)->execute($second, $driver)->booking();

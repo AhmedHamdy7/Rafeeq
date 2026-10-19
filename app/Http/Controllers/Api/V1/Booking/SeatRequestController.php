@@ -35,6 +35,16 @@ final class SeatRequestController extends Controller
         ErrorCode::WaitlistFull,
         ErrorCode::CannotBookOwnCommute,
         ErrorCode::RecurringDaysNotOffered,
+        /*
+         * Her two required points can each be refused (Feature 03 v5 §2): the same place twice,
+         * the wrong way round for this commute, a suggestion this commute does not advertise, or a
+         * pair that together takes the driver further out of her way than she agreed to.
+         */
+        ErrorCode::SeatRequestPointsSame,
+        ErrorCode::SeatRequestPointsOutOfOrder,
+        ErrorCode::SeatRequestSuggestionUnknown,
+        ErrorCode::PickupDetourTooLong,
+        ErrorCode::PickupNotOnCommute,
         ErrorCode::NotFound,
     )]
     public function store(RequestSeatRequest $request, string $commute, RequestSeatAction $action): JsonResponse

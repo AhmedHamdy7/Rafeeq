@@ -53,6 +53,31 @@ final readonly class CreateBookingAction
         ]);
 
         /*
+         * 🔴 The agreed pickup and drop-off, frozen onto the booking (Feature 03 v5 §5: "immutable
+         * agreed pickup/drop-off snapshots").
+         *
+         * Snapshots for the same reason the three money figures above are: the seat request is a
+         * live row that a counteroffer or a later edit can change, and a booking has to keep saying
+         * where this person was actually promised to be collected and set down on this day. Reading
+         * through to the request at the kerb would mean an edit agreed next week silently rewrote
+         * what happened this morning.
+         *
+         * `forceFill`, outside the fillable list, because nothing a client sends may reach these —
+         * they are copied from columns the server resolved and validated when the request was made.
+         */
+        $booking->forceFill([
+            'pickup_point' => $request->requested_pickup_point,
+            'pickup_label' => $request->requested_pickup_label,
+            'pickup_lat' => $request->requested_pickup_lat,
+            'pickup_lng' => $request->requested_pickup_lng,
+
+            'dropoff_point' => $request->requested_dropoff_point,
+            'dropoff_label' => $request->requested_dropoff_label,
+            'dropoff_lat' => $request->requested_dropoff_lat,
+            'dropoff_lng' => $request->requested_dropoff_lng,
+        ]);
+
+        /*
          * The code the passenger checks against the car at the kerb, shown beside the plate on the
          * active-trip screen.
          *

@@ -238,6 +238,15 @@ it('generates a document describing every /v1 route', function () {
 
         'POST /v1/commutes/{commute}/pickup-preview',
         'POST /v1/driver/seat-requests/{seatRequest}/waitlist',
+
+        /*
+         * Her waiting list, and v5's named exception to the automatic fan-out: on resume the driver
+         * chooses who to offer seats to, and may take back an offer nobody has accepted.
+         */
+        'GET /v1/driver/commutes/{commute}/waitlist',
+        'POST /v1/driver/commutes/{commute}/waitlist/offers',
+        'DELETE /v1/driver/seat-offers/{offer}',
+
         'POST /v1/seat-requests/{seatRequest}/pickup-request',
         'POST /v1/groups/{group}/pickup-request',
         'GET /v1/pickup-requests',

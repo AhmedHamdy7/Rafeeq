@@ -2,20 +2,18 @@
 
 namespace App\Domains\Driver\Actions;
 
-use App\Domains\Booking\Enums\BookingStatus;
-use App\Domains\Booking\Models\Booking;
+use App\Domains\Booking\Actions\DisplaceConfirmedBookingsAction;
+use App\Domains\Booking\Enums\DisplacementReason;
 use App\Domains\Commute\Actions\CreateCommuteOfferAction;
 use App\Domains\Commute\Enums\CommuteOfferStatus;
 use App\Domains\Commute\Models\CommuteOffer;
-use App\Domains\Commute\Models\ScheduledTrip;
 use App\Domains\Driver\Enums\VehicleVerificationStatus;
 use App\Domains\Driver\Models\DriverProfile;
 use App\Domains\Driver\Models\Vehicle;
 use App\Domains\Driver\Support\DuplicateDetector;
-use App\Domains\Notification\Enums\NotificationType;
-use App\Domains\Notification\Support\Notifier;
 use App\Domains\Shared\Exceptions\DomainException;
 use App\Domains\Shared\Support\ErrorCode;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 
 /**
@@ -29,6 +27,8 @@ use Illuminate\Support\Facades\DB;
  */
 final readonly class ManageVehicleAction
 {
+    public function __construct(private DisplaceConfirmedBookingsAction $displace) {}
+
     /**
      * @param  array<string, mixed>  $attributes  already validated upstream
      */
@@ -106,10 +106,25 @@ final readonly class ManageVehicleAction
      * failed to start. v3 says "prevent new driving on unapproved replacement"; refusing here is
      * the cheapest place to honour it.
      *
-     * 🔴 Confirmed future bookings are **kept, not cancelled** (product decision, 2026-10-16). So
-     * her commutes move with her to the new car and every affected passenger is told — including
-     * which car, because the plate she was shown has changed and that is what she matches at the
-     * kerb.
+     * 🔴 **Confirmed future bookings are CANCELLED, and this reverses what this method used to do.**
+     *
+     * Until Feature 03 v5 (2026-10-18) they were kept: the commutes moved to the new car and every
+     * passenger was told which plate to look for (product decision, 2026-10-16, implemented and
+     * tested). v5 overrides it in terms — *"Replace Vehicle requires new verification and cancels
+     * all future confirmed bookings across that driver's commutes; displaced riders enter preserved
+     * waitlists. Keep account, score, history, templates. No automatic restoration."*
+     *
+     * The argument v5 wins on is the one the old behaviour could not answer. A replacement car
+     * starts a **fresh verification**, and `usableVehicle()` refuses to start a run in a car no
+     * reviewer has approved. So a booking "kept" on the new car was never a seat she could actually
+     * ride in — it was a confirmed booking the platform already knew it could not honour, and she
+     * would have found out at the kerb. Cancelling says so now, while she can still arrange
+     * something else, and puts her back on the list so she gets first look when the new car clears.
+     *
+     * 🔴 Note that this fires for EVERY activation, including a driver returning to a previous car
+     * she still has approved — v5 allows that return "without re-verification" but still says
+     * canceled bookings do not come back. The seats were already cancelled when she left that car,
+     * so there is nothing to cancel on the way back; the sweep simply finds nothing.
      */
     public function activate(DriverProfile $profile, Vehicle $vehicle): Vehicle
     {
@@ -130,11 +145,12 @@ final readonly class ManageVehicleAction
             /*
              * Checked BEFORE anything is written, for every commute that would move.
              *
-             * A replacement is often a smaller car, and a commute selling three seats cannot move
-             * into a four-seater. Refusing the whole activation is the only honest answer: the
-             * alternatives are to cancel somebody's booked seat — which the product decision rules
-             * out — or to leave her commute bound to a car that is no longer active, which breaks
-             * it silently. Better that the driver learns now, while she can still choose.
+             * A replacement is often a smaller car, and a commute advertising four seats cannot run
+             * in a three-seater: the seat count is published, people search on it, and the weekday
+             * rows price against it. Refusing the whole activation is still the honest answer even
+             * now that the booked seats are cancelled anyway — the alternative is a live commute
+             * selling more seats than the car has, or one bound to a vehicle that is no longer
+             * active, which breaks it silently.
              */
             $moving = $this->commutesOn($profile, $outgoing);
 
@@ -142,14 +158,35 @@ final readonly class ManageVehicleAction
                 CreateCommuteOfferAction::assertSeatsFitVehicle($vehicle, (int) $offer->seats_total);
             }
 
+            /*
+             * 🔴 Every future confirmed seat she has sold, across every commute, goes — and the
+             * passengers go back on the waiting lists (v5, "Vehicle management").
+             *
+             * Guarded on `$outgoing` because this method also serves an activation that replaces
+             * NOTHING: re-activating the car that is already active, which would otherwise cancel
+             * her whole book of business for a no-op. A replacement is precisely the case where
+             * another vehicle is being stood down.
+             *
+             * Before the flags are flipped, so a failure here leaves her on the car she was
+             * driving rather than mid-swap.
+             */
+            if ($outgoing->isNotEmpty()) {
+                $this->displace->forDriver($profile, DisplacementReason::VehicleReplaced);
+            }
+
             $outgoing->each(fn (Vehicle $other) => $other->forceFill(['is_active' => false])->save());
 
             $vehicle->forceFill(['is_active' => true])->save();
 
+            /*
+             * The commutes themselves still move, and this is not in tension with cancelling the
+             * bookings. v5 keeps "account, score, history, templates" — the commute IS the
+             * template, and leaving it pointing at a stood-down car would mean she has to rebuild
+             * every one of them by hand before she can resume. What she has to rebuild is her
+             * passenger list, which is what the preserved waiting list is for.
+             */
             foreach ($moving as $offer) {
                 $offer->forceFill(['vehicle_id' => $vehicle->getKey()])->save();
-
-                $this->tellPassengers($offer, $vehicle);
             }
 
             return $vehicle;
@@ -162,8 +199,8 @@ final readonly class ManageVehicleAction
      * Archived commutes are left alone: moving a car into a commute nobody can book is work that
      * changes nothing, and it would notify people about a journey that is over.
      *
-     * @param  \Illuminate\Support\Collection<int, Vehicle>  $outgoing
-     * @return \Illuminate\Support\Collection<int, CommuteOffer>
+     * @param  Collection<int, Vehicle>  $outgoing
+     * @return Collection<int, CommuteOffer>
      */
     private function commutesOn(DriverProfile $profile, $outgoing)
     {
@@ -176,44 +213,6 @@ final readonly class ManageVehicleAction
             ->whereIn('vehicle_id', $outgoing->modelKeys())
             ->whereNot('status', CommuteOfferStatus::Archived->value)
             ->get();
-    }
-
-    /**
-     * Tell everybody holding a live seat on a future day that a different car is coming.
-     *
-     * 🔒 Only her own booking's passengers, and nothing about each other: the loop notifies one
-     * person at a time with the vehicle and nothing else. A passenger list is not something a
-     * notification should carry.
-     */
-    private function tellPassengers(CommuteOffer $offer, Vehicle $vehicle): void
-    {
-        $passengers = Booking::query()
-            ->whereIn('scheduled_trip_id', ScheduledTrip::query()
-                ->where('commute_offer_id', $offer->getKey())
-                ->whereDate('departure_at', '>=', now()->toDateString())
-                ->select('id'))
-            // Confirmed only. A trial is a flag on a confirmed booking, not a status of its own,
-            // and a pending request has not been promised a car yet.
-            ->where('status', BookingStatus::Confirmed->value)
-            ->with('passenger')
-            ->get();
-
-        $driverName = $offer->driverProfile?->user?->public_first_name ?? '';
-
-        foreach ($passengers as $booking) {
-            if ($booking->passenger === null) {
-                continue;
-            }
-
-            Notifier::send($booking->passenger, NotificationType::BookingVehicleChanged, params: [
-                'name' => $driverName,
-                'vehicle' => trim($vehicle->make.' '.$vehicle->model),
-                'plate' => $vehicle->plate_number,
-            ], data: [
-                'bookingId' => $booking->getKey(),
-                'vehicleId' => $vehicle->getKey(),
-            ]);
-        }
     }
 
     private function assertPlateIsFree(string $plateNumber, ?string $exceptVehicleId = null): void

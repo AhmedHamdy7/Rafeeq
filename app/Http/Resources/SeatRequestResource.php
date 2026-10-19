@@ -29,6 +29,20 @@ final class SeatRequestResource extends JsonResource
             'requestedDaysMask' => $this->requested_days_mask,
             'seats' => $this->seats,
             'meetingPreference' => $this->meeting_preference->value,
+
+            /*
+             * 🔴 The two points she chose (Feature 03 v5 §2). Always present: both are required to
+             * create a request, so a client never has to handle a missing one.
+             *
+             * 🔒 Exact, and unlike {@see BookingResource} that is right here. This payload is
+             * reached from her own request list and from the driver's review of a request on her
+             * own commute — v5 §4: "the driver can see a passenger's pending proposed points only
+             * inside their own request review". The driver is being asked to decide whether that
+             * detour is acceptable, and she cannot judge a rounded pin.
+             */
+            'pickup' => $this->chosenPoint('pickup'),
+            'dropoff' => $this->chosenPoint('dropoff'),
+
             'introMessage' => $this->intro_message,
             'paymentType' => $this->payment_type->value,
             // A moment, not a flag: in a dispute what matters is when they agreed.
@@ -52,6 +66,29 @@ final class SeatRequestResource extends JsonResource
                 $this->resource->relationLoaded('passenger'),
                 fn () => PersonSummary::for($this->passenger, $request->user()),
             ),
+        ];
+    }
+
+    /**
+     * One of the two points she chose, with where it came from.
+     *
+     * `source` travels with the coordinates because the two are different news to a driver. A point
+     * she advertised herself is one she has already agreed to stop at; a pin the passenger dropped
+     * is a proposal she has not seen before, and it is the one she is weighing. A screen that could
+     * not tell them apart would present both as settled.
+     *
+     * @param  'pickup'|'dropoff'  $kind
+     * @return array<string, mixed>
+     */
+    private function chosenPoint(string $kind): array
+    {
+        return [
+            'lat' => (float) $this->{"requested_{$kind}_lat"},
+            'lng' => (float) $this->{"requested_{$kind}_lng"},
+            'label' => $this->{"requested_{$kind}_label"},
+            'source' => $this->{"requested_{$kind}_source"}?->value,
+            // Which advertised stop she picked, when she picked one rather than dropping a pin.
+            'suggestionId' => $this->{"requested_{$kind}_suggestion_id"},
         ];
     }
 }

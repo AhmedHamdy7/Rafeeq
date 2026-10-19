@@ -5,6 +5,7 @@ namespace App\Http\Requests\Booking;
 use App\Domains\Booking\Enums\MeetingPreference;
 use App\Domains\Booking\Enums\PaymentType;
 use App\Domains\Booking\Enums\SeatRequestCommitment;
+use App\Domains\Booking\Support\RequestedPoints;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
 
@@ -25,6 +26,18 @@ use Illuminate\Validation\Rule;
  * - `introMessage` is stored as written. Filtering it for phone numbers and abuse
  *   is noted in the schema and belongs with the messaging work in Phase 12; doing
  *   it badly here would be worse than doing it there properly.
+ * - 🔴 `pickup` and `dropoff` are BOTH required (Feature 03 v5 §2). Neither may be
+ *   omitted, inferred from the driver's route endpoints, or defaulted. A commute
+ *   that advertises no suggested points is still requestable — with two custom
+ *   pins — because v5 is explicit that the absence of suggestions must never block
+ *   a request.
+ * - A `suggestionId` is checked against THIS commute's advertised stops in the
+ *   Action, never by `exists:commute_locations,id`: an id belonging to another
+ *   driver's commute would otherwise pass validation and become a meeting point on
+ *   a journey its owner never offered.
+ * - Direction, distinctness and the detour the pair costs are all decided
+ *   server-side in {@see RequestedPoints}. Nothing
+ *   about the cost of a stop is ever accepted from the person asking for it.
  */
 final class RequestSeatRequest extends FormRequest
 {
@@ -46,12 +59,29 @@ final class RequestSeatRequest extends FormRequest
             // How many seats you need, if you are travelling with someone.
             'seats' => ['sometimes', 'integer', 'min:1', 'max:4'],
 
-            // Where you would like to be picked up: at the commute's own gate, on
-            // a street nearby, at a landmark, or somewhere you propose yourself.
+            // What kind of place you would rather meet at: the commute's own gate, a
+            // street nearby, a landmark, or somewhere you propose yourself. A
+            // preference, not the point itself — that is `pickup` below.
             'meetingPreference' => ['required', 'string', Rule::enum(MeetingPreference::class)],
 
             // A known place to be picked up from, when you chose `custom`.
             'customPickupPlaceId' => ['nullable', 'string', 'size:26', 'exists:places,id'],
+
+            // Where you want to be collected. Required: give either the id of one of
+            // the driver's suggested points, or your own coordinates and a label.
+            'pickup' => ['required', 'array'],
+            'pickup.suggestionId' => ['nullable', 'string', 'size:26'],
+            'pickup.lat' => ['required_without:pickup.suggestionId', 'numeric', 'between:-90,90'],
+            'pickup.lng' => ['required_without:pickup.suggestionId', 'numeric', 'between:-180,180'],
+            'pickup.label' => ['required_without:pickup.suggestionId', 'nullable', 'string', 'max:255'],
+
+            // Where you want to be set down. Required, on the same terms as `pickup`.
+            // It is never assumed to be the end of the driver's route.
+            'dropoff' => ['required', 'array'],
+            'dropoff.suggestionId' => ['nullable', 'string', 'size:26'],
+            'dropoff.lat' => ['required_without:dropoff.suggestionId', 'numeric', 'between:-90,90'],
+            'dropoff.lng' => ['required_without:dropoff.suggestionId', 'numeric', 'between:-180,180'],
+            'dropoff.label' => ['required_without:dropoff.suggestionId', 'nullable', 'string', 'max:255'],
 
             // A short note to the driver, so they know who is asking.
             'introMessage' => ['nullable', 'string', 'max:500'],

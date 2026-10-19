@@ -1,5 +1,10 @@
 <?php
 
+use App\Domains\Booking\Enums\DisplacementReason;
+use App\Domains\Booking\Enums\SeatOfferStatus;
+use App\Domains\Booking\Enums\SeatRequestStatus;
+use App\Domains\Booking\Models\SeatOffer;
+use App\Domains\Booking\Models\SeatRequest;
 use App\Domains\Commute\Models\CommuteOffer;
 use App\Domains\Commute\Models\ScheduledTrip;
 use App\Domains\Driver\Enums\VehicleVerificationStatus;
@@ -11,8 +16,9 @@ use App\Domains\Notification\Models\Notification;
  * switching. Keep old history; **prevent new driving on unapproved replacement**. Existing commute
  * vehicle associations need integrity checks."
  *
- * Product decision, 2026-10-16: **confirmed future bookings are kept, not cancelled** — the
- * passengers are notified instead, and the notification names the new car.
+ * 🔴 Feature 03 v5 (2026-10-18) decides what happens to the seats, and it **reverses** the product
+ * decision of 2026-10-16 that this file used to assert: confirmed future bookings are now
+ * CANCELLED, not kept, and the displaced riders go onto preserved waiting lists.
  *
  * 🔴 What this file does NOT need to test, because reading the code first showed it was already
  * handled: a commute is bound to a specific `vehicle_id`, and `usableVehicle()` is re-run at both
@@ -78,9 +84,17 @@ it('moves her commutes onto an approved replacement and keeps the old vehicle as
 });
 
 /**
- * 🔴 The product decision, asserted: the booking survives and the passenger is told which car.
+ * 🔴 **The reversal, asserted.** v5: "Replace Vehicle requires new verification and cancels all
+ * future confirmed bookings across that driver's commutes; displaced riders enter preserved
+ * waitlists."
+ *
+ * This test replaces one that asserted the opposite — that the booking survived and the passenger
+ * was merely told the new plate. The argument that lost: a replacement car starts a fresh
+ * verification, and `usableVehicle()` refuses to start a run in a car no reviewer has approved. So
+ * the seat that was "kept" was never a seat she could ride in, and she would have discovered that
+ * at the kerb instead of now.
  */
-it('keeps a confirmed booking and tells the passenger which car is coming', function () {
+it('cancels a confirmed booking when she replaces her car and puts the passenger back on the list', function () {
     $driverToken = approvedDriver();
     $vehicleId = test()->withToken($driverToken)->getJson('/api/v1/driver/vehicles')->json('data.0.id');
     $commuteId = readyCommute($driverToken, $vehicleId);
@@ -101,24 +115,65 @@ it('keeps a confirmed booking and tells the passenger which car is coming', func
         ->postJson("/api/v1/driver/vehicles/{$replacement->getKey()}/activate")
         ->assertOk();
 
-    // The seat is untouched.
+    // The seat is gone, and recorded against the driver — she is the one who changed car.
     expect(test()->withToken($paxToken)->getJson("/api/v1/bookings/{$bookingId}")->assertOk()->json('data.status'))
-        ->toBe('CONFIRMED');
-
-    $told = Notification::query()->where('type', 'booking_vehicle_changed')->get();
-
-    expect($told)->toHaveCount(1);
+        ->toBe('CANCELLED_BY_DRIVER')
+        // The day it freed is free again.
+        ->and(ScheduledTrip::findOrFail($tripId)->seats_taken)->toBe(0);
 
     /*
-     * 🔴 The plate is IN the message, not left for her to go and look up. She is going to stand at
-     * a kerb and get into whichever car matches what she was told.
+     * 🔴 She is on the waiting list, not simply refused — and marked as displaced, so the driver's
+     * waitlist card can say **Previous Passenger** and she gets first look when the new car clears.
      */
-    expect($told->first()->body)->toContain('ق ن ر 7788')
-        ->and($told->first()->body)->toContain('Cerato');
+    $waiting = SeatRequest::findOrFail($requestId);
+
+    expect($waiting->status)->toBe(SeatRequestStatus::Waitlisted)
+        ->and($waiting->displaced_reason)->toBe(DisplacementReason::VehicleReplaced->value)
+        ->and($waiting->displaced_at)->not->toBeNull();
+
+    // Told once, naming the reason, and told she is back on the list.
+    $told = Notification::query()->where('type', 'vehicle_replaced_seat_cancelled')->get();
+
+    expect($told)->toHaveCount(1)
+        ->and($told->first()->user_id)->toBe(SeatRequest::findOrFail($requestId)->passenger_user_id);
 });
 
 /**
- * 🔴 The edge case that would otherwise oversubscribe a car, or silently cancel somebody.
+ * 🔴 And the freed seat is NOT announced to the waiting list.
+ *
+ * The ordinary cancellation path offers a released seat to everybody waiting, which is right when
+ * one person drops out. Here the car itself is gone — an offer would reach the very woman who just
+ * lost her seat, inviting her to take it back in a vehicle nobody has approved.
+ */
+it('does not offer the freed seats to anybody when the car is replaced', function () {
+    $driverToken = approvedDriver();
+    $vehicleId = test()->withToken($driverToken)->getJson('/api/v1/driver/vehicles')->json('data.0.id');
+    $commuteId = readyCommute($driverToken, $vehicleId, ['seatsTotal' => 2]);
+    test()->withToken($driverToken)->postJson("/api/v1/commutes/{$commuteId}/publish")->assertOk();
+
+    $tripId = ScheduledTrip::query()->orderBy('trip_date')->firstOrFail()->id;
+
+    // One riding, one already waiting behind her.
+    $riderToken = verifiedPassenger('01099887766');
+    $riderRequest = requestSeat($riderToken, $commuteId, ['scheduledTripId' => $tripId])->assertStatus(201)->json('data.id');
+    approveSeat($driverToken, $riderRequest);
+
+    $waiterToken = verifiedPassenger('01077665544', device: 'pax-2');
+    $waiterRequest = requestSeat($waiterToken, $commuteId, ['scheduledTripId' => $tripId])->assertStatus(201)->json('data.id');
+    test()->withToken($driverToken)->postJson("/api/v1/driver/seat-requests/{$waiterRequest}/waitlist")->assertOk();
+
+    $replacement = secondVehicleFor($driverToken, approved: true);
+
+    test()->withToken($driverToken)
+        ->postJson("/api/v1/driver/vehicles/{$replacement->getKey()}/activate")
+        ->assertOk();
+
+    expect(SeatOffer::query()->where('status', SeatOfferStatus::Open->value)->count())->toBe(0)
+        ->and(Notification::query()->where('type', 'seat_offered')->count())->toBe(0);
+});
+
+/**
+ * 🔴 The edge case that would otherwise leave a commute advertising more seats than the car has.
  */
 it('refuses the whole swap when the replacement has too few seats for a live commute', function () {
     $driverToken = approvedDriver();

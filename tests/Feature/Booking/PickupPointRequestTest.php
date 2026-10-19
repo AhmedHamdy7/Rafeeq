@@ -172,9 +172,18 @@ it('lets the driver counter with a place, which moves nothing until accepted', f
         ->assertJsonPath('data.status', 'SUGGESTED_ALTERNATIVE')
         ->assertJsonPath('data.alternativePlaceId', $place->id);
 
-    // Nothing has moved: relocating somebody's morning without asking them is the
-    // mirror image of what this whole flow exists to prevent.
-    expect(Booking::sole()->pickup_point)->toBeNull();
+    /*
+     * Nothing has moved: relocating somebody's morning without asking them is the mirror image of
+     * what this whole flow exists to prevent.
+     *
+     * 🔴 Asserted as "still the point she agreed to", not as "no point at all". Feature 03 v5 §2
+     * makes a pickup compulsory on every seat request and `CreateBookingAction` snapshots it, so a
+     * booking now always has one — and that is what the counter-offer must leave untouched. The
+     * old assertion only held because an ordinary booking's `pickup_point` was null, which was
+     * itself a defect: the attendance geofence and the home screen both read that column.
+     */
+    expect(round((float) Booking::sole()->pickup_lat, 4))->toBe(30.0624)
+        ->and($place->lat)->not->toBe(Booking::sole()->pickup_lat);
 
     test()->withToken($this->paxToken)
         ->postJson("/api/v1/pickup-requests/{$pickupId}/accept-alternative")

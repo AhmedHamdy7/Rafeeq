@@ -189,6 +189,10 @@ return [
         'full_name' => [
             'format' => 'Please enter your name using Arabic or English letters only.',
         ],
+        'waitlist_offer' => [
+            'exclusive' => 'Choose either everybody on the list or specific members, not both.',
+            'required' => 'Choose who to offer a seat to, or set all to true.',
+        ],
     ],
 
     /*

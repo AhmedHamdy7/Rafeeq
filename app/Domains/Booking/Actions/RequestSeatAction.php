@@ -5,9 +5,11 @@ namespace App\Domains\Booking\Actions;
 use App\Domains\Booking\Enums\SeatRequestCommitment;
 use App\Domains\Booking\Enums\SeatRequestStatus;
 use App\Domains\Booking\Models\SeatRequest;
+use App\Domains\Booking\Support\RequestedPoints;
 use App\Domains\Booking\Support\SeatAvailabilityChecker;
 use App\Domains\Commute\Models\CommuteOffer;
 use App\Domains\Commute\Models\ScheduledTrip;
+use App\Domains\Geo\Contracts\GeoQueryEngine;
 use App\Domains\Identity\Models\User;
 use App\Domains\Matching\Support\HardFilters;
 use App\Domains\Notification\Enums\NotificationType;
@@ -39,7 +41,10 @@ use Illuminate\Support\Facades\DB;
  */
 final readonly class RequestSeatAction
 {
-    public function __construct(private SeatAvailabilityChecker $availability) {}
+    public function __construct(
+        private SeatAvailabilityChecker $availability,
+        private GeoQueryEngine $geo,
+    ) {}
 
     /**
      * @param  array<string, mixed>  $input  validated upstream
@@ -66,7 +71,16 @@ final readonly class RequestSeatAction
             $this->availability->assertNoDuplicateBooking($trip, $passenger->id);
         }
 
-        return DB::transaction(function () use ($passenger, $offer, $trip, $commitment, $input): SeatRequest {
+        /*
+         * 🔴 Her two points, resolved and checked before anything is written (Feature 03 v5 §2).
+         *
+         * Outside the transaction on purpose: this is the one step that may call a routing
+         * provider, and holding a transaction open across a network call to measure a detour would
+         * put a third party's latency inside a database lock.
+         */
+        $points = RequestedPoints::fromInput($this->geo, $offer, $input);
+
+        return DB::transaction(function () use ($passenger, $offer, $trip, $commitment, $input, $points): SeatRequest {
             $request = new SeatRequest;
 
             $request->fill([
@@ -84,6 +98,16 @@ final readonly class RequestSeatAction
                 'agreed_to_rules_at' => now(),
                 'payment_type' => $input['paymentType'],
             ]);
+
+            /*
+             * Her pickup and drop-off, written past the fillable list.
+             *
+             * 🔒 Deliberately not mass-assignable. Every one of these twelve columns was either
+             * computed or verified a few lines above — which suggestion is really this commute's,
+             * which way round the journey runs, what the pair costs the driver — and a fillable
+             * `requested_pickup_lat` would let a client post coordinates straight past all of it.
+             */
+            $request->forceFill($points->columns());
 
             // Not fillable: a request must not be able to declare itself approved,
             // nor claim a place in the queue.

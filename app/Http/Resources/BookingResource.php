@@ -72,6 +72,16 @@ final class BookingResource extends JsonResource
             // 🔒 Exact only once confirmed — see the class note.
             'meetingPoint' => $this->meetingPoint(),
 
+            /*
+             * Where she is set down, as agreed for this day (Feature 03 v5 §2).
+             *
+             * 🔒 Fuzzed before confirmation on exactly the same terms as the pickup, and the
+             * reason is the same one the class note gives for a meeting point: a drop-off is often
+             * a workplace, and a precise one handed out on a pending booking tells a stranger
+             * where to wait for her at the other end of the day.
+             */
+            'dropoffPoint' => $this->dropoffPoint(),
+
             'cancelledAt' => $this->cancelled_at?->toIso8601String(),
             'cancelledReason' => $this->cancelled_reason,
             'cancellationFeePiastres' => $this->cancellation_fee_piastres,
@@ -86,8 +96,28 @@ final class BookingResource extends JsonResource
      */
     private function meetingPoint(): ?array
     {
-        $point = $this->pickup_point;
+        return $this->placeOrNull($this->pickup_point, $this->pickup_label);
+    }
 
+    /**
+     * @return array<string, mixed>|null
+     */
+    private function dropoffPoint(): ?array
+    {
+        return $this->placeOrNull($this->dropoff_point, $this->dropoff_label);
+    }
+
+    /**
+     * One agreed place, fuzzed until the booking is confirmed.
+     *
+     * Shared by both ends of the journey rather than written twice: they are the same privacy rule
+     * about the same kind of fact, and a rule written twice is one that will one day disagree with
+     * itself.
+     *
+     * @return array<string, mixed>|null
+     */
+    private function placeOrNull(mixed $point, ?string $label): ?array
+    {
         if ($point === null) {
             return null;
         }
@@ -99,6 +129,12 @@ final class BookingResource extends JsonResource
         return [
             'lat' => $confirmed ? $point->lat : round($point->lat, self::FUZZ_DECIMALS),
             'lng' => $confirmed ? $point->lng : round($point->lng, self::FUZZ_DECIMALS),
+            /*
+             * 🔒 The label is withheld until confirmation too. "14 Mohamed Mahmoud St, flat 3" is
+             * a precise address no matter how coarsely the coordinates beside it are rounded —
+             * fuzzing the pin and publishing the street name would make the fuzzing decorative.
+             */
+            'label' => $confirmed ? $label : null,
             // Stated rather than left for the client to infer from the status, so a
             // map can say "approximate" honestly.
             'isExact' => $confirmed,

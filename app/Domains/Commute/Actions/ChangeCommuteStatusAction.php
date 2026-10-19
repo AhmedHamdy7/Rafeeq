@@ -2,6 +2,9 @@
 
 namespace App\Domains\Commute\Actions;
 
+use App\Domains\Booking\Actions\DisplaceConfirmedBookingsAction;
+use App\Domains\Booking\Actions\OfferSeatsToWaitlistMembersAction;
+use App\Domains\Booking\Enums\DisplacementReason;
 use App\Domains\Commute\Enums\CommuteOfferStatus;
 use App\Domains\Commute\Enums\CommutePausedReason;
 use App\Domains\Commute\Enums\ScheduledTripStatus;
@@ -14,11 +17,25 @@ use Illuminate\Support\Facades\DB;
 /**
  * Pausing, resuming and archiving (Chapter 4's state machine and edge cases).
  *
- * What pausing means matters more than how it is implemented. Chapter 4 says
- * "paused commutes keep history" — so pausing does NOT touch the trips already
- * generated, and in particular does not cancel days people have booked. It stops
- * the commute being found and stops new days being generated. A driver who pauses
- * for a week and resumes finds their group intact.
+ * 🔴 **What pausing means changed, and this is the important note in the file.**
+ *
+ * It used to leave existing bookings alone. Chapter 4 says "paused commutes keep history", which
+ * was read as "does not cancel days people have booked" — a driver who paused for a week and
+ * resumed found her group intact. Feature 03 v5 (2026-10-18) overrides that in terms: *"Driver
+ * Pause Commute indefinitely; no mandatory end date. It cancels ALL future confirmed bookings, not
+ * active trip; displaced passengers are notified and automatically added to preserved waiting list.
+ * Templates and waitlist persist. Canceled seats never auto-restore."*
+ *
+ * The old reading was the kinder one and the new one is the honest one. A paused commute is not
+ * running: the days stop being generated and the commute stops being findable. A confirmed seat on
+ * a journey that is not running is a woman planning her morning around a lift that will not come,
+ * and she finds out when it does not arrive. Cancelling now tells her while she can still make
+ * other arrangements. What "keeps history" survives on: her approval, her terms, her place on the
+ * list, the commute's template and its completed trips — none of which pausing touches.
+ *
+ * Resuming therefore does NOT give the seats back. v5 makes that an explicit exception to the
+ * automatic fan-out a freed seat normally gets: the driver chooses who to offer seats to. See
+ * {@see OfferSeatsToWaitlistMembersAction}.
  *
  * Archiving is the end. Chapter 4: "archived commutes cannot be booked" — so
  * future days that nobody has taken are cancelled, because leaving them bookable
@@ -26,19 +43,34 @@ use Illuminate\Support\Facades\DB;
  */
 final readonly class ChangeCommuteStatusAction
 {
-    public function __construct(private GenerateScheduledTripsAction $generateTrips) {}
+    public function __construct(
+        private GenerateScheduledTripsAction $generateTrips,
+        private DisplaceConfirmedBookingsAction $displace,
+    ) {}
 
     public function pause(CommuteOffer $offer, CommutePausedReason $reason): CommuteOffer
     {
         CommuteState::assertCanTransitionTo($offer, CommuteOfferStatus::Paused);
 
-        $offer->forceFill([
-            'status' => CommuteOfferStatus::Paused->value,
-            'paused_at' => now(),
-            'paused_reason' => $reason->value,
-        ])->save();
+        return DB::transaction(function () use ($offer, $reason): CommuteOffer {
+            $offer->forceFill([
+                'status' => CommuteOfferStatus::Paused->value,
+                'paused_at' => now(),
+                'paused_reason' => $reason->value,
+            ])->save();
 
-        return $offer;
+            /*
+             * After the status is written, inside the same transaction.
+             *
+             * The order matters: a passenger whose seat is cancelled is told so, and the commute
+             * must already be paused when that happens — otherwise she could open the app from the
+             * notification, find the commute still published, and request the seat she was just
+             * told she had lost. One transaction means neither half can land without the other.
+             */
+            $this->displace->forCommute($offer, DisplacementReason::CommutePaused);
+
+            return $offer;
+        });
     }
 
     public function resume(CommuteOffer $offer): CommuteOffer

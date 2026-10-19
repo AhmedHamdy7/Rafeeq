@@ -3,9 +3,8 @@
 namespace App\Domains\Booking\Actions;
 
 use App\Domains\Booking\Enums\SeatOfferStatus;
-use App\Domains\Booking\Enums\SeatRequestStatus;
 use App\Domains\Booking\Models\SeatOffer;
-use App\Domains\Booking\Models\SeatRequest;
+use App\Domains\Booking\Support\WaitlistEligibility;
 use App\Domains\Commute\Models\ScheduledTrip;
 use App\Domains\Notification\Enums\NotificationType;
 use App\Domains\Notification\Support\Notifier;
@@ -44,27 +43,7 @@ final readonly class OfferSeatToWaitlistAction
             return 0;
         }
 
-        $eligible = SeatRequest::query()
-            ->where('commute_offer_id', $trip->commute_offer_id)
-            ->where('status', SeatRequestStatus::Waitlisted->value)
-            /*
-             * A trial waiting for Tuesday is not helped by a seat freeing on Wednesday. A recurring
-             * request (no single day) wants every day it committed to, so it counts.
-             */
-            ->where(fn ($q) => $q
-                ->whereNull('scheduled_trip_id')
-                ->orWhere('scheduled_trip_id', $trip->id))
-            // Somebody who needs two seats is not served by one freeing.
-            ->where('seats', '<=', $seatsFreed)
-            // Still waiting for a real answer; an expired request is not a person still hoping.
-            ->where(fn ($q) => $q->whereNull('expires_at')->orWhere('expires_at', '>', now()))
-            /*
-             * Ordered by position even though the seat is a race. The order decides who is TOLD
-             * first, which is the only advantage a position can honestly confer once acceptance is
-             * first-come — and it keeps the list's displayed order meaning something.
-             */
-            ->orderBy('waitlist_position')
-            ->orderBy('id')
+        $eligible = WaitlistEligibility::requestsForTrip($trip, $seatsFreed)
             // Eager-loaded because each one is notified below, and strict mode turns a lazy load
             // inside that loop into an exception — or, in production, a query per waiting person.
             ->with('passenger')

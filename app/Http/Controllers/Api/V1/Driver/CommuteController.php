@@ -159,8 +159,16 @@ final class CommuteController extends Controller
     }
 
     /**
-     * POST /v1/commutes/{commute}/pause — stops it being found and stops new days
-     * being generated. Days already booked are untouched.
+     * POST /v1/commutes/{commute}/pause — stops it being found, stops new days being generated,
+     * and **cancels every future confirmed booking on it**.
+     *
+     * 🔴 The cancellation is new, and it is the part a client has to handle. Feature 03 v5: *"It
+     * cancels ALL future confirmed bookings, not active trip; displaced passengers are notified and
+     * automatically added to preserved waiting list."* A run that has already begun is untouched —
+     * that is Cancel Active Trip, a different decision with its own fees.
+     *
+     * Resuming does NOT give the seats back. She offers them to the waiting members she chooses,
+     * through `POST /v1/driver/commutes/{commute}/waitlist/offers`.
      */
     #[ApiErrors(ErrorCode::CommuteInvalidTransition, ErrorCode::NotFound)]
     public function pause(Request $request, string $commute, ChangeCommuteStatusAction $action): JsonResponse

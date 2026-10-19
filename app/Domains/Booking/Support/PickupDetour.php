@@ -53,13 +53,27 @@ final readonly class PickupDetour
 
     public static function measure(GeoQueryEngine $geo, CommuteOffer $offer, Coordinate $proposed): self
     {
+        return self::measureAll($geo, $offer, [$proposed]);
+    }
+
+    /**
+     * The same measurement for several new stops at once, in the order given.
+     *
+     * 🔴 Needed because a seat request now proposes TWO points — a pickup and a drop-off (Feature
+     * 03 v5 §2) — and measuring them one at a time would understate the cost exactly the way
+     * `assertWithin` already describes: each half passes a ten-minute check on its own while the
+     * pair together puts the driver well past the limit she agreed to.
+     *
+     * @param  array<int, Coordinate>  $proposed  in the order the journey would reach them
+     */
+    public static function measureAll(GeoQueryEngine $geo, CommuteOffer $offer, array $proposed): self
+    {
         $published = self::publishedRoute($offer);
 
         $origin = self::pointOf($offer, CommuteLocationType::Origin);
         $destination = self::pointOf($offer, CommuteLocationType::Destination);
 
-        $via = self::existingPickups($offer);
-        $via[] = $proposed;
+        $via = array_merge(self::existingPickups($offer), $proposed);
 
         $withStop = $geo->routeBetween($origin, $destination, $via);
 

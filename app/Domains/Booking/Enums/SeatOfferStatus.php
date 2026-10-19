@@ -33,6 +33,17 @@ enum SeatOfferStatus: string
     /** The seat stopped existing: the day was cancelled, or the driver filled it herself. */
     case Closed = 'closed';
 
+    /**
+     * The driver took the offer back before anybody accepted it (Feature 03 v5: *"Driver may
+     * withdraw only unaccepted offers"*).
+     *
+     * Separate from `Closed` for the same reason `TakenByOther` is: the seat still exists, and the
+     * person who was offered it is entitled to know that the driver changed her mind rather than
+     * that the day fell through. It is also the one closure that is somebody's decision about her,
+     * which is what makes it worth being able to find in the history.
+     */
+    case Withdrawn = 'withdrawn';
+
     public function isLive(): bool
     {
         return $this === self::Open;

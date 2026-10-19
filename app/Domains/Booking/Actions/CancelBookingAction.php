@@ -5,6 +5,7 @@ namespace App\Domains\Booking\Actions;
 use App\Domains\Booking\Enums\BookingActorType;
 use App\Domains\Booking\Enums\BookingEventType;
 use App\Domains\Booking\Enums\BookingStatus;
+use App\Domains\Booking\Enums\DisplacementReason;
 use App\Domains\Booking\Models\Booking;
 use App\Domains\Booking\Support\BookingEventLog;
 use App\Domains\Commute\Models\ScheduledTrip;
@@ -69,6 +70,37 @@ final readonly class CancelBookingAction
     }
 
     /**
+     * The commute stopped being available — paused, or its vehicle replaced — so this seat goes
+     * with it (Feature 03 v5).
+     *
+     * Recorded as cancelled by the DRIVER, because she is: she paused it, or she changed her car.
+     * What differs from {@see byDriver} is everything around that one fact, and both differences
+     * matter enough to be a separate entry point rather than two flags on the driver path:
+     *
+     * 1. 🔴 **The freed seat is NOT offered to the waiting list.** Offering it would announce "a
+     *    seat just opened up" for a journey that has stopped running — and it would land on the
+     *    very people who just lost their own seats on it.
+     * 2. **No per-booking notice.** {@see DisplaceConfirmedBookingsAction}
+     *    tells each passenger once, naming the reason and the number of days, rather than once per
+     *    cancelled day.
+     *
+     * @param  DisplacementReason  $reason  stored on the booking, so support can answer "why did my
+     *                                      Tuesday disappear" without reconstructing it
+     */
+    public function byDisplacement(Booking $booking, string $driverUserId, DisplacementReason $reason): Booking
+    {
+        return $this->cancel(
+            $booking,
+            BookingStatus::CancelledByDriver,
+            BookingActorType::Driver,
+            $driverUserId,
+            $reason->value,
+            notify: false,
+            offerToWaitlist: false,
+        );
+    }
+
+    /**
      * The other person on the booking hears about it; the one who cancelled does not need to.
      * The reason is not repeated — it may be personal, and the message shows on a lock screen.
      *
@@ -100,6 +132,7 @@ final readonly class CancelBookingAction
         string $actorId,
         ?string $reason,
         bool $notify = true,
+        bool $offerToWaitlist = true,
     ): Booking {
         // The state machine decides, not this method: a completed or already
         // cancelled booking has no transition to cancelled, and asking the enum
@@ -110,7 +143,7 @@ final readonly class CancelBookingAction
             ]);
         }
 
-        return DB::transaction(function () use ($booking, $to, $actorType, $actorId, $reason, $notify): Booking {
+        return DB::transaction(function () use ($booking, $to, $actorType, $actorId, $reason, $notify, $offerToWaitlist): Booking {
             $from = $booking->status;
 
             // Locked for the same reason as taking a seat: the count must not be
@@ -140,8 +173,14 @@ final readonly class CancelBookingAction
                  *
                  * Promotion moves them into the driver's inbox — it does not seat
                  * them. See {@see OfferSeatToWaitlistAction}.
+                 *
+                 * 🔴 Skipped for a displacement, where the commute itself has stopped running:
+                 * there is no seat to offer, and the offer would reach the people who just lost
+                 * theirs. See {@see byDisplacement}.
                  */
-                $this->offerSeat->forTrip($trip, $release);
+                if ($offerToWaitlist) {
+                    $this->offerSeat->forTrip($trip, $release);
+                }
             }
 
             BookingEventLog::record(

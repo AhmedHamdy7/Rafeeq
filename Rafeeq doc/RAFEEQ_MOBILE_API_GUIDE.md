@@ -14,7 +14,7 @@
 >
 > **Base URL:** `{host}/api/v1` · **Auth:** bearer token · **Format:** JSON only.
 
-**Last updated:** 2026-10-16 · **136 endpoints live** · Phases 0–7, 9 and 11 complete · 10, 12 and 13 all but a decision each
+**Last updated:** 2026-10-19 · **139 endpoints live** · Phases 0–7, 9 and 11 complete · 10, 12 and 13 all but a decision each
 
 ---
 
@@ -22,7 +22,7 @@
 
 ### What is ready
 
-**136 endpoints live** and tested, across the 47 designed screens:
+**139 endpoints live** and tested, across the 47 designed screens:
 
 | | Count | Covers |
 |---|---|---|
@@ -745,6 +745,9 @@ fails if this list and the running routes ever disagree in either direction.
 | `POST /driver/seat-requests/{seatRequest}/approve` | 4.7 Seat requests and bookings |
 | `POST /driver/seat-requests/{seatRequest}/reject` | 4.7 Seat requests and bookings |
 | `POST /driver/seat-requests/{seatRequest}/waitlist` | 4.7 Seat requests and bookings |
+| `GET /driver/commutes/{commute}/waitlist` | 4.7 Seat requests and bookings |
+| `POST /driver/commutes/{commute}/waitlist/offers` | 4.7 Seat requests and bookings |
+| `DELETE /driver/seat-offers/{offer}` | 4.7 Seat requests and bookings |
 | `GET /my-bookings` | 4.7 Seat requests and bookings |
 | `GET /seat-offers` | 4.7 Seat requests and bookings |
 | `POST /seat-offers/{offer}/accept` | 4.7 Seat requests and bookings |
@@ -1302,12 +1305,21 @@ missing, so gating it would leave them with a refusal and no explanation.
 |---|---|
 | **The replacement must be approved first** | `422 VEHICLE_NOT_ALLOWED` otherwise. Add the vehicle, upload its documents, wait for a reviewer — then activate. An unapproved car cannot enter service. |
 | **An approved driver can now add a vehicle** | She could not before: adding one answered `409 DRIVER_APPLICATION_LOCKED` once she was approved, so changing her car was impossible. The replacement starts `pending` and is reviewed on its own, while her current car keeps working. |
-| **Her commutes move with her, and her passengers are told** | Confirmed bookings on future days are **kept, not cancelled**. Each affected passenger gets a `booking_vehicle_changed` notification **naming the new car and plate** — she matches a car at the kerb, so the plate is in the message rather than somewhere she has to go and look. |
+| **Her commutes move with her — her passengers do not** | 🔴 **This reversed on 2026-10-19.** Every future confirmed booking across **all** her commutes is **cancelled**, and each displaced passenger is put back on that commute's waiting list and told once, with a `vehicle_replaced_seat_cancelled` notification. The commutes themselves move to the new car, because a commute is her template and she would otherwise rebuild each one by hand. |
 
-**It can be refused for seats.** If a live commute sells more seats than the replacement has, the
-whole swap answers `422` and nothing moves. The alternatives were cancelling somebody's booked seat
-or leaving the commute bound to a car that is no longer active — so the driver finds out while she
-can still choose. Deactivate or re-price the commute first, or use a bigger car.
+> 🔴 **Why the reversal.** Bookings used to be kept, with a `booking_vehicle_changed` notice naming
+> the new plate. But a replacement car starts a **fresh verification**, and a run cannot start in a
+> car no reviewer has approved — so the "kept" seat was one we already knew we could not honour, and
+> she would have found out at the kerb. Cancelling tells her while she can still arrange something
+> else, and puts her back on the list so she gets first look when the new car clears.
+>
+> **`booking_vehicle_changed` no longer exists.** Nothing produces it: there is no surviving booking
+> to tell about. Remove any handling for it.
+
+**It can still be refused for seats.** If a live commute advertises more seats than the replacement
+has, the whole swap answers `422` and nothing moves — the seat count is published and people search
+on it, so a commute selling four seats cannot run in a three-seater. Re-price or re-size the commute
+first, or use a bigger car.
 
 **The old vehicle is kept**, inactive, with its documents. It is what carried every completed
 journey and the evidence that it was allowed to.
@@ -1412,9 +1424,26 @@ refused for this. The same refusal applies to `resume`. Show the amount and how 
 
 #### `POST /commutes/{commute}/pause` · `/resume` — verified
 
-Pausing stops it being found and stops new days being generated. **Days already booked are
-untouched** — a driver who pauses for a week and resumes finds her group intact. Resume re-checks
-the licence and vehicle and catches up the missed days.
+Pausing stops it being found, stops new days being generated, and 🔴 **cancels every future
+confirmed booking on it**. Resume re-checks the licence and vehicle and catches up the missed days.
+
+🔴 **This reversed on 2026-10-19 and it needs a confirmation step on your side.** Pausing used to
+leave existing bookings alone — "a driver who pauses for a week and resumes finds her group intact".
+It no longer does, and the screen must say so before she taps: *"This cancels N booked seats. They
+go back on your waiting list."*
+
+| | |
+|---|---|
+| **What is cancelled** | Confirmed bookings on days that are still `scheduled` and still in the future. Each becomes `CANCELLED_BY_DRIVER` with `cancelledReason: commute_paused`. |
+| **A run already underway is NOT touched** | That is Cancel Active Trip, a different decision with its own fees. Pausing cannot reach into a journey people are sitting in. |
+| **Where the passengers go** | Onto this commute's waiting list, keeping the terms she already approved, marked `displacedReason: commute_paused`. They are told once each, naming the number of days, with `commute_paused_seat_cancelled`. |
+| **No fan-out** | The freed seats are **not** offered to anybody. An offer would announce "a seat just opened" for a journey that has stopped — and would land on the women who just lost theirs. |
+| **Resume gives nothing back** | Cancelled seats never auto-restore. She offers them to the waiting members she chooses, with `POST /driver/commutes/{commute}/waitlist/offers`. |
+
+> ⚠️ The same thing happens **without her tapping pause**: a commute is paused automatically when
+> her licence lapses or her vehicle is suspended. The passenger's notification is deliberately
+> passive — *"X's commute has been paused"* — because naming the real cause would tell her
+> passengers about her documents.
 
 #### `DELETE /commutes/{commute}` — verified
 
@@ -1556,14 +1585,57 @@ deserves to see *why* one ranked above the other:
 #### `POST /commutes/{commute}/seat-requests` — active, profile complete
 
 **Request:** `commitment` (`trial`/`recurring`), `scheduledTripId` (**required for a trial**),
-`requestedDaysMask` (**required for recurring**), `seats` (1–4), `meetingPreference`
-(`gate`/`street`/`landmark`/`custom`), `customPickupPlaceId`, `introMessage` (max 500),
-`paymentType` (`cash`/`online`), `agreedToRules` (**must be true**).
+`requestedDaysMask` (**required for recurring**), `seats` (1–4), **`pickup` (required)**,
+**`dropoff` (required)**, `meetingPreference` (`gate`/`street`/`landmark`/`custom`),
+`customPickupPlaceId`, `introMessage` (max 500), `paymentType` (`cash`/`online`), `agreedToRules`
+(**must be true**).
+
+🔴 **`pickup` and `dropoff` are new and both are required.** This is the biggest change to this
+endpoint. A request used to carry only `meetingPreference` — a hint about what *kind* of place she
+would rather meet at — and no drop-off at all: the drop-off was assumed to be the end of the
+driver's route. So a driver was approving somebody without knowing where to collect her, and
+carrying her without knowing where she was going.
+
+Give each point in one of two ways:
+
+```
+{ "pickup":  { "suggestionId": "01h..." },
+  "dropoff": { "lat": 30.0684, "lng": 31.1015, "label": "Mehwar, Sheikh Zayed" } }
+```
+
+| Form | Use it when |
+|---|---|
+| `{ suggestionId }` | She tapped one of the driver's advertised meeting points — the `pickups` / `dropoffs` on `GET /commutes/{commute}`. |
+| `{ lat, lng, label }` | She dropped her own pin. `label` is required: a pin with no name is unreadable on the driver's review screen and in a notification. |
+
+Mix them freely — a suggested pickup with a custom drop-off is normal. Each point comes back with a
+`source` of `driver_suggestion` or `custom_map`, and **show that difference**: a point the driver
+advertised is one she has already agreed to stop at; a pin the passenger dropped is a proposal she
+has not seen before.
+
+> ⚠️ **A commute with no suggested points is still requestable.** Many are: a driver may publish
+> with only a start and an end. Never block the screen waiting for suggestions to choose from —
+> fall back to the map.
+>
+> ⚠️ **The driver's own start and end are NOT choosable as suggestions.** They are her journey
+> endpoints, not places she offered to collect strangers. If she wants to meet there, drop a pin —
+> it will be recorded as `custom_map`, which is the truth.
 
 `agreedToRules` is mandatory and the moment is stored, not a flag — in a dispute what matters is
 when they agreed. Expected refusals: `SEAT_UNAVAILABLE`, `BOOKING_DEADLINE_PASSED` (bookings close
 at 21:00 the night before), `BOOKING_ALREADY_REQUESTED` (one open request per commute),
-`BOOKING_OWN_COMMUTE`, `BOOKING_RECURRING_DAYS_NOT_OFFERED`.
+`BOOKING_OWN_COMMUTE`, `BOOKING_RECURRING_DAYS_NOT_OFFERED`, and four about the two points:
+
+| Code | Means |
+|---|---|
+| `SEAT_REQUEST_POINTS_SAME` | The two pins are within 200 m of each other. |
+| `SEAT_REQUEST_POINTS_OUT_OF_ORDER` | This commute reaches her drop-off before her pickup — they are the wrong way round. |
+| `SEAT_REQUEST_SUGGESTION_UNKNOWN` | That `suggestionId` is not one this commute advertises. |
+| `PICKUP_DETOUR_TOO_LONG` | The **pair together** takes the driver further out of her way than her `maxDetourMinutes`. `error.fields` carries `addedMinutes`, `runTotalMinutes` and `maxDetourMinutes`. |
+
+> 🔴 The detour is measured **by us**, for both points at once, against the route as published —
+> never accepted from the request. Use `POST /commutes/{commute}/pickup-preview` to show the cost
+> beside the pin while she is still choosing.
 
 #### `GET /seat-requests` — active, profile complete, paginated
 
@@ -1665,6 +1737,50 @@ POST /seat-offers/{offer}/accept
 **Not built:** a standalone switch endpoint on the booking itself (v3 proposes one; this is the offer path instead), and **recurring/future-weekday scope**.
 Only a single date switches today. A half-built recurring scope would silently release days she
 still wanted, so it waits rather than shipping partly done.
+
+#### `GET /driver/commutes/{commute}/waitlist` — active, profile complete, paginated
+
+Her own waiting list, as the screen where she chooses who to offer a seat to. **404** for anybody
+else's commute.
+
+| Field | Means |
+|---|---|
+| `seatRequestId` · `commuteId` · `tripId` | `tripId` is set only for a trial, which wants one specific day. |
+| `commitment` | `trial` or `recurring` — **show it.** A recurring member is being invited back into the group; a trial to one morning. |
+| `requestedDaysMask` · `seats` | |
+| `waitlistPosition` · `joinedWaitlistAt` | Position is an estimate, as everywhere else. |
+| `isPreviousPassenger` | 🔴 **The "Previous Passenger" badge.** True for somebody who has held a seat in this car before — including anybody the platform displaced when the commute was paused or the vehicle replaced. |
+| `displacedAt` · `displacedReason` | Non-null when the *platform* put her back on the list, not her own choice. `commute_paused` or `vehicle_replaced`. |
+| `hasOtherConfirmedCommute` | A bare boolean: she already holds a confirmed future seat somewhere. **Nothing more is published** — not whose commute, not which days. It is there so the driver is not surprised when somebody declines, and nothing is blocked on it. |
+| `introMessage` · `meetingPreference` · `paymentType` | |
+| `passenger` | 5.1. |
+
+#### `POST /driver/commutes/{commute}/waitlist/offers` — active, profile complete
+
+**Request:** either `all: true`, or `seatRequestIds: [...]` (1–100). **Exactly one of the two** — a
+body with neither answers `422`, and so does a body with both.
+
+🔴 **This is the one place a driver hands out seats herself.** Everywhere else, a seat that frees is
+offered to everybody waiting automatically and the first acceptance wins. Resuming a paused commute
+is different: she is refilling a whole car for weeks of mornings, and she is allowed to favour the
+passengers she already had. Use `isPreviousPassenger` above to let her.
+
+**Response:** `membersOffered` and `offersCreated`. One member can be offered several days — a
+recurring waiter resumed mid-month is eligible for every remaining weekday she committed to, and she
+gets **one** notification for the set, not one per day.
+
+Her choice decides **who may race, not who wins**: each day is still settled by server transaction
+order when somebody accepts. Refused with `409 COMMUTE_NOT_EDITABLE` while the commute is still
+paused — an offer on a commute that is not running invites somebody to a journey that will not
+happen. Ids that are not on her own list are **silently ignored** rather than refused; telling her
+"that id is not yours" would answer a question about another driver's commute.
+
+#### `DELETE /driver/seat-offers/{offer}` — active, profile complete
+
+Takes back an offer **nobody has accepted**. Returns the offer with `status: WITHDRAWN`.
+
+Once accepted it is a booking, and taking that back is a driver cancellation with its fees and
+reliability impact — not an undo. So an accepted or closed offer answers `409 SEAT_OFFER_CLOSED`.
 
 #### `GET /my-bookings` — active, profile complete, paginated
 
@@ -2605,7 +2721,7 @@ hold must still be able to read the notice that says so.
 
 | Response field | Meaning |
 |---|---|
-| `type` | What happened — route on this. Today: `seat_requested` (driver) · `seat_approved` · `seat_declined` · `booking_cancelled` (to the other side) · `booking_vehicle_changed` (the driver replaced her car — your seat stands, and the body names the new car and plate; `data.bookingId`, `data.vehicleId`) · `trip_day_cancelled` (the driver called off a day — `data.tripId`, `data.bookingId`) · `match_found` (a saved request matched — `data.commuteId`) · `trip_started` · `chat_message` · `rating_due` (passenger, `data.bookingId`) · `rating_due_riders` (driver, once per run, `data.tripId`) · `rating_reminder` (last day of the window, once) · `sos_picked_up` · `report_resolved` · `report_closed` · `account_on_hold` · `account_reinstated`. **Expect new values**; show an unknown one as a plain message. |
+| `type` | What happened — route on this. Today: `seat_requested` (driver) · `seat_approved` · `seat_declined` · `booking_cancelled` (to the other side) · `commute_paused_seat_cancelled` (the commute was paused, her booked days are cancelled and she is back on the waiting list; `data.commuteId`, `data.bookingId`) · `vehicle_replaced_seat_cancelled` (the same news for a replaced car; same `data`) · `seats_offered_by_driver` (a driver picked her off the waiting list and offered her seats — `data.commuteId`, `data.seatRequestId`; the first acceptance of each day still wins) · `trip_day_cancelled` (the driver called off a day — `data.tripId`, `data.bookingId`) · `match_found` (a saved request matched — `data.commuteId`) · `trip_started` · `chat_message` · `rating_due` (passenger, `data.bookingId`) · `rating_due_riders` (driver, once per run, `data.tripId`) · `rating_reminder` (last day of the window, once) · `sos_picked_up` · `report_resolved` · `report_closed` · `account_on_hold` · `account_reinstated`. **Expect new values**; show an unknown one as a plain message. |
 | `category` | `booking` · `payment` · `trip` · `safety` · `marketing`. |
 | `title` / `body` | **Already in the member's language** — rendered when the message was sent, and stored as written. Show them as they are. They never contain a phone number, an address or a full name: a push body appears on a lock screen. |
 | `data` | Ids for the screen to open: `seatRequestId`, `commuteId`, `tripId`, `sosId`, `incidentId`. Never names. |
@@ -2848,6 +2964,9 @@ exist, and every live endpoint must be named here.
 
 | Date | Change |
 |---|---|
+| 2026-10-19 | 📍 **Every seat request now names a pickup AND a drop-off, and both are required.** `POST /commutes/{commute}/seat-requests` takes `pickup` and `dropoff`, each as either `{suggestionId}` or `{lat, lng, label}`. Neither may be omitted and neither is inferred from the driver's route any more — the drop-off previously did not exist at all and was assumed to be the end of her route. Each comes back with a `source` (`driver_suggestion` / `custom_map`); **show the difference.** A commute advertising no suggested points is still requestable — fall back to the map. Four new refusals: `SEAT_REQUEST_POINTS_SAME`, `SEAT_REQUEST_POINTS_OUT_OF_ORDER`, `SEAT_REQUEST_SUGGESTION_UNKNOWN`, and `PICKUP_DETOUR_TOO_LONG` measured for the **pair together**. Bookings now carry the agreed snapshot, so `dropoffPoint` joins `meetingPoint` — both fuzzed, and both with the label withheld, until the booking is confirmed. |
+| 2026-10-19 | ⏸️ **Pausing a commute now cancels its future confirmed bookings, and so does replacing a vehicle.** 🔴 **Both reverse behaviour this file documented.** Pausing used to leave booked days untouched; replacing a car used to keep the bookings and send a `booking_vehicle_changed` notice. Neither holds: a paused commute is not running, and a replacement car is unverified, so those seats were promises we already knew we could not keep. Displaced passengers go onto a preserved waiting list with a **Previous Passenger** badge and are told once each (`commute_paused_seat_cancelled` / `vehicle_replaced_seat_cancelled`). **`booking_vehicle_changed` is gone — remove any handling for it.** Pause needs a confirmation step naming the number of seats it cancels. A run already underway is never touched. |
+| 2026-10-19 | 🎟️ **On resume, the driver chooses who gets a seat** — the one exception to the automatic fan-out. Three new endpoints: `GET /driver/commutes/{commute}/waitlist` (cards carrying `isPreviousPassenger`, `commitment`, `hasOtherConfirmedCommute`), `POST /driver/commutes/{commute}/waitlist/offers` (`all: true` or `seatRequestIds`), and `DELETE /driver/seat-offers/{offer}` to take back an **unaccepted** offer. Her choice decides who may race, not who wins; each day is still settled by server transaction order. New notification `seats_offered_by_driver`, one per member for the whole set of days. |
 | 2026-10-16 | ⏱️ **A driver`s `onTimeRate` now measures arrival as well as departure, and says how it was computed.** She counts as on time when she sets off within 10 minutes **and**, where the day carries a `promisedArrivalTime`, arrives within **5**. A day with no promise is judged on departure alone — no promise, no breach. New on a public profile`s `asDriver`: **`onTimeMetricVersion`** and **`onTimeSampleSize`**, because two drivers at "88%" under different rules are not comparable and 88% over nine runs is not the claim 88% over four hundred is. 🔴 **And a defect this fixed:** the driver rate shown to passengers was read from a column no production code ever wrote, so a real driver`s computed figure was never displayed — it sat at `null` for ever while this file said "null until computed". It is now the number we actually compute. |
 | 2026-10-16 | 🔄 **Switching a seat works, on the offer you already accept.** `POST /seat-offers/{offer}/accept` takes three optional fields — `switchFromBookingId`, `switchReason` (`voluntary` or `driver_delay`) and `joinOldWaitlist`. One transaction, so there is **never** an instant with two confirmed seats and never a way to lose both; if she already holds the target day it answers `409 BOOKING_ALREADY_BOOKED` and nothing moves. `driver_delay` charges **no cancellation fee** and records the old booking as cancelled **by the driver**, so a driver running late does not land on the passenger record. `joinOldWaitlist` rejoins the old list **without that driver approving again** (she already had a seat in that car) and **reserves nothing**. A plain acceptance still sends an empty body. **Not built:** a standalone switch endpoint on the booking itself, and recurring/future-weekday scope — single date only, because a half-built recurring scope would silently release days she still wanted. |
 | 2026-10-16 | 🎟️ **A freed seat is now OFFERED to everybody on the waitlist, and the first acceptance wins.** Two new endpoints: `GET /seat-offers` and `POST /seat-offers/{offer}/accept`, which returns the **booking** — no second driver approval, because everybody on the list was already approved when she waitlisted them. **So your screen 20 was right: the waitlist does now fill empty seats automatically.** It previously promoted one person into the driver inbox as a fresh decision, which could leave a seat empty for 48 hours waiting on one reply. ⚠️ **`waitlistPosition` is now an ESTIMATE** — keep showing it, never say it entitles her to the next seat; position only decides who is notified first, and number 2 can win. A loser gets `409 SEAT_OFFER_CLOSED` with `error.fields.status`: show **TAKEN_BY_OTHER** ("somebody was quicker") differently from **CLOSED** ("the seat stopped existing"). |

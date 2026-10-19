@@ -56,11 +56,6 @@ return [
         'body' => ':name cancelled the booking for :date.',
     ],
     /*
-     * 🔴 The plate is in the BODY, not left for the person to go and look up. She is going to stand
-     * at a kerb and get into whichever car matches what she was told, so the one fact that has
-     * changed is the one fact the message has to carry.
-     */
-    /*
      * 🔴 "First to accept gets it" is in the body on purpose. She is being told a race has started,
      * and a message that implied the seat was already hers would make losing it feel like it was
      * taken from her.
@@ -69,9 +64,36 @@ return [
         'title' => 'A seat just opened up',
         'body' => 'A seat is free on :date. First to accept gets it.',
     ],
-    'booking_vehicle_changed' => [
-        'title' => 'Your ride is in a different car',
-        'body' => ':name changed vehicle. Look for a :vehicle, plate :plate.',
+    /*
+     * 🔴 "You are back on the waiting list" rather than "your seat is being held". v5 is explicit
+     * that cancelled seats never auto-restore and that the driver chooses who to offer a seat to on
+     * resume, so a message implying the seat is kept for her would be a promise nobody made.
+     *
+     * The day count is in the body because one decision can take a whole week off a recurring
+     * rider, and she is told once — a woman who loses five mornings should not have to count the
+     * notifications to find out.
+     */
+    /*
+     * 🔒 Passive, and deliberately so: a commute is also paused automatically when the driver's
+     * licence lapses or her vehicle is suspended. "She paused it" would be false in those cases,
+     * and naming the real cause would tell her passengers something about her documents that is
+     * none of their business. "Has been paused" is true however it happened.
+     */
+    'commute_paused_seat_cancelled' => [
+        'title' => 'Your commute was paused',
+        'body' => ':name’s commute has been paused, so :days booked day(s) were cancelled. You are back on the waiting list.',
+    ],
+    /*
+     * 🔴 "Offered you a seat", not "gave you a seat". The driver chose who may race for these days;
+     * the server still decides who wins, and she may be offered a day somebody else accepts first.
+     */
+    'seats_offered_by_driver' => [
+        'title' => 'A driver offered you a seat',
+        'body' => 'You have been offered a seat on :days day(s). Accept to confirm — the first to accept each day gets it.',
+    ],
+    'vehicle_replaced_seat_cancelled' => [
+        'title' => 'Your driver changed car',
+        'body' => ':name is switching to another car, which has to be verified again, so :days booked day(s) were cancelled. You are back on the waiting list.',
     ],
     'match_found' => [
         'title' => 'A commute that fits your request',

@@ -100,6 +100,24 @@ enum ErrorCode: string
     case CannotBookOwnCommute = 'BOOKING_OWN_COMMUTE';
     case RecurringDaysNotOffered = 'BOOKING_RECURRING_DAYS_NOT_OFFERED';
 
+    /*
+     * ---- The passenger's two required points (Feature 03 v5 §2) ---------
+     *
+     * Each is fixed by choosing different points, so all three are 422.
+     */
+
+    /** Pickup and drop-off are the same place, so there is no journey to carry her on. */
+    case SeatRequestPointsSame = 'SEAT_REQUEST_POINTS_SAME';
+
+    /**
+     * The drop-off comes before the pickup along this commute's route — she is asking to travel
+     * against its direction. v5 §2: "Validate travel direction/order ... server-side."
+     */
+    case SeatRequestPointsOutOfOrder = 'SEAT_REQUEST_POINTS_OUT_OF_ORDER';
+
+    /** She named a driver suggestion that this commute does not advertise. */
+    case SeatRequestSuggestionUnknown = 'SEAT_REQUEST_SUGGESTION_UNKNOWN';
+
     // ---- Custom pickup points (Phase 7) --------------------------------
     case PickupDetourTooLong = 'PICKUP_DETOUR_TOO_LONG';
     case PickupAlreadyRequested = 'PICKUP_ALREADY_REQUESTED';
@@ -276,6 +294,9 @@ enum ErrorCode: string
              */
             self::PickupDetourTooLong,
             self::PickupNotOnCommute,
+            self::SeatRequestPointsSame,
+            self::SeatRequestPointsOutOfOrder,
+            self::SeatRequestSuggestionUnknown,
             self::RecurringDaysNotOffered,
             self::AbsenceTooLong => 422,
 

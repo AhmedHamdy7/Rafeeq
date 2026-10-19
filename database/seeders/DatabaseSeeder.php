@@ -9,6 +9,7 @@ use App\Domains\Booking\Enums\BookingStatus;
 use App\Domains\Booking\Enums\MeetingPreference;
 use App\Domains\Booking\Enums\PaymentStatus;
 use App\Domains\Booking\Enums\PaymentType;
+use App\Domains\Booking\Enums\PointSource;
 use App\Domains\Booking\Enums\SeatRequestCommitment;
 use App\Domains\Booking\Enums\SeatRequestStatus;
 use App\Domains\Booking\Models\Booking;
@@ -516,7 +517,21 @@ class DatabaseSeeder extends Seeder
 
     private function seedMariamsBooking(User $mariam, CommuteOffer $offer, ScheduledTrip $trip, CommuteGroup $group): void
     {
-        $seatRequest = SeatRequest::create([
+        $pickup = new Coordinate(30.0624, 31.3614);
+        $dropoff = new Coordinate(30.0684, 31.1015);
+
+        /*
+         * Built and filled before the first save, not created and then updated.
+         *
+         * 🔴 The two points Feature 03 v5 §2 requires are NOT NULL columns and are deliberately
+         * outside the fillable list — in the running system they are resolved and validated
+         * server-side rather than posted. So they cannot go in a `create()` array, and they cannot
+         * wait for a second `save()` either: the first INSERT would have no value for them and the
+         * database refuses it.
+         */
+        $seatRequest = new SeatRequest;
+
+        $seatRequest->fill([
             'passenger_user_id' => $mariam->id,
             'commute_offer_id' => $offer->id,
             'scheduled_trip_id' => $trip->id,
@@ -526,10 +541,25 @@ class DatabaseSeeder extends Seeder
             'intro_message' => 'أهلاً نور! بتنقل يوميًا نفس الطريق وحابة أجرب مجموعتك.',
             'agreed_to_rules_at' => now(),
             'payment_type' => PaymentType::Cash,
+        ]);
+
+        $seatRequest->forceFill([
             'status' => SeatRequestStatus::Approved,
             'responded_by' => $offer->driverProfile->user_id,
             'responded_at' => now(),
-        ]);
+
+            'requested_pickup_point' => $pickup,
+            'requested_pickup_lat' => $pickup->lat,
+            'requested_pickup_lng' => $pickup->lng,
+            'requested_pickup_label' => 'بوابة الرحاب 2',
+            'requested_pickup_source' => PointSource::CustomMap->value,
+
+            'requested_dropoff_point' => $dropoff,
+            'requested_dropoff_lat' => $dropoff->lat,
+            'requested_dropoff_lng' => $dropoff->lng,
+            'requested_dropoff_label' => 'المحور، الشيخ زايد',
+            'requested_dropoff_source' => PointSource::CustomMap->value,
+        ])->save();
 
         $platformFee = (int) round($trip->price_snapshot_piastres * 0.03);
 
@@ -547,6 +577,18 @@ class DatabaseSeeder extends Seeder
             'payment_status' => PaymentStatus::NotDue,
             'status' => BookingStatus::Confirmed,
         ]);
+
+        // The agreed snapshot, as `CreateBookingAction` writes it for a real approval.
+        $booking->forceFill([
+            'pickup_point' => $pickup,
+            'pickup_label' => $seatRequest->requested_pickup_label,
+            'pickup_lat' => $pickup->lat,
+            'pickup_lng' => $pickup->lng,
+            'dropoff_point' => $dropoff,
+            'dropoff_label' => $seatRequest->requested_dropoff_label,
+            'dropoff_lat' => $dropoff->lat,
+            'dropoff_lng' => $dropoff->lng,
+        ])->save();
 
         $trip->increment('seats_taken');
 

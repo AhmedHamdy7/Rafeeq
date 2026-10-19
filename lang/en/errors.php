@@ -78,6 +78,9 @@ return [
     'BOOKING_RECURRING_DAYS_NOT_OFFERED' => 'This commute does not run on all of the days you asked for.',
 
     // Custom pickup points.
+    'SEAT_REQUEST_POINTS_SAME' => 'Your pickup and drop-off are the same place. Choose two different points.',
+    'SEAT_REQUEST_POINTS_OUT_OF_ORDER' => 'This commute reaches your drop-off before your pickup. Check which way round they are.',
+    'SEAT_REQUEST_SUGGESTION_UNKNOWN' => 'That meeting point is not one this commute offers. Pick another, or choose a point on the map.',
     'PICKUP_DETOUR_TOO_LONG' => 'That pickup point is further off the driver’s route than they accept.',
     'PICKUP_ALREADY_REQUESTED' => 'You already have a pickup point waiting for an answer.',
     'PICKUP_REQUEST_NOT_PENDING' => 'That pickup request has already been answered.',

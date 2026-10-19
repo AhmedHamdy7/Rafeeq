@@ -128,9 +128,15 @@ it('gives the plate number only once the seat is confirmed', function () {
         ->assertOk()->json('data.nextJourney');
 
     expect($confirmed['vehicle']['plateNumber'])->toBe(Vehicle::sole()->plate_number)
-        // No meeting point of its own: this passenger meets the driver at the gate, and
-        // the gate is the run's origin, which the card carries as `originLabel`.
-        ->and($confirmed['meetingPoint'])->toBeNull()
+        /*
+         * 🔴 She now HAS a meeting point of her own, and that changed on 2026-10-19.
+         *
+         * This used to expect null, with the reasoning that "this passenger meets the driver at
+         * the gate, and the gate is the run's origin". Feature 03 v5 §2 makes a pickup point
+         * compulsory on every seat request, so there is no such passenger any more — and the old
+         * null was not really a design, it was the symptom of a column almost nothing filled.
+         */
+        ->and($confirmed['meetingPoint']['lat'])->toBe(30.0624)
         ->and($confirmed['originLabel'])->toBe('Rehab Gate 2');
 
     Booking::sole()->forceFill(['status' => 'pending'])->save();
@@ -425,11 +431,15 @@ it('puts the whole run on one card', function () {
         ->and($run['passengers'][0]['person'])->not->toHaveKey('fullName')
         ->and($run['passengers'][0]['person'])->not->toHaveKey('phone')
         /*
-         * Null, because this passenger meets the driver at the gate — and a booking only
-         * stores a point of its own once a CUSTOM pickup was approved. The gate is the
-         * run's origin, which the same card already carries as `originLabel`.
+         * 🔴 The driver gets a pickup point for every passenger now, and this changed on
+         * 2026-10-19. It used to be null unless a CUSTOM pickup had been approved separately —
+         * which meant the driver's own run card told her where to collect almost nobody.
+         * Feature 03 v5 §2 makes the point compulsory on the request, and `CreateBookingAction`
+         * snapshots it, so the card can finally answer the question it exists to answer.
+         *
+         * Exact, not fuzzed: she has to drive to it, and she is the one who accepted it.
          */
-        ->and($run['passengers'][0]['pickup'])->toBeNull()
+        ->and($run['passengers'][0]['pickup']['lat'])->toBe(30.0624)
         // Nobody has declared yet, which is not the same as being away.
         ->and($run['passengers'][0]['attendanceStatus'])->toBeNull();
 });

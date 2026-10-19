@@ -453,6 +453,12 @@ function signIn(string $phone = '01012345678', string $devicePublicId = 'device-
  *
  * Defaults to a trial on one named day, because that is the shape most tests want;
  * `commitment` and `requestedDaysMask` in `$overrides` make it a recurring request.
+ *
+ * 🔴 `pickup` and `dropoff` are both sent, because Feature 03 v5 §2 makes both
+ * required on every seat request. The two defaults sit ON the line {@see saveRoute}
+ * publishes — a quarter and three quarters of the way along it — so they add
+ * essentially no detour and are the right way round for the commute's direction.
+ * A test about either of those rules overrides them deliberately.
  */
 function requestSeat(string $token, string $commuteId, array $overrides = [])
 {
@@ -461,6 +467,8 @@ function requestSeat(string $token, string $commuteId, array $overrides = [])
         'scheduledTripId' => $overrides['scheduledTripId'] ?? null,
         'seats' => 1,
         'meetingPreference' => 'gate',
+        'pickup' => ['lat' => 30.0624, 'lng' => 31.3614, 'label' => 'Ring Road, Rehab exit'],
+        'dropoff' => ['lat' => 30.0684, 'lng' => 31.1015, 'label' => 'Mehwar, Sheikh Zayed'],
         'introMessage' => 'أهلاً! بنقل نفس الطريق وحابة أجرب مجموعتك.',
         'paymentType' => 'cash',
         'agreedToRules' => true,
