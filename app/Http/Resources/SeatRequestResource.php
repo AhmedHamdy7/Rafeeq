@@ -43,6 +43,25 @@ final class SeatRequestResource extends JsonResource
             'pickup' => $this->chosenPoint('pickup'),
             'dropoff' => $this->chosenPoint('dropoff'),
 
+            /*
+             * The place the driver proposed instead, while it is waiting on the passenger (v5 §2).
+             *
+             * Absent entirely unless there is one, rather than present with nulls: a client should
+             * render the counteroffer screen on the presence of this key, and a hash of nulls would
+             * have it render an empty proposal for every ordinary request.
+             *
+             * 🔴 Only the end she actually moved appears. A counteroffer that touches the drop-off
+             * leaves `pickup` null here, so the passenger is shown one decision rather than being
+             * asked to re-agree to her own choice.
+             */
+            'counteroffer' => $this->when($this->counteroffered_at !== null, fn (): array => [
+                'pickup' => $this->proposedPoint('pickup'),
+                'dropoff' => $this->proposedPoint('dropoff'),
+                'note' => $this->counteroffer_note,
+                'at' => $this->counteroffered_at?->toIso8601String(),
+                'answeredAt' => $this->counteroffer_answered_at?->toIso8601String(),
+            ]),
+
             'introMessage' => $this->intro_message,
             'paymentType' => $this->payment_type->value,
             // A moment, not a flag: in a dispute what matters is when they agreed.
@@ -89,6 +108,25 @@ final class SeatRequestResource extends JsonResource
             'source' => $this->{"requested_{$kind}_source"}?->value,
             // Which advertised stop she picked, when she picked one rather than dropping a pin.
             'suggestionId' => $this->{"requested_{$kind}_suggestion_id"},
+        ];
+    }
+
+    /**
+     * One end of a driver's counteroffer, or null for the end she left alone.
+     *
+     * @param  'pickup'|'dropoff'  $kind
+     * @return array<string, mixed>|null
+     */
+    private function proposedPoint(string $kind): ?array
+    {
+        if ($this->{"counteroffer_{$kind}_lat"} === null) {
+            return null;
+        }
+
+        return [
+            'lat' => (float) $this->{"counteroffer_{$kind}_lat"},
+            'lng' => (float) $this->{"counteroffer_{$kind}_lng"},
+            'label' => $this->{"counteroffer_{$kind}_label"},
         ];
     }
 }

@@ -2,6 +2,7 @@
 
 namespace App\Domains\Booking\Support;
 
+use App\Domains\Booking\Actions\CounterofferAction;
 use App\Domains\Booking\Enums\PointSource;
 use App\Domains\Booking\Models\PickupPointRequest;
 use App\Domains\Commute\Actions\SaveCommuteRouteAction;
@@ -89,16 +90,7 @@ final readonly class RequestedPoints
             $offer, $input['dropoff'], CommuteLocationType::Dropoff,
         );
 
-        self::assertDistinct($geo, $pickup, $dropoff);
-        self::assertInTravelOrder($geo, $offer, $pickup, $dropoff);
-
-        /*
-         * Measured as a pair, in journey order, and checked against the number the driver chose to
-         * say how far out of her way she will go. Measuring them separately would let each half
-         * pass a limit the two together break.
-         */
-        $detour = PickupDetour::measureAll($geo, $offer, [$pickup, $dropoff]);
-        $detour->assertWithin((int) $offer->max_detour_minutes);
+        $detour = self::assertUsablePair($geo, $offer, $pickup, $dropoff);
 
         return new self(
             pickup: $pickup,
@@ -111,6 +103,39 @@ final readonly class RequestedPoints
             dropoffSuggestionId: $dropoffSuggestion,
             detour: $detour,
         );
+    }
+
+    /**
+     * Whether a pickup and a drop-off can be carried together on this commute.
+     *
+     * 🔴 Public and shared, because two different people can propose a pair: the passenger asking
+     * for a seat, and the driver counteroffering a different place
+     * ({@see CounterofferAction}). One definition means a driver
+     * cannot propose something the system would have refused from a passenger — and the checks
+     * protect the riders she has already promised as much as they protect her.
+     *
+     * @return PickupDetour what the pair costs, so a caller can show the driver before she answers
+     */
+    public static function assertUsablePair(
+        GeoQueryEngine $geo,
+        CommuteOffer $offer,
+        Coordinate $pickup,
+        Coordinate $dropoff,
+    ): PickupDetour {
+        $offer->loadMissing('locations');
+
+        self::assertDistinct($geo, $pickup, $dropoff);
+        self::assertInTravelOrder($geo, $offer, $pickup, $dropoff);
+
+        /*
+         * Measured as a pair, in journey order, and checked against the number the driver chose to
+         * say how far out of her way she will go. Measuring them separately would let each half
+         * pass a limit the two together break.
+         */
+        $detour = PickupDetour::measureAll($geo, $offer, [$pickup, $dropoff]);
+        $detour->assertWithin((int) $offer->max_detour_minutes);
+
+        return $detour;
     }
 
     /**

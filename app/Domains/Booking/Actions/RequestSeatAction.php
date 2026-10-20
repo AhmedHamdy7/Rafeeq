@@ -204,6 +204,12 @@ final readonly class RequestSeatAction
                 SeatRequestStatus::Pending->value,
                 SeatRequestStatus::Approved->value,
                 SeatRequestStatus::Waitlisted->value,
+                /*
+                 * A counteroffer is an open conversation: the driver has answered with a different
+                 * meeting place and is waiting on this passenger. The generated unique column
+                 * enforces it too — this gives her an explanation instead of a database error.
+                 */
+                SeatRequestStatus::Counteroffered->value,
             ])
             ->exists();
 

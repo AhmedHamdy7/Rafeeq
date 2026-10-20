@@ -240,6 +240,14 @@ it('generates a document describing every /v1 route', function () {
         'POST /v1/driver/seat-requests/{seatRequest}/waitlist',
 
         /*
+         * The driver's third answer and the passenger's answer back (v5 §2). A structured exchange
+         * rather than a conversation, because "chat is not consent".
+         */
+        'POST /v1/driver/seat-requests/{seatRequest}/counteroffer',
+        'POST /v1/seat-requests/{seatRequest}/counteroffer/accept',
+        'POST /v1/seat-requests/{seatRequest}/counteroffer/decline',
+
+        /*
          * Her waiting list, and v5's named exception to the automatic fan-out: on resume the driver
          * chooses who to offer seats to, and may take back an offer nobody has accepted.
          */

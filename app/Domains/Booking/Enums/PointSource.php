@@ -34,6 +34,17 @@ enum PointSource: string
      */
     case LegacyBackfill = 'legacy_backfill';
 
+    /**
+     * The driver proposed this place and the passenger accepted it (Feature 03 v5 §2's
+     * counteroffer).
+     *
+     * 🔴 Kept distinct from `custom_map`, which means the passenger chose it herself. A dispute
+     * about somebody waiting at the wrong corner turns on whose idea the corner was, and recording
+     * the driver's proposal as the passenger's own pin would quietly move the responsibility onto
+     * the person who was told where to stand.
+     */
+    case DriverCounteroffer = 'driver_counteroffer';
+
     /** Whether a person chose this point, as opposed to a migration having written it. */
     public function wasChosen(): bool
     {

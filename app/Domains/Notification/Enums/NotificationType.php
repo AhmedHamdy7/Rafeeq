@@ -81,6 +81,19 @@ enum NotificationType: string
     case SeatsOfferedByDriver = 'seats_offered_by_driver';
 
     /**
+     * The driver answered her request with a different pickup or drop-off, and it is her turn
+     * (Feature 03 v5 §2).
+     *
+     * 🔴 Not a `SeatApproved` and not a `SeatDeclined`, and the wording must not read as either.
+     * She has neither been given a seat nor refused one — she has been asked a question, and the
+     * seat is still open while she answers it.
+     */
+    case SeatCounteroffered = 'seat_counteroffered';
+
+    /** The passenger refused the place the driver proposed, so the conversation is closed. */
+    case SeatCounterofferDeclined = 'seat_counteroffer_declined';
+
+    /**
      * The same news, for the other reason it happens: the driver replaced her car, which starts a
      * fresh verification and cancels every future confirmed seat she had sold.
      *
@@ -108,6 +121,8 @@ enum NotificationType: string
             self::CommutePausedSeatCancelled,
             self::VehicleReplacedSeatCancelled,
             self::SeatsOfferedByDriver,
+            self::SeatCounteroffered,
+            self::SeatCounterofferDeclined,
             self::TripDayCancelled,
             self::MatchFound => NotificationCategory::Booking,
 

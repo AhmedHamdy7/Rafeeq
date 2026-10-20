@@ -14,7 +14,7 @@
 >
 > **Base URL:** `{host}/api/v1` · **Auth:** bearer token · **Format:** JSON only.
 
-**Last updated:** 2026-10-20 · **141 endpoints live** · Phases 0–7, 9 and 11 complete · 10, 12 and 13 all but a decision each
+**Last updated:** 2026-10-20 · **144 endpoints live** · Phases 0–7, 9 and 11 complete · 10, 12 and 13 all but a decision each
 
 ---
 
@@ -22,7 +22,7 @@
 
 ### What is ready
 
-**141 endpoints live** and tested, across the 47 designed screens:
+**144 endpoints live** and tested, across the 47 designed screens:
 
 | | Count | Covers |
 |---|---|---|
@@ -745,6 +745,9 @@ fails if this list and the running routes ever disagree in either direction.
 | `POST /driver/seat-requests/{seatRequest}/approve` | 4.7 Seat requests and bookings |
 | `POST /driver/seat-requests/{seatRequest}/reject` | 4.7 Seat requests and bookings |
 | `POST /driver/seat-requests/{seatRequest}/waitlist` | 4.7 Seat requests and bookings |
+| `POST /driver/seat-requests/{seatRequest}/counteroffer` | 4.7 Seat requests and bookings |
+| `POST /seat-requests/{seatRequest}/counteroffer/accept` | 4.7 Seat requests and bookings |
+| `POST /seat-requests/{seatRequest}/counteroffer/decline` | 4.7 Seat requests and bookings |
 | `GET /driver/commutes/{commute}/waitlist` | 4.7 Seat requests and bookings |
 | `POST /driver/commutes/{commute}/waitlist/offers` | 4.7 Seat requests and bookings |
 | `DELETE /driver/seat-offers/{offer}` | 4.7 Seat requests and bookings |
@@ -1682,6 +1685,62 @@ for, and "waitlist fills empty seats automatically" is now accurate.
 "Position 1 of 2 · Est. seat within ~1 week" is deliberate — but **never tell her it entitles her to
 the next seat.** The person at position 2 can and does win; position only decides who is *notified*
 first. Nothing in the allocation path reads it.
+
+#### `POST /driver/seat-requests/{seatRequest}/counteroffer` — active, profile complete
+
+🔴 **The driver's third answer: "I can take you, from somewhere else."** Feature 03 v5 §2 makes
+Accept / Reject / **Counteroffer** her three explicit choices.
+
+**Request:** `pickup` and/or `dropoff` — **at least one**, each in the same two forms as a seat
+request (`{suggestionId}` or `{lat, lng, label}`) — plus an optional `note` (max 255) she will read
+before deciding.
+
+```
+POST /driver/seat-requests/{seatRequest}/counteroffer
+{ "pickup": { "lat": 30.0630, "lng": 31.3300, "label": "Petrol station, not the side street" },
+  "note": "I can't get into that street at 7am." }
+```
+
+| | |
+|---|---|
+| **Nothing is committed** | The request becomes `COUNTEROFFERED`. The agreed points do **not** move, no booking is created, and no seat is taken. Only the end she actually moved is recorded — counter the drop-off and `counteroffer.pickup` stays null, so the passenger is shown one decision instead of being asked to re-agree to her own choice. |
+| **It is still her one open request** | She cannot file another on this commute while the conversation is live. |
+| **It expires** | On the usual request window, restarted from the counteroffer. A proposal nobody answers closes. |
+| **Pending only** | A waitlisted request answers `409 SEAT_REQUEST_NOT_PENDING`: she is on a list because there was no seat, and countering her meeting point would answer a question nobody asked. |
+
+The proposed pair is judged by the same rules as a passenger's own — `SEAT_REQUEST_POINTS_SAME`,
+`SEAT_REQUEST_POINTS_OUT_OF_ORDER`, `SEAT_REQUEST_SUGGESTION_UNKNOWN`, `PICKUP_DETOUR_TOO_LONG`. A
+driver can propose something unworkable too, and the check protects the riders she has already
+promised. A body that moves nothing — no points, or her echoing the passenger's own coordinates back
+— answers `422`.
+
+#### `POST /seat-requests/{seatRequest}/counteroffer/accept` — active, profile complete
+
+The passenger agreeing. **This confirms the seat** and returns the approval (same shape as
+`/approve`, `201`): the driver proposed the place, so she has already said yes on those terms.
+
+> 🔴 **It can still fail with `409 SEAT_UNAVAILABLE`.** Her counteroffer promised a **meeting
+> place**, never that a seat would still be free — somebody else can take the last one while the
+> conversation is open. Her request survives in that case, so she is not burned.
+>
+> The agreed point comes back with `source: driver_counteroffer`, not `custom_map`. A dispute about
+> somebody waiting at the wrong corner turns on whose idea the corner was.
+
+#### `POST /seat-requests/{seatRequest}/counteroffer/decline` — active, profile complete
+
+The passenger refusing. The request closes as **`COUNTEROFFER_DECLINED`** — its own status, not
+`REJECTED` (which would read as the driver refusing her) and not `WITHDRAWN` (which would read as
+backing out before an answer). Both of those histories are read by somebody deciding whether to
+accept the other person later.
+
+It does **not** return to `PENDING`: the driver would see the same two points she had just declined
+and the pair would loop.
+
+> 🔒 **Chat is not consent.** v5 says so in terms, and it is why this is three endpoints rather than
+> a message thread. Two people can agree a corner in chat in ten seconds and nothing in the system
+> would know — the driver's route would still point at the original, the attendance geofence would
+> still measure against it, and a dispute would be settled against a record that disagreed with both
+> of them. Never treat a chat message as the agreement.
 
 #### `GET /seat-offers` — active, profile complete, paginated
 
@@ -3028,6 +3087,7 @@ exist, and every live endpoint must be named here.
 
 | Date | Change |
 |---|---|
+| 2026-10-20 | 🤝 **The driver can counter a request's meeting point, and the passenger has to accept it in the app.** Three endpoints: `POST /driver/seat-requests/{seatRequest}/counteroffer` (either point or both, with a note), and `/seat-requests/{seatRequest}/counteroffer/accept` · `/decline` for her answer. 🔴 **Nothing moves until she accepts** — the request sits at `COUNTEROFFERED`, no booking, no seat taken, and only the end the driver actually moved is proposed. Accepting **confirms the seat** and returns the approval, but can still answer `409 SEAT_UNAVAILABLE`: the counteroffer promised a meeting place, never a free seat. Declining closes it as `COUNTEROFFER_DECLINED` — its own status, so the refusal lands on neither person's record as something they did not do. Agreed points from a counteroffer carry `source: driver_counteroffer`. 🔒 **Chat is not consent** — v5 says so in terms; never treat a message thread as the agreement. |
 | 2026-10-20 | 🗺️ **The driver's map.** `GET /driver/commute-occurrences/{trip}/navigation-route` returns the ordered stops she actually drives — **2 + 2N** points: her start, each confirmed passenger's two agreed points, her end — with a routed ETA per stop and the `View Route in Google Maps` link. 🔴 **Do not assume the order is `Start → A pickup → A drop-off → B pickup → B drop-off → End`:** stops are ordered by position along her route, so shared journeys interleave; the only invariant is that each passenger's pickup precedes her own drop-off. Render `stops` as given. 🔴 **`googleMapsDirectionsUrl` can be null** when the run has more stops than one Maps link carries — use the overlapping `segments` instead; we will not hand you a link Maps would silently truncate. `GET /driver/seat-requests/{seatRequest}/route-preview` shows what accepting a pending request would do, marked `PREVIEW_NOT_CONFIRMED`, writing nothing. Both are driver-only: the payload is a list of other riders' front doors. |
 | 2026-10-19 | 📍 **Every seat request now names a pickup AND a drop-off, and both are required.** `POST /commutes/{commute}/seat-requests` takes `pickup` and `dropoff`, each as either `{suggestionId}` or `{lat, lng, label}`. Neither may be omitted and neither is inferred from the driver's route any more — the drop-off previously did not exist at all and was assumed to be the end of her route. Each comes back with a `source` (`driver_suggestion` / `custom_map`); **show the difference.** A commute advertising no suggested points is still requestable — fall back to the map. Four new refusals: `SEAT_REQUEST_POINTS_SAME`, `SEAT_REQUEST_POINTS_OUT_OF_ORDER`, `SEAT_REQUEST_SUGGESTION_UNKNOWN`, and `PICKUP_DETOUR_TOO_LONG` measured for the **pair together**. Bookings now carry the agreed snapshot, so `dropoffPoint` joins `meetingPoint` — both fuzzed, and both with the label withheld, until the booking is confirmed. |
 | 2026-10-19 | ⏸️ **Pausing a commute now cancels its future confirmed bookings, and so does replacing a vehicle.** 🔴 **Both reverse behaviour this file documented.** Pausing used to leave booked days untouched; replacing a car used to keep the bookings and send a `booking_vehicle_changed` notice. Neither holds: a paused commute is not running, and a replacement car is unverified, so those seats were promises we already knew we could not keep. Displaced passengers go onto a preserved waiting list with a **Previous Passenger** badge and are told once each (`commute_paused_seat_cancelled` / `vehicle_replaced_seat_cancelled`). **`booking_vehicle_changed` is gone — remove any handling for it.** Pause needs a confirmation step naming the number of seats it cancels. A run already underway is never touched. |

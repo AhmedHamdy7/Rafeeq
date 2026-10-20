@@ -453,6 +453,19 @@ Route::prefix('v1')->group(function (): void {
         Route::post('driver/seat-requests/{seatRequest}/approve', [SeatRequestController::class, 'approve']);
         Route::post('driver/seat-requests/{seatRequest}/reject', [SeatRequestController::class, 'reject']);
         Route::post('driver/seat-requests/{seatRequest}/waitlist', [SeatRequestController::class, 'waitlist']);
+
+        /*
+         * The driver's third answer, and the passenger's answer back (Feature 03 v5 §2).
+         *
+         * 🔴 A structured exchange rather than a conversation, because v5 says "chat is not
+         * consent". Two people can agree a street corner in a chat thread and nothing in the
+         * system would know: the itinerary would still send her to the original point and a dispute
+         * would be settled against a record that disagreed with both of them.
+         */
+        Route::post('driver/seat-requests/{seatRequest}/counteroffer', [SeatRequestController::class, 'counteroffer']);
+        Route::post('seat-requests/{seatRequest}/counteroffer/accept', [SeatRequestController::class, 'acceptCounteroffer']);
+        Route::post('seat-requests/{seatRequest}/counteroffer/decline', [SeatRequestController::class, 'declineCounteroffer']);
+
         Route::get('driver/bookings', [BookingController::class, 'forDriver']);
 
         /*

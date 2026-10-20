@@ -54,6 +54,20 @@ class SeatRequest extends Model
             'requested_dropoff_lng' => 'decimal:7',
             'requested_dropoff_source' => PointSource::class,
 
+            /*
+             * The place the driver proposed instead, waiting on the passenger (v5 §2). Only the end
+             * she actually moved is set — a counteroffer that touches the drop-off leaves the
+             * pickup columns null, so the passenger is never asked to re-agree to her own choice.
+             */
+            'counteroffer_pickup_point' => SpatialPoint::class,
+            'counteroffer_pickup_lat' => 'decimal:7',
+            'counteroffer_pickup_lng' => 'decimal:7',
+            'counteroffer_dropoff_point' => SpatialPoint::class,
+            'counteroffer_dropoff_lat' => 'decimal:7',
+            'counteroffer_dropoff_lng' => 'decimal:7',
+            'counteroffered_at' => 'datetime',
+            'counteroffer_answered_at' => 'datetime',
+
             'agreed_to_rules_at' => 'datetime',
             'payment_type' => PaymentType::class,
             'status' => SeatRequestStatus::class,
@@ -107,6 +121,27 @@ class SeatRequest extends Model
     public function responder(): BelongsTo
     {
         return $this->belongsTo(User::class, 'responded_by');
+    }
+
+    /**
+     * The driver who proposed a different meeting place.
+     *
+     * Kept beside `responded_by` rather than relying on it: a counteroffer is answered by the
+     * PASSENGER, and accepting it confirms the seat on the counteroffering driver's behalf — so
+     * which driver made the proposal has to survive the passenger's answer overwriting the
+     * responder.
+     */
+    public function counterofferedBy(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'counteroffered_by');
+    }
+
+    /**
+     * Whether the driver has proposed a different place and is waiting on the passenger.
+     */
+    public function hasLiveCounteroffer(): bool
+    {
+        return $this->status === SeatRequestStatus::Counteroffered;
     }
 
     public function pickupPointRequests(): HasMany

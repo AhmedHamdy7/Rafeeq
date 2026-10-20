@@ -87,6 +87,18 @@ return [
      * 🔴 "Offered you a seat", not "gave you a seat". The driver chose who may race for these days;
      * the server still decides who wins, and she may be offered a day somebody else accepts first.
      */
+    /*
+     * 🔴 A question, not an answer. She has neither been given a seat nor refused one, and wording
+     * that leaned either way would make her read the next screen expecting the wrong thing.
+     */
+    'seat_counteroffered' => [
+        'title' => ':name suggested a different spot',
+        'body' => ':name can take you, from a different meeting point. Open the request to see where and decide.',
+    ],
+    'seat_counteroffer_declined' => [
+        'title' => 'Your suggested spot was declined',
+        'body' => ':name would rather not meet at the point you suggested, so the request is closed.',
+    ],
     'seats_offered_by_driver' => [
         'title' => 'A driver offered you a seat',
         'body' => 'You have been offered a seat on :days day(s). Accept to confirm — the first to accept each day gets it.',

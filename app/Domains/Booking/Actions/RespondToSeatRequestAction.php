@@ -22,8 +22,6 @@ use Illuminate\Support\Facades\DB;
  */
 final readonly class RespondToSeatRequestAction
 {
-    
-
     /**
      * A driver declining. The note is optional here, unlike a verification
      * rejection: a driver choosing who rides in their own car does not owe a
@@ -157,6 +155,13 @@ final readonly class RespondToSeatRequestAction
             ->whereIn('status', [
                 SeatRequestStatus::Pending->value,
                 SeatRequestStatus::Waitlisted->value,
+                /*
+                 * A counteroffer nobody answers has to close too. It holds the passenger's one open
+                 * request for that commute, so leaving it would mean she cannot ask again while
+                 * waiting to decide on an offer she has stopped thinking about — and the driver
+                 * would be holding a place open for a conversation that ended.
+                 */
+                SeatRequestStatus::Counteroffered->value,
             ])
             ->whereNotNull('expires_at')
             ->where('expires_at', '<=', now())
