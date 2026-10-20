@@ -7,6 +7,7 @@ use App\Domains\Booking\Enums\PickupPointRequestStatus;
 use App\Domains\Booking\Models\Booking;
 use App\Domains\Booking\Models\PickupPointRequest;
 use App\Domains\Commute\Models\ScheduledTrip;
+use App\Domains\Commute\Support\ScheduleLock;
 use App\Domains\Geo\Models\Place;
 use App\Domains\Shared\Exceptions\DomainException;
 use App\Domains\Shared\Support\ErrorCode;
@@ -134,7 +135,26 @@ final readonly class RespondToPickupPointAction
             ->where('passenger_user_id', $pickup->requested_by_user_id)
             ->where('status', BookingStatus::Confirmed->value)
             ->whereIn('scheduled_trip_id', $this->upcomingTripIds($pickup))
+            ->with('scheduledTrip')
             ->get();
+
+        /*
+         * 🔴 The 16-hour lock, checked for EVERY day before any of them moves (Feature 03 v5).
+         *
+         * An approved pickup change is the one edit that still reaches into a published commute's
+         * future days, which makes it the one place the lock has teeth. Tomorrow morning's kerb
+         * stops moving sixteen hours before she stands on it — she has planned her morning around
+         * being there, and a point that moved overnight is a woman waiting on the wrong corner.
+         *
+         * All of them checked first, so the approval is all-or-nothing: applying the days that are
+         * still open and refusing the rest would leave her collected from two different places on
+         * two consecutive mornings with nothing saying which was which.
+         */
+        foreach ($bookings as $booking) {
+            if ($booking->scheduledTrip !== null) {
+                ScheduleLock::assertNotLocked($booking->scheduledTrip);
+            }
+        }
 
         foreach ($bookings as $booking) {
             $booking->forceFill([

@@ -10,12 +10,14 @@ use App\Domains\Booking\Support\SeatApproval;
 use App\Domains\Booking\Support\SeatAvailabilityChecker;
 use App\Domains\Commute\Enums\ScheduledTripStatus;
 use App\Domains\Commute\Models\ScheduledTrip;
+use App\Domains\Commute\Support\ScheduleLock;
 use App\Domains\Group\Actions\AddMemberToGroupAction;
 use App\Domains\Identity\Models\User;
 use App\Domains\Notification\Enums\NotificationType;
 use App\Domains\Notification\Support\Notifier;
 use App\Domains\Shared\Exceptions\DomainException;
 use App\Domains\Shared\Support\ErrorCode;
+use App\Domains\Shared\ValueObjects\Coordinate;
 use App\Domains\Shared\ValueObjects\DaysMask;
 use App\Domains\Trip\Actions\BuildNavigationItineraryAction;
 use Illuminate\Support\Collection;
@@ -96,6 +98,18 @@ final readonly class ApproveSeatRequestAction
             // and is open.
             throw DomainException::of(ErrorCode::SeatUnavailable);
         }
+
+        /*
+         * 🔴 Inside the 16-hour window, one more rider may not push the day's promised arrival past
+         * what the people already on board were promised (Feature 03 v5: "New bookings after lock
+         * only when compatible with frozen commitments").
+         *
+         * Outside the transaction, like the candidate read above and for a stronger reason: the
+         * check composes the day's itinerary, which calls the routing provider once per leg. Doing
+         * that under the lock on `seats_taken` would put a third party's latency inside the busiest
+         * lock in the system. {@see ScheduleLock} documents the small race that buys.
+         */
+        $this->assertKeepsFrozenPromises($request, $tripIds);
 
         return DB::transaction(function () use ($request, $approver, $tripIds): SeatApproval {
             /*
@@ -180,6 +194,45 @@ final readonly class ApproveSeatRequestAction
 
             return new SeatApproval($request, $member, $bookings, $skipped);
         });
+    }
+
+    /**
+     * Every candidate day already inside its lock window has to survive this rider.
+     *
+     * 🔴 Only the locked ones are judged. Before the lock nothing is frozen, and refusing a booking
+     * three weeks out because a straight-line estimate said two minutes late would turn an estimate
+     * into a promise — see {@see ScheduleLock} on why the window is the line.
+     *
+     * @param  array<int, string>  $tripIds
+     */
+    private function assertKeepsFrozenPromises(SeatRequest $request, array $tripIds): void
+    {
+        $locked = ScheduledTrip::query()
+            ->whereIn('id', $tripIds)
+            // No promise, no breach — the principle `CompleteTripAction` already works to. Nothing
+            // is scored, or refused, against null.
+            ->whereNotNull('promised_arrival_at')
+            ->with('commuteOffer.locations')
+            ->get()
+            ->filter(fn (ScheduledTrip $trip): bool => ScheduleLock::isLocked($trip));
+
+        if ($locked->isEmpty()) {
+            return;
+        }
+
+        $pickup = new Coordinate((float) $request->requested_pickup_lat, (float) $request->requested_pickup_lng);
+        $dropoff = new Coordinate((float) $request->requested_dropoff_lat, (float) $request->requested_dropoff_lng);
+
+        foreach ($locked as $trip) {
+            ScheduleLock::assertNewRiderKeepsThePromise(
+                $this->itinerary,
+                $trip,
+                $pickup,
+                $request->requested_pickup_label,
+                $dropoff,
+                $request->requested_dropoff_label,
+            );
+        }
     }
 
     /**

@@ -1686,6 +1686,33 @@ for, and "waitlist fills empty seats automatically" is now accurate.
 the next seat.** The person at position 2 can and does win; position only decides who is *notified*
 first. Nothing in the allocation path reads it.
 
+#### The 16-hour schedule lock
+
+🔴 **A day stops changing 16 hours before it departs** (Feature 03 v5). Two things follow, and both
+can refuse a call you already built.
+
+| | |
+|---|---|
+| **`POST /driver/pickup-requests/{pickupRequest}/approve`** and **`/pickup-requests/{pickupRequest}/accept-alternative`** | Answer **`409 COMMUTE_SCHEDULE_LOCKED`** when any affected day is inside the window. `error.fields` carries `lockedFrom` and `lockHours`. Tomorrow morning's meeting point stops moving 16 hours before she stands on it. |
+| **Approving or accepting a seat** | Answers **`409 BOOKING_BREAKS_FROZEN_PROMISE`** when the new rider's two points would land the run past the arrival the passengers already on board were promised. `error.fields` carries `promisedArrivalAt`, `projectedArrivalAt` and `lockedFrom`. |
+
+> ⚠️ **What the lock does NOT change, because it was already stricter.** A published commute's route
+> and schedule cannot be edited at all — `PUT /commutes/{commute}/route` and `/schedule` answer
+> `409 COMMUTE_NOT_EDITABLE` on anything that is not a draft, and always have. People book specific
+> days on the strength of both. So there is no "16 hours before" for those: they are frozen from
+> publish.
+>
+> A locked day **nobody has booked** is not locked for these purposes. The lock protects the people
+> who planned around the day, so a driver editing her own empty morning is not stopped.
+>
+> A day with **no `promisedArrivalTime`** is judged on capacity and detour alone — no promise, no
+> breach. Nothing is refused against null.
+
+**Not built:** v5's post-lock *departure change by unanimous passenger approval*. That rule
+presupposes a driver can change a published commute's departure at all, which she cannot here — so
+honouring it means **building** that capability behind unanimous consent, not restricting an
+existing one. It is a product decision, not a gap we can close quietly.
+
 #### `POST /driver/seat-requests/{seatRequest}/counteroffer` — active, profile complete
 
 🔴 **The driver's third answer: "I can take you, from somewhere else."** Feature 03 v5 §2 makes
@@ -3087,6 +3114,7 @@ exist, and every live endpoint must be named here.
 
 | Date | Change |
 |---|---|
+| 2026-10-20 | 🔒 **A day stops changing 16 hours before it departs.** Approving or accepting a pickup-point change on a day inside that window answers `409 COMMUTE_SCHEDULE_LOCKED`; approving or accepting a **seat** whose rider would land the run past the arrival the passengers on board were promised answers `409 BOOKING_BREAKS_FROZEN_PROMISE`, with the projected and promised times in `error.fields`. ⚠️ A locked day nobody has booked is not locked — the rule protects the people who planned around it. A day with no `promisedArrivalTime` is judged on capacity and detour alone. And note what did **not** change: a published commute's route and schedule were already unchangeable, so they are frozen from publish rather than 16 hours out. v5's post-lock *departure change by unanimous approval* is **not built** — it presupposes an editing capability that does not exist here, so it is a feature to build, not a restriction to add. |
 | 2026-10-20 | 🤝 **The driver can counter a request's meeting point, and the passenger has to accept it in the app.** Three endpoints: `POST /driver/seat-requests/{seatRequest}/counteroffer` (either point or both, with a note), and `/seat-requests/{seatRequest}/counteroffer/accept` · `/decline` for her answer. 🔴 **Nothing moves until she accepts** — the request sits at `COUNTEROFFERED`, no booking, no seat taken, and only the end the driver actually moved is proposed. Accepting **confirms the seat** and returns the approval, but can still answer `409 SEAT_UNAVAILABLE`: the counteroffer promised a meeting place, never a free seat. Declining closes it as `COUNTEROFFER_DECLINED` — its own status, so the refusal lands on neither person's record as something they did not do. Agreed points from a counteroffer carry `source: driver_counteroffer`. 🔒 **Chat is not consent** — v5 says so in terms; never treat a message thread as the agreement. |
 | 2026-10-20 | 🗺️ **The driver's map.** `GET /driver/commute-occurrences/{trip}/navigation-route` returns the ordered stops she actually drives — **2 + 2N** points: her start, each confirmed passenger's two agreed points, her end — with a routed ETA per stop and the `View Route in Google Maps` link. 🔴 **Do not assume the order is `Start → A pickup → A drop-off → B pickup → B drop-off → End`:** stops are ordered by position along her route, so shared journeys interleave; the only invariant is that each passenger's pickup precedes her own drop-off. Render `stops` as given. 🔴 **`googleMapsDirectionsUrl` can be null** when the run has more stops than one Maps link carries — use the overlapping `segments` instead; we will not hand you a link Maps would silently truncate. `GET /driver/seat-requests/{seatRequest}/route-preview` shows what accepting a pending request would do, marked `PREVIEW_NOT_CONFIRMED`, writing nothing. Both are driver-only: the payload is a list of other riders' front doors. |
 | 2026-10-19 | 📍 **Every seat request now names a pickup AND a drop-off, and both are required.** `POST /commutes/{commute}/seat-requests` takes `pickup` and `dropoff`, each as either `{suggestionId}` or `{lat, lng, label}`. Neither may be omitted and neither is inferred from the driver's route any more — the drop-off previously did not exist at all and was assumed to be the end of her route. Each comes back with a `source` (`driver_suggestion` / `custom_map`); **show the difference.** A commute advertising no suggested points is still requestable — fall back to the map. Four new refusals: `SEAT_REQUEST_POINTS_SAME`, `SEAT_REQUEST_POINTS_OUT_OF_ORDER`, `SEAT_REQUEST_SUGGESTION_UNKNOWN`, and `PICKUP_DETOUR_TOO_LONG` measured for the **pair together**. Bookings now carry the agreed snapshot, so `dropoffPoint` joins `meetingPoint` — both fuzzed, and both with the label withheld, until the booking is confirmed. |

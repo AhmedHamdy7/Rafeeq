@@ -345,6 +345,21 @@ return [
         'max_dropoff_points' => 2,
 
         /*
+         * 🔴 How many hours before departure a day's arrangements freeze (Feature 03 v5).
+         *
+         * A policy number, not a technical one (standard #11): sixteen hours is a choice about how
+         * much notice a woman needs to rearrange her morning, and it may move.
+         *
+         * ⚠️ Note what it does and does not cover. A published commute's route and schedule are
+         * already unchangeable in this codebase — `CommuteState::assertEditable()` allows those
+         * only on a DRAFT — so this is not what freezes them. It governs the pickup schedule, which
+         * an approved pickup-point change can still move, and it is the window inside which a new
+         * booking has to be compatible with the arrival the riders on board were promised. See
+         * {@see \App\Domains\Commute\Support\ScheduleLock}.
+         */
+        'schedule_lock_hours' => 16,
+
+        /*
          * How far ahead scheduled trips are generated. NOT to the schedule's
          * end date: 5,000 offers × ~110 workdays would be 550,000 rows on day
          * one, in the fastest-growing table in the system. A daily job rolls
@@ -782,7 +797,7 @@ return [
          * NOT promise that an arbitrary number of stops can always be passed in one Google Maps
          * deep link". Beyond this the itinerary is returned as ordered segments instead, each
          * inside the limit — never as a truncated link that looks complete.
-         *
+       q      *
          * A commute's own seat count keeps it reachable in practice: nine waypoints is four
          * passengers' pickups and drop-offs plus one, and `vehicle_maximum_seats` is eight. It is
          * configurable because the limit belongs to a third party and may move.

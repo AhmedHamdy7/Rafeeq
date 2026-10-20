@@ -54,7 +54,17 @@ final class SeatOfferController extends Controller
      * A loser gets `409 SEAT_OFFER_CLOSED` with `error.fields.status` saying which — `taken_by_other`
      * means somebody was quicker. Show that, not an error.
      */
-    #[ApiErrors(ErrorCode::NotFound, ErrorCode::SeatOfferClosed, ErrorCode::AlreadyBooked)]
+    /*
+     * `BOOKING_BREAKS_FROZEN_PROMISE` is the 16-hour lock, and a freed seat is exactly where it
+     * bites: somebody cancels the night before, the day is already frozen, and whoever takes the
+     * empty seat must not make the riders still on board late (v5).
+     */
+    #[ApiErrors(
+        ErrorCode::NotFound,
+        ErrorCode::SeatOfferClosed,
+        ErrorCode::AlreadyBooked,
+        ErrorCode::BookingBreaksFrozenPromise,
+    )]
     public function accept(AcceptSeatOfferRequest $request, string $offer, AcceptSeatOfferAction $action): JsonResponse
     {
         $target = SeatOffer::query()

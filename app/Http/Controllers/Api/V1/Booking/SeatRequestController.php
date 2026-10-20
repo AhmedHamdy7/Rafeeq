@@ -114,6 +114,12 @@ final class SeatRequestController extends Controller
         ErrorCode::SeatRequestNotPending,
         ErrorCode::AlreadyBooked,
         ErrorCode::BookingDeadlinePassed,
+        /*
+         * Inside the 16-hour lock, a rider whose stops would land the run past the arrival the
+         * people on board were promised is refused rather than carried (v5: "New bookings after
+         * lock only when compatible with frozen commitments").
+         */
+        ErrorCode::BookingBreaksFrozenPromise,
         ErrorCode::NotFound,
     )]
     public function approve(Request $request, string $seatRequest, ApproveSeatRequestAction $action): JsonResponse
@@ -205,6 +211,7 @@ final class SeatRequestController extends Controller
         ErrorCode::SeatUnavailable,
         ErrorCode::AlreadyBooked,
         ErrorCode::BookingDeadlinePassed,
+        ErrorCode::BookingBreaksFrozenPromise,
         ErrorCode::NotFound,
     )]
     public function acceptCounteroffer(Request $request, string $seatRequest, CounterofferAction $action): JsonResponse

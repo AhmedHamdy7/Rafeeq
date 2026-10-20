@@ -78,6 +78,8 @@ return [
     'BOOKING_RECURRING_DAYS_NOT_OFFERED' => 'This commute does not run on all of the days you asked for.',
 
     // Custom pickup points.
+    'COMMUTE_SCHEDULE_LOCKED' => 'This day is too close to departure to change. Your passengers have already planned around it.',
+    'BOOKING_BREAKS_FROZEN_PROMISE' => 'Adding this seat would make the commute arrive later than the passengers on board were promised.',
     'SEAT_REQUEST_POINTS_SAME' => 'Your pickup and drop-off are the same place. Choose two different points.',
     'SEAT_REQUEST_POINTS_OUT_OF_ORDER' => 'This commute reaches your drop-off before your pickup. Check which way round they are.',
     'SEAT_REQUEST_SUGGESTION_UNKNOWN' => 'That meeting point is not one this commute offers. Pick another, or choose a point on the map.',

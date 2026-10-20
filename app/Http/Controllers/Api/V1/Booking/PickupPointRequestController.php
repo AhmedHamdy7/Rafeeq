@@ -165,8 +165,14 @@ final class PickupPointRequestController extends Controller
      *
      * Applies the point to the requester's upcoming bookings, which is what makes an
      * approval mean anything.
+     *
+     * 🔴 Refused with `COMMUTE_SCHEDULE_LOCKED` when any of those days is already inside its
+     * 16-hour window (Feature 03 v5). This is the one edit that still reaches into a published
+     * commute's future days, so it is where the lock has teeth: tomorrow morning's kerb stops
+     * moving sixteen hours before she stands on it. All-or-nothing across the days, so she is never
+     * collected from two different places on two consecutive mornings.
      */
-    #[ApiErrors(ErrorCode::PickupRequestNotPending, ErrorCode::NotFound)]
+    #[ApiErrors(ErrorCode::PickupRequestNotPending, ErrorCode::ScheduleLocked, ErrorCode::NotFound)]
     public function approve(Request $request, string $pickupRequest, RespondToPickupPointAction $action): JsonResponse
     {
         return ApiResponse::success(
@@ -209,8 +215,16 @@ final class PickupPointRequestController extends Controller
     /**
      * POST /v1/pickup-requests/{pickupRequest}/accept-alternative — the passenger
      * taking the driver up on their counter-offer.
+     *
+     * Subject to the same 16-hour lock as the driver's own approval, because it applies a point the
+     * same way: it is the acceptance that moves the kerb, whichever side sends it.
      */
-    #[ApiErrors(ErrorCode::PickupRequestNotPending, ErrorCode::PickupNotOnCommute, ErrorCode::NotFound)]
+    #[ApiErrors(
+        ErrorCode::PickupRequestNotPending,
+        ErrorCode::PickupNotOnCommute,
+        ErrorCode::ScheduleLocked,
+        ErrorCode::NotFound,
+    )]
     public function acceptAlternative(
         Request $request,
         string $pickupRequest,

@@ -118,6 +118,22 @@ enum ErrorCode: string
     /** She named a driver suggestion that this commute does not advertise. */
     case SeatRequestSuggestionUnknown = 'SEAT_REQUEST_SUGGESTION_UNKNOWN';
 
+    /*
+     * ---- The 16-hour schedule lock (Feature 03 v5) ---------------------
+     */
+
+    /**
+     * The day's arrangements froze: it departs within the lock window and somebody has planned
+     * around them.
+     */
+    case ScheduleLocked = 'COMMUTE_SCHEDULE_LOCKED';
+
+    /**
+     * One more rider would push the day's promised arrival past what the people already on board
+     * were promised. v5: "New bookings after lock only when compatible with frozen commitments."
+     */
+    case BookingBreaksFrozenPromise = 'BOOKING_BREAKS_FROZEN_PROMISE';
+
     // ---- Custom pickup points (Phase 7) --------------------------------
     case PickupDetourTooLong = 'PICKUP_DETOUR_TOO_LONG';
     case PickupAlreadyRequested = 'PICKUP_ALREADY_REQUESTED';
@@ -281,6 +297,12 @@ enum ErrorCode: string
             self::BookingNotCancellable,
             self::PickupAlreadyRequested,
             self::PickupRequestNotPending,
+            /*
+             * 409, with the group above: both are well-formed requests that the day's CURRENT
+             * state refuses. There is nothing for anybody to correct — the clock moved.
+             */
+            self::ScheduleLocked,
+            self::BookingBreaksFrozenPromise,
             self::GroupNotActive,
             self::GroupNoticeAlreadyGiven,
             self::AttendanceNotDeclarable,

@@ -13,9 +13,11 @@ use App\Domains\Booking\Models\SeatOffer;
 use App\Domains\Booking\Support\BookingEventLog;
 use App\Domains\Booking\Support\WaitlistPositions;
 use App\Domains\Commute\Models\ScheduledTrip;
+use App\Domains\Commute\Support\ScheduleLock;
 use App\Domains\Group\Actions\AddMemberToGroupAction;
 use App\Domains\Shared\Exceptions\DomainException;
 use App\Domains\Shared\Support\ErrorCode;
+use App\Domains\Shared\ValueObjects\Coordinate;
 use App\Domains\Trip\Actions\BuildNavigationItineraryAction;
 use Illuminate\Support\Facades\DB;
 
@@ -53,6 +55,18 @@ final readonly class AcceptSeatOfferAction
         SwitchReason $reason = SwitchReason::Voluntary,
         bool $joinOldWaitlist = false,
     ): Booking {
+        /*
+         * 🔴 The 16-hour lock, before the transaction opens (Feature 03 v5: "New bookings after
+         * lock only when compatible with frozen commitments").
+         *
+         * A seat freed by somebody cancelling the night before is exactly the case this guards: the
+         * day is frozen, the remaining riders have planned their mornings around its arrival, and
+         * whoever takes the empty seat must not make them late. Checked here rather than inside the
+         * lock because it composes the itinerary — one routing call per leg — and the whole point of
+         * the lock below is to be held briefly. {@see ScheduleLock} documents the race that buys.
+         */
+        $this->assertKeepsTheFrozenPromise($offer);
+
         return DB::transaction(function () use ($offer, $switchFrom, $reason, $joinOldWaitlist): Booking {
             /*
              * 1. Lock the trip — and the one she is leaving, if this is a switch.
@@ -196,6 +210,40 @@ final readonly class AcceptSeatOfferAction
 
             return $booking;
         });
+    }
+
+    /**
+     * The day she is accepting onto, if it is already frozen, has to survive her two points.
+     *
+     * Silent outside the lock window and silent on a day with no promised arrival: before the lock
+     * nothing is frozen, and nothing is refused against null.
+     */
+    private function assertKeepsTheFrozenPromise(SeatOffer $offer): void
+    {
+        $trip = ScheduledTrip::query()
+            ->whereKey($offer->scheduled_trip_id)
+            ->whereNotNull('promised_arrival_at')
+            ->with('commuteOffer.locations')
+            ->first();
+
+        if ($trip === null || ! ScheduleLock::isLocked($trip)) {
+            return;
+        }
+
+        $request = $offer->seatRequest;
+
+        if ($request === null) {
+            return;
+        }
+
+        ScheduleLock::assertNewRiderKeepsThePromise(
+            $this->itinerary,
+            $trip,
+            new Coordinate((float) $request->requested_pickup_lat, (float) $request->requested_pickup_lng),
+            $request->requested_pickup_label,
+            new Coordinate((float) $request->requested_dropoff_lat, (float) $request->requested_dropoff_lng),
+            $request->requested_dropoff_label,
+        );
     }
 
     /**
