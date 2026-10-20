@@ -189,6 +189,10 @@ return [
         'full_name' => [
             'format' => 'Please enter your name using Arabic or English letters only.',
         ],
+        'change_proposal' => [
+            'required' => 'Change at least one of the departure time, the promised arrival or the pickup points.',
+            'pickup_scope' => 'Pickup points are shared across this commute’s weekdays, so changing them applies to all future occurrences.',
+        ],
         'counteroffer' => [
             'required' => 'Suggest a different pickup or drop-off — otherwise simply accept the request.',
         ],

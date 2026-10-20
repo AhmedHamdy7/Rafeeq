@@ -37,6 +37,21 @@ enum SeatRequestStatus: string
     case CounterofferDeclined = 'counteroffer_declined';
 
     /**
+     * She was on the waiting list, and the driver changed the commute's standing terms with her
+     * passengers' agreement (Feature 03 v5 §6: an Edit Entire Commute clears the whole list).
+     *
+     * 🔴 Its own case, because the three existing ones would each say something false. `expired` is
+     * what the unanswered-request sweep writes and reads as "nobody ever got back to her";
+     * `rejected` puts a refusal on the driver's record for a queue she emptied by changing her own
+     * times; `withdrawn` says the passenger left. What actually happened is that the commute she
+     * queued for is not the commute it is now — so she is asked to apply again, on terms she can
+     * see.
+     *
+     * Outside the `active_request_key` list, which is what lets her reapply immediately.
+     */
+    case TermsChanged = 'terms_changed';
+
+    /**
      * The approval outlived the membership it created.
      *
      * Not in the ERD's list, and added deliberately rather than by overloading one

@@ -262,6 +262,17 @@ it('generates a document describing every /v1 route', function () {
         'GET /v1/driver/commute-occurrences/{trip}/navigation-route',
         'GET /v1/driver/seat-requests/{seatRequest}/route-preview',
 
+        /*
+         * The only path by which a published commute's departure or advertised stops change, and
+         * only with every affected passenger's explicit yes (v5 §6).
+         */
+        'POST /v1/driver/commutes/{commute}/change-proposals',
+        'GET /v1/driver/change-proposals',
+        'PATCH /v1/driver/change-proposals/{proposal}',
+        'DELETE /v1/driver/change-proposals/{proposal}',
+        'GET /v1/change-proposals',
+        'POST /v1/change-proposals/{proposal}/respond',
+
         'POST /v1/seat-requests/{seatRequest}/pickup-request',
         'POST /v1/groups/{group}/pickup-request',
         'GET /v1/pickup-requests',

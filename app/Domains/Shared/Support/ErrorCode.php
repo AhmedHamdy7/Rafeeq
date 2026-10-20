@@ -134,6 +134,30 @@ enum ErrorCode: string
      */
     case BookingBreaksFrozenPromise = 'BOOKING_BREAKS_FROZEN_PROMISE';
 
+    /*
+     * ---- Changing a commute people have booked (Feature 03 v5 §6) -------
+     */
+
+    /**
+     * She already has a proposal out on this commute.
+     *
+     * Two at once would ask the same passenger about two different mornings with no way to say
+     * which won, and whichever reached unanimity first would silently invalidate the other's
+     * comparison. v5's editor is one combined request for that reason: she revises the one she has.
+     */
+    case ChangeProposalAlreadyOpen = 'CHANGE_PROPOSAL_ALREADY_OPEN';
+
+    /**
+     * Nobody is affected, so there is nobody to agree.
+     *
+     * Refused rather than applied: a change through this path with no approvals would be a route
+     * around the whole mechanism the moment the last passenger cancelled.
+     */
+    case ChangeProposalNobodyAffected = 'CHANGE_PROPOSAL_NOBODY_AFFECTED';
+
+    /** It has been applied, withdrawn or expired, so there is nothing left to answer or revise. */
+    case ChangeProposalNotLive = 'CHANGE_PROPOSAL_NOT_LIVE';
+
     // ---- Custom pickup points (Phase 7) --------------------------------
     case PickupDetourTooLong = 'PICKUP_DETOUR_TOO_LONG';
     case PickupAlreadyRequested = 'PICKUP_ALREADY_REQUESTED';
@@ -303,6 +327,10 @@ enum ErrorCode: string
              */
             self::ScheduleLocked,
             self::BookingBreaksFrozenPromise,
+            // Also state refusals: the proposal's own state, or the commute's, is what says no.
+            self::ChangeProposalAlreadyOpen,
+            self::ChangeProposalNobodyAffected,
+            self::ChangeProposalNotLive,
             self::GroupNotActive,
             self::GroupNoticeAlreadyGiven,
             self::AttendanceNotDeclarable,

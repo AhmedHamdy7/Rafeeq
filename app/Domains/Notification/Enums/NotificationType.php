@@ -93,6 +93,40 @@ enum NotificationType: string
     /** The passenger refused the place the driver proposed, so the conversation is closed. */
     case SeatCounterofferDeclined = 'seat_counteroffer_declined';
 
+    /*
+     * The driver wants to change a commute people have already booked, and it cannot happen without
+     * every affected passenger's yes (Feature 03 v5 §6). Four messages, because the four moments
+     * are four different things to tell somebody.
+     */
+
+    /** "Your driver wants to change something. Have a look and decide." */
+    case ChangeProposalReceived = 'change_proposal_received';
+
+    /**
+     * 🔴 She changed what she is asking for, so any yes already given no longer counts.
+     *
+     * Its own message rather than a second `received`: somebody who already agreed has to know
+     * that her agreement was to the old version, or she will assume the thing she accepted is what
+     * happens.
+     */
+    case ChangeProposalRevised = 'change_proposal_revised';
+
+    /** Everybody agreed and the change is now in force. */
+    case ChangeProposalApplied = 'change_proposal_applied';
+
+    /** Somebody said no, so nothing changed. Goes to the driver. */
+    case ChangeProposalRejected = 'change_proposal_rejected';
+
+    /**
+     * The commute she was queueing for changed its standing terms, so the waiting list was cleared
+     * and she is asked to apply again.
+     *
+     * 🔴 Not a refusal, and the wording must not read as one. Her application was not turned down —
+     * the thing she applied for is different now, and nobody can tell on her behalf whether the new
+     * times still suit her.
+     */
+    case WaitlistClearedByChange = 'waitlist_cleared_by_change';
+
     /**
      * The same news, for the other reason it happens: the driver replaced her car, which starts a
      * fresh verification and cancels every future confirmed seat she had sold.
@@ -123,6 +157,11 @@ enum NotificationType: string
             self::SeatsOfferedByDriver,
             self::SeatCounteroffered,
             self::SeatCounterofferDeclined,
+            self::ChangeProposalReceived,
+            self::ChangeProposalRevised,
+            self::ChangeProposalApplied,
+            self::ChangeProposalRejected,
+            self::WaitlistClearedByChange,
             self::TripDayCancelled,
             self::MatchFound => NotificationCategory::Booking,
 

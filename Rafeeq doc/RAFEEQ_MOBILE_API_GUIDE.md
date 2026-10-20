@@ -14,7 +14,7 @@
 >
 > **Base URL:** `{host}/api/v1` · **Auth:** bearer token · **Format:** JSON only.
 
-**Last updated:** 2026-10-20 · **144 endpoints live** · Phases 0–7, 9 and 11 complete · 10, 12 and 13 all but a decision each
+**Last updated:** 2026-10-20 · **150 endpoints live** · Phases 0–7, 9 and 11 complete · 10, 12 and 13 all but a decision each
 
 ---
 
@@ -22,7 +22,7 @@
 
 ### What is ready
 
-**144 endpoints live** and tested, across the 47 designed screens:
+**150 endpoints live** and tested, across the 47 designed screens:
 
 | | Count | Covers |
 |---|---|---|
@@ -752,6 +752,12 @@ fails if this list and the running routes ever disagree in either direction.
 | `POST /driver/commutes/{commute}/waitlist/offers` | 4.7 Seat requests and bookings |
 | `DELETE /driver/seat-offers/{offer}` | 4.7 Seat requests and bookings |
 | `GET /driver/commute-occurrences/{trip}/navigation-route` | 4.7 Seat requests and bookings |
+| `POST /driver/commutes/{commute}/change-proposals` | 4.7 Seat requests and bookings |
+| `GET /driver/change-proposals` | 4.7 Seat requests and bookings |
+| `PATCH /driver/change-proposals/{proposal}` | 4.7 Seat requests and bookings |
+| `DELETE /driver/change-proposals/{proposal}` | 4.7 Seat requests and bookings |
+| `GET /change-proposals` | 4.7 Seat requests and bookings |
+| `POST /change-proposals/{proposal}/respond` | 4.7 Seat requests and bookings |
 | `GET /driver/seat-requests/{seatRequest}/route-preview` | 4.7 Seat requests and bookings |
 | `GET /my-bookings` | 4.7 Seat requests and bookings |
 | `GET /seat-offers` | 4.7 Seat requests and bookings |
@@ -1708,10 +1714,60 @@ can refuse a call you already built.
 > A day with **no `promisedArrivalTime`** is judged on capacity and detour alone — no promise, no
 > breach. Nothing is refused against null.
 
-**Not built:** v5's post-lock *departure change by unanimous passenger approval*. That rule
-presupposes a driver can change a published commute's departure at all, which she cannot here — so
-honouring it means **building** that capability behind unanimous consent, not restricting an
-existing one. It is a product decision, not a gap we can close quietly.
+**The way a published commute DOES change** is the change-proposal flow below, which exists for
+exactly this: every affected passenger has to say yes.
+
+#### Change proposals — the only way a published commute's times or stops move
+
+🔴 `PUT /commutes/{commute}/route` and `/schedule` answer `409 COMMUTE_NOT_EDITABLE` on anything
+that is not a draft, and that has not changed. To move a **published** commute's departure, promised
+arrival or advertised pickup points, the driver sends a **proposal** and every affected confirmed
+passenger must accept it (Feature 03 v5 §6).
+
+| Rule | What it means for your screens |
+|---|---|
+| **One combined request** | Several fields move together because they only make sense together. There is **no partial accept** — the passenger gets `Accept all` / `Reject`. |
+| **Silence changes nothing** | A passenger who never answers blocks it indefinitely, until the proposal expires. Do not imply a timeout approves it. |
+| **One refusal ends it** | The proposal goes to `REJECTED`. The driver can revise and ask again. |
+| **A revision resets every answer** | `version` increments. An answer counts only for the version it was given on — **warn the driver before she revises**, and re-read before letting a passenger answer. |
+| **The last yes applies it immediately** | There is no separate Apply step. The response that completes unanimity returns `status: APPLIED`. |
+| **Expires at the affected morning's departure** | `expiresAt`. A proposal about this morning is meaningless once the car has gone. |
+
+**`POST /driver/commutes/{commute}/change-proposals`** — **Request:** `scheduledTripId`, `scope`
+(`only_this_occurrence` · `all_future_on_this_weekday`), optional `effectiveFrom`, and at least one
+of `departureTime` · `promisedArrivalTime` · `pickupPoints[]` (`{lat, lng, address}`).
+
+| Refusal | When |
+|---|---|
+| `409 CHANGE_PROPOSAL_ALREADY_OPEN` | She already has one out. Edit that one. |
+| `409 CHANGE_PROPOSAL_NOBODY_AFFECTED` | Nobody is confirmed on those days — there is nobody to ask, so there is no proposal to make. |
+| `422` | Nothing actually changed, or `pickupPoints` with `only_this_occurrence`: the commute has **one** advertised route across its weekdays, so moving the stops applies to all future occurrences of that weekday. |
+
+**`GET /driver/change-proposals`** — her pending view. Adds `affectedCount`, `acceptedCount`, and
+`passengers[]` with `bookingId`, `passengerFirstName` and `response` of `ACCEPTED` ·
+`AWAITING_RESPONSE` · `REJECTED` · `WITHDRAWN`.
+
+**`PATCH /driver/change-proposals/{proposal}`** — revise. Same body. Bumps `version` and **resets
+every answer**, including ones already given.
+
+**`DELETE /driver/change-proposals/{proposal}`** — take it back.
+
+**`GET /change-proposals`** — what the caller is being asked to agree to, with `changes` against
+`previous` for the highlighted comparison, her own `bookingId`, and `myResponse`.
+
+**`POST /change-proposals/{proposal}/respond`** — **Request:** `response` of `accepted` ·
+`rejected` · `withdrawn` (take an acceptance back before it applies). `404` if she has no confirmed
+booking on an affected day.
+
+> 🔒 **A passenger is never told how the others answered.** No roster, no `acceptedCount`, no
+> affected count on her view. She is being asked about her own morning; who else is in the car and
+> whether they agreed is not a fact about her journey, and showing it would turn a schedule change
+> into social pressure from people she may not have met.
+>
+> 🔴 **`all_future_on_this_weekday` clears the whole waiting list once applied** — and notifies
+> everybody on it (`waitlist_cleared_by_change`) to apply again, their requests moving to
+> `TERMS_CHANGED`. Even the ones that still look compatible: we cannot tell from a 07:05 application
+> whether 07:30 works for her. **Nothing is cleared if the proposal is rejected or never applies.**
 
 #### `POST /driver/seat-requests/{seatRequest}/counteroffer` — active, profile complete
 
@@ -3114,6 +3170,7 @@ exist, and every live endpoint must be named here.
 
 | Date | Change |
 |---|---|
+| 2026-10-20 | 🤝 **A published commute's times and stops can now change — with every affected passenger's yes.** Six endpoints under `change-proposals`: the driver sends one combined proposal (`departureTime` · `promisedArrivalTime` · `pickupPoints`, scoped to one morning or to that weekday from a date), each affected confirmed passenger answers `accepted` / `rejected` / `withdrawn`, and **the answer that completes unanimity applies it immediately** — there is no separate Apply step. 🔴 **No partial accept. Silence changes nothing. One refusal ends it. A revision bumps `version` and resets every answer already given** — warn before revising, and re-read before letting somebody answer. A passenger confirmed *after* the proposal went out must also approve. `all_future_on_this_weekday` clears the whole waiting list once applied (`TERMS_CHANGED` + `waitlist_cleared_by_change`), even members that still look compatible — and clears nothing if it is rejected. 🔒 A passenger is never shown how the others answered. `PUT /commutes/{commute}/route` and `/schedule` still answer `409 COMMUTE_NOT_EDITABLE` on a published commute; this is the only path. |
 | 2026-10-20 | 🔒 **A day stops changing 16 hours before it departs.** Approving or accepting a pickup-point change on a day inside that window answers `409 COMMUTE_SCHEDULE_LOCKED`; approving or accepting a **seat** whose rider would land the run past the arrival the passengers on board were promised answers `409 BOOKING_BREAKS_FROZEN_PROMISE`, with the projected and promised times in `error.fields`. ⚠️ A locked day nobody has booked is not locked — the rule protects the people who planned around it. A day with no `promisedArrivalTime` is judged on capacity and detour alone. And note what did **not** change: a published commute's route and schedule were already unchangeable, so they are frozen from publish rather than 16 hours out. v5's post-lock *departure change by unanimous approval* is **not built** — it presupposes an editing capability that does not exist here, so it is a feature to build, not a restriction to add. |
 | 2026-10-20 | 🤝 **The driver can counter a request's meeting point, and the passenger has to accept it in the app.** Three endpoints: `POST /driver/seat-requests/{seatRequest}/counteroffer` (either point or both, with a note), and `/seat-requests/{seatRequest}/counteroffer/accept` · `/decline` for her answer. 🔴 **Nothing moves until she accepts** — the request sits at `COUNTEROFFERED`, no booking, no seat taken, and only the end the driver actually moved is proposed. Accepting **confirms the seat** and returns the approval, but can still answer `409 SEAT_UNAVAILABLE`: the counteroffer promised a meeting place, never a free seat. Declining closes it as `COUNTEROFFER_DECLINED` — its own status, so the refusal lands on neither person's record as something they did not do. Agreed points from a counteroffer carry `source: driver_counteroffer`. 🔒 **Chat is not consent** — v5 says so in terms; never treat a message thread as the agreement. |
 | 2026-10-20 | 🗺️ **The driver's map.** `GET /driver/commute-occurrences/{trip}/navigation-route` returns the ordered stops she actually drives — **2 + 2N** points: her start, each confirmed passenger's two agreed points, her end — with a routed ETA per stop and the `View Route in Google Maps` link. 🔴 **Do not assume the order is `Start → A pickup → A drop-off → B pickup → B drop-off → End`:** stops are ordered by position along her route, so shared journeys interleave; the only invariant is that each passenger's pickup precedes her own drop-off. Render `stops` as given. 🔴 **`googleMapsDirectionsUrl` can be null** when the run has more stops than one Maps link carries — use the overlapping `segments` instead; we will not hand you a link Maps would silently truncate. `GET /driver/seat-requests/{seatRequest}/route-preview` shows what accepting a pending request would do, marked `PREVIEW_NOT_CONFIRMED`, writing nothing. Both are driver-only: the payload is a list of other riders' front doors. |

@@ -91,6 +91,40 @@ return [
      * 🔴 A question, not an answer. She has neither been given a seat nor refused one, and wording
      * that leaned either way would make her read the next screen expecting the wrong thing.
      */
+    /*
+     * 🔴 "Nothing changes until you answer" is in the body on purpose. v5: "If no reply, nothing
+     * changes" — so a message that read like an announcement would have her believe her morning had
+     * already moved, and she would plan around a departure nobody has agreed to.
+     */
+    'change_proposal_received' => [
+        'title' => 'Your driver proposed a change',
+        'body' => ':name wants to change something about your commute. Nothing changes until you review it and agree.',
+    ],
+    /*
+     * 🔴 Sent to somebody who may already have said yes. The body has to say that her agreement no
+     * longer stands, or she will plan around the version she accepted.
+     */
+    'change_proposal_revised' => [
+        'title' => 'The proposed change was updated',
+        'body' => ':name changed what she is proposing, so any answer you gave no longer counts. Please review it again.',
+    ],
+    'change_proposal_applied' => [
+        'title' => 'The change is now in effect',
+        'body' => 'Everyone affected agreed, so your commute has been updated. Check your next journey.',
+    ],
+    'change_proposal_rejected' => [
+        'title' => 'Your proposed change was declined',
+        'body' => 'One of your passengers declined, so nothing changed. You can revise it and ask again.',
+    ],
+    /*
+     * 🔒 Not a refusal, and the wording avoids reading as one. Her application was not turned down;
+     * the commute she applied for has different times now, and nobody can judge on her behalf
+     * whether they still suit her.
+     */
+    'waitlist_cleared_by_change' => [
+        'title' => 'A commute you were waiting for has changed',
+        'body' => ':name updated this commute’s times, so the waiting list was reset. Take a look and apply again if it still works for you.',
+    ],
     'seat_counteroffered' => [
         'title' => ':name suggested a different spot',
         'body' => ':name can take you, from a different meeting point. Open the request to see where and decide.',

@@ -17,6 +17,7 @@ use App\Http\Controllers\Api\V1\Booking\PickupPreviewController;
 use App\Http\Controllers\Api\V1\Booking\SeatOfferController;
 use App\Http\Controllers\Api\V1\Booking\SeatRequestController;
 use App\Http\Controllers\Api\V1\Booking\WaitlistController;
+use App\Http\Controllers\Api\V1\Commute\ChangeProposalController;
 use App\Http\Controllers\Api\V1\Driver\CommuteController;
 use App\Http\Controllers\Api\V1\Driver\DriverApplicationController;
 use App\Http\Controllers\Api\V1\Driver\VehicleController;
@@ -490,6 +491,23 @@ Route::prefix('v1')->group(function (): void {
          */
         Route::get('driver/commute-occurrences/{trip}/navigation-route', [NavigationRouteController::class, 'show']);
         Route::get('driver/seat-requests/{seatRequest}/route-preview', [NavigationRouteController::class, 'preview']);
+
+        /*
+         * Changing a commute people have already booked, with their agreement (Feature 03 v5 §6).
+         *
+         * 🔴 **The only path by which a published commute's departure or advertised stops change.**
+         * Everywhere else the answer is `COMMUTE_NOT_EDITABLE`, because people book specific days
+         * on the strength of both — v5 asks for a yes with every affected passenger's explicit
+         * agreement attached, and this is where that agreement is collected. A revision resets
+         * every answer; silence changes nothing; one refusal ends it.
+         */
+        Route::post('driver/commutes/{commute}/change-proposals', [ChangeProposalController::class, 'store']);
+        Route::get('driver/change-proposals', [ChangeProposalController::class, 'index']);
+        Route::patch('driver/change-proposals/{proposal}', [ChangeProposalController::class, 'update']);
+        Route::delete('driver/change-proposals/{proposal}', [ChangeProposalController::class, 'destroy']);
+
+        Route::get('change-proposals', [ChangeProposalController::class, 'mine']);
+        Route::post('change-proposals/{proposal}/respond', [ChangeProposalController::class, 'respond']);
 
         /*
          * The money, as the two people in the car see it (Phase 8, Bible §8).
