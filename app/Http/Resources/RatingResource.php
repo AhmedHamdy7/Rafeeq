@@ -32,6 +32,14 @@ final class RatingResource extends JsonResource
             'id' => $this->id,
             'bookingId' => $this->booking_id,
             'direction' => $this->direction->value,
+
+            /*
+             * 🔴 `completed_ride` or `canceled_booking` (Feature 03 v5). It is not cosmetic: a
+             * cancellation's feedback is visible the moment it is written, can still be edited
+             * while visible, and never reaches the person's star average. A client that treated
+             * the two the same would show a review as pending when it is already published.
+             */
+            'kind' => $this->kind->value,
             'stars' => $this->stars,
             'comment' => $this->comment,
             'tags' => $this->whenLoaded('tags', fn () => $this->tagValues(), []),

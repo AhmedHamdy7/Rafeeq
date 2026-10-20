@@ -6,6 +6,7 @@ use App\Domains\Driver\Enums\DriverProfileStatus;
 use App\Domains\Identity\Models\User;
 use App\Domains\Rating\Models\Rating;
 use App\Domains\Verification\Support\Avatar;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
 
@@ -116,11 +117,28 @@ final class PublicProfileResource extends JsonResource
             ]),
 
             'reviews' => [
-                'count' => $this->visibleReviews()->count(),
+                'count' => $this->visibleReviews()->ofCompletedRides()->count(),
                 // The most recent few, in the same shape the commute's review list uses — no
                 // reviewer, month precision only. See `PublicReviewResource` for why.
                 'items' => PublicReviewResource::collection(
-                    $this->visibleReviews()->latest('visible_at')->limit(5)->get()
+                    $this->visibleReviews()->ofCompletedRides()->latest('visible_at')->limit(5)->get()
+                ),
+            ],
+
+            /*
+             * 🔴 v5's **Canceled Booking Feedback**, under its own heading: *"Display as Canceled
+             * Booking Feedback, distinct from completed-ride review."*
+             *
+             * Separate rather than mixed in, and that is the whole requirement. Somebody deciding
+             * whether to rely on this driver is asking two different questions — what is she like
+             * to ride with, and does she turn up — and a single list of stars answers the first
+             * with evidence about the second. These stars are also absent from her average, for
+             * the same reason; see {@see \App\Domains\Rating\Enums\RatingKind}.
+             */
+            'canceledBookingFeedback' => [
+                'count' => $this->visibleReviews()->ofCanceledBookings()->count(),
+                'items' => PublicReviewResource::collection(
+                    $this->visibleReviews()->ofCanceledBookings()->latest('visible_at')->limit(5)->get()
                 ),
             ],
         ];
@@ -133,7 +151,7 @@ final class PublicProfileResource extends JsonResource
      * default would silently make every future query safe-looking — so every reader has to say it,
      * and this is a reader.
      *
-     * @return \Illuminate\Database\Eloquent\Builder<Rating>
+     * @return Builder<Rating>
      */
     private function visibleReviews()
     {

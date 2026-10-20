@@ -2815,13 +2815,39 @@ Answers `201` with **your own** rating, which is the one thing you may read befo
 | Response field | Meaning |
 |---|---|
 | `stars`, `comment`, `tags` | What you wrote. |
-| `isVisible` | Whether anybody else can see it yet. 🔴 **`false` says nothing about whether they have rated** — it is also false when nobody has. |
+| `kind` | 🔴 **New.** `completed_ride` or `canceled_booking` — see below. It changes three behaviours, so branch on it. |
+| `isVisible` | Whether anybody else can see it yet. 🔴 **`false` says nothing about whether they have rated** — it is also false when nobody has. Always `true` immediately for `canceled_booking`. |
 | `editableUntil` | Until when you may change it, or `null` once you cannot. Null covers both reasons — the clock ran out, or it became visible — because your behaviour is the same either way and distinguishing them would hint at theirs. |
 | `editedAt` | Set if it was changed. |
 
-Errors: `TRIP_NOT_RATEABLE` (422 — the journey was cancelled or has not happened;
-`error.fields.bookingStatus` says which) · `RATING_WINDOW_CLOSED` (409) · `RATING_ALREADY_SUBMITTED`
-(409) · `404` for a journey the caller was not on.
+Errors: `TRIP_NOT_RATEABLE` (422 — the journey has not happened, or the cancellation was not the
+driver's; `error.fields.bookingStatus` says which) · `RATING_WINDOW_CLOSED` (409) ·
+`RATING_ALREADY_SUBMITTED` (409) · `404` for a journey the caller was not on.
+
+##### Canceled Booking Feedback
+
+🔴 **A passenger whose confirmed seat the DRIVER cancelled can now rate her, even though no ride
+happened** (Feature 03 v5). The same endpoint; the server decides the `kind`.
+
+| | |
+|---|---|
+| **Who** | Only the passenger, and only on a booking with status `CANCELLED_BY_DRIVER` — which includes seats lost to a **paused commute** or a **replaced vehicle**. A passenger who cancelled her own seat still cannot rate anybody, and the driver cannot rate a passenger for a journey she called off: both answer `422 TRIP_NOT_RATEABLE`. |
+| **Visible at once** | `isVisible: true` on creation. There is no second rating to wait for — the driver cannot rate back — so double-blind has nothing to protect and would only delay it. **Do not show it as "pending reveal".** |
+| **Editable while visible** | Unlike a completed-ride review, which locks the moment it becomes readable. With no counterpart to read, "rate low, read hers, revise" is not a thing that can happen here. |
+| **Not in her star average** | These stars are shown under their own heading and deliberately do not move `rating` anywhere. v5 displays them "distinct from completed-ride review" and gives cancellations their own instrument, the Reliability Score — counting them twice would punish one event twice. |
+| **The window** | Runs from the **cancellation**, not the departure. A pause can cancel a morning three weeks out, and measuring from the departure would open the window before anything happened. |
+| **The driver can report it** | `POST /ratings/{rating}/report`, exactly as for any review. |
+
+On a public profile this comes back as its own block, **separate from `reviews`**:
+
+```
+"reviews":                  { "count": 12, "items": [...] },   // journeys that happened
+"canceledBookingFeedback":  { "count": 1,  "items": [...] }    // seats that were cancelled
+```
+
+> 🔒 Keep them separate on screen too. Somebody deciding whether to rely on this driver is asking
+> two different questions — what she is like to ride with, and whether she turns up — and one merged
+> list of stars answers the first with evidence about the second.
 
 #### `PATCH /ratings/{rating}` · `GET /ratings/mine` — paginated
 
@@ -3170,6 +3196,7 @@ exist, and every live endpoint must be named here.
 
 | Date | Change |
 |---|---|
+| 2026-10-20 | ⭐ **Canceled Booking Feedback.** A passenger whose confirmed seat the **driver** cancelled — including by pausing the commute or replacing the vehicle — can now rate her even though no ride happened. Same endpoint; ratings carry a new **`kind`** of `completed_ride` or `canceled_booking`, and the second behaves differently in three ways: **visible immediately** (no second rating to wait for, so do not show it as pending), **editable while visible**, and **excluded from her star average** (v5 displays it distinctly and gives cancellations their own instrument). Public profiles gain a **`canceledBookingFeedback`** block beside `reviews` — keep them separate on screen. A passenger who cancelled her own seat still cannot rate anybody, and nor can the driver on a booking she cancelled: both `422 TRIP_NOT_RATEABLE`. The feedback window runs from the cancellation, not the departure. |
 | 2026-10-20 | 🤝 **A published commute's times and stops can now change — with every affected passenger's yes.** Six endpoints under `change-proposals`: the driver sends one combined proposal (`departureTime` · `promisedArrivalTime` · `pickupPoints`, scoped to one morning or to that weekday from a date), each affected confirmed passenger answers `accepted` / `rejected` / `withdrawn`, and **the answer that completes unanimity applies it immediately** — there is no separate Apply step. 🔴 **No partial accept. Silence changes nothing. One refusal ends it. A revision bumps `version` and resets every answer already given** — warn before revising, and re-read before letting somebody answer. A passenger confirmed *after* the proposal went out must also approve. `all_future_on_this_weekday` clears the whole waiting list once applied (`TERMS_CHANGED` + `waitlist_cleared_by_change`), even members that still look compatible — and clears nothing if it is rejected. 🔒 A passenger is never shown how the others answered. `PUT /commutes/{commute}/route` and `/schedule` still answer `409 COMMUTE_NOT_EDITABLE` on a published commute; this is the only path. |
 | 2026-10-20 | 🔒 **A day stops changing 16 hours before it departs.** Approving or accepting a pickup-point change on a day inside that window answers `409 COMMUTE_SCHEDULE_LOCKED`; approving or accepting a **seat** whose rider would land the run past the arrival the passengers on board were promised answers `409 BOOKING_BREAKS_FROZEN_PROMISE`, with the projected and promised times in `error.fields`. ⚠️ A locked day nobody has booked is not locked — the rule protects the people who planned around it. A day with no `promisedArrivalTime` is judged on capacity and detour alone. And note what did **not** change: a published commute's route and schedule were already unchangeable, so they are frozen from publish rather than 16 hours out. v5's post-lock *departure change by unanimous approval* is **not built** — it presupposes an editing capability that does not exist here, so it is a feature to build, not a restriction to add. |
 | 2026-10-20 | 🤝 **The driver can counter a request's meeting point, and the passenger has to accept it in the app.** Three endpoints: `POST /driver/seat-requests/{seatRequest}/counteroffer` (either point or both, with a note), and `/seat-requests/{seatRequest}/counteroffer/accept` · `/decline` for her answer. 🔴 **Nothing moves until she accepts** — the request sits at `COUNTEROFFERED`, no booking, no seat taken, and only the end the driver actually moved is proposed. Accepting **confirms the seat** and returns the approval, but can still answer `409 SEAT_UNAVAILABLE`: the counteroffer promised a meeting place, never a free seat. Declining closes it as `COUNTEROFFER_DECLINED` — its own status, so the refusal lands on neither person's record as something they did not do. Agreed points from a counteroffer carry `source: driver_counteroffer`. 🔒 **Chat is not consent** — v5 says so in terms; never treat a message thread as the agreement. |

@@ -34,7 +34,20 @@ final readonly class RecomputeRatingStatsAction
 {
     public function execute(string $userId): void
     {
-        $stat = UserStat::query()->firstOrNew(['user_id' => $userId]);
+        /*
+         * 🔴 Found by hand rather than with `firstOrNew(['user_id' => $userId])`, and this is a fix.
+         *
+         * That helper MASS-ASSIGNS its first argument when it builds the new instance, and
+         * `UserStat` has no `$fillable` — so the very first time anybody rated a person who had no
+         * stats row yet, this threw `Add [user_id] to fillable property`. It had not fired because
+         * every existing path reaches a user who already has one; a passenger rating a driver on
+         * her first completed journey is the case that does not.
+         *
+         * The same trap is documented in {@see \App\Domains\Driver\Actions\StartDriverApplicationAction}
+         * and worked around with an accessor on {@see \App\Domains\Identity\Models\UserPreference}.
+         * This was the last place still using it.
+         */
+        $stat = UserStat::query()->where('user_id', $userId)->first() ?? new UserStat;
 
         /*
          * Explicit attribute writes, not mass assignment: `UserStat` has no `$fillable` because it
@@ -59,6 +72,13 @@ final readonly class RecomputeRatingStatsAction
     {
         $average = Rating::query()
             ->visible()
+            /*
+             * 🔴 Reviews of journeys only. Feedback on a cancelled seat is published under its own
+             * heading and does not move the mean — the stars answer "what is she like to ride
+             * with", and a cancellation is not a ride. v5 gives cancellations their own instrument
+             * (the Reliability Score), so counting them here would punish the same event twice.
+             */
+            ->ofCompletedRides()
             ->where('reviewed_user_id', $userId)
             ->where('direction', $direction->value)
             // See the class note: a moderator's takedown stops counting, a complaint does not.

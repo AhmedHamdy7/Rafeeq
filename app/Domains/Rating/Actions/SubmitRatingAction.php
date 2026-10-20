@@ -6,6 +6,7 @@ use App\Domains\Booking\Enums\BookingStatus;
 use App\Domains\Booking\Models\Booking;
 use App\Domains\Identity\Models\User;
 use App\Domains\Rating\Enums\RatingDirection;
+use App\Domains\Rating\Enums\RatingKind;
 use App\Domains\Rating\Enums\RatingTagValue;
 use App\Domains\Rating\Models\Rating;
 use App\Domains\Rating\Models\RatingTag;
@@ -50,13 +51,15 @@ final readonly class SubmitRatingAction
     {
         $direction = $this->directionFor($reviewer, $booking);
 
-        $this->assertRateable($booking);
+        $kind = $this->kindFor($reviewer, $booking, $direction);
+
+        $this->assertRateable($booking, $kind);
 
         if ($this->existing($reviewer, $booking) !== null) {
             throw DomainException::of(ErrorCode::RatingAlreadySubmitted);
         }
 
-        $rating = DB::transaction(function () use ($reviewer, $booking, $attributes, $direction): Rating {
+        $rating = DB::transaction(function () use ($reviewer, $booking, $attributes, $direction, $kind): Rating {
             $rating = new Rating;
 
             $rating->fill([
@@ -73,6 +76,24 @@ final readonly class SubmitRatingAction
             // reviewer's to set.
             $rating->edit_deadline_at = now()->addMinutes(RatingSettings::editWindowMinutes());
 
+            /*
+             * 🔒 Nor is which KIND of rating this is. It decides whether double-blind applies and
+             * whether the stars count, so a fillable `kind` would let a client publish a review
+             * immediately and keep it out of its own average by saying so in the payload.
+             */
+            $rating->kind = $kind->value;
+
+            /*
+             * 🔴 Feedback on a cancelled seat is visible at once (Feature 03 v5), and the reason is
+             * what makes it safe rather than an exception bolted on. Double-blind exists so neither
+             * person can read the other's rating before answering it — and the driver cannot rate a
+             * passenger for a journey that did not happen, so there is no pair to reveal and nothing
+             * to retaliate against. Holding it back would delay it for nobody's protection.
+             */
+            if (! $kind->isDoubleBlind()) {
+                $rating->visible_at = now();
+            }
+
             $rating->save();
 
             $this->syncTags($rating, $attributes['tags'] ?? []);
@@ -85,8 +106,14 @@ final readonly class SubmitRatingAction
          * both become visible now, together and with one timestamp. `RevealRatingsAction` owns
          * that; see its note on why revealing one before the other, even by the length of a
          * request, is the exact asymmetry the design exists to prevent.
+         *
+         * Skipped for a cancellation: there is no pair, and asking the reveal to consider one would
+         * invite it to publish a hidden completed-ride rating on the strength of feedback about
+         * something else.
          */
-        $this->reveals->pair($booking);
+        if ($kind->isDoubleBlind()) {
+            $this->reveals->pair($booking);
+        }
 
         return $rating->refresh();
     }
@@ -105,7 +132,18 @@ final readonly class SubmitRatingAction
             throw DomainException::of(ErrorCode::NotFound);
         }
 
-        if ($rating->isVisible() || $rating->edit_deadline_at === null || $rating->edit_deadline_at->isPast()) {
+        /*
+         * 🔴 "Visible" only blocks an edit where double-blind applies.
+         *
+         * The rule exists because "rate five stars, wait for the reveal, read hers, revise mine to
+         * one" would otherwise be two legitimate calls. Feedback on a cancelled seat is published
+         * at once and has no counterpart to read, so that attack does not exist for it — and the
+         * edit window goes back to being what it is for, which is fixing what you wrote. v5 asks
+         * for editable feedback; this is how it stays safe for the kind that needs protecting.
+         */
+        $blockedByVisibility = $rating->isVisible() && $rating->kind->isDoubleBlind();
+
+        if ($blockedByVisibility || $rating->edit_deadline_at === null || $rating->edit_deadline_at->isPast()) {
             throw DomainException::of(ErrorCode::RatingNotEditable);
         }
 
@@ -139,14 +177,25 @@ final readonly class SubmitRatingAction
      * timestamps: a booking is created when a seat is approved, which can be a month before the
      * journey, and measuring from that would close the window before the trip had even happened.
      */
-    private function assertRateable(Booking $booking): void
+    private function assertRateable(Booking $booking, RatingKind $kind): void
     {
-        if ($booking->status !== BookingStatus::Completed) {
-            /*
-             * Only a journey that happened. A cancelled or no-show booking is not a shared ride to
-             * have an opinion about, and letting it be rated would make "book then cancel" a way
-             * to leave stars on somebody.
-             */
+        /*
+         * 🔴 A cancelled seat is rateable now, and the old rule's reasoning is what shapes the
+         * exception rather than being thrown away.
+         *
+         * This used to refuse anything but a completed booking, because "a cancelled or no-show
+         * booking is not a shared ride to have an opinion about, and letting it be rated would make
+         * 'book then cancel' a way to leave stars on somebody". Feature 03 v5 overrides the first
+         * half — *"Passenger affected by canceled confirmed booking may leave rating/comment even if
+         * no ride occurred"* — and the second half still stands. The attack it names is a PASSENGER
+         * booking and cancelling to leave stars, so {@see kindFor()} allows this only for a booking
+         * the DRIVER cancelled, and only from the passenger who lost the seat. A passenger who
+         * cancels her own seat can still rate nobody.
+         */
+        $rateable = $kind === RatingKind::CanceledBooking
+            || $booking->status === BookingStatus::Completed;
+
+        if (! $rateable) {
             throw DomainException::of(ErrorCode::TripNotRateable, fields: [
                 'bookingStatus' => [strtoupper($booking->status->value)],
             ]);
@@ -159,12 +208,40 @@ final readonly class SubmitRatingAction
 
     /**
      * The last moment this booking may be rated.
+     *
+     * 🔴 A cancellation's window runs from the cancellation, not from the departure. A pause can
+     * cancel a morning three weeks out, and measuring from the departure would both open the window
+     * before anything had happened and keep it open for a month after she had made other
+     * arrangements. What she is giving feedback about is the cancellation, so that is the event the
+     * clock starts from.
      */
     public function deadlineFor(Booking $booking): CarbonInterface
     {
-        return $booking->scheduledTrip->departure_at
-            ->copy()
-            ->addDays(RatingSettings::windowDays());
+        $from = $booking->status === BookingStatus::CancelledByDriver && $booking->cancelled_at !== null
+            ? $booking->cancelled_at
+            : $booking->scheduledTrip->departure_at;
+
+        return $from->copy()->addDays(RatingSettings::windowDays());
+    }
+
+    /**
+     * Whether this is a review of a journey or feedback on a seat that vanished.
+     *
+     * 🔒 Derived from the booking and the reviewer, never accepted from the request — for the same
+     * reason as `direction` and `reviewed_user_id`. The kind decides whether the rating is published
+     * immediately and whether it counts towards an average, so a client that could name it could
+     * publish a review at once and keep it out of its own mean.
+     *
+     * Only the PASSENGER of a driver-cancelled booking gets the cancellation kind. The driver asking
+     * about the same booking falls through to the completed-ride path and is refused there, which is
+     * the honest answer: she cannot rate somebody for a journey she called off.
+     */
+    private function kindFor(User $reviewer, Booking $booking, RatingDirection $direction): RatingKind
+    {
+        $hersToJudge = $booking->status === BookingStatus::CancelledByDriver
+            && $direction === RatingDirection::PassengerToDriver;
+
+        return $hersToJudge ? RatingKind::CanceledBooking : RatingKind::CompletedRide;
     }
 
     /**

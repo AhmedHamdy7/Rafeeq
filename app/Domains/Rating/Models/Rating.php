@@ -6,6 +6,7 @@ use App\Domains\Booking\Models\Booking;
 use App\Domains\Identity\Models\User;
 use App\Domains\Rating\Enums\ModerationStatus;
 use App\Domains\Rating\Enums\RatingDirection;
+use App\Domains\Rating\Enums\RatingKind;
 use Database\Factories\RatingFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Builder;
@@ -33,6 +34,13 @@ class Rating extends Model
     {
         return [
             'direction' => RatingDirection::class,
+            /*
+             * Whether this reviews a journey or a seat that was cancelled (Feature 03 v5). It
+             * decides three behaviours — double-blind, editability while visible, and whether the
+             * stars count towards an average — so see {@see RatingKind} before changing anything
+             * that reads it.
+             */
+            'kind' => RatingKind::class,
             'stars' => 'integer',
             'visible_at' => 'datetime',
             'edit_deadline_at' => 'datetime',
@@ -78,5 +86,31 @@ class Rating extends Model
     public function scopeVisible(Builder $query): Builder
     {
         return $query->whereNotNull('visible_at');
+    }
+
+    /**
+     * Reviews of journeys that actually happened.
+     *
+     * 🔴 Applied by anything that computes or displays a rating average. Feedback on a cancelled
+     * seat is published under its own heading and deliberately does not move the mean — the stars
+     * answer "what is she like to ride with", and a cancellation is not a ride. See
+     * {@see RatingKind::countsTowardsAverage()} for the full argument, including that v5 gives
+     * cancellations their own instrument in the Reliability Score.
+     *
+     * @param  Builder<self>  $query
+     */
+    public function scopeOfCompletedRides(Builder $query): Builder
+    {
+        return $query->where('kind', RatingKind::CompletedRide->value);
+    }
+
+    /**
+     * v5's **Canceled Booking Feedback** — shown separately from the reviews.
+     *
+     * @param  Builder<self>  $query
+     */
+    public function scopeOfCanceledBookings(Builder $query): Builder
+    {
+        return $query->where('kind', RatingKind::CanceledBooking->value);
     }
 }
