@@ -142,6 +142,61 @@ it('reports a detour for a pickup off the direct path, and none for one on it', 
         ->and($onTheWay)->toBeGreaterThanOrEqual(0.0);
 });
 
+/**
+ * 🔴 `progressAlongRoute` is what orders a day's navigation stops (Feature 03 v5 §3), so what it
+ * answers decides the order a driver drives in. The two questions the engine answers about a point
+ * and a route are easy to confuse: `distanceFromRoute` is "how far off the road", this is "how far
+ * along it".
+ */
+it('reports how far along a route a point sits', function () {
+    $engine = app(GeoQueryEngine::class);
+
+    $route = $engine->routeBetween(rehab(), smartVillage());
+
+    // Rehab is the start and Smart Village the end, whatever the road between them does.
+    expect($engine->progressAlongRoute($route, rehab()))->toBe(0.0)
+        ->and($engine->progressAlongRoute($route, smartVillage()))->toBe(1.0);
+
+    // A quarter of the way along, by longitude, reads as roughly a quarter.
+    $quarter = new Coordinate(30.0624, 31.3614);
+
+    expect($engine->progressAlongRoute($route, $quarter))
+        ->toBeGreaterThan(0.2)
+        ->toBeLessThan(0.35);
+});
+
+/**
+ * 🔴 The ordering property this exists for: two points on the corridor sort the way a driver would
+ * reach them. A method that returned the same figure for both — which is what snapping to the
+ * nearest VERTEX would do on a straight stretch — would silently destroy the itinerary order.
+ */
+it('orders two points along a route the way a driver would reach them', function () {
+    $engine = app(GeoQueryEngine::class);
+
+    $route = $engine->routeBetween(rehab(), smartVillage());
+
+    $nearer = $engine->progressAlongRoute($route, new Coordinate(30.0610, 31.4200));
+    $further = $engine->progressAlongRoute($route, new Coordinate(30.0700, 31.0500));
+
+    expect($nearer)->toBeLessThan($further);
+});
+
+/**
+ * A point nowhere near the route still gets a figure — its nearest approach — rather than null.
+ * Whether a stop is an acceptable detour is decided by the detour check; returning null here would
+ * mean an ordering that silently dropped stops.
+ */
+it('still places a point that is far off the route', function () {
+    $engine = app(GeoQueryEngine::class);
+
+    $route = $engine->routeBetween(rehab(), smartVillage());
+
+    $progress = $engine->progressAlongRoute($route, new Coordinate(30.9000, 31.2000));
+
+    expect($progress)->toBeGreaterThanOrEqual(0.0)
+        ->toBeLessThanOrEqual(1.0);
+});
+
 it('reports full overlap for the same route and little for an unrelated one', function () {
     $engine = app(GeoQueryEngine::class);
 

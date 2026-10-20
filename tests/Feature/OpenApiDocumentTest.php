@@ -247,6 +247,13 @@ it('generates a document describing every /v1 route', function () {
         'POST /v1/driver/commutes/{commute}/waitlist/offers',
         'DELETE /v1/driver/seat-offers/{offer}',
 
+        /*
+         * Her map: the ordered stops she drives, and what a pending request would add to them.
+         * Driver-only — the payload is a list of other women's front doors and workplaces.
+         */
+        'GET /v1/driver/commute-occurrences/{trip}/navigation-route',
+        'GET /v1/driver/seat-requests/{seatRequest}/route-preview',
+
         'POST /v1/seat-requests/{seatRequest}/pickup-request',
         'POST /v1/groups/{group}/pickup-request',
         'GET /v1/pickup-requests',

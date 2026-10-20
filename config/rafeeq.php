@@ -760,6 +760,36 @@ return [
         'corridor_match_metres' => 3000,
     ],
 
+    /*
+    |--------------------------------------------------------------------------
+    | The external map button (Feature 03 v5 §4)
+    |--------------------------------------------------------------------------
+    */
+    'maps' => [
+        /*
+         * DEPLOY-ONLY. Where `View Route in Google Maps` points.
+         *
+         * The documented cross-platform Directions form, which the Maps app answers when it is
+         * installed and a browser answers when it is not — so the web fallback v5 asks for needs no
+         * platform guessing on our side.
+         */
+        'directions_url' => env('RAFEEQ_MAPS_DIRECTIONS_URL', 'https://www.google.com/maps/dir/'),
+
+        /*
+         * 🔴 How many INTERMEDIATE stops one Directions link may carry.
+         *
+         * Nine is Google's documented ceiling for the URL API, and v5 is explicit that we "MUST
+         * NOT promise that an arbitrary number of stops can always be passed in one Google Maps
+         * deep link". Beyond this the itinerary is returned as ordered segments instead, each
+         * inside the limit — never as a truncated link that looks complete.
+         *
+         * A commute's own seat count keeps it reachable in practice: nine waypoints is four
+         * passengers' pickups and drop-offs plus one, and `vehicle_maximum_seats` is eight. It is
+         * configurable because the limit belongs to a third party and may move.
+         */
+        'max_waypoints' => 9,
+    ],
+
     'driver' => [
         // Chapter 3 §7: "vehicle year configurable". The floor is a policy
         // decision about what the platform is willing to put passengers in,

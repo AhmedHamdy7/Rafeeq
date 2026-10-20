@@ -11,6 +11,7 @@ use App\Domains\Geo\Models\Place;
 use App\Domains\Shared\Exceptions\DomainException;
 use App\Domains\Shared\Support\ErrorCode;
 use App\Domains\Shared\ValueObjects\Coordinate;
+use App\Domains\Trip\Actions\BuildNavigationItineraryAction;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Facades\DB;
 
@@ -38,6 +39,8 @@ use Illuminate\Support\Facades\DB;
  */
 final readonly class RespondToPickupPointAction
 {
+    public function __construct(private BuildNavigationItineraryAction $itinerary) {}
+
     public function approve(PickupPointRequest $pickup): PickupPointRequest
     {
         $this->assertPending($pickup);
@@ -137,8 +140,41 @@ final readonly class RespondToPickupPointAction
             $booking->forceFill([
                 'pickup_place_id' => $placeId,
                 'pickup_point' => $point,
+                /*
+                 * The label and decimals move with the point, because they are what the agreed
+                 * snapshot is READ from — the driver's run card, the navigation itinerary and the
+                 * attendance geofence all use `pickup_lat`/`pickup_lng`. Leaving them behind would
+                 * mean a meeting point that two people just agreed on, recorded in one column and
+                 * contradicted by the three beside it.
+                 *
+                 * The label is the place's name when a known place was agreed, and null for a bare
+                 * pin — honest either way, rather than inventing a description for coordinates.
+                 */
+                'pickup_lat' => $point?->lat,
+                'pickup_lng' => $point?->lng,
+                'pickup_label' => $this->labelFor($placeId),
             ])->save();
+
+            /*
+             * An approved pickup edit moves a stop on every day she still has ahead of her, so each
+             * of those days' itineraries is now out of date (Feature 03 v5 §3: "On each accepted
+             * booking, cancellation, approved pickup/drop-off edit ... recompute the current
+             * itinerary").
+             */
+            $this->itinerary->bump($booking->scheduled_trip_id);
         }
+    }
+
+    /**
+     * The readable name of an agreed place, or null for a bare pin.
+     */
+    private function labelFor(?string $placeId): ?string
+    {
+        if ($placeId === null) {
+            return null;
+        }
+
+        return Place::query()->whereKey($placeId)->value('name');
     }
 
     /**

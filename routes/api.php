@@ -34,6 +34,7 @@ use App\Http\Controllers\Api\V1\Search\CommuteDemandController;
 use App\Http\Controllers\Api\V1\Search\SavedSearchController;
 use App\Http\Controllers\Api\V1\Search\SearchController;
 use App\Http\Controllers\Api\V1\Trip\AttendanceController;
+use App\Http\Controllers\Api\V1\Trip\NavigationRouteController;
 use App\Http\Controllers\Api\V1\Trip\TripController;
 use App\Http\Controllers\Api\V1\Trip\TripLocationController;
 use App\Http\Controllers\Api\V1\Trip\WaitTimerController;
@@ -465,6 +466,17 @@ Route::prefix('v1')->group(function (): void {
         Route::get('driver/commutes/{commute}/waitlist', [WaitlistController::class, 'index']);
         Route::post('driver/commutes/{commute}/waitlist/offers', [WaitlistController::class, 'offer']);
         Route::delete('driver/seat-offers/{offer}', [WaitlistController::class, 'withdrawOffer']);
+
+        /*
+         * Her map (Feature 03 v5 §3): the ordered stops she actually drives, and what a pending
+         * request would add to them.
+         *
+         * 🔒 Driver-only, and the ownership check is not a formality — the payload carries every
+         * confirmed passenger's pickup and drop-off, which is a list of front doors and workplaces.
+         * v5 §4 forbids showing those to unrelated passengers.
+         */
+        Route::get('driver/commute-occurrences/{trip}/navigation-route', [NavigationRouteController::class, 'show']);
+        Route::get('driver/seat-requests/{seatRequest}/route-preview', [NavigationRouteController::class, 'preview']);
 
         /*
          * The money, as the two people in the car see it (Phase 8, Bible §8).

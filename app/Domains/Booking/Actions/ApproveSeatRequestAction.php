@@ -17,6 +17,7 @@ use App\Domains\Notification\Support\Notifier;
 use App\Domains\Shared\Exceptions\DomainException;
 use App\Domains\Shared\Support\ErrorCode;
 use App\Domains\Shared\ValueObjects\DaysMask;
+use App\Domains\Trip\Actions\BuildNavigationItineraryAction;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 
@@ -75,6 +76,7 @@ final readonly class ApproveSeatRequestAction
         private SeatAvailabilityChecker $availability,
         private CreateBookingAction $createBooking,
         private AddMemberToGroupAction $addMember,
+        private BuildNavigationItineraryAction $itinerary,
     ) {}
 
     public function execute(SeatRequest $request, User $approver): SeatApproval
@@ -144,6 +146,13 @@ final readonly class ApproveSeatRequestAction
                 // Atomic in SQL. The CHECK constraint on the table is the last
                 // line of defence if this ever runs without the lock.
                 $trip->increment('seats_taken', $request->seats);
+
+                /*
+                 * Her two agreed points are now part of the day's route (Feature 03 v5 §3). Marked
+                 * out of date rather than rebuilt here: a rebuild calls a routing provider once per
+                 * leg, and this transaction holds the seat lock — the busiest lock in the system.
+                 */
+                $this->itinerary->bump($trip->getKey());
             }
 
             if ($bookings === []) {

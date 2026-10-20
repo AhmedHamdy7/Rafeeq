@@ -14,6 +14,7 @@ use App\Domains\Notification\Enums\NotificationType;
 use App\Domains\Notification\Support\Notifier;
 use App\Domains\Shared\Exceptions\DomainException;
 use App\Domains\Shared\Support\ErrorCode;
+use App\Domains\Trip\Actions\BuildNavigationItineraryAction;
 use Illuminate\Support\Facades\DB;
 
 /**
@@ -35,7 +36,10 @@ use Illuminate\Support\Facades\DB;
  */
 final readonly class CancelBookingAction
 {
-    public function __construct(private OfferSeatToWaitlistAction $offerSeat) {}
+    public function __construct(
+        private OfferSeatToWaitlistAction $offerSeat,
+        private BuildNavigationItineraryAction $itinerary,
+    ) {}
 
     /**
      * @param  bool  $notify  false for the bulk paths (a planned absence, leaving a group), which
@@ -182,6 +186,16 @@ final readonly class CancelBookingAction
                     $this->offerSeat->forTrip($trip, $release);
                 }
             }
+
+            /*
+             * The day's navigation itinerary no longer matches who is on it (Feature 03 v5 §3:
+             * "On each accepted booking, cancellation ... recompute the current itinerary").
+             *
+             * Marked out of date rather than rebuilt here: rebuilding calls a routing provider, and
+             * this transaction holds a row lock on the seat count. The rebuild happens when the
+             * driver next reads her route.
+             */
+            $this->itinerary->bump($trip->getKey());
 
             BookingEventLog::record(
                 $booking,

@@ -16,6 +16,7 @@ use App\Domains\Commute\Models\ScheduledTrip;
 use App\Domains\Group\Actions\AddMemberToGroupAction;
 use App\Domains\Shared\Exceptions\DomainException;
 use App\Domains\Shared\Support\ErrorCode;
+use App\Domains\Trip\Actions\BuildNavigationItineraryAction;
 use Illuminate\Support\Facades\DB;
 
 /**
@@ -39,6 +40,7 @@ final readonly class AcceptSeatOfferAction
         private CreateBookingAction $createBooking,
         private AddMemberToGroupAction $addMember,
         private OfferSeatToWaitlistAction $offerSeat,
+        private BuildNavigationItineraryAction $itinerary,
     ) {}
 
     /**
@@ -154,7 +156,7 @@ final readonly class AcceptSeatOfferAction
                 'responded_at' => now(),
             ])->save();
 
-            $offer->loadMissing("scheduledTrip.commuteOffer");
+            $offer->loadMissing('scheduledTrip.commuteOffer');
             $group = $this->addMember->groupFor($trip->commuteOffer);
 
             $booking = $this->createBooking->execute($request, $trip, $group);
@@ -165,6 +167,10 @@ final readonly class AcceptSeatOfferAction
              * anybody else.
              */
             $trip->increment('seats_taken', $request->seats);
+
+            // Her agreed points join this day's route (v5 §3). Bumped, not rebuilt: see
+            // {@see BuildNavigationItineraryAction} on why a provider call cannot happen here.
+            $this->itinerary->bump($trip->getKey());
 
             $this->addMember->execute($request, $trip->commuteOffer);
 
@@ -244,6 +250,9 @@ final readonly class AcceptSeatOfferAction
             // Her old seat is somebody else's chance, offered on the way out.
             $this->offerSeat->forTrip($oldTrip->refresh(), $release);
         }
+
+        // The day she left no longer has her two stops on it either.
+        $this->itinerary->bump($oldTrip->getKey());
 
         BookingEventLog::record(
             $old,

@@ -133,10 +133,49 @@ final class StraightLineGeoEngine implements GeoQueryEngine
             return Haversine::between($points[0], $point);
         }
 
-        /*
-         * Metres per degree, taken at the point's own latitude. One cosine for the whole
-         * calculation instead of one per segment.
-         */
+        return Distance::fromMetres((int) round(self::nearestApproach($points, $point)['metres']));
+    }
+
+    /**
+     * The fraction of the route's length at the point's nearest approach to it.
+     *
+     * Built on the same segment projection as `distanceFromRoute`, and for the same reason: the
+     * closest place on the LINE, not the closest vertex. Snapping to vertices would give every
+     * stop on a straight stretch the same position and flatten the ordering this produces.
+     */
+    public function progressAlongRoute(Route $route, Coordinate $point): float
+    {
+        $points = $route->points();
+
+        // Nothing to be along. Zero rather than null, so a caller ordering stops gets a usable
+        // number and an unroutable commute is refused where that is actually decided.
+        if (count($points) < 2) {
+            return 0.0;
+        }
+
+        $nearest = self::nearestApproach($points, $point);
+
+        if ($nearest['totalLength'] <= 0.0) {
+            return 0.0;
+        }
+
+        return max(0.0, min(1.0, $nearest['lengthBefore'] / $nearest['totalLength']));
+    }
+
+    /**
+     * Walks the line once and reports where the point comes closest to it.
+     *
+     * One pass for both questions, with one cosine for the whole calculation rather than one per
+     * segment. Each segment is solved on a local flat plane: over the few hundred metres of one
+     * segment the curvature is far below the error in a phone's own fix, and the flat version is a
+     * handful of multiplications where the spherical one is several trigonometric calls — which
+     * matters when this runs on every position report from every live run.
+     *
+     * @param  array<int, Coordinate>  $points
+     * @return array{metres: float, lengthBefore: float, totalLength: float}
+     */
+    private static function nearestApproach(array $points, Coordinate $point): array
+    {
         $metresPerDegreeLat = 111_320.0;
         $metresPerDegreeLng = 111_320.0 * cos(deg2rad($point->lat));
 
@@ -144,6 +183,8 @@ final class StraightLineGeoEngine implements GeoQueryEngine
         $py = $point->lat * $metresPerDegreeLat;
 
         $shortest = null;
+        $lengthBefore = 0.0;
+        $travelled = 0.0;
 
         for ($i = 0; $i < count($points) - 1; $i++) {
             $ax = $points[$i]->lng * $metresPerDegreeLng;
@@ -151,31 +192,44 @@ final class StraightLineGeoEngine implements GeoQueryEngine
             $bx = $points[$i + 1]->lng * $metresPerDegreeLng;
             $by = $points[$i + 1]->lat * $metresPerDegreeLat;
 
-            $metres = self::distanceToSegment($px, $py, $ax, $ay, $bx, $by);
+            [$metres, $t] = self::closestOnSegment($px, $py, $ax, $ay, $bx, $by);
+
+            $segmentLength = sqrt(($bx - $ax) ** 2 + ($by - $ay) ** 2);
 
             if ($shortest === null || $metres < $shortest) {
                 $shortest = $metres;
+                // How far along the whole line the closest place is: everything before this
+                // segment, plus the part of this segment the projection fell on.
+                $lengthBefore = $travelled + $t * $segmentLength;
             }
+
+            $travelled += $segmentLength;
         }
 
-        return Distance::fromMetres((int) round($shortest ?? 0));
+        return [
+            'metres' => $shortest ?? 0.0,
+            'lengthBefore' => $lengthBefore,
+            'totalLength' => $travelled,
+        ];
     }
 
     /**
-     * Point-to-segment distance on a plane.
+     * Point-to-segment distance on a plane, and where along the segment the closest place is.
      *
      * The projection is clamped to the segment, which is the whole point: an unclamped projection
      * measures to the infinite LINE through the two vertices, so a car sitting beside the start of
      * a route would be reported as on it.
+     *
+     * @return array{0: float, 1: float} distance in metres, and the position 0–1 along the segment
      */
-    private static function distanceToSegment(
+    private static function closestOnSegment(
         float $px,
         float $py,
         float $ax,
         float $ay,
         float $bx,
         float $by,
-    ): float {
+    ): array {
         $dx = $bx - $ax;
         $dy = $by - $ay;
 
@@ -183,7 +237,7 @@ final class StraightLineGeoEngine implements GeoQueryEngine
 
         if ($lengthSquared === 0.0) {
             // A zero-length segment: two identical vertices, which real polylines do contain.
-            return sqrt(($px - $ax) ** 2 + ($py - $ay) ** 2);
+            return [sqrt(($px - $ax) ** 2 + ($py - $ay) ** 2), 0.0];
         }
 
         $t = (($px - $ax) * $dx + ($py - $ay) * $dy) / $lengthSquared;
@@ -192,6 +246,6 @@ final class StraightLineGeoEngine implements GeoQueryEngine
         $closestX = $ax + $t * $dx;
         $closestY = $ay + $t * $dy;
 
-        return sqrt(($px - $closestX) ** 2 + ($py - $closestY) ** 2);
+        return [sqrt(($px - $closestX) ** 2 + ($py - $closestY) ** 2), $t];
     }
 }

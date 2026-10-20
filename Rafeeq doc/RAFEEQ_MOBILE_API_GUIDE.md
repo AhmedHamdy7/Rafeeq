@@ -14,7 +14,7 @@
 >
 > **Base URL:** `{host}/api/v1` · **Auth:** bearer token · **Format:** JSON only.
 
-**Last updated:** 2026-10-19 · **139 endpoints live** · Phases 0–7, 9 and 11 complete · 10, 12 and 13 all but a decision each
+**Last updated:** 2026-10-20 · **141 endpoints live** · Phases 0–7, 9 and 11 complete · 10, 12 and 13 all but a decision each
 
 ---
 
@@ -22,7 +22,7 @@
 
 ### What is ready
 
-**139 endpoints live** and tested, across the 47 designed screens:
+**141 endpoints live** and tested, across the 47 designed screens:
 
 | | Count | Covers |
 |---|---|---|
@@ -748,6 +748,8 @@ fails if this list and the running routes ever disagree in either direction.
 | `GET /driver/commutes/{commute}/waitlist` | 4.7 Seat requests and bookings |
 | `POST /driver/commutes/{commute}/waitlist/offers` | 4.7 Seat requests and bookings |
 | `DELETE /driver/seat-offers/{offer}` | 4.7 Seat requests and bookings |
+| `GET /driver/commute-occurrences/{trip}/navigation-route` | 4.7 Seat requests and bookings |
+| `GET /driver/seat-requests/{seatRequest}/route-preview` | 4.7 Seat requests and bookings |
 | `GET /my-bookings` | 4.7 Seat requests and bookings |
 | `GET /seat-offers` | 4.7 Seat requests and bookings |
 | `POST /seat-offers/{offer}/accept` | 4.7 Seat requests and bookings |
@@ -1781,6 +1783,68 @@ Takes back an offer **nobody has accepted**. Returns the offer with `status: WIT
 
 Once accepted it is a booking, and taking that back is a driver cancellation with its fees and
 reliability impact — not an undo. So an accepted or closed offer answers `409 SEAT_OFFER_CLOSED`.
+
+#### `GET /driver/commute-occurrences/{trip}/navigation-route` — active, profile complete
+
+🔴 **The driver's map, and the `View Route in Google Maps` button.** Her start, every confirmed
+passenger's two agreed points in the order she reaches them, and her end.
+
+**The point count is `2 + 2N`.** Start + End = **2**. One confirmed passenger = **4**. Two = **6**.
+Published as `pointCount` so you do not have to count, and so the screen can say "4 stops".
+
+> 🔴 **Do NOT assume the order is `Start → A pickup → A drop-off → B pickup → B drop-off → End`.**
+> It frequently is not. Stops are ordered by how far along the driver's route each point sits, so
+> shared journeys **interleave** — B may be collected and set down inside A's ride. The one
+> invariant you can rely on is that each passenger's pickup precedes **her own** drop-off. Render
+> `stops` in the order given; never re-sort it.
+>
+> Nothing is deduplicated. Two riders collected at the same corner are two stops, because they are
+> two people to wait for and two attendance decisions.
+
+| Field | Means |
+|---|---|
+| `status` | `CONFIRMED` here. The preview endpoint below returns `PREVIEW_NOT_CONFIRMED`. |
+| `stops[].kind` | `DRIVER_START` · `PASSENGER_PICKUP` · `PASSENGER_DROPOFF` · `DRIVER_END`. The driver's two endpoints are **not** passenger stops — a rider collected at the driver's start point still has her own `PASSENGER_PICKUP` there. |
+| `stops[].sequence` | 0-based driving order. |
+| `stops[].bookingId` · `passengerFirstName` | Null on the driver's own endpoints. The first name, as everywhere else — never a full name. |
+| `stops[].lat` · `lng` · `label` | Exact. She has to drive there, and she accepted every one of these. |
+| `stops[].etaAt` | When she is expected. **Measured**, not apportioned: each leg is routed and the ETAs are the running sum. Null when the day has no departure time or a leg could not be routed — we do not invent one. |
+| `stops[].legDurationSeconds` · `legDistanceMeters` | The leg **into** this stop. Zero on the first. They sum to `durationSeconds` / `distanceMeters`. |
+| `stops[].reachedAt` | Null means still to come. This is the one value that is not derived, and it survives every rebuild. |
+| `polyline` · `distanceMeters` · `durationSeconds` | The whole run, summed from the legs. |
+| `googleMapsDirectionsUrl` | Open this for the external map. **Can be null** — see below. |
+| `exceedsWaypointLimit` · `waypointLimit` · `segments` | The fallback. |
+
+> 🔴 **`googleMapsDirectionsUrl` is null when the itinerary is longer than one Maps link can carry**
+> (`waypointLimit` intermediate stops, 9 today). We deliberately do **not** build a link Maps would
+> silently truncate: a driver who opens a route that looks complete and is missing two passengers
+> finds out when somebody is still standing on a kerb. Use `segments` instead — consecutive links,
+> each inside the limit, **each starting where the previous one ended** so following them in order
+> drives the whole route. When it fits, `segments` holds exactly that one URL.
+>
+> ⚠️ Google Maps validates **nothing**. It is a map with a route on it. Every rule about whether
+> that route is acceptable — the detour, the promises to existing riders, the schedule — was decided
+> by us before the link existed. Do not present it as approval.
+
+The itinerary is recomputed when the bookings on the day change, so this can be slower on the first
+read after an accept or a cancellation. Call it again after either.
+
+#### `GET /driver/seat-requests/{seatRequest}/route-preview` — active, profile complete
+
+What the run **would** look like if she accepted this pending request: the confirmed stops plus the
+request's two points. Same shape as above, with two differences.
+
+| | |
+|---|---|
+| `status` | 🔴 **`PREVIEW_NOT_CONFIRMED`.** Show it as a proposal. |
+| `stops[].isProposed` | True on exactly the two points being proposed. `stops[].id` is null throughout — these rows do not exist, so there is nothing to act on. |
+
+Nothing is written. The official itinerary stays at its current point count until she accepts —
+four points can appear here while `navigation-route` still returns two.
+
+> 🔒 **Both of these are driver-only, and a passenger gets `404`.** The payload is every other
+> rider's pickup and drop-off: front doors and workplaces. A passenger's own points come back on her
+> own booking and her own seat request, and nowhere else.
 
 #### `GET /my-bookings` — active, profile complete, paginated
 
@@ -2964,6 +3028,7 @@ exist, and every live endpoint must be named here.
 
 | Date | Change |
 |---|---|
+| 2026-10-20 | 🗺️ **The driver's map.** `GET /driver/commute-occurrences/{trip}/navigation-route` returns the ordered stops she actually drives — **2 + 2N** points: her start, each confirmed passenger's two agreed points, her end — with a routed ETA per stop and the `View Route in Google Maps` link. 🔴 **Do not assume the order is `Start → A pickup → A drop-off → B pickup → B drop-off → End`:** stops are ordered by position along her route, so shared journeys interleave; the only invariant is that each passenger's pickup precedes her own drop-off. Render `stops` as given. 🔴 **`googleMapsDirectionsUrl` can be null** when the run has more stops than one Maps link carries — use the overlapping `segments` instead; we will not hand you a link Maps would silently truncate. `GET /driver/seat-requests/{seatRequest}/route-preview` shows what accepting a pending request would do, marked `PREVIEW_NOT_CONFIRMED`, writing nothing. Both are driver-only: the payload is a list of other riders' front doors. |
 | 2026-10-19 | 📍 **Every seat request now names a pickup AND a drop-off, and both are required.** `POST /commutes/{commute}/seat-requests` takes `pickup` and `dropoff`, each as either `{suggestionId}` or `{lat, lng, label}`. Neither may be omitted and neither is inferred from the driver's route any more — the drop-off previously did not exist at all and was assumed to be the end of her route. Each comes back with a `source` (`driver_suggestion` / `custom_map`); **show the difference.** A commute advertising no suggested points is still requestable — fall back to the map. Four new refusals: `SEAT_REQUEST_POINTS_SAME`, `SEAT_REQUEST_POINTS_OUT_OF_ORDER`, `SEAT_REQUEST_SUGGESTION_UNKNOWN`, and `PICKUP_DETOUR_TOO_LONG` measured for the **pair together**. Bookings now carry the agreed snapshot, so `dropoffPoint` joins `meetingPoint` — both fuzzed, and both with the label withheld, until the booking is confirmed. |
 | 2026-10-19 | ⏸️ **Pausing a commute now cancels its future confirmed bookings, and so does replacing a vehicle.** 🔴 **Both reverse behaviour this file documented.** Pausing used to leave booked days untouched; replacing a car used to keep the bookings and send a `booking_vehicle_changed` notice. Neither holds: a paused commute is not running, and a replacement car is unverified, so those seats were promises we already knew we could not keep. Displaced passengers go onto a preserved waiting list with a **Previous Passenger** badge and are told once each (`commute_paused_seat_cancelled` / `vehicle_replaced_seat_cancelled`). **`booking_vehicle_changed` is gone — remove any handling for it.** Pause needs a confirmation step naming the number of seats it cancels. A run already underway is never touched. |
 | 2026-10-19 | 🎟️ **On resume, the driver chooses who gets a seat** — the one exception to the automatic fan-out. Three new endpoints: `GET /driver/commutes/{commute}/waitlist` (cards carrying `isPreviousPassenger`, `commitment`, `hasOtherConfirmedCommute`), `POST /driver/commutes/{commute}/waitlist/offers` (`all: true` or `seatRequestIds`), and `DELETE /driver/seat-offers/{offer}` to take back an **unaccepted** offer. Her choice decides who may race, not who wins; each day is still settled by server transaction order. New notification `seats_offered_by_driver`, one per member for the whole set of days. |

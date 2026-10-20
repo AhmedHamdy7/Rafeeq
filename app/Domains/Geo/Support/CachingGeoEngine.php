@@ -86,6 +86,15 @@ final readonly class CachingGeoEngine implements GeoQueryEngine
     }
 
     /**
+     * Passed through uncached, for the same reason as the method above: it walks a line that is
+     * already in memory and calls no provider, so a cache lookup would cost more than the answer.
+     */
+    public function progressAlongRoute(Route $route, Coordinate $point): float
+    {
+        return $this->engine->progressAlongRoute($route, $point);
+    }
+
+    /**
      * @param  array<int, Coordinate>  $via
      */
     public static function cacheKey(Coordinate $from, Coordinate $to, array $via = []): string
