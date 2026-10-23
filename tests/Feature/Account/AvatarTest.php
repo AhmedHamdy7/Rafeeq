@@ -2,6 +2,7 @@
 
 use App\Domains\Admin\Enums\AdminRole;
 use App\Domains\Identity\Models\User;
+use App\Domains\Verification\Actions\DeriveAvatarAction;
 use App\Domains\Verification\Actions\ReviewVerificationAction;
 use App\Domains\Verification\Enums\VerificationType;
 use App\Domains\Verification\Models\UserVerification;
@@ -129,7 +130,7 @@ it('replaces the previous avatar and leaves no orphan behind', function () {
     $verification = approveSelfieFor($driverToken);
     $first = User::sole()->profile_photo_path;
 
-    app(App\Domains\Verification\Actions\DeriveAvatarAction::class)->execute($verification);
+    app(DeriveAvatarAction::class)->execute($verification);
     $second = User::sole()->profile_photo_path;
 
     $disk = app(DocumentStorage::class)->disk();

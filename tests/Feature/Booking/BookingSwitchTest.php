@@ -1,5 +1,6 @@
 <?php
 
+use App\Domains\Booking\Actions\OfferSeatToWaitlistAction;
 use App\Domains\Booking\Enums\BookingStatus;
 use App\Domains\Booking\Enums\SeatRequestStatus;
 use App\Domains\Booking\Models\Booking;
@@ -76,7 +77,7 @@ function offerOnNewCommute(string $paxToken, string $driverToken, string $commut
     $trip = ScheduledTrip::findOrFail($tripId);
     $trip->forceFill(['seats_taken' => 0])->save();
 
-    app(App\Domains\Booking\Actions\OfferSeatToWaitlistAction::class)->forTrip($trip, 1);
+    app(OfferSeatToWaitlistAction::class)->forTrip($trip, 1);
 
     return SeatOffer::query()->where('seat_request_id', $requestId)->sole();
 }

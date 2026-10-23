@@ -7,10 +7,10 @@ use App\Domains\Booking\Enums\SeatRequestStatus;
 use App\Domains\Booking\Models\Booking;
 use App\Domains\Booking\Models\SeatOffer;
 use App\Domains\Booking\Models\SeatRequest;
-use App\Domains\Shared\Exceptions\DomainException;
 use App\Domains\Commute\Models\ScheduledTrip;
 use App\Domains\Driver\Models\Vehicle;
 use App\Domains\Identity\Models\User;
+use App\Domains\Shared\Exceptions\DomainException;
 use Illuminate\Support\Facades\Storage;
 
 /**

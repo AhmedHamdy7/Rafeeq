@@ -3,6 +3,7 @@
 use App\Domains\Commute\Models\ScheduledTrip;
 use App\Domains\Driver\Models\DriverProfile;
 use App\Domains\Driver\Models\Vehicle;
+use App\Domains\Trip\Actions\CompleteTripAction;
 use App\Domains\Trip\Models\TripSession;
 use Illuminate\Support\Facades\Storage;
 
@@ -59,7 +60,7 @@ function arriveMinutesLate(string $driverToken, string $tripId, int $minutesLate
         'completed_at' => $trip->promised_arrival_at->addMinutes($minutesLate),
     ])->save();
 
-    app(App\Domains\Trip\Actions\CompleteTripAction::class)->recomputeOnTimeRate(DriverProfile::sole());
+    app(CompleteTripAction::class)->recomputeOnTimeRate(DriverProfile::sole());
 }
 
 it('counts a run that arrives within the tolerance as on time', function () {
@@ -102,7 +103,7 @@ it('judges a day with no promise on its departure alone', function () {
         'completed_at' => $trip->departure_at->addHours(4),
     ])->save();
 
-    app(App\Domains\Trip\Actions\CompleteTripAction::class)->recomputeOnTimeRate(DriverProfile::sole());
+    app(CompleteTripAction::class)->recomputeOnTimeRate(DriverProfile::sole());
 
     expect((float) DriverProfile::sole()->on_time_rate)->toBe(100.0);
 });
@@ -120,7 +121,7 @@ it('still counts a late departure against her', function () {
         'completed_at' => $trip->promised_arrival_at,
     ])->save();
 
-    app(App\Domains\Trip\Actions\CompleteTripAction::class)->recomputeOnTimeRate(DriverProfile::sole());
+    app(CompleteTripAction::class)->recomputeOnTimeRate(DriverProfile::sole());
 
     expect((float) DriverProfile::sole()->on_time_rate)->toBe(0.0);
 });

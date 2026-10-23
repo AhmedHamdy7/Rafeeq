@@ -10,6 +10,7 @@ use App\Domains\Identity\Models\User;
 use App\Domains\Verification\Enums\VerificationStatus;
 use App\Domains\Verification\Enums\VerificationType;
 use App\Domains\Verification\Models\UserVerification;
+use Illuminate\Support\Collection;
 
 /**
  * The driver's five-item checklist, as the design draws it (Feature 02 v3: "Driver has **five
@@ -167,7 +168,7 @@ final class DriverChecklist
      * her commutes stopped.
      *
      * @param  array<int, array<string, mixed>>  $items
-     * @param  \Illuminate\Support\Collection<string, UserVerification>  $verifications
+     * @param  Collection<string, UserVerification>  $verifications
      */
     private static function overall(?DriverProfileStatus $status, array $items, $verifications): string
     {
@@ -203,7 +204,7 @@ final class DriverChecklist
     }
 
     /**
-     * @param  \Illuminate\Support\Collection<string, UserVerification>  $verifications
+     * @param  Collection<string, UserVerification>  $verifications
      */
     private static function licenceExpiringSoon($verifications): bool
     {
@@ -221,7 +222,7 @@ final class DriverChecklist
     }
 
     /**
-     * @param  \Illuminate\Support\Collection<string, UserVerification>  $verifications
+     * @param  Collection<string, UserVerification>  $verifications
      */
     private static function licenceExpiry($verifications): ?string
     {
