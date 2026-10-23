@@ -121,6 +121,13 @@ it('generates a document describing every /v1 route', function () {
         'GET /v1/account/comfort-preferences',
         'PATCH /v1/account/comfort-preferences',
         'GET /v1/account/stats',
+
+        /*
+         * Her own reliability standing and every event behind it (Feature 03 v5). No parameter for
+         * whose: the number is a judgement, and a judgement about somebody else is not something a
+         * member may look up.
+         */
+        'GET /v1/account/reliability',
         'GET /v1/users/{user}/public-profile',
         'GET /v1/users/{user}/avatar',
         'GET /v1/account/verifications',

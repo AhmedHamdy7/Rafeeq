@@ -791,6 +791,64 @@ return [
 
     /*
     |--------------------------------------------------------------------------
+    | Reliability (Feature 03 v5)
+    |--------------------------------------------------------------------------
+    |
+    | The score v5 routes to a monthly admin review, a temporary suspension and a
+    | permanent ban. Derived from `reliability_events` on every read — never stored as a
+    | running total, because a number that can end an account has to be reconstructible
+    | line by line in front of whoever is ending it.
+    */
+    'reliability' => [
+        /*
+         * 🔴 **These weights are PLACEHOLDERS pending a product decision**, in exactly the sense
+         * `booking.cancellation_fee_piastres` is. v5 defers the fee brackets outright — "exact
+         * brackets/amounts are not decided" — and says nothing at all about score weights.
+         *
+         * What is defensible here is their PROPORTION, not their size:
+         *
+         *   - cancelling one named passenger's seat is the most pointed act, so it costs most: she
+         *     looked at one person's booking and ended it.
+         *   - being swept up in a pause or a vehicle replacement costs least per person, because
+         *     she did not choose any of them individually and a lapsed licence is not the same act.
+         *     It is recorded PER PASSENGER, so pausing on a full car still costs more than pausing
+         *     on an empty one — the harm is per woman rearranging her morning.
+         *   - a passenger's no-show costs her about what a cancellation costs a driver: both are
+         *     one person failing to turn up for an arrangement somebody planned around.
+         *
+         * ⚠️ Nobody should be suspended on these numbers until a human has agreed them. They are a
+         * working shape so the ledger can be built and tested, not a policy.
+         */
+        'weights' => [
+            'driver_cancelled_booking' => 8,
+            'driver_cancelled_day' => 6,
+            'driver_displaced_passenger' => 3,
+            'passenger_no_show' => 8,
+            'passenger_cancelled_late' => 4,
+        ],
+
+        /*
+         * How far back the SCORE looks. The rows themselves are permanent — v5: "Score/history
+         * persist after reinstatement" — and a cancellation from two years ago is part of somebody's
+         * history without being part of whether she can be relied on this month.
+         *
+         * Six months: long enough that a pattern shows, short enough that one bad week in winter
+         * is not still costing her a seat in summer.
+         */
+        'window_days' => 180,
+
+        /*
+         * How close to departure a passenger's OWN cancellation starts to count against her.
+         *
+         * Cancelling a week out costs nobody anything — the seat goes back to the waiting list and
+         * somebody takes it — so it is recorded as nothing at all. Inside this window the driver is
+         * unlikely to fill it, and somebody has driven to a kerb for nobody.
+         */
+        'late_cancellation_hours' => 12,
+    ],
+
+    /*
+    |--------------------------------------------------------------------------
     | The external map button (Feature 03 v5 §4)
     |--------------------------------------------------------------------------
     */

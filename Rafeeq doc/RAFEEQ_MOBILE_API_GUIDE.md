@@ -14,7 +14,7 @@
 >
 > **Base URL:** `{host}/api/v1` · **Auth:** bearer token · **Format:** JSON only.
 
-**Last updated:** 2026-10-23 · **153 endpoints live** · Phases 0–7, 9 and 11 complete · 10, 12 and 13 all but a decision each
+**Last updated:** 2026-10-23 · **154 endpoints live** · Phases 0–7, 9 and 11 complete · 10, 12 and 13 all but a decision each
 
 ---
 
@@ -22,7 +22,7 @@
 
 ### What is ready
 
-**153 endpoints live** and tested, across the 47 designed screens:
+**154 endpoints live** and tested, across the 47 designed screens:
 
 | | Count | Covers |
 |---|---|---|
@@ -692,6 +692,7 @@ fails if this list and the running routes ever disagree in either direction.
 | `PATCH /account/preferences` | 4.2 Account, devices, consents |
 | `PUT /account/profile/basic` | 4.2 Account, devices, consents |
 | `GET /account/stats` | 4.2 Account, devices, consents |
+| `GET /account/reliability` | 4.2 Account, devices, consents |
 | `GET /users/{user}/public-profile` | 4.2 Account, devices, consents |
 | `GET /users/{user}/avatar` | 4.2 Account, devices, consents |
 | `GET /account/comfort-preferences` | 4.2 Account, devices, consents |
@@ -1109,6 +1110,47 @@ is the normal answer, not an error worth showing.
 #### `GET /account/stats` — signed-in
 
 The caller's **own** numbers only. See 4.2.
+
+#### `GET /account/reliability` — signed-in
+
+🔴 **Her own reliability standing, and every event behind it** (Feature 03 v5). v5 builds
+enforcement on this number — a monthly admin review, a temporary suspension, a permanent ban — so
+she has to be able to read it, and the reasons, **before** a review rather than after.
+
+```
+{ "asDriver":    { "score": 100, "events": [] },
+  "asPassenger": { "score": 92,  "events": [ { "kind": "PASSENGER_CANCELLED_LATE", ... } ] },
+  "windowDays": 180, "perfectScore": 100 }
+```
+
+| Field | Means |
+|---|---|
+| `asDriver` / `asPassenger` | **Two separate records.** One account is one person doing two things; a driver's cancellations never reach her passenger standing. |
+| `score` | `0`–`perfectScore`, and **lower is worse**. Everybody starts at `perfectScore`: a new member has not failed anybody, and starting her at zero would make the number say she had. |
+| `events[]` | `kind` · `weight` · `occurredAt` · `bookingId` / `tripId` / `commuteId` · `counts` · `reversedAt` · `reversedReason`. |
+| `counts` | Whether this event still counts against the score. **Render a `counts: false` event struck through rather than hiding it** — that she appealed and won is the most favourable thing on her record. |
+| `windowDays` | How far back the **score** looks. The events themselves are kept for ever. |
+
+Event kinds today: `DRIVER_CANCELLED_BOOKING` · `DRIVER_CANCELLED_DAY` ·
+`DRIVER_DISPLACED_PASSENGER` (one per passenger a pause or vehicle replacement displaced) ·
+`PASSENGER_NO_SHOW` · `PASSENGER_CANCELLED_LATE`. **Expect new kinds**; show an unknown one as a
+plain row.
+
+> ⚠️ **The weights are placeholders pending a product decision.** v5 defers the fee brackets
+> outright and says nothing about score weights. Their proportion to each other is deliberate; their
+> absolute size is not policy anybody has agreed, so **do not build a UI that implies a threshold**
+> ("you are 8 points from suspension").
+>
+> 🔒 **There is no endpoint for anybody else's.** The number is a judgement, and the path takes no
+> parameter at all. It is not on public profiles and v5 does not ask for it to be.
+>
+> **Not built:** the appeal *submission* flow. The reversal exists — an approved appeal clears an
+> event's impact while leaving it readable — but a driver cannot yet file one from the app, so that
+> happens through support.
+
+**What is deliberately absent:** `cancellationRate` on `GET /account/stats` is still always `null`.
+It was published before anything computed it; the reliability score is the measure that now exists,
+and the rate will either be derived or removed rather than left as a field that looks computed.
 
 ---
 
@@ -3254,6 +3296,7 @@ exist, and every live endpoint must be named here.
 
 | Date | Change |
 |---|---|
+| 2026-10-23 | 📉 **The Reliability Score exists, so a cancellation finally costs something.** Until now a driver could cancel freely and no number moved: the stars measure the ride, not whether she turns up. `GET /account/reliability` returns **her own** standing — two separate scores, as driver and as passenger — with **every event behind it**, because v5 routes a low score to a monthly review, a suspension and a ban, and nobody should learn their score at the review. Recorded today: a driver cancelling one seat, cancelling a day, or displacing passengers by pausing / replacing her vehicle (one event per displaced passenger); a passenger's no-show, or a cancellation close to departure. A late **switch** counts exactly as a late cancellation — otherwise switching the night before was a way to dodge it. A driver-delay exit costs nobody anything. An approved appeal **reverses** an event: it stops counting and stays readable. ⚠️ **The weights are placeholders pending a product decision** — do not build a UI that implies a threshold. 🔒 No endpoint returns anybody else's, and it is not on public profiles. |
 | 2026-10-23 | 🚪 **The three ends of a shared journey.** `POST /trips/{trip}/drop-off` sets **one** passenger down while the run carries on — her booking completes immediately, which is what lets her rate a ride she has finished instead of waiting for somebody else's journey to end, and her stop leaves the live route. `POST /bookings/{booking}/end-early` is the **passenger's safety exit**: no reason required, no driver confirmation, booking becomes the new **`ENDED_EARLY`** status, no fee, and her access to the car's live position ends at once along with any share link she sent. `POST /trips/{trip}/still-driving` pushes back the auto-close by 15 minutes, as often as she needs. ⚠️ A run is **only** closed automatically when nobody is aboard and nobody is still awaiting a decision — a `PENDING` attendance row blocks it, because closing over one would freeze a decision nobody made. |
 | 2026-10-20 | ⭐ **Canceled Booking Feedback.** A passenger whose confirmed seat the **driver** cancelled — including by pausing the commute or replacing the vehicle — can now rate her even though no ride happened. Same endpoint; ratings carry a new **`kind`** of `completed_ride` or `canceled_booking`, and the second behaves differently in three ways: **visible immediately** (no second rating to wait for, so do not show it as pending), **editable while visible**, and **excluded from her star average** (v5 displays it distinctly and gives cancellations their own instrument). Public profiles gain a **`canceledBookingFeedback`** block beside `reviews` — keep them separate on screen. A passenger who cancelled her own seat still cannot rate anybody, and nor can the driver on a booking she cancelled: both `422 TRIP_NOT_RATEABLE`. The feedback window runs from the cancellation, not the departure. |
 | 2026-10-20 | 🤝 **A published commute's times and stops can now change — with every affected passenger's yes.** Six endpoints under `change-proposals`: the driver sends one combined proposal (`departureTime` · `promisedArrivalTime` · `pickupPoints`, scoped to one morning or to that weekday from a date), each affected confirmed passenger answers `accepted` / `rejected` / `withdrawn`, and **the answer that completes unanimity applies it immediately** — there is no separate Apply step. 🔴 **No partial accept. Silence changes nothing. One refusal ends it. A revision bumps `version` and resets every answer already given** — warn before revising, and re-read before letting somebody answer. A passenger confirmed *after* the proposal went out must also approve. `all_future_on_this_weekday` clears the whole waiting list once applied (`TERMS_CHANGED` + `waitlist_cleared_by_change`), even members that still look compatible — and clears nothing if it is rejected. 🔒 A passenger is never shown how the others answered. `PUT /commutes/{commute}/route` and `/schedule` still answer `409 COMMUTE_NOT_EDITABLE` on a published commute; this is the only path. |

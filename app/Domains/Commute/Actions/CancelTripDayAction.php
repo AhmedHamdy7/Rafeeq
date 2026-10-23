@@ -14,6 +14,8 @@ use App\Domains\Commute\Models\ScheduledTrip;
 use App\Domains\Identity\Models\User;
 use App\Domains\Notification\Enums\NotificationType;
 use App\Domains\Notification\Support\Notifier;
+use App\Domains\Reliability\Enums\ReliabilityEventKind;
+use App\Domains\Reliability\Support\ReliabilityLedger;
 use App\Domains\Shared\Exceptions\DomainException;
 use App\Domains\Shared\Support\ErrorCode;
 use Illuminate\Support\Facades\DB;
@@ -86,6 +88,24 @@ final readonly class CancelTripDayAction
                     $driver->id,
                     from: $from,
                     metadata: ['trip_cancelled' => true, 'seats_released' => $booking->seats_reserved],
+                );
+
+                /*
+                 * 🔴 Per passenger, on her driver record (Feature 03 v5: a cancellation reduces the
+                 * Reliability Score even when the fee is paid).
+                 *
+                 * Per passenger rather than once for the day, because the harm is per person: five
+                 * women rearranging their mornings is five times the harm of one, and a flat charge
+                 * would make calling off a full car cost exactly what calling off an empty one
+                 * does. The weight for a day is lower than for singling out one booking —
+                 * cancelling the whole morning is at least not a decision about a particular woman.
+                 */
+                ReliabilityLedger::record(
+                    $trip->commuteOffer->driver_profile_id,
+                    ReliabilityEventKind::DriverCancelledDay,
+                    booking: $booking,
+                    scheduledTripId: $trip->id,
+                    commuteOfferId: $trip->commute_offer_id,
                 );
 
                 if ($booking->passenger !== null) {

@@ -4,6 +4,8 @@ namespace App\Domains\Trip\Actions;
 
 use App\Domains\Booking\Models\Booking;
 use App\Domains\Geo\Contracts\GeoQueryEngine;
+use App\Domains\Reliability\Enums\ReliabilityEventKind;
+use App\Domains\Reliability\Support\ReliabilityLedger;
 use App\Domains\Shared\Exceptions\DomainException;
 use App\Domains\Shared\Support\ErrorCode;
 use App\Domains\Shared\ValueObjects\Coordinate;
@@ -162,6 +164,26 @@ final readonly class ConfirmAttendanceAction
             $status->travelled()
                 ? $this->waitTimers->arrived($session, $booking)
                 : $this->waitTimers->departedWithout($session, $booking);
+
+            /*
+             * 🔴 A no-show goes on the passenger's reliability record (Feature 03 v5: the monthly
+             * review covers "drivers and passengers").
+             *
+             * Only an explicit one. D18 gives the driver the decision, and the whole reason
+             * `CompleteTripAction` leaves an unconfirmed row `pending` is that a driver's silence
+             * must not become somebody's absence — so a score built on silence would undo that
+             * protection by another route. Somebody marked here was marked by a person who chose
+             * to, and {@see ReliabilityLedger::record()} is idempotent on the booking so a retried
+             * tap cannot mark her twice.
+             */
+            if ($status === AttendanceStatus::PassengerNoShow) {
+                ReliabilityLedger::record(
+                    $booking->passenger_user_id,
+                    ReliabilityEventKind::PassengerNoShow,
+                    booking: $booking,
+                    commuteOfferId: $session->scheduledTrip?->commute_offer_id,
+                );
+            }
 
             return $attendance;
         });

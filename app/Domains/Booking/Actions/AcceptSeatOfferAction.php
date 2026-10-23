@@ -15,6 +15,8 @@ use App\Domains\Booking\Support\WaitlistPositions;
 use App\Domains\Commute\Models\ScheduledTrip;
 use App\Domains\Commute\Support\ScheduleLock;
 use App\Domains\Group\Actions\AddMemberToGroupAction;
+use App\Domains\Reliability\Enums\ReliabilityEventKind;
+use App\Domains\Reliability\Support\ReliabilityLedger;
 use App\Domains\Shared\Exceptions\DomainException;
 use App\Domains\Shared\Support\ErrorCode;
 use App\Domains\Shared\ValueObjects\Coordinate;
@@ -301,6 +303,31 @@ final readonly class AcceptSeatOfferAction
 
         // The day she left no longer has her two stops on it either.
         $this->itinerary->bump($oldTrip->getKey());
+
+        /*
+         * 🔴 A late switch costs her what a late cancellation would, and this is a loophole being
+         * closed rather than a feature being added.
+         *
+         * This Action releases the old seat itself instead of going through
+         * {@see CancelBookingAction}, so the reliability record written there never saw a switch —
+         * which meant a passenger could avoid the mark by switching to another commute the night
+         * before rather than cancelling. The seat is just as empty either way, and somebody still
+         * drives to a kerb for nobody.
+         *
+         * `chargesPassenger()` is the predicate, deliberately: it already draws the line v5 draws —
+         * voluntary follows the normal policy, a driver-delay exit carries nothing — so the two
+         * cannot drift apart.
+         */
+        if ($reason->chargesPassenger()
+            && $oldTrip->departure_at !== null
+            && now()->diffInHours($oldTrip->departure_at, absolute: false) <= ReliabilityLedger::lateCancellationHours()) {
+            ReliabilityLedger::record(
+                $old->passenger_user_id,
+                ReliabilityEventKind::PassengerCancelledLate,
+                booking: $old,
+                commuteOfferId: $oldTrip->commute_offer_id,
+            );
+        }
 
         BookingEventLog::record(
             $old,

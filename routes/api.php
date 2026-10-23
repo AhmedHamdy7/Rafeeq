@@ -7,6 +7,7 @@ use App\Http\Controllers\Api\V1\Account\DeviceController;
 use App\Http\Controllers\Api\V1\Account\OnboardingController;
 use App\Http\Controllers\Api\V1\Account\ProfileController;
 use App\Http\Controllers\Api\V1\Account\PublicProfileController;
+use App\Http\Controllers\Api\V1\Account\ReliabilityController;
 use App\Http\Controllers\Api\V1\Account\StatsController;
 use App\Http\Controllers\Api\V1\Account\VerificationController;
 use App\Http\Controllers\Api\V1\Auth\OtpController;
@@ -98,6 +99,20 @@ Route::prefix('v1')->group(function (): void {
          * in a match card or a member list, where there is a reason to see it.
          */
         Route::get('stats', [StatsController::class, 'show']);
+
+        /*
+         * Her reliability standing, and every event behind it (Feature 03 v5).
+         *
+         * 🔴 v5 builds enforcement on this number — a monthly admin review, a temporary
+         * suspension, a permanent ban — so somebody whose account can end on it has to be able to
+         * read it, and the reasons, before the review rather than after. The score never travels
+         * without the line items.
+         *
+         * 🔒 Only ever about the caller. There is no parameter for whose reliability to read at any
+         * access level: it is a judgement, and a judgement about somebody else is not something a
+         * member may look up.
+         */
+        Route::get('reliability', [ReliabilityController::class, 'show']);
 
         // The Verification Centre stays reachable while suspended: scenario H
         // allows an appeal, and seeing what was checked is part of that.

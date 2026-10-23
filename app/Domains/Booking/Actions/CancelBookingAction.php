@@ -6,12 +6,15 @@ use App\Domains\Booking\Enums\BookingActorType;
 use App\Domains\Booking\Enums\BookingEventType;
 use App\Domains\Booking\Enums\BookingStatus;
 use App\Domains\Booking\Enums\DisplacementReason;
+use App\Domains\Booking\Enums\SwitchReason;
 use App\Domains\Booking\Models\Booking;
 use App\Domains\Booking\Support\BookingEventLog;
 use App\Domains\Commute\Models\ScheduledTrip;
 use App\Domains\Identity\Models\User;
 use App\Domains\Notification\Enums\NotificationType;
 use App\Domains\Notification\Support\Notifier;
+use App\Domains\Reliability\Enums\ReliabilityEventKind;
+use App\Domains\Reliability\Support\ReliabilityLedger;
 use App\Domains\Shared\Exceptions\DomainException;
 use App\Domains\Shared\Support\ErrorCode;
 use App\Domains\Trip\Actions\BuildNavigationItineraryAction;
@@ -129,6 +132,74 @@ final readonly class CancelBookingAction
         ], ['bookingId' => $booking->id]);
     }
 
+    /**
+     * Puts this cancellation on the right person's reliability record, or on nobody's.
+     *
+     * 🔴 Three outcomes, and the distinctions are the whole value of the record:
+     *
+     * - **A driver ending one named passenger's seat** is the most pointed act here and lands on
+     *   her driver record.
+     * - **A displacement** — a paused commute, a replaced vehicle — lands on her record too, per
+     *   displaced passenger, but at a smaller weight: she did not choose any of them individually.
+     * - **A passenger cancelling her own seat** lands on her passenger record ONLY if she did it
+     *   close enough to departure that the driver could not fill it. Cancelling a week out costs
+     *   nobody anything and is recorded as nothing at all — a reliability score that punished
+     *   ordinary planning would teach people to keep seats they did not want.
+     *
+     * ⚠️ A driver-delay switch is excluded. `SwitchReason::DriverDelay` records the old booking as
+     * cancelled by the driver precisely so a driver's lateness stays out of the passenger's
+     * history, and that same reasoning has to reach this ledger or the exclusion is cosmetic.
+     */
+    private function recordAgainstReliability(
+        Booking $booking,
+        ScheduledTrip $trip,
+        BookingStatus $to,
+        ?string $reason,
+    ): void {
+        if ($to === BookingStatus::CancelledByDriver) {
+            $kind = $reason === DisplacementReason::CommutePaused->value
+                || $reason === DisplacementReason::VehicleReplaced->value
+                    ? ReliabilityEventKind::DriverDisplacedPassenger
+                    : ReliabilityEventKind::DriverCancelledBooking;
+
+            /*
+             * 🔒 A driver-delay switch is recorded as cancelled BY THE DRIVER so that her lateness
+             * does not land on the passenger — but it is the passenger's own choice to move, and
+             * charging the driver a reliability hit for a seat the passenger chose to leave would
+             * be the mirror of the same mistake.
+             */
+            if ($reason === SwitchReason::DriverDelay->value) {
+                return;
+            }
+
+            ReliabilityLedger::record(
+                $booking->driver_profile_id,
+                $kind,
+                booking: $booking,
+                commuteOfferId: $trip->commute_offer_id,
+            );
+
+            return;
+        }
+
+        if ($to !== BookingStatus::CancelledByPassenger) {
+            return;
+        }
+
+        // Far enough out that the seat can be sold again: nothing is recorded.
+        if ($trip->departure_at === null
+            || now()->diffInHours($trip->departure_at, absolute: false) > ReliabilityLedger::lateCancellationHours()) {
+            return;
+        }
+
+        ReliabilityLedger::record(
+            $booking->passenger_user_id,
+            ReliabilityEventKind::PassengerCancelledLate,
+            booking: $booking,
+            commuteOfferId: $trip->commute_offer_id,
+        );
+    }
+
     private function cancel(
         Booking $booking,
         BookingStatus $to,
@@ -196,6 +267,16 @@ final readonly class CancelBookingAction
              * driver next reads her route.
              */
             $this->itinerary->bump($trip->getKey());
+
+            /*
+             * 🔴 It goes on somebody's reliability record (Feature 03 v5: "Cancellation/
+             * displacement reduces Reliability Score **even when fee paid**" — so it is recorded
+             * here, where the cancellation happens, rather than wherever a fee one day is).
+             *
+             * Which record, and whether at all, depends on who cancelled and when — see
+             * {@see recordAgainstReliability()}.
+             */
+            $this->recordAgainstReliability($booking, $trip, $to, $reason);
 
             BookingEventLog::record(
                 $booking,
