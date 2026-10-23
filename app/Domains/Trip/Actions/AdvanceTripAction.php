@@ -59,6 +59,17 @@ final readonly class AdvanceTripAction
              */
             if ($next === TripSessionStatus::InProgress && $session->departed_at === null) {
                 $changes['departed_at'] = now();
+
+                /*
+                 * When to look at this run if the driver never closes it (Feature 03 v5's
+                 * still-driving / auto-finish pair). Set on departure rather than at start, because
+                 * it is measured from the arrival she promised and only a run that has actually set
+                 * off can be late arriving.
+                 *
+                 * Null when the day carries no promise and no measured itinerary: there is then no
+                 * honest moment to count from, and the run is simply never closed automatically.
+                 */
+                $changes['auto_finish_check_at'] = AutoFinishTripsAction::firstCheckFor($session);
             }
 
             $session->forceFill($changes)->save();

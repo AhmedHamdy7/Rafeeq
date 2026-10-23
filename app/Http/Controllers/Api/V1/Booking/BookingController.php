@@ -4,8 +4,11 @@ namespace App\Http\Controllers\Api\V1\Booking;
 
 use App\Domains\Booking\Actions\CancelBookingAction;
 use App\Domains\Booking\Models\Booking;
+use App\Domains\Commute\Models\ScheduledTrip;
 use App\Domains\Shared\Exceptions\DomainException;
 use App\Domains\Shared\Support\ErrorCode;
+use App\Domains\Trip\Actions\AdvanceTripAction;
+use App\Domains\Trip\Actions\EndBookingEarlyAction;
 use App\Http\Controllers\Controller;
 use App\Http\OpenApi\ApiErrors;
 use App\Http\Resources\BookingResource;
@@ -92,6 +95,50 @@ final class BookingController extends Controller
             : $action->byDriver($target, $request->user()->id, $reason);
 
         return ApiResponse::success(new BookingResource($cancelled));
+    }
+
+    /**
+     * POST /v1/bookings/{booking}/end-early — the passenger getting out before her drop-off
+     * (Feature 03 v5's safety exit).
+     *
+     * 🔴 **Hers alone, and it asks for nothing.** No reason is required, no confirmation from the
+     * driver, no window. A woman who wants out of a car is not somebody to put a form in front of,
+     * and a flow needing the driver's agreement would need it from the person she may be getting
+     * away from. The `reason` field exists and is optional; support reads it, the driver never does.
+     *
+     * 🔒 Her access to the car's live position ends with it. Mostly that is structural — the
+     * position is only readable on a pending or confirmed booking — and the share link she may have
+     * sent a friend is revoked explicitly, because that one hangs off the run rather than her seat.
+     *
+     * Before she has been picked up this is the wrong call: cancelling is, and v5 says so. The
+     * Action refuses with `ATTENDANCE_NOT_CONFIRMABLE` naming where she actually is.
+     */
+    #[ApiErrors(
+        ErrorCode::BookingNotCancellable,
+        ErrorCode::AttendanceNotConfirmable,
+        ErrorCode::TripNotStarted,
+        ErrorCode::NotFound,
+    )]
+    public function endEarly(Request $request, string $booking, EndBookingEarlyAction $action): JsonResponse
+    {
+        $target = $this->visible($request, $booking);
+
+        /*
+         * 🔒 Only the passenger. A driver wanting somebody out of her car is a different act with
+         * different consequences — v5 gives her Cancel Active Trip, with a reason, a safe stop and
+         * support — and letting it in here would record her decision as the passenger's own exit.
+         */
+        if ($target->passenger_user_id !== $request->user()->id) {
+            throw DomainException::of(ErrorCode::NotFound);
+        }
+
+        $session = AdvanceTripAction::sessionFor(
+            ScheduledTrip::query()->whereKey($target->scheduled_trip_id)->firstOrFail()
+        );
+
+        return ApiResponse::success(new BookingResource(
+            $action->execute($session, $target, $request->input('reason'))
+        ));
     }
 
     /**

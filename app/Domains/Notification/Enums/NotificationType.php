@@ -41,6 +41,20 @@ enum NotificationType: string
 
     // ---- Trip ---------------------------------------------------------------
     case TripStarted = 'trip_started';
+
+    /**
+     * Somebody got out of the driver's car before where she was going to set her down
+     * (Feature 03 v5's passenger safety exit).
+     *
+     * 🔴 Filed under Trip and it reaches her mid-run, because she is driving and the car now has
+     * one fewer person in it — she needs to know before she pulls up at a kerb for somebody who is
+     * not there.
+     *
+     * 🔒 The body carries no reason. It may be about the driver, and it may be why the passenger
+     * needed to get out; handing it to the person she left would make the exit something she had to
+     * justify to them.
+     */
+    case PassengerEndedEarly = 'passenger_ended_early';
     case ChatMessage = 'chat_message';
     case RatingDue = 'rating_due';
     case RatingDueRiders = 'rating_due_riders';
@@ -166,6 +180,7 @@ enum NotificationType: string
             self::MatchFound => NotificationCategory::Booking,
 
             self::TripStarted,
+            self::PassengerEndedEarly,
             self::ChatMessage,
             self::RatingDue,
             self::RatingDueRiders,

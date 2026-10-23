@@ -64,7 +64,7 @@ final readonly class PickupDetour
      * `assertWithin` already describes: each half passes a ten-minute check on its own while the
      * pair together puts the driver well past the limit she agreed to.
      *
-     * @param  array<int, Coordinate>  $proposed  in the order the journey would reach them
+     * @param  array<int, Coordinate>  $proposed  the new stops, in the order the passenger reaches them
      */
     public static function measureAll(GeoQueryEngine $geo, CommuteOffer $offer, array $proposed): self
     {
@@ -73,7 +73,23 @@ final readonly class PickupDetour
         $origin = self::pointOf($offer, CommuteLocationType::Origin);
         $destination = self::pointOf($offer, CommuteLocationType::Destination);
 
-        $via = array_merge(self::existingPickups($offer), $proposed);
+        /*
+         * 🔴 Sorted along the road before measuring, and this is a fix.
+         *
+         * The proposed stops used to be appended AFTER the driver's existing pickups, whatever
+         * their geography — so a passenger choosing the driver's FIRST advertised meeting point on
+         * a commute that advertises a second one further along was measured as: drive to stop one,
+         * drive on to stop two, then **turn back** for her. On a fifty-kilometre corridor that
+         * invented about fifty minutes of detour and refused her with `PICKUP_DETOUR_TOO_LONG` for
+         * a journey where the driver would simply have passed her on the way.
+         *
+         * A detour is only meaningful against a route somebody would actually drive, so the stops
+         * are ordered the way {@see \App\Domains\Trip\Support\StopOrder} orders a navigation
+         * itinerary: by how far along the driver's own line each one sits. A pickup still precedes
+         * its own drop-off, because the pair is checked for travel order before it ever reaches
+         * here.
+         */
+        $via = self::inRoadOrder($geo, $origin, $destination, array_merge(self::existingPickups($offer), $proposed));
 
         $withStop = $geo->routeBetween($origin, $destination, $via);
 
@@ -194,6 +210,47 @@ final readonly class PickupDetour
             distance: Distance::fromMetres((int) $offer->route_distance_meters),
             durationSeconds: (int) $offer->route_duration_seconds,
         );
+    }
+
+    /**
+     * The stops in the order a driver would reach them.
+     *
+     * Measured against the bare origin-to-destination line rather than against the route with the
+     * stops in it, which would be circular — the thing being ordered would decide the order it was
+     * ordered by.
+     *
+     * @param  array<int, Coordinate>  $via
+     * @return array<int, Coordinate>
+     */
+    private static function inRoadOrder(
+        GeoQueryEngine $geo,
+        Coordinate $origin,
+        Coordinate $destination,
+        array $via,
+    ): array {
+        if (count($via) < 2) {
+            return $via;
+        }
+
+        $spine = $geo->routeBetween($origin, $destination);
+
+        $withProgress = [];
+
+        foreach ($via as $index => $point) {
+            $withProgress[] = [
+                'point' => $point,
+                'progress' => $geo->progressAlongRoute($spine, $point),
+                // A stable tiebreak, so two stops at the same place on the road do not swap between
+                // measurements and make the same request cost a different amount twice.
+                'index' => $index,
+            ];
+        }
+
+        usort($withProgress, fn (array $a, array $b): int => $a['progress'] === $b['progress']
+            ? $a['index'] <=> $b['index']
+            : $a['progress'] <=> $b['progress']);
+
+        return array_map(fn (array $row): Coordinate => $row['point'], $withProgress);
     }
 
     /**

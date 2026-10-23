@@ -449,6 +449,16 @@ Route::prefix('v1')->group(function (): void {
         Route::get('bookings/{booking}', [BookingController::class, 'show']);
         Route::patch('bookings/{booking}/cancel', [BookingController::class, 'cancel']);
 
+        /*
+         * The passenger's safety exit (Feature 03 v5): she is in the car and wants out before her
+         * drop-off.
+         *
+         * 🔴 Hers alone, and it asks for nothing — no reason, no driver confirmation, no window. A
+         * flow that needed the driver's agreement would need it from the person she may be getting
+         * away from. Her access to the car's live position ends with the booking.
+         */
+        Route::post('bookings/{booking}/end-early', [BookingController::class, 'endEarly']);
+
         // The driver's side of the same conversation.
         Route::get('driver/seat-requests', [SeatRequestController::class, 'inbox']);
         Route::post('driver/seat-requests/{seatRequest}/approve', [SeatRequestController::class, 'approve']);
@@ -587,6 +597,17 @@ Route::prefix('v1')->group(function (): void {
         Route::post('trips/{trip}/start', [TripController::class, 'start']);
         Route::post('trips/{trip}/status', [TripController::class, 'advance']);
         Route::post('trips/{trip}/complete', [TripController::class, 'complete']);
+
+        /*
+         * "Still driving" (Feature 03 v5): pushes back the moment a run she has not closed would
+         * be closed for her, by a quarter of an hour, as often as the road needs.
+         *
+         * ⚠️ A convenience, not a safeguard. A run is only ever closed automatically when nobody is
+         * aboard and nobody is still awaiting a decision, so a driver who never taps it still
+         * cannot have a journey with people in it ended underneath her.
+         */
+        Route::post('trips/{trip}/still-driving', [TripController::class, 'stillDriving']);
+
         // "Cancel today" — one day off, before it starts; the commute stands (screen 23).
         Route::post('trips/{trip}/cancel', [TripController::class, 'cancel']);
 
@@ -602,6 +623,16 @@ Route::prefix('v1')->group(function (): void {
         Route::get('trips/{trip}/attendance', [AttendanceController::class, 'index']);
         Route::post('trips/{trip}/check-in', [AttendanceController::class, 'checkIn']);
         Route::post('trips/{trip}/no-show', [AttendanceController::class, 'noShow']);
+
+        /*
+         * One passenger set down while the run carries on (Feature 03 v5).
+         *
+         * 🔴 Needed because the itinerary interleaves: somebody dropped at the start of the Mehwar
+         * is out of the car twenty minutes before the driver reaches the last stop, and until this
+         * existed her booking still read CONFIRMED and she could not rate a ride she had finished.
+         * Completing her booking is what enables her rating; the run is not ended.
+         */
+        Route::post('trips/{trip}/drop-off', [AttendanceController::class, 'dropOff']);
 
         Route::post('bookings/{booking}/dispute', [AttendanceController::class, 'dispute']);
 

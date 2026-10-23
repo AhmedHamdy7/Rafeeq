@@ -10,6 +10,7 @@ use App\Domains\Commute\Models\ScheduledTrip;
 use App\Domains\Shared\Exceptions\DomainException;
 use App\Domains\Shared\Support\ErrorCode;
 use App\Domains\Trip\Actions\AdvanceTripAction;
+use App\Domains\Trip\Actions\AutoFinishTripsAction;
 use App\Domains\Trip\Actions\CompleteTripAction;
 use App\Domains\Trip\Actions\StartTripAction;
 use App\Domains\Trip\Enums\TripSessionStatus;
@@ -115,6 +116,35 @@ final class TripController extends Controller
 
         return ApiResponse::success(new TripSessionResource(
             $action->execute($session)->load('scheduledTrip')
+        ));
+    }
+
+    /**
+     * POST /v1/trips/{trip}/still-driving — "I am still on the road" (Feature 03 v5).
+     *
+     * Pushes back the moment the run would otherwise be closed for her, by a quarter of an hour,
+     * as many times as the road needs. There is deliberately no limit: a woman stuck in Cairo
+     * traffic is not more suspicious the fourth time she says so, and a cap would have to invent an
+     * answer for what happens then.
+     *
+     * ⚠️ It is a convenience, not a safeguard. A run is only ever closed automatically when nobody
+     * is aboard and nobody is still awaiting a decision — so a driver who never taps this still
+     * cannot have a journey with people in it ended underneath her.
+     */
+    #[ApiErrors(ErrorCode::TripNotStarted, ErrorCode::NotFound)]
+    public function stillDriving(Request $request, string $trip, AutoFinishTripsAction $action): JsonResponse
+    {
+        $session = AdvanceTripAction::sessionFor($this->driven($request, $trip));
+
+        if (! $session->current_status->isUnderway()) {
+            // Nothing to extend on a run that has not set off or has already closed.
+            throw DomainException::of(ErrorCode::TripNotStarted, fields: [
+                'tripStatus' => [strtoupper($session->current_status->value)],
+            ]);
+        }
+
+        return ApiResponse::success(new TripSessionResource(
+            $action->stillDriving($session)->load('scheduledTrip')
         ));
     }
 

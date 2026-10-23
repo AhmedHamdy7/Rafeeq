@@ -133,6 +133,21 @@ Schedule::command('trips:flush-locations')
     ->withoutOverlapping();
 
 /*
+ * Closes runs long past their promised arrival that the driver never closed (Feature 03 v5).
+ *
+ * 🔴 Only when nobody is aboard and nobody is still awaiting a decision — see
+ * `AutoFinishTripsAction` on why those two conditions are the whole safety of it. A driver still on
+ * the road taps "Still driving" and buys another fifteen minutes, as often as she needs.
+ *
+ * Every five minutes rather than hourly: the window this closes is one where a passenger's app
+ * still says she is in a moving car and the driver's still offers to collect people she has already
+ * dropped. An hour of that is an hour of three screens disagreeing with the street.
+ */
+Schedule::command('trips:auto-finish')
+    ->everyFiveMinutes()
+    ->withoutOverlapping();
+
+/*
  * 🔒 Deletes GPS trails past their retention date (ERD §23.4: 90 days).
  *
  * Not housekeeping. `trip_locations` is a record of where real people were, kept for one

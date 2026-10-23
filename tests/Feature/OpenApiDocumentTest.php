@@ -167,6 +167,14 @@ it('generates a document describing every /v1 route', function () {
         'POST /v1/trips/{trip}/check-in',
         'POST /v1/trips/{trip}/no-show',
         'POST /v1/bookings/{booking}/dispute',
+
+        /*
+         * The three ends of a shared journey (Feature 03 v5): one passenger set down while the run
+         * carries on, a passenger's safety exit, and the driver saying she is still on the road.
+         */
+        'POST /v1/bookings/{booking}/end-early',
+        'POST /v1/trips/{trip}/drop-off',
+        'POST /v1/trips/{trip}/still-driving',
         'GET /v1/trips/{trip}/wait-timers',
         'POST /v1/trips/{trip}/wait-timers',
         'POST /v1/trips/{trip}/wait-timers/{timer}/extend',

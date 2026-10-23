@@ -124,9 +124,28 @@ final class PersonSummary
 
         $levels = [];
 
+        /*
+         * 🔴 Ordered before anything is read off it. The relation has no `orderBy`, so the badges
+         * came back in whatever order the database felt like — stable enough in development to look
+         * deliberate, and not stable at all. The identical bug in `UserResource::capabilityValues()`
+         * reached CI as a failure that could not be reproduced locally.
+         *
+         * By the enum's own declaration order, because that IS the product's order of trust:
+         * phone, then government id, then selfie, then organisation. A badge row that reshuffled
+         * itself between two reads of the same profile would make the strongest thing she has
+         * verified appear in a different place each time.
+         */
+        $inTrustOrder = $person->verifications->sortBy(function ($verification): int {
+            $position = array_search($verification->type, VerificationType::cases(), true);
+
+            // A type the enum no longer declares sorts last rather than first: an unknown badge
+            // must not push the ones we understand down the row.
+            return $position === false ? PHP_INT_MAX : $position;
+        });
+
         // A foreach rather than a filter-then-map: the published contract needs a typed
         // list of strings, and a mapped collection loses its element type (standard #37).
-        foreach ($person->verifications as $verification) {
+        foreach ($inTrustOrder as $verification) {
             if ($verification->status !== VerificationStatus::Approved) {
                 continue;
             }

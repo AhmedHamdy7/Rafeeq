@@ -193,7 +193,14 @@ final readonly class SubmitRatingAction
          * cancels her own seat can still rate nobody.
          */
         $rateable = $kind === RatingKind::CanceledBooking
-            || $booking->status === BookingStatus::Completed;
+            || $booking->status === BookingStatus::Completed
+            /*
+             * 🔴 And a journey she left early. She was in the car and travelled part of the way, so
+             * it IS a shared ride to have an opinion about — and it is the review it matters most
+             * to allow, because a safety exit is exactly the thing somebody needs to be able to
+             * describe. Refusing it would silence the passenger with the most to say.
+             */
+            || $booking->status === BookingStatus::EndedEarly;
 
         if (! $rateable) {
             throw DomainException::of(ErrorCode::TripNotRateable, fields: [

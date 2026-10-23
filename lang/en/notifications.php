@@ -161,4 +161,12 @@ return [
         'title' => ':name has started today’s commute',
         'body' => 'Open the trip to follow the car.',
     ],
+    /*
+     * 🔒 No reason, and no suggestion that she owes the driver one. It may be about the driver. The
+     * message says what she needs to know to drive the rest of her run.
+     */
+    'passenger_ended_early' => [
+        'title' => ':name has left the car',
+        'body' => ':name ended her journey early. You do not need to stop for her drop-off.',
+    ],
 ];

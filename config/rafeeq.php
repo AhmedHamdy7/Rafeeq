@@ -407,6 +407,20 @@ return [
         'start_window_minutes' => 90,
 
         /*
+         * How long past the promised arrival a driver is left alone before the run is offered up
+         * for closing, and how much longer "Still driving" buys her (Feature 03 v5: "+15m past
+         * promised arrival show still-driving/finish, +5m auto-finish ... Still Driving extends
+         * next check by 15m").
+         *
+         * 🔴 A run is only ever closed automatically when nobody is aboard and nobody is still
+         * awaiting a decision, so these numbers decide when forgetfulness is tidied up — never
+         * whether a journey with people in it is ended. See
+         * {@see \App\Domains\Trip\Actions\AutoFinishTripsAction}.
+         */
+        'auto_finish_grace_minutes' => 20,
+        'still_driving_extension_minutes' => 15,
+
+        /*
          * How late a run may set off and still count as on time.
          *
          * 🔴 This number decides what `on_time_rate` means, and that figure is shown to

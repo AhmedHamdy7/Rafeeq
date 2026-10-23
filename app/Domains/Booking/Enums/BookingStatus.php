@@ -17,6 +17,20 @@ enum BookingStatus: string
     case Expired = 'expired';
     case NoShow = 'no_show';
 
+    /**
+     * She was in the car and got out before her agreed drop-off (Feature 03 v5, which lists
+     * `ENDED_EARLY` among a booking's states).
+     *
+     * 🔴 Neither a completion nor a cancellation, and both of those would be wrong in a way that
+     * costs somebody. `completed` would say she was carried to the place she agreed, which decides
+     * what she is charged when the money path exists. `cancelled_by_passenger` would say she never
+     * travelled and would land on the cancellation history a future driver reads — for a journey she
+     * paid for most of, possibly having left it because she felt unsafe.
+     *
+     * Terminal: the journey is over for her. The run carries on for everybody else.
+     */
+    case EndedEarly = 'ended_early';
+
     public function canTransitionTo(self $next): bool
     {
         return in_array($next, $this->allowedTransitions(), true);
@@ -42,7 +56,15 @@ enum BookingStatus: string
      */
     public function grantsExactDetails(): bool
     {
-        return $this === self::Confirmed || $this === self::Completed;
+        return $this === self::Confirmed
+            || $this === self::Completed
+            /*
+             * Somebody who ended her journey early has already been collected, so withholding the
+             * meeting point and the plate from her would protect nothing — she stood at that kerb
+             * and got into that car. And she is the one most likely to need the details afterwards,
+             * because a safety exit is exactly what a report is written about.
+             */
+            || $this === self::EndedEarly;
     }
 
     /**
@@ -54,6 +76,9 @@ enum BookingStatus: string
             self::Pending => [self::Confirmed, self::Expired, self::CancelledByPassenger],
             self::Confirmed => [
                 self::Completed, self::NoShow, self::CancelledByPassenger, self::CancelledByDriver,
+                // She was picked up and got out early. Only reachable from confirmed, because a
+                // journey has to have started for there to be one to leave.
+                self::EndedEarly,
             ],
             default => [],
         };

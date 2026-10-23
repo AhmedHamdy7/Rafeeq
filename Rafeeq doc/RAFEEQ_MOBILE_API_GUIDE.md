@@ -14,7 +14,7 @@
 >
 > **Base URL:** `{host}/api/v1` · **Auth:** bearer token · **Format:** JSON only.
 
-**Last updated:** 2026-10-20 · **150 endpoints live** · Phases 0–7, 9 and 11 complete · 10, 12 and 13 all but a decision each
+**Last updated:** 2026-10-23 · **153 endpoints live** · Phases 0–7, 9 and 11 complete · 10, 12 and 13 all but a decision each
 
 ---
 
@@ -22,7 +22,7 @@
 
 ### What is ready
 
-**150 endpoints live** and tested, across the 47 designed screens:
+**153 endpoints live** and tested, across the 47 designed screens:
 
 | | Count | Covers |
 |---|---|---|
@@ -780,6 +780,9 @@ fails if this list and the running routes ever disagree in either direction.
 | `GET /trips/{trip}/location` | 4.9 Live trip |
 | `POST /trips/{trip}/location` | 4.9 Live trip |
 | `POST /trips/{trip}/no-show` | 4.9 Live trip |
+| `POST /trips/{trip}/drop-off` | 4.9 Live trip |
+| `POST /trips/{trip}/still-driving` | 4.9 Live trip |
+| `POST /bookings/{booking}/end-early` | 4.9 Live trip |
 | `POST /trips/{trip}/start` | 4.9 Live trip |
 | `POST /trips/{trip}/status` | 4.9 Live trip |
 | `GET /trips/{trip}/wait-timers` | 4.9 Live trip |
@@ -2233,6 +2236,61 @@ consequence: one puts somebody in a car, the other puts a mark on their record.
 `PENDING` at completion — her silence is not an absence, and nobody carries a mark for something
 she did not do.
 
+#### `POST /trips/{trip}/drop-off` — active, profile complete, driver only
+
+**Request:** `bookingId`.
+
+🔴 **One passenger set down while the run carries on** (Feature 03 v5). On a shared journey the
+itinerary interleaves: somebody dropped at the start of the Mehwar is out of the car twenty minutes
+before the driver reaches the last stop.
+
+| | |
+|---|---|
+| **Her booking completes** | `COMPLETED`, immediately — which is what **enables her rating**. Before this she could not review a ride she had finished until the driver closed the whole run. |
+| **The run does NOT end** | Other passengers stay `CONFIRMED` and the session stays `IN_PROGRESS`. Finishing is still `POST /trips/{trip}/complete`. |
+| **Her stop leaves the live route** | `reachedAt` is set on her `PASSENGER_DROPOFF` stop, so `navigation-route` stops offering it. |
+| **Idempotent** | A second tap answers `200` and changes nothing. |
+
+Refused with `409 ATTENDANCE_NOT_CONFIRMABLE` for somebody who was never picked up —
+`error.fields.currentStatus` says where she actually is. Setting down a `PENDING` row would be
+recording a journey nobody said happened.
+
+#### `POST /trips/{trip}/still-driving` — active, profile complete, driver only
+
+🔴 **"I am still on the road."** Pushes back the moment the run would otherwise be closed for her
+by 15 minutes, **as many times as she needs** — there is deliberately no limit, because a woman
+stuck in Cairo traffic is not more suspicious the fourth time she says so.
+
+Show it once the run is past its promised arrival, beside `complete`. Response carries
+`stillDrivingCount` and the new `autoFinishCheckAt`.
+
+> ⚠️ **It is a convenience, not a safeguard.** A run is only ever closed automatically when **nobody
+> is aboard and nobody is still awaiting a decision**, so a driver who never taps this cannot have a
+> journey with people in it ended underneath her. Closing a run with somebody aboard would cut her
+> live location while she is moving; closing one with a `PENDING` row would freeze a decision nobody
+> made.
+
+#### `POST /bookings/{booking}/end-early` — active, profile complete, **passenger only**
+
+🔴 **The safety exit.** She is in the car and wants out before her drop-off.
+
+**Request:** `reason` — **optional**, and keep it optional in your UI. A woman who wants out of a
+car is not somebody to put a form in front of.
+
+| | |
+|---|---|
+| **No driver confirmation** | By design. A flow needing the driver's agreement would need it from the person she may be getting away from. |
+| **Her booking becomes `ENDED_EARLY`** | A **new status**. Not `COMPLETED` (which would say she was carried where she agreed, and decides what she is charged) and not cancelled (which would say she never travelled, and lands on the cancellation history a future driver reads). |
+| **No fee** | `cancellationFeePiastres` is `0`. She was carried. |
+| **Location access ends at once** | `GET /trips/{trip}/location` answers `404` for her from that moment, and any live-share link she sent a friend is revoked. For most commutes where the car goes next is the driver's street. |
+| **She can still rate it** | She travelled part of the way, and this is the review it matters most to allow. |
+| **The driver is told** | `passenger_ended_early` — **without the reason.** It may be about her. |
+
+Before she has been picked up this is the wrong call and answers
+`409 ATTENDANCE_NOT_CONFIRMABLE`: use `PATCH /bookings/{booking}/cancel`. v5 is explicit —
+"passenger pre-pickup cancel anytime; after pickup end early". The driver calling it gets `404`:
+putting somebody out of her car is Cancel Active Trip, with a reason and a safe stop.
+
 #### Attendance fields (from check-in, no-show, dispute and the list)
 
 | Field | Meaning |
@@ -3196,6 +3254,7 @@ exist, and every live endpoint must be named here.
 
 | Date | Change |
 |---|---|
+| 2026-10-23 | 🚪 **The three ends of a shared journey.** `POST /trips/{trip}/drop-off` sets **one** passenger down while the run carries on — her booking completes immediately, which is what lets her rate a ride she has finished instead of waiting for somebody else's journey to end, and her stop leaves the live route. `POST /bookings/{booking}/end-early` is the **passenger's safety exit**: no reason required, no driver confirmation, booking becomes the new **`ENDED_EARLY`** status, no fee, and her access to the car's live position ends at once along with any share link she sent. `POST /trips/{trip}/still-driving` pushes back the auto-close by 15 minutes, as often as she needs. ⚠️ A run is **only** closed automatically when nobody is aboard and nobody is still awaiting a decision — a `PENDING` attendance row blocks it, because closing over one would freeze a decision nobody made. |
 | 2026-10-20 | ⭐ **Canceled Booking Feedback.** A passenger whose confirmed seat the **driver** cancelled — including by pausing the commute or replacing the vehicle — can now rate her even though no ride happened. Same endpoint; ratings carry a new **`kind`** of `completed_ride` or `canceled_booking`, and the second behaves differently in three ways: **visible immediately** (no second rating to wait for, so do not show it as pending), **editable while visible**, and **excluded from her star average** (v5 displays it distinctly and gives cancellations their own instrument). Public profiles gain a **`canceledBookingFeedback`** block beside `reviews` — keep them separate on screen. A passenger who cancelled her own seat still cannot rate anybody, and nor can the driver on a booking she cancelled: both `422 TRIP_NOT_RATEABLE`. The feedback window runs from the cancellation, not the departure. |
 | 2026-10-20 | 🤝 **A published commute's times and stops can now change — with every affected passenger's yes.** Six endpoints under `change-proposals`: the driver sends one combined proposal (`departureTime` · `promisedArrivalTime` · `pickupPoints`, scoped to one morning or to that weekday from a date), each affected confirmed passenger answers `accepted` / `rejected` / `withdrawn`, and **the answer that completes unanimity applies it immediately** — there is no separate Apply step. 🔴 **No partial accept. Silence changes nothing. One refusal ends it. A revision bumps `version` and resets every answer already given** — warn before revising, and re-read before letting somebody answer. A passenger confirmed *after* the proposal went out must also approve. `all_future_on_this_weekday` clears the whole waiting list once applied (`TERMS_CHANGED` + `waitlist_cleared_by_change`), even members that still look compatible — and clears nothing if it is rejected. 🔒 A passenger is never shown how the others answered. `PUT /commutes/{commute}/route` and `/schedule` still answer `409 COMMUTE_NOT_EDITABLE` on a published commute; this is the only path. |
 | 2026-10-20 | 🔒 **A day stops changing 16 hours before it departs.** Approving or accepting a pickup-point change on a day inside that window answers `409 COMMUTE_SCHEDULE_LOCKED`; approving or accepting a **seat** whose rider would land the run past the arrival the passengers on board were promised answers `409 BOOKING_BREAKS_FROZEN_PROMISE`, with the projected and promised times in `error.fields`. ⚠️ A locked day nobody has booked is not locked — the rule protects the people who planned around it. A day with no `promisedArrivalTime` is judged on capacity and detour alone. And note what did **not** change: a published commute's route and schedule were already unchangeable, so they are frozen from publish rather than 16 hours out. v5's post-lock *departure change by unanimous approval* is **not built** — it presupposes an editing capability that does not exist here, so it is a feature to build, not a restriction to add. |

@@ -27,6 +27,13 @@ class TripSession extends Model
             // app. The only honest source for the on-time rate — see its migration.
             'departed_at' => 'datetime',
             'completed_at' => 'datetime',
+            /*
+             * When to look at a run the driver never closed, and how many times she has said she is
+             * still going (Feature 03 v5). Only the sweep reads them —
+             * {@see \App\Domains\Trip\Actions\AutoFinishTripsAction}.
+             */
+            'auto_finish_check_at' => 'datetime',
+            'still_driving_count' => 'integer',
             'current_status' => TripSessionStatus::class,
             'distance_travelled_meters' => 'integer',
             'duration_seconds' => 'integer',

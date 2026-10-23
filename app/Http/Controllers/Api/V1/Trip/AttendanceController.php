@@ -11,6 +11,7 @@ use App\Domains\Shared\ValueObjects\Coordinate;
 use App\Domains\Trip\Actions\AdvanceTripAction;
 use App\Domains\Trip\Actions\ConfirmAttendanceAction;
 use App\Domains\Trip\Actions\DisputeAttendanceAction;
+use App\Domains\Trip\Actions\DropOffPassengerAction;
 use App\Domains\Trip\Models\Attendance;
 use App\Http\Controllers\Controller;
 use App\Http\OpenApi\ApiErrors;
@@ -104,6 +105,40 @@ final class AttendanceController extends Controller
         $session = AdvanceTripAction::sessionFor($scheduled);
 
         $attendance = $action->noShow(
+            $session,
+            $this->bookingOn($scheduled, $request->string('bookingId')->value()),
+            confirmedBy: $request->user()->id,
+        );
+
+        return ApiResponse::success(new AttendanceResource($attendance));
+    }
+
+    /**
+     * POST /v1/trips/{trip}/drop-off — one passenger's journey ends while the run carries on.
+     *
+     * 🔴 Needed because v5's itinerary interleaves: somebody set down at the start of the Mehwar is
+     * out of the car twenty minutes before the driver reaches the last stop. Until this existed her
+     * booking still read `CONFIRMED`, she could not rate the ride she had finished, and the
+     * driver's remaining itinerary still listed a stop she had already made — three screens wrong
+     * for twenty minutes on every shared journey.
+     *
+     * Completing her booking is what enables her rating. The run is NOT ended; finishing is the
+     * driver's separate act, and v5 gates it on every passenger being resolved, which this is how
+     * she resolves them.
+     *
+     * Idempotent: a second tap on a moving car has nothing left to change.
+     */
+    #[ApiErrors(
+        ErrorCode::TripNotStarted,
+        ErrorCode::AttendanceNotConfirmable,
+        ErrorCode::NotFound,
+    )]
+    public function dropOff(CheckInPassengerRequest $request, string $trip, DropOffPassengerAction $action): JsonResponse
+    {
+        $scheduled = $this->driven($request, $trip);
+        $session = AdvanceTripAction::sessionFor($scheduled);
+
+        $attendance = $action->execute(
             $session,
             $this->bookingOn($scheduled, $request->string('bookingId')->value()),
             confirmedBy: $request->user()->id,

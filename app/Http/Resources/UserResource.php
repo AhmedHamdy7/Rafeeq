@@ -103,6 +103,22 @@ final class UserResource extends JsonResource
 
         return $this->capabilities
             ->where('status', CapabilityStatus::Active)
+            /*
+             * 🔴 Sorted, and this is a fix rather than tidiness.
+             *
+             * The relation has no `orderBy`, so MySQL returned the rows in whatever order suited
+             * it — which is stable enough to look deliberate in development and is not stable at
+             * all. CI caught it: the same request answered `[PASSENGER, DRIVER]` locally and
+             * `[DRIVER, PASSENGER]` under a parallel run, on a list the API publishes as an
+             * ordered one.
+             *
+             * By id, which for ULIDs is creation order, and creation order carries meaning here:
+             * somebody who registered as Both gets Passenger first because
+             * `Capability::forRegisteredRole()` enrols her that way, and Feature 01 v3 is explicit
+             * that "Both starts Passenger". Sorting alphabetically would answer DRIVER first and
+             * quietly contradict the rule the home screen follows.
+             */
+            ->sortBy(fn (UserCapability $row): string => (string) $row->getKey())
             ->map(fn (UserCapability $row): string => strtoupper($row->capability->value))
             ->values()
             ->all();

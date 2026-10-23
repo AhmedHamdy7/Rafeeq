@@ -55,6 +55,21 @@ final class TripSessionResource extends JsonResource
             'lastLocationAt' => $this->last_location_at?->toIso8601String(),
 
             /*
+             * When a run the driver has not closed would be closed for her, and how many times she
+             * has said she is still going (Feature 03 v5's still-driving / auto-finish pair).
+             *
+             * 🔴 Published so her screen can offer "Still driving" at the right moment instead of
+             * guessing from the promised arrival — and so a client never has to re-derive a rule
+             * about grace periods that lives in config.
+             *
+             * ⚠️ `autoFinishCheckAt` in the past does NOT mean the run is about to end. A run is
+             * only ever closed automatically when nobody is aboard and nobody is still awaiting a
+             * decision; the moment is when we LOOK, not when we close.
+             */
+            'autoFinishCheckAt' => $this->auto_finish_check_at?->toIso8601String(),
+            'stillDrivingCount' => (int) $this->still_driving_count,
+
+            /*
              * Screen 39, "Route changed". The moment the run FIRST went off its published route,
              * and the furthest it got — when it started and how far it went, which are the two
              * things anybody asking about it wants to know.

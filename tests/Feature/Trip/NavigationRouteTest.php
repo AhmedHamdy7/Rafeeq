@@ -1,6 +1,8 @@
 <?php
 
 use App\Domains\Booking\Models\Booking;
+use App\Domains\Commute\Enums\CommuteLocationType;
+use App\Domains\Commute\Models\CommuteLocation;
 use App\Domains\Commute\Models\ScheduledTrip;
 use App\Domains\Driver\Models\Vehicle;
 use App\Domains\Trip\Models\NavigationStop;
@@ -8,7 +10,7 @@ use App\Domains\Trip\Models\NavigationStop;
 /**
  * The driver's map: the stops she actually drives, and the Google Maps button (Feature 03 v5 §3, §4).
  *
- * This file follows v5's own required acceptance tests 5 to 7 and 11 to 12, which are written in
+ * This file follows v5's own required acceptance tests 2, 5 to 8 and 11 to 12, which are written in
  * terms of a point count: *"Start + End = 2 points. After accepting passenger A (A Pickup + A
  * Drop-off) = 4 points. After accepting passenger B = 6 points ... With N confirmed passengers,
  * there are 2 + 2N logical points"*.
@@ -369,4 +371,96 @@ it('counts each stop’s ETA from the legs it routed', function () {
     expect($summed)->toBe($route['durationSeconds'])
         ->and($route['stops'][3]['etaAt'])
         ->toBe($trip->departure_at->copy()->addSeconds($route['durationSeconds'])->toIso8601String());
+});
+
+/**
+ * 🔴 v5 acceptance test 2: a driver's suggested points *"appear as suggestions but are **not
+ * mandatory stops** in the external navigation itinerary until a passenger selects them and is
+ * confirmed"*.
+ *
+ * The inverse of the test that proves a suggestion CAN be chosen, and the more important half: v5
+ * §3 is explicit that "driver-suggested points are NOT automatically extra required stops" and that
+ * the 4/6-point counts must hold with none of them in the route. A commute advertising three
+ * meeting places that nobody picked would otherwise send the driver on a tour of them.
+ */
+it('leaves an advertised meeting point out of the route until somebody picks it', function () {
+    $commuteId = readyCommute($this->driverToken, Vehicle::sole()->id, ['seatsTotal' => 3]);
+
+    saveRoute($this->driverToken, $commuteId, [
+        'pickups' => [
+            ['lat' => 30.0624, 'lng' => 31.3614, 'address' => 'Advertised one'],
+            ['lat' => 30.0660, 'lng' => 31.2400, 'address' => 'Advertised two'],
+        ],
+    ])->assertOk();
+
+    test()->withToken($this->driverToken)->postJson("/api/v1/commutes/{$commuteId}/publish")->assertOk();
+
+    $tripId = ScheduledTrip::query()->where('commute_offer_id', $commuteId)
+        ->orderBy('trip_date')->firstOrFail()->id;
+
+    // They exist as suggestions on the commute...
+    expect(CommuteLocation::query()
+        ->where('commute_offer_id', $commuteId)
+        ->where('type', CommuteLocationType::Pickup->value)
+        ->count())->toBe(2);
+
+    // ...and the run she actually drives is still just her own two endpoints.
+    $route = navigationRoute($this->driverToken, $tripId);
+
+    expect($route['pointCount'])->toBe(2)
+        ->and(array_column($route['stops'], 'label'))->toBe(['Rehab Gate 2', 'Smart Village B6']);
+
+    // One passenger picks ONE of them, and only that one becomes a stop.
+    $paxToken = verifiedPassenger('01112223344', device: 'pax-1');
+
+    $suggestion = CommuteLocation::query()
+        ->where('commute_offer_id', $commuteId)
+        ->where('address', 'Advertised one')
+        ->sole();
+
+    $requestId = requestSeat($paxToken, $commuteId, [
+        'scheduledTripId' => $tripId,
+        'pickup' => ['suggestionId' => $suggestion->getKey()],
+        'dropoff' => ['lat' => 30.0684, 'lng' => 31.1015, 'label' => 'Mehwar'],
+    ])->assertStatus(201)->json('data.id');
+
+    approveSeat($this->driverToken, $requestId);
+
+    $after = navigationRoute($this->driverToken, $tripId);
+
+    // Four, not five: "Advertised two" is still only an offer she made, not a place to drive to.
+    expect($after['pointCount'])->toBe(4)
+        ->and(array_column($after['stops'], 'label'))->not->toContain('Advertised two');
+});
+
+/**
+ * 🔴 v5 acceptance test 8: *"Driver rejects passenger C → C's proposed points never appear in
+ * confirmed itinerary."*
+ *
+ * Distinct from the pending case, which the preview test covers. A refusal is the moment those
+ * coordinates stop being a proposal and become somebody else's business entirely — and the
+ * itinerary is the one place they must never leak into, because every confirmed passenger can see
+ * it through the driver's screen.
+ */
+it('never puts a refused passenger’s points in the route', function () {
+    $paxToken = verifiedPassenger('01112223344', device: 'pax-1');
+
+    $requestId = requestSeat($paxToken, $this->commuteId, [
+        'scheduledTripId' => $this->tripId,
+        'pickup' => ['lat' => 30.0624, 'lng' => 31.3614, 'label' => 'Refused pickup'],
+        'dropoff' => ['lat' => 30.0684, 'lng' => 31.1015, 'label' => 'Refused dropoff'],
+    ])->assertStatus(201)->json('data.id');
+
+    test()->flushHeaders()->withToken($this->driverToken)
+        ->postJson("/api/v1/driver/seat-requests/{$requestId}/reject")
+        ->assertOk();
+
+    $route = navigationRoute($this->driverToken, $this->tripId);
+
+    expect($route['pointCount'])->toBe(2)
+        ->and(array_column($route['stops'], 'label'))
+        ->not->toContain('Refused pickup')
+        ->not->toContain('Refused dropoff')
+        // And nothing was written down for her either.
+        ->and(NavigationStop::query()->whereNotNull('booking_id')->count())->toBe(0);
 });
