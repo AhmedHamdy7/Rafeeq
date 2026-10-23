@@ -8,6 +8,8 @@ use App\Domains\Booking\Support\WaitlistEligibility;
 use App\Domains\Commute\Models\ScheduledTrip;
 use App\Domains\Notification\Enums\NotificationType;
 use App\Domains\Notification\Support\Notifier;
+use App\Domains\Outbox\Enums\OutboxEventType;
+use App\Domains\Outbox\Support\Outbox;
 use Illuminate\Support\Str;
 
 /**
@@ -60,6 +62,32 @@ final readonly class OfferSeatToWaitlistAction
          */
         $releaseEventId = (string) Str::ulid();
         $offered = 0;
+
+        /*
+         * 🔴 v5 specifies this one by name: *"Seat release ... emits
+         * `seat_opened(occurrence_id, seat_count, event_id)` **once via outbox**"* — and the
+         * `event_id` it means is this fan-out's own `release_event_id`, which every offer below
+         * also carries. The same id on the announcement and on the offers is what lets a client tie
+         * the two together instead of guessing which release an offer belongs to.
+         *
+         * Written in this transaction, like everything else here: if the cancellation that freed
+         * the seat rolls back, the announcement goes with it. A client told "a seat opened" for a
+         * seat that never freed would reach for a chair that was never empty.
+         *
+         * Deduped on the release id, so a cancellation processed twice announces one opening rather
+         * than offering two chances at one seat.
+         */
+        Outbox::record(
+            OutboxEventType::SeatOpened,
+            Outbox::occurrenceChannel((string) $trip->getKey()),
+            [
+                'occurrenceId' => (string) $trip->getKey(),
+                'commuteId' => (string) $trip->commute_offer_id,
+                'seatCount' => $seatsFreed,
+                'releaseEventId' => $releaseEventId,
+            ],
+            dedupeKey: "seat.opened:{$releaseEventId}",
+        );
 
         foreach ($eligible as $request) {
             /*

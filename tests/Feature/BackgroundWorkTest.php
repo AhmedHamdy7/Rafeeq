@@ -83,6 +83,14 @@ it('registers every scheduled command the platform depends on', function (string
 
     // The fee ledger against its projection (pitfall #39).
     'payments:reconcile-balances',
+
+    /*
+     * Sends the outbox (Feature 03 v5). Without it the rows are written faithfully and NOTHING is
+     * ever delivered — and this is the one case where the suite is actively misleading, because
+     * every outbox test asserts about the row rather than the socket and would stay green while no
+     * client was ever told a seat opened.
+     */
+    'outbox:publish',
 ]);
 
 /**

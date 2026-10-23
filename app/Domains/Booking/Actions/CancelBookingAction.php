@@ -13,6 +13,8 @@ use App\Domains\Commute\Models\ScheduledTrip;
 use App\Domains\Identity\Models\User;
 use App\Domains\Notification\Enums\NotificationType;
 use App\Domains\Notification\Support\Notifier;
+use App\Domains\Outbox\Enums\OutboxEventType;
+use App\Domains\Outbox\Support\Outbox;
 use App\Domains\Reliability\Enums\ReliabilityEventKind;
 use App\Domains\Reliability\Support\ReliabilityLedger;
 use App\Domains\Shared\Exceptions\DomainException;
@@ -277,6 +279,28 @@ final readonly class CancelBookingAction
              * {@see recordAgainstReliability()}.
              */
             $this->recordAgainstReliability($booking, $trip, $to, $reason);
+
+            /*
+             * 🔴 Announced on the day's channel, in this transaction.
+             *
+             * The driver's screen shows who is coming; a cancellation she is not told about leaves
+             * her planning to stop for somebody who will not be there. The booking id is enough for
+             * a client to refresh the one row that changed — no name travels.
+             *
+             * Deduped on the booking, which is the identity of the state change: a booking is
+             * cancelled once, however many times the path is retried.
+             */
+            Outbox::record(
+                OutboxEventType::BookingCancelled,
+                Outbox::occurrenceChannel((string) $trip->getKey()),
+                [
+                    'occurrenceId' => (string) $trip->getKey(),
+                    'bookingId' => (string) $booking->getKey(),
+                    'status' => $to->value,
+                    'seatsReleased' => $release,
+                ],
+                dedupeKey: 'booking.cancelled:'.$booking->getKey(),
+            );
 
             BookingEventLog::record(
                 $booking,

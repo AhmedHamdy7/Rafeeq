@@ -15,6 +15,8 @@ use App\Domains\Booking\Support\WaitlistPositions;
 use App\Domains\Commute\Models\ScheduledTrip;
 use App\Domains\Commute\Support\ScheduleLock;
 use App\Domains\Group\Actions\AddMemberToGroupAction;
+use App\Domains\Outbox\Enums\OutboxEventType;
+use App\Domains\Outbox\Support\Outbox;
 use App\Domains\Reliability\Enums\ReliabilityEventKind;
 use App\Domains\Reliability\Support\ReliabilityLedger;
 use App\Domains\Shared\Exceptions\DomainException;
@@ -197,18 +199,74 @@ final readonly class AcceptSeatOfferAction
             $this->close($offer, SeatOfferStatus::Accepted);
 
             /*
+             * 🔴 She won it, and everybody else watching this day finds out at the same moment.
+             *
+             * In this transaction with the allocation, so the announcement and the seat cannot
+             * disagree: a client told somebody took the seat when the acceptance rolled back would
+             * stop showing an offer that is still live.
+             *
+             * Deduped on the offer, which is the identity of the state change — one offer can be
+             * accepted exactly once.
+             */
+            Outbox::record(
+                OutboxEventType::OfferAccepted,
+                Outbox::occurrenceChannel((string) $trip->getKey()),
+                [
+                    'occurrenceId' => (string) $trip->getKey(),
+                    'offerId' => (string) $offer->getKey(),
+                    'releaseEventId' => (string) $offer->release_event_id,
+                    'seatsRemaining' => max(0, (int) $trip->seats_total - (int) $trip->refresh()->seats_taken),
+                ],
+                dedupeKey: 'offer.accepted:'.$offer->getKey(),
+            );
+
+            /*
              * 5. Everybody else offered this seat learns it is gone — in the same transaction, so
              *    nobody is left holding an offer for a seat that no longer exists even if this
              *    rolls back.
              */
-            SeatOffer::query()
+            $losers = SeatOffer::query()
                 ->where('scheduled_trip_id', $trip->id)
                 ->whereKeyNot($offer->id)
                 ->open()
+                ->pluck('id');
+
+            SeatOffer::query()
+                ->whereIn('id', $losers->all())
                 ->update([
                     'status' => SeatOfferStatus::TakenByOther->value,
                     'closed_at' => now(),
                 ]);
+
+            /*
+             * 🔴 Each woman who lost the race is told on her own channel, and told WHICH — somebody
+             * was quicker, not "the seat stopped existing". The enum keeps those apart precisely so
+             * she is not told she keeps losing races she never ran, and an event that collapsed
+             * them would undo that on the one surface where she finds out fastest.
+             *
+             * Her own channel rather than the occurrence's: she may have no booking on this day at
+             * all, and "you lost this seat" is news about her.
+             */
+            foreach ($losers as $loserOfferId) {
+                $loser = SeatOffer::query()->whereKey($loserOfferId)->with('seatRequest')->first();
+
+                if ($loser?->seatRequest === null) {
+                    continue;
+                }
+
+                Outbox::record(
+                    OutboxEventType::OfferClosed,
+                    Outbox::userChannel((string) $loser->seatRequest->passenger_user_id),
+                    [
+                        'offerId' => (string) $loserOfferId,
+                        'occurrenceId' => (string) $trip->getKey(),
+                        // 🔴 Which kind of closure. Losing a race and the seat vanishing are
+                        // different things to be told.
+                        'reason' => SeatOfferStatus::TakenByOther->value,
+                    ],
+                    dedupeKey: 'offer.closed:'.$loserOfferId,
+                );
+            }
 
             return $booking;
         });

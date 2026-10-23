@@ -5,6 +5,7 @@ use App\Domains\Identity\Models\OtpChallenge;
 use App\Domains\Identity\Models\SecurityEvent;
 use App\Domains\Notification\Models\Message;
 use App\Domains\Notification\Models\Notification;
+use App\Domains\Outbox\Models\OutboxEvent;
 use App\Domains\Payment\Models\PaymentWebhook;
 use Illuminate\Console\Scheduling\Schedule;
 use Illuminate\Database\Eloquent\Model;
@@ -44,6 +45,16 @@ it('deletes rows past their lifetime and keeps the rest', function (string $mode
         ->and((clone $query)->whereKey($kept->getKey())->exists())->toBeTrue();
 })->with('retained');
 
+/**
+ * 🔴 Every prunable model, including the ones whose lifetime is not simply their age.
+ *
+ * {@see OutboxEvent} is on this list but not in the dataset above, and deliberately: it prunes on
+ * `published_at`, so an old row that never went out is KEPT — which is the opposite of what the
+ * dataset asserts, and is tested where that rule lives, in `tests/Feature/Outbox`. What it needs
+ * from here is the thing this test is actually for: being named in the schedule, because
+ * `model:prune` would otherwise never look under app/Domains and would report success having
+ * deleted nothing.
+ */
 it('names every retained model in the schedule', function (string $model) {
     $commands = collect(app(Schedule::class)->events())->map(fn ($event) => (string) $event->command);
 
@@ -51,4 +62,4 @@ it('names every retained model in the schedule', function (string $model) {
 
     expect($prune)->not->toBeNull()
         ->and($prune)->toContain($model);
-})->with([OtpChallenge::class, Notification::class, Message::class, PaymentWebhook::class, SecurityEvent::class, AdminAction::class]);
+})->with([OtpChallenge::class, Notification::class, Message::class, PaymentWebhook::class, SecurityEvent::class, AdminAction::class, OutboxEvent::class]);

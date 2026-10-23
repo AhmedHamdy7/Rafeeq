@@ -791,6 +791,23 @@ return [
 
     /*
     |--------------------------------------------------------------------------
+    | The transactional outbox (Feature 03 v5)
+    |--------------------------------------------------------------------------
+    */
+    'outbox' => [
+        /*
+         * How long a PUBLISHED event is kept. An unpublished one is never pruned — see
+         * `OutboxEvent::prunable()`: pruning by age alone would delete the single row that proves
+         * the mechanism failed, which is the only row anybody would want to find.
+         *
+         * Fourteen days, matching the push delivery log: these rows are a delivery record and
+         * nothing is read off them afterwards.
+         */
+        'keep_published_days' => 14,
+    ],
+
+    /*
+    |--------------------------------------------------------------------------
     | Reliability (Feature 03 v5)
     |--------------------------------------------------------------------------
     |

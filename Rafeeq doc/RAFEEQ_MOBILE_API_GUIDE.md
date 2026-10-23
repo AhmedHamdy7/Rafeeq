@@ -3232,16 +3232,21 @@ screens showed the same handful of facts, so they come from one place and cannot
 
 Decision D6: **Laravel Reverb** over WebSockets, Pusher protocol.
 
+Auth endpoint for every channel below: `POST /broadcasting/auth` with your **bearer token** (not a
+session cookie). Authorisation is checked **per subscription**, and there is no second check
+afterwards — once you are subscribed, every event on that channel reaches you.
+
+### 6.1 The live position — `private-trip.{tripSessionId}`
+
 | | |
 |---|---|
-| Auth endpoint | `POST /broadcasting/auth` with your **bearer token** (not a session cookie) |
 | Channel | `private-trip.{tripSessionId}` — the **session** id from `GET /trips/{trip}`, not the trip id |
 | Event | `location.updated` |
 | Payload | `{lat, lng, recordedAt, accuracyMeters, speedKmh}` |
 
-🔒 **Authorisation is checked per subscription and only while the run is underway.** A subscription
-that outlived the journey would keep a socket open onto positions pushed after everybody got out.
-You will be refused if you are not the driver or do not hold a live booking on that day.
+🔒 **Only while the run is underway.** A subscription that outlived the journey would keep a socket
+open onto positions pushed after everybody got out. You will be refused if you are not the driver or
+do not hold a live booking on that day.
 
 The payload is **the position and nothing else** — no passenger list, no names, no booking ids. A
 channel payload is the easiest thing in a system to end up logged by a proxy.
@@ -3249,9 +3254,45 @@ channel payload is the easiest thing in a system to end up logged by a proxy.
 **Always implement the polling fallback** (`GET /trips/{trip}/location`). The situation a live map
 is for — a bad connection at a bus stop — is the same situation where a socket does not open.
 
-⚠️ **Not yet verified end to end.** Reverb is installed and the server dispatches the event, but
-local config is `BROADCAST_CONNECTION=log`; the path is proven by an automated assertion rather
-than against a running Reverb instance. Coordinate with us before you build against it.
+### 6.2 The seat race — `private-occurrence.{scheduledTripId}` and `private-user.{userId}`
+
+🔴 **Four events, and every one of them carries an `id` you must deduplicate on.** The server writes
+each event into a table inside the same transaction as the fact it describes, and a separate pass
+sends it. That is what guarantees you are never told about something that did not happen — and the
+price of it is that a crash mid-send can deliver the **same event twice**. Keep the last few hundred
+ids you have seen and drop a repeat. This is a requirement, not a suggestion.
+
+Every message has the same envelope:
+
+```json
+{ "id": "01JB...", "type": "seat.opened", "occurredAt": "2026-10-23T05:12:44+00:00", "payload": { } }
+```
+
+| Event | Channel | Payload | What it means |
+|---|---|---|---|
+| `seat.opened` | `private-occurrence.{scheduledTripId}` | `{occurrenceId, commuteId, seatCount, releaseEventId}` | A seat came free on this day and **everybody waiting was offered it at once**. Refresh `GET /seat-offers`. The `releaseEventId` is also on every offer the release produced, so you can tie an offer to the opening it came from. |
+| `offer.accepted` | `private-occurrence.{scheduledTripId}` | `{occurrenceId, offerId, releaseEventId, seatsRemaining}` | Somebody took it. `seatsRemaining` is the live figure read under the seat lock. |
+| `offer.closed` | `private-user.{userId}` | `{offerId, occurrenceId, reason}` | **Your** offer is no longer live. `reason` says which — today the only value that arrives on the socket is `taken_by_other`, because somebody was quicker. Show that, not "something went wrong": she lost a race, the seat did not evaporate. An offer that expires or that the driver withdraws changes `GET /seat-offers` but is **not** broadcast yet. |
+| `booking.cancelled` | `private-occurrence.{scheduledTripId}` | `{occurrenceId, bookingId, status, seatsReleased}` | A confirmed seat ended. `status` distinguishes `cancelled_by_passenger` from `cancelled_by_driver`. |
+
+🔒 **Who may subscribe to `private-occurrence.{scheduledTripId}`:** the driver, anybody holding a
+live booking on that day, **or anybody whose seat request for that day is still waiting** —
+waitlisted, pending or counteroffered. That last group is wider than the trip channel above and
+deliberately so: a woman waiting for a seat has no booking at all, and she is exactly who a
+"seat opened" exists for. A cancelled booking, an expired request or a guessed id is refused.
+
+🔒 **`private-user.{userId}` is yours and nobody else's.** It carries news about you alone, which is
+why `offer.closed` goes there rather than onto the day's channel: putting it on the day would tell
+everybody on the commute which of them lost.
+
+**These are not the only notifications.** Everything else — a new seat request, a counteroffer, an
+approval, a pickup arrival, a change proposal, an SOS — reaches you through `GET /notifications`
+(4.14) and is **not** on the socket yet. Nothing is lost; it is simply not live. Poll the inbox.
+
+⚠️ **Not yet verified against a running broker.** Reverb is installed, the events are dispatched and
+the channel authorisation is proven by automated assertions against the real
+`POST /broadcasting/auth` path, but no test has run against a live Reverb instance. Coordinate with
+us before you build against it.
 
 ---
 
@@ -3296,6 +3337,7 @@ exist, and every live endpoint must be named here.
 
 | Date | Change |
 |---|---|
+| 2026-10-23 | 📡 **The seat race is now live on the socket — and every message carries an `id` you must deduplicate on.** Section 6.2 is new: four events (`seat.opened`, `offer.accepted`, `offer.closed`, `booking.cancelled`) on two new private channels, `private-occurrence.{scheduledTripId}` for a day of a commute and `private-user.{userId}` for news that is yours alone. 🔴 **The deduplication is a requirement, not a nicety.** Each event is written into a table in the same transaction as the fact and sent by a separate pass, which is what guarantees you are never told about something that did not happen — and the price is that a crash mid-send can deliver the same event twice. Keep the last few hundred ids and drop a repeat. 🔒 The occurrence channel admits the driver, anybody holding a live booking on that day, **and anybody still waiting for a seat on it** — a woman on the waiting list has no booking at all and is exactly who "a seat opened" is for. `offer.closed` goes to her **own** channel, because putting "you did not get it" on the day's channel would tell everybody on the commute which of them lost. ⚠️ **Everything else is still inbox-only** — a new request, a counteroffer, an approval, a pickup arrival, a proposal revision, an SOS. Nothing is lost; it is simply not live yet. Keep polling `GET /notifications`. |
 | 2026-10-23 | 📉 **The Reliability Score exists, so a cancellation finally costs something.** Until now a driver could cancel freely and no number moved: the stars measure the ride, not whether she turns up. `GET /account/reliability` returns **her own** standing — two separate scores, as driver and as passenger — with **every event behind it**, because v5 routes a low score to a monthly review, a suspension and a ban, and nobody should learn their score at the review. Recorded today: a driver cancelling one seat, cancelling a day, or displacing passengers by pausing / replacing her vehicle (one event per displaced passenger); a passenger's no-show, or a cancellation close to departure. A late **switch** counts exactly as a late cancellation — otherwise switching the night before was a way to dodge it. A driver-delay exit costs nobody anything. An approved appeal **reverses** an event: it stops counting and stays readable. ⚠️ **The weights are placeholders pending a product decision** — do not build a UI that implies a threshold. 🔒 No endpoint returns anybody else's, and it is not on public profiles. |
 | 2026-10-23 | 🚪 **The three ends of a shared journey.** `POST /trips/{trip}/drop-off` sets **one** passenger down while the run carries on — her booking completes immediately, which is what lets her rate a ride she has finished instead of waiting for somebody else's journey to end, and her stop leaves the live route. `POST /bookings/{booking}/end-early` is the **passenger's safety exit**: no reason required, no driver confirmation, booking becomes the new **`ENDED_EARLY`** status, no fee, and her access to the car's live position ends at once along with any share link she sent. `POST /trips/{trip}/still-driving` pushes back the auto-close by 15 minutes, as often as she needs. ⚠️ A run is **only** closed automatically when nobody is aboard and nobody is still awaiting a decision — a `PENDING` attendance row blocks it, because closing over one would freeze a decision nobody made. |
 | 2026-10-20 | ⭐ **Canceled Booking Feedback.** A passenger whose confirmed seat the **driver** cancelled — including by pausing the commute or replacing the vehicle — can now rate her even though no ride happened. Same endpoint; ratings carry a new **`kind`** of `completed_ride` or `canceled_booking`, and the second behaves differently in three ways: **visible immediately** (no second rating to wait for, so do not show it as pending), **editable while visible**, and **excluded from her star average** (v5 displays it distinctly and gives cancellations their own instrument). Public profiles gain a **`canceledBookingFeedback`** block beside `reviews` — keep them separate on screen. A passenger who cancelled her own seat still cannot rate anybody, and nor can the driver on a booking she cancelled: both `422 TRIP_NOT_RATEABLE`. The feedback window runs from the cancellation, not the departure. |

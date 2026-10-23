@@ -5,6 +5,7 @@ use App\Domains\Identity\Models\OtpChallenge;
 use App\Domains\Identity\Models\SecurityEvent;
 use App\Domains\Notification\Models\Message;
 use App\Domains\Notification\Models\Notification;
+use App\Domains\Outbox\Models\OutboxEvent;
 use App\Domains\Payment\Models\PaymentWebhook;
 use Illuminate\Support\Facades\Schedule;
 
@@ -133,6 +134,22 @@ Schedule::command('trips:flush-locations')
     ->withoutOverlapping();
 
 /*
+ * Sends the outbox events that have not gone out yet (Feature 03 v5).
+ *
+ * 🔴 Every minute, because what it carries is a seat race: a client told thirty seconds late that a
+ * seat opened has already lost it to whoever was told on time. The row is written in the same
+ * transaction as the fact, so nothing is ever lost — this is what makes it timely as well as
+ * certain.
+ *
+ * `withoutOverlapping`, so two passes cannot both pick up the same pending row and deliver it
+ * twice. A consumer must deduplicate anyway (v5 requires it), but there is no reason to generate
+ * the duplicates ourselves.
+ */
+Schedule::command('outbox:publish')
+    ->everyMinute()
+    ->withoutOverlapping();
+
+/*
  * Closes runs long past their promised arrival that the driver never closed (Feature 03 v5).
  *
  * 🔴 Only when nobody is aboard and nobody is still awaiting a decision — see
@@ -192,6 +209,12 @@ Schedule::command('model:prune', ['--model' => [
     PaymentWebhook::class,
     SecurityEvent::class,
     AdminAction::class,
+    /*
+     * Delivered outbox events, on the same clock as the push log (14 days). Unlike every other
+     * model on this list, its `prunable()` is keyed on `published_at` rather than age — an
+     * UNDELIVERED row is kept for ever, because it is the only evidence the mechanism failed.
+     */
+    OutboxEvent::class,
 ]])
     ->dailyAt('04:45')
     ->timezone('Africa/Cairo')
