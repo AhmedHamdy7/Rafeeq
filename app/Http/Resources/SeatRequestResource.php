@@ -3,6 +3,7 @@
 namespace App\Http\Resources;
 
 use App\Domains\Booking\Models\SeatRequest;
+use App\Domains\Booking\Support\StandbyAvailability;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
 
@@ -68,6 +69,17 @@ final class SeatRequestResource extends JsonResource
             'agreedToRulesAt' => $this->agreed_to_rules_at->toIso8601String(),
             // Set only while waiting for a seat to free up.
             'waitlistPosition' => $this->waitlist_position,
+
+            /*
+             * Whether she can ride today, on a waiting-list membership (Feature 03 v5 §8).
+             *
+             * 🔴 Computed against the commute's own local day rather than published as the stored
+             * date, because the stored date goes stale and the switch does not: a woman who said
+             * "not today" yesterday is available now, and a client rendering a raw date would have
+             * to work out which timezone's midnight ended it. `true` is the normal answer, including
+             * for anybody not on a waiting list at all.
+             */
+            'availableToday' => StandbyAvailability::isAvailableToday($this->resource),
             'responseNote' => $this->response_note,
             'respondedAt' => $this->responded_at?->toIso8601String(),
             // A request nobody answers expires, so it stops holding your one open

@@ -34,6 +34,17 @@ enum SeatOfferStatus: string
     case Closed = 'closed';
 
     /**
+     * She said no (Feature 03 v5: *"Only declines this offer, doesn't remove membership"*).
+     *
+     * 🔴 Her own decision, and the only closure here that is. That is precisely why it is not
+     * folded into `Closed`: a woman reading her own waiting-list history should be able to see that
+     * she turned a Tuesday down, rather than a list in which every seat she was ever offered
+     * appears to have fallen through. It is also what makes the next line true — she is **still on
+     * the waiting list**, and the next seat is offered to her like everybody else's.
+     */
+    case Declined = 'declined';
+
+    /**
      * The driver took the offer back before anybody accepted it (Feature 03 v5: *"Driver may
      * withdraw only unaccepted offers"*).
      *

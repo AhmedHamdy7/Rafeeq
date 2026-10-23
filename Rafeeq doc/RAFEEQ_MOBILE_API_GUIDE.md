@@ -14,7 +14,7 @@
 >
 > **Base URL:** `{host}/api/v1` · **Auth:** bearer token · **Format:** JSON only.
 
-**Last updated:** 2026-10-23 · **154 endpoints live** · Phases 0–7, 9 and 11 complete · 10, 12 and 13 all but a decision each
+**Last updated:** 2026-10-23 · **156 endpoints live** · Phases 0–7, 9 and 11 complete · 10, 12 and 13 all but a decision each
 
 ---
 
@@ -22,7 +22,7 @@
 
 ### What is ready
 
-**154 endpoints live** and tested, across the 47 designed screens:
+**156 endpoints live** and tested, across the 47 designed screens:
 
 | | Count | Covers |
 |---|---|---|
@@ -763,7 +763,9 @@ fails if this list and the running routes ever disagree in either direction.
 | `GET /my-bookings` | 4.7 Seat requests and bookings |
 | `GET /seat-offers` | 4.7 Seat requests and bookings |
 | `POST /seat-offers/{offer}/accept` | 4.7 Seat requests and bookings |
+| `POST /seat-offers/{offer}/decline` | 4.7 Seat requests and bookings |
 | `GET /seat-requests` | 4.7 Seat requests and bookings |
+| `PATCH /seat-requests/{seatRequest}/availability` | 4.7 Seat requests and bookings |
 | `DELETE /seat-requests/{seatRequest}` | 4.7 Seat requests and bookings |
 | `POST /seat-requests/{seatRequest}/pickup-request` | 4.7 Seat requests and bookings |
 | `GET /driver/pickup-requests` | 4.8 Pickup points |
@@ -1876,7 +1878,7 @@ Seats she has been offered while waiting. Open ones first, then history.
 
 | Field | Means |
 |---|---|
-| `status` | `OPEN` · `ACCEPTED` · `TAKEN_BY_OTHER` · `INELIGIBLE` · `CLOSED` |
+| `status` | `OPEN` · `ACCEPTED` · `TAKEN_BY_OTHER` · `DECLINED` · `INELIGIBLE` · `CLOSED` · `WITHDRAWN` |
 | `tripId` · `seatRequestId` | Which day, and which waiting request it came from. |
 | `trip` | `date`, `departureAt`, `departureLocal`, `pricePiastres` — so the list reads without a second call. A seat on Wednesday is a different decision from a seat tomorrow. |
 | `offeredAt` · `closedAt` | |
@@ -1926,6 +1928,57 @@ POST /seat-offers/{offer}/accept
 **Not built:** a standalone switch endpoint on the booking itself (v3 proposes one; this is the offer path instead), and **recurring/future-weekday scope**.
 Only a single date switches today. A half-built recurring scope would silently release days she
 still wanted, so it waits rather than shipping partly done.
+
+#### `POST /seat-offers/{offer}/decline` — active, profile complete
+
+She turns this seat down. Returns the offer with `status: DECLINED`.
+
+🔴 **This offer only. She stays on the waiting list** — her place, her position and the driver's
+approval of her are all untouched, and the next seat that frees is offered to her like anybody
+else's. Build the screen so it says that: a woman who thinks declining costs her her place will sit
+on an offer she cannot use rather than release it.
+
+`DECLINED` is its own status and not `CLOSED`, because it is the one ending that was her decision.
+In her history, "I turned down that Tuesday" should not read like "that Tuesday fell through".
+
+Declining an offer that has already ended answers **`409 SEAT_OFFER_CLOSED`** with
+`error.fields.status` — usually `taken_by_other`, meaning somebody accepted while she was looking at
+it. Show that, not a failed tap. Somebody else's offer answers **`404`**.
+
+> 🔒 The driver is never told who declined, only who accepted. She does not owe anybody an
+> explanation for one Tuesday.
+
+#### `PATCH /seat-requests/{seatRequest}/availability` — active, profile complete
+
+"I can't ride today" on a waiting-list membership. Body: `{ "available": true | false }`.
+
+⚠️ **v5 proposes this as a PATCH on `/waiting-list-memberships/{id}/availability`.** There is no such
+resource: a waiting-list membership **is** a seat request the driver answered with `Waitlist`, and
+the id you already hold is that request's. One row, one path.
+
+| | |
+|---|---|
+| `available: false` | You are not offered **today's** seats on this commute. |
+| `available: true` | Back in. |
+| Read it from | `availableToday` on any seat request (`GET /seat-requests`, and the response here). |
+
+🔴 **It only ever affects today, and it clears itself.** A recurring membership keeps every other
+day it is waiting for, and tomorrow `availableToday` is `true` again without you sending anything —
+the server stores the day she meant, not a flag somebody has to remember to turn off. Do not cache
+it across midnight.
+
+**There is no date field and there will not be one.** The server decides which day "today" is, in
+the commute's own timezone. A phone with the wrong clock or the wrong timezone would otherwise
+exclude her from a morning she fully intended to ride.
+
+| It does not | |
+|---|---|
+| cost her anything | No penalty, no reliability effect, no record of how often she changed her mind. Say so on the screen. |
+| end her membership | Position, approval and future days are untouched. |
+| restore closed offers | Coming back does not reopen offers that closed while she was out — those seats belong to somebody else now. |
+
+A request that is not on a waiting list answers **`409 SEAT_REQUEST_NOT_WAITLISTED`** with the
+current status in `error.fields.status`. Somebody else's answers **`404`**.
 
 #### `GET /driver/commutes/{commute}/waitlist` — active, profile complete, paginated
 
@@ -3337,6 +3390,8 @@ exist, and every live endpoint must be named here.
 
 | Date | Change |
 |---|---|
+| 2026-10-23 | 🙋‍♀️ **A waiting passenger can now say no to one seat, and "not today", without losing her place.** `POST /seat-offers/{offer}/decline` ends **that offer only** — her position, her membership and the driver's approval of her are untouched, and the next seat that frees is offered to her like anybody else's. New status `DECLINED`, separate from `CLOSED` on purpose: in her own history "I turned that Tuesday down" must not read like "that Tuesday fell through". `PATCH /seat-requests/{seatRequest}/availability` takes `{available: false}` and leaves her out of **today's** offers only; read it back as **`availableToday`** on any seat request. 🔴 **It clears itself at midnight** — the server stores the day she meant, in the commute's own timezone, so do not cache it across a day boundary and do not send a date (there is no date field, and a phone with a wrong clock would exclude her from a morning she meant to ride). Neither control costs anything: **no penalty, no reliability effect** — say so on the screen, because a woman who thinks "not today" is held against her will stop saying it. ⚠️ v5 proposes the toggle at `/waiting-list-memberships/{id}/availability`; there is no such resource — a membership **is** a waitlisted seat request, and the id you hold is that request's. Coming back available does **not** reopen offers that closed while she was out. New refusal: `409 SEAT_REQUEST_NOT_WAITLISTED`. |
+| 2026-10-23 | 🔴 **Bug fix, and it was emptying cars.** When a second seat freed on a day whose first fan-out had already closed, the offer went out to **nobody** — and nothing reported a failure. Three women waiting, one seat frees, one accepts, the other two are closed `TAKEN_BY_OTHER`; a second passenger then cancels the same morning and the two who are still waiting were never told, so the car left with an empty seat. The cause was a uniqueness key on (day, request) that allowed one offer per person per day **for ever** rather than one *live* offer. Keyed on the release now. **What changes for you:** `GET /seat-offers` can legitimately show **more than one offer for the same `tripId`** on one `seatRequestId` — at most one of them `OPEN`, the rest history. Key your list by offer `id`, never by `tripId`. |
 | 2026-10-23 | 📡 **The seat race is now live on the socket — and every message carries an `id` you must deduplicate on.** Section 6.2 is new: four events (`seat.opened`, `offer.accepted`, `offer.closed`, `booking.cancelled`) on two new private channels, `private-occurrence.{scheduledTripId}` for a day of a commute and `private-user.{userId}` for news that is yours alone. 🔴 **The deduplication is a requirement, not a nicety.** Each event is written into a table in the same transaction as the fact and sent by a separate pass, which is what guarantees you are never told about something that did not happen — and the price is that a crash mid-send can deliver the same event twice. Keep the last few hundred ids and drop a repeat. 🔒 The occurrence channel admits the driver, anybody holding a live booking on that day, **and anybody still waiting for a seat on it** — a woman on the waiting list has no booking at all and is exactly who "a seat opened" is for. `offer.closed` goes to her **own** channel, because putting "you did not get it" on the day's channel would tell everybody on the commute which of them lost. ⚠️ **Everything else is still inbox-only** — a new request, a counteroffer, an approval, a pickup arrival, a proposal revision, an SOS. Nothing is lost; it is simply not live yet. Keep polling `GET /notifications`. |
 | 2026-10-23 | 📉 **The Reliability Score exists, so a cancellation finally costs something.** Until now a driver could cancel freely and no number moved: the stars measure the ride, not whether she turns up. `GET /account/reliability` returns **her own** standing — two separate scores, as driver and as passenger — with **every event behind it**, because v5 routes a low score to a monthly review, a suspension and a ban, and nobody should learn their score at the review. Recorded today: a driver cancelling one seat, cancelling a day, or displacing passengers by pausing / replacing her vehicle (one event per displaced passenger); a passenger's no-show, or a cancellation close to departure. A late **switch** counts exactly as a late cancellation — otherwise switching the night before was a way to dodge it. A driver-delay exit costs nobody anything. An approved appeal **reverses** an event: it stops counting and stays readable. ⚠️ **The weights are placeholders pending a product decision** — do not build a UI that implies a threshold. 🔒 No endpoint returns anybody else's, and it is not on public profiles. |
 | 2026-10-23 | 🚪 **The three ends of a shared journey.** `POST /trips/{trip}/drop-off` sets **one** passenger down while the run carries on — her booking completes immediately, which is what lets her rate a ride she has finished instead of waiting for somebody else's journey to end, and her stop leaves the live route. `POST /bookings/{booking}/end-early` is the **passenger's safety exit**: no reason required, no driver confirmation, booking becomes the new **`ENDED_EARLY`** status, no fee, and her access to the car's live position ends at once along with any share link she sent. `POST /trips/{trip}/still-driving` pushes back the auto-close by 15 minutes, as often as she needs. ⚠️ A run is **only** closed automatically when nobody is aboard and nobody is still awaiting a decision — a `PENDING` attendance row blocks it, because closing over one would freeze a decision nobody made. |

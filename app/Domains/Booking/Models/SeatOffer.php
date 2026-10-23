@@ -48,4 +48,27 @@ class SeatOffer extends Model
     {
         $query->where('status', SeatOfferStatus::Open->value);
     }
+
+    /**
+     * Does she already have a live chance at this day?
+     *
+     * 🔴 The check that replaced an index doing two jobs. `seat_offers` used to be unique on
+     * `(scheduled_trip_id, seat_request_id)`, which forbade a second offer for one day FOR EVER —
+     * so when a second seat freed on a Tuesday whose first fan-out had already closed, nobody was
+     * offered it and the car went out with an empty seat. The key now guards the release, which is
+     * the thing that must not repeat, and "not two live offers at once" is asked here, where it can
+     * be read.
+     *
+     * Only an OPEN offer counts. A closed one is history — including one she declined, which is
+     * precisely the case v5 wants reoffered: *"Only declines this offer, doesn't remove
+     * membership."*
+     */
+    public static function hasLiveOfferFor(string $scheduledTripId, string $seatRequestId): bool
+    {
+        return static::query()
+            ->where('scheduled_trip_id', $scheduledTripId)
+            ->where('seat_request_id', $seatRequestId)
+            ->open()
+            ->exists();
+    }
 }

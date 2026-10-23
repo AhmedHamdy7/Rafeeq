@@ -24,8 +24,11 @@ use Illuminate\Database\Eloquent\Builder;
  * lived in both places would eventually accept somebody from one direction and refuse her from the
  * other, and the symptom would be a passenger who can see an offer she cannot take.
  *
- * The predicate, in words: she is still waiting, the day is one she asked for, she needs no more
- * seats than are free, and nobody has answered her with a deadline that has passed.
+ * The predicate, in words: she is still waiting, the day is one she asked for, she has not declared
+ * herself out for that day, she needs no more seats than are free, and nobody has answered her with
+ * a deadline that has passed.
+ *
+ * @see StandbyAvailability for the "available today" half, and why it is stored as a date
  */
 final class WaitlistEligibility
 {
@@ -49,6 +52,18 @@ final class WaitlistEligibility
                 ->orWhere('scheduled_trip_id', $trip->getKey()))
             // Somebody who needs two seats is not served by one freeing.
             ->where('seats', '<=', $seatsFree)
+            /*
+             * 🔴 And she has not said she cannot ride today (v5 §8: turning unavailable "excludes
+             * the member from today's automatic offers, preserves future recurring membership").
+             *
+             * Compared against the day's own `trip_date`, which is why the column stores a date
+             * rather than a flag: a recurring member who is out on Tuesday is still offered
+             * Wednesday, from the same row, with nothing to reset. See
+             * {@see StandbyAvailability}.
+             */
+            ->where(fn (Builder $q) => $q
+                ->whereNull('unavailable_on')
+                ->orWhere('unavailable_on', '!=', $trip->trip_date->toDateString()))
             ->where(fn (Builder $q) => self::stillWaiting($q))
             /*
              * Ordered by position even though the seat is a race. The order decides who is TOLD
@@ -84,6 +99,17 @@ final class WaitlistEligibility
                 $request->scheduled_trip_id !== null,
                 // A trial asked for one specific day and wants no other.
                 fn (Builder $q) => $q->whereKey($request->scheduled_trip_id),
+            )
+            /*
+             * 🔴 And not the day she said she could not ride (v5 §8), which matters here as well as
+             * in the fan-out: resuming a paused commute offers seats "automatically to available
+             * members", and the driver choosing from her waiting list must not be handed a day the
+             * member has already declared herself out of. Same rule, asked from the other side —
+             * which is the whole reason both questions live in this one class.
+             */
+            ->when(
+                $request->unavailable_on !== null,
+                fn (Builder $q) => $q->where('trip_date', '!=', $request->unavailable_on->toDateString()),
             )
             ->orderBy('departure_at')
             // Standard #42: a tiebreak, so two days departing at the same minute order the same way

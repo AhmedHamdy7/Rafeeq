@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Api\V1\Booking;
 
 use App\Domains\Booking\Actions\AcceptSeatOfferAction;
+use App\Domains\Booking\Actions\DeclineSeatOfferAction;
 use App\Domains\Booking\Enums\BookingStatus;
 use App\Domains\Booking\Enums\SwitchReason;
 use App\Domains\Booking\Models\Booking;
@@ -111,5 +112,33 @@ final class SeatOfferController extends Controller
         );
 
         return ApiResponse::success(new BookingResource($booking));
+    }
+
+    /**
+     * POST /v1/seat-offers/{offer}/decline — she turns this seat down.
+     *
+     * 🔴 **This offer only. She stays on the waiting list** (v5: *"Only declines this offer, doesn't
+     * remove membership"*). Her place, her position and the driver's approval of her are untouched,
+     * and the next seat that frees is offered to her with everybody else.
+     *
+     * The declining is also entirely between her and the row: the driver is never shown who passed
+     * on a seat, only who took it. She does not owe anybody an explanation for one Tuesday.
+     *
+     * A `409 SEAT_OFFER_CLOSED` here means she was looking at an offer that had already ended —
+     * usually because somebody accepted first, which `error.fields.status` says. Show that rather
+     * than treating her tap as having failed.
+     */
+    #[ApiErrors(ErrorCode::NotFound, ErrorCode::SeatOfferClosed)]
+    public function decline(Request $request, string $offer, DeclineSeatOfferAction $action): JsonResponse
+    {
+        $target = SeatOffer::query()
+            ->whereKey($offer)
+            ->whereHas('seatRequest', fn ($query) => $query
+                ->where('passenger_user_id', $request->user()->id))
+            ->first()
+            // 404 and never 403, for the same reason as `accept`: a 403 confirms the id exists.
+            ?? throw DomainException::of(ErrorCode::NotFound);
+
+        return ApiResponse::success(new SeatOfferResource($action->execute($target)));
     }
 }

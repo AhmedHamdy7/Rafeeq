@@ -91,7 +91,24 @@ final readonly class OfferSeatToWaitlistAction
 
         foreach ($eligible as $request) {
             /*
-             * 🔴 `insertOrIgnore` against the unique (trip, request) index, not `firstOrCreate`.
+             * 🔴 Not if she already has a LIVE offer for this day.
+             *
+             * This check used to be a side effect of a unique index on `(trip, request)`, and that
+             * index was wrong in a way that emptied cars: it forbade a second offer for one day for
+             * ever, so when a second seat freed on a Tuesday whose first fan-out had already closed,
+             * `insertOrIgnore` silently ignored everybody and nobody was told. See the migration
+             * `key_seat_offers_by_release_not_journey`.
+             *
+             * Asked explicitly here instead, where it says what it means: do not give one person two
+             * live chances at the same morning. A CLOSED offer is no obstacle — a woman who declined
+             * Tuesday's seat, or lost it to somebody quicker, is still waiting for Tuesday.
+             */
+            if (SeatOffer::hasLiveOfferFor((string) $trip->getKey(), (string) $request->id)) {
+                continue;
+            }
+
+            /*
+             * 🔴 `insertOrIgnore` against the unique (request, release) index, not `firstOrCreate`.
              *
              * Two reasons, and both matter. It leans on the index instead of racing it: a
              * cancellation processed twice — a retried job, an overlapping manual run — cannot give
@@ -118,8 +135,13 @@ final readonly class OfferSeatToWaitlistAction
                 continue;
             }
 
+            /*
+             * Found by the RELEASE, not by the day. She may hold a closed offer for this same
+             * Tuesday from an earlier freeing — which is legal now and is the whole point of the
+             * key change — and a lookup by `(trip, request)` would find two rows and throw.
+             */
             $offer = SeatOffer::query()
-                ->where('scheduled_trip_id', $trip->id)
+                ->where('release_event_id', $releaseEventId)
                 ->where('seat_request_id', $request->id)
                 ->sole();
 

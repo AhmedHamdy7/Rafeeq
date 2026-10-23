@@ -95,6 +95,15 @@ enum ErrorCode: string
     case AlreadyBooked = 'BOOKING_ALREADY_BOOKED';
     case BookingDeadlinePassed = 'BOOKING_DEADLINE_PASSED';
     case SeatRequestNotPending = 'SEAT_REQUEST_NOT_PENDING';
+
+    /**
+     * She is trying to manage a waiting-list membership on a request that is not on a waiting list
+     * (Feature 03 v5 §8: `Available Today` lives "on standby management").
+     *
+     * A request still awaiting the driver's answer, or one already seated, has nothing for this
+     * switch to govern — the fan-out it would filter only ever looks at waitlisted requests.
+     */
+    case SeatRequestNotWaitlisted = 'SEAT_REQUEST_NOT_WAITLISTED';
     case WaitlistFull = 'BOOKING_WAITLIST_FULL';
     case BookingNotCancellable = 'BOOKING_NOT_CANCELLABLE';
     case CannotBookOwnCommute = 'BOOKING_OWN_COMMUTE';
@@ -317,6 +326,7 @@ enum ErrorCode: string
             self::SeatOfferClosed,
             self::AlreadyBooked,
             self::SeatRequestNotPending,
+            self::SeatRequestNotWaitlisted,
             self::WaitlistFull,
             self::BookingNotCancellable,
             self::PickupAlreadyRequested,

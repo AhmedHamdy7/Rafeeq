@@ -6,6 +6,7 @@ use App\Domains\Booking\Actions\ApproveSeatRequestAction;
 use App\Domains\Booking\Actions\CounterofferAction;
 use App\Domains\Booking\Actions\RequestSeatAction;
 use App\Domains\Booking\Actions\RespondToSeatRequestAction;
+use App\Domains\Booking\Actions\SetStandbyAvailabilityAction;
 use App\Domains\Booking\Enums\SeatRequestStatus;
 use App\Domains\Booking\Models\SeatRequest;
 use App\Domains\Commute\Models\CommuteOffer;
@@ -15,6 +16,7 @@ use App\Http\Controllers\Controller;
 use App\Http\OpenApi\ApiErrors;
 use App\Http\Requests\Booking\CounterofferSeatRequestRequest;
 use App\Http\Requests\Booking\RequestSeatRequest;
+use App\Http\Requests\Booking\SetStandbyAvailabilityRequest;
 use App\Http\Resources\SeatApprovalResource;
 use App\Http\Resources\SeatRequestResource;
 use App\Http\Responses\ApiResponse;
@@ -233,6 +235,33 @@ final class SeatRequestController extends Controller
         $declined = $action->decline($this->mine($request, $seatRequest), $request->user());
 
         return ApiResponse::success(new SeatRequestResource($declined));
+    }
+
+    /**
+     * PATCH /v1/seat-requests/{seatRequest}/availability — "I can't ride today".
+     *
+     * ⚠️ v5 proposes this at `PATCH /waiting-list-memberships/{id}/availability`. There is no such
+     * resource here: a waiting-list membership **is** a seat request the driver answered with
+     * `Waitlist`, and the id a client holds is that request's. A second path onto one row would
+     * have the mobile team guessing which id belongs to which URL — and v5 itself asks us to
+     * "reuse compatible conventions, do not duplicate APIs".
+     *
+     * It governs **today only** and nothing else. Her membership, her position and every other day
+     * she is waiting for are untouched, there is no penalty, and tomorrow the switch is clear again
+     * without anybody sending anything.
+     */
+    #[ApiErrors(ErrorCode::SeatRequestNotWaitlisted, ErrorCode::NotFound)]
+    public function availability(
+        SetStandbyAvailabilityRequest $request,
+        string $seatRequest,
+        SetStandbyAvailabilityAction $action,
+    ): JsonResponse {
+        $updated = $action->execute(
+            $this->mine($request, $seatRequest),
+            (bool) $request->validated('available'),
+        );
+
+        return ApiResponse::success(new SeatRequestResource($updated));
     }
 
     /**

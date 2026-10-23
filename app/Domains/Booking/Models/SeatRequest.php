@@ -72,6 +72,14 @@ class SeatRequest extends Model
             'payment_type' => PaymentType::class,
             'status' => SeatRequestStatus::class,
             'waitlist_position' => 'integer',
+
+            /*
+             * The one day she said she could not ride (Feature 03 v5 §8's `Not Available Today`).
+             * A date rather than a flag, so the statement expires by itself — see
+             * {@see StandbyAvailability}.
+             */
+            'unavailable_on' => 'date',
+
             // Set when the platform took her seat away and put her back on the list — a paused
             // commute or a replaced vehicle. Null for everybody who joined by asking.
             'displaced_at' => 'datetime',

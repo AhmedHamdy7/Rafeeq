@@ -87,10 +87,25 @@ final readonly class OfferSeatsToWaitlistMembersAction
 
                 foreach ($days as $trip) {
                     /*
-                     * `insertOrIgnore` against the unique (trip, request) index, for the reasons
+                     * Not a day she already has a live offer for. A driver tapping Offer twice, or
+                     * offering a member a day an automatic fan-out reached a moment earlier, must
+                     * not put two live chances at one morning in front of her.
+                     *
+                     * 🔴 A CLOSED offer is no obstacle, and that is the fix this check came with:
+                     * the unique index it replaced forbade a second offer for one day for ever, so
+                     * a driver resuming a commute could not offer a seat to somebody whose earlier
+                     * offer on that day had been withdrawn or lost. See the migration
+                     * `key_seat_offers_by_release_not_journey`.
+                     */
+                    if (SeatOffer::hasLiveOfferFor((string) $trip->getKey(), (string) $member->getKey())) {
+                        continue;
+                    }
+
+                    /*
+                     * `insertOrIgnore` against the unique (request, release) index, for the reasons
                      * {@see OfferSeatToWaitlistAction} sets out: it leans on the index rather than
-                     * racing it, so a double tap cannot give one person two chances at one seat,
-                     * and it does not mass-assign a `status` this model refuses on purpose.
+                     * racing it, so a double tap cannot offer one batch twice, and it does not
+                     * mass-assign a `status` this model refuses on purpose.
                      */
                     $inserted = SeatOffer::query()->insertOrIgnore([
                         'id' => (string) Str::ulid(),

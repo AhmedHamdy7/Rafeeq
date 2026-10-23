@@ -71,6 +71,7 @@ return [
     'BOOKING_ALREADY_BOOKED' => 'عندك مقعد في اليوم ده بالفعل.',
     'BOOKING_DEADLINE_PASSED' => 'الحجز على اليوم ده اتقفل.',
     'SEAT_REQUEST_NOT_PENDING' => 'الطلب ده اترد عليه بالفعل.',
+    'SEAT_REQUEST_NOT_WAITLISTED' => 'الطلب ده مش على قائمة انتظار.',
     'BOOKING_WAITLIST_FULL' => 'قائمة الانتظار للرحلة دي كاملة.',
     'BOOKING_NOT_CANCELLABLE' => 'الحجز ده مش ممكن يتلغي بعد كده.',
     'BOOKING_OWN_COMMUTE' => 'مش ممكن تحجز مقعد في رحلتك بنفسك.',

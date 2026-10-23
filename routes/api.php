@@ -458,6 +458,18 @@ Route::prefix('v1')->group(function (): void {
          */
         Route::get('seat-offers', [SeatOfferController::class, 'index']);
         Route::post('seat-offers/{offer}/accept', [SeatOfferController::class, 'accept']);
+
+        /*
+         * Her two answers to a waiting list, both of which cost her nothing (Feature 03 v5 §8).
+         *
+         * 🔴 `decline` ends ONE offer and `availability` excludes her from ONE day. Neither ends
+         * her membership, and that restraint is the requirement rather than an implementation
+         * detail: a single inconvenient Tuesday must not cost a woman a place she waited weeks for
+         * and have her ask the driver to approve her all over again.
+         */
+        Route::post('seat-offers/{offer}/decline', [SeatOfferController::class, 'decline']);
+        Route::patch('seat-requests/{seatRequest}/availability', [SeatRequestController::class, 'availability']);
+
         Route::delete('seat-requests/{seatRequest}', [SeatRequestController::class, 'withdraw']);
 
         Route::get('my-bookings', [BookingController::class, 'mine']);

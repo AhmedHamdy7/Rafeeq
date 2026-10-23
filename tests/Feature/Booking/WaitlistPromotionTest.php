@@ -2,6 +2,7 @@
 
 use App\Domains\Booking\Actions\AcceptSeatOfferAction;
 use App\Domains\Booking\Actions\OfferSeatToWaitlistAction;
+use App\Domains\Booking\Enums\BookingStatus;
 use App\Domains\Booking\Enums\SeatOfferStatus;
 use App\Domains\Booking\Enums\SeatRequestStatus;
 use App\Domains\Booking\Models\Booking;
@@ -196,8 +197,14 @@ it('still keeps the queue numbered, even though the seat is a race', function ()
 });
 
 /**
- * An offer is not sent twice for the same seat. A retried job or an overlapping run must not give
- * one person two chances, and the unique index is what makes that true rather than care.
+ * Nobody gets two LIVE chances at one morning. A retried job or an overlapping run must not put two
+ * open offers for the same day in front of one person.
+ *
+ * ⚠️ Note what this does **not** prove, because for a while it was believed to. Calling the fan-out
+ * again mints a new `release_event_id`, so this is not a replay of one release — it is a second
+ * release finding her first offer still open. True retry-safety (the same release recorded twice) is
+ * guarded by the unique `(seat_request_id, release_event_id)` key and is asserted in
+ * `tests/Feature/Outbox`.
  */
 it('does not offer the same seat to the same person twice', function () {
     $first = joinWaitlist('01222220001', 'pax-2', $this->commuteId, $this->trip->id);
@@ -210,6 +217,53 @@ it('does not offer the same seat to the same person twice', function () {
 
     expect($offered)->toBe(0)
         ->and(SeatOffer::query()->where('seat_request_id', $first['id'])->count())->toBe(1);
+});
+
+/**
+ * 🔴 But a second seat freeing on the same day IS offered — and until 2026-10-23 it was not.
+ *
+ * `seat_offers` was unique on `(scheduled_trip_id, seat_request_id)` under a comment that read "one
+ * **open** offer per person per journey". The index was stronger than the comment: one offer per
+ * person per journey for ever. So once a day's first fan-out had closed, every later freeing on that
+ * day was silently offered to nobody — `insertOrIgnore` ignored every row and reported success — and
+ * the car went out with an empty seat while approved women waited for exactly it.
+ *
+ * The key now guards the release, which is the thing that must not repeat. See the migration
+ * `key_seat_offers_by_release_not_journey`.
+ */
+it('offers a second seat freeing on the same day to the people whose first offer closed', function () {
+    $first = joinWaitlist('01222220001', 'pax-2', $this->commuteId, $this->trip->id);
+    $second = joinWaitlist('01222220002', 'pax-3', $this->commuteId, $this->trip->id);
+
+    // Seat one frees, and the quicker of the two takes it.
+    test()->withToken($this->riderToken)
+        ->patchJson("/api/v1/bookings/{$this->bookingId}/cancel")->assertOk();
+
+    app(AcceptSeatOfferAction::class)->execute(
+        SeatOffer::query()->where('seat_request_id', $first['id'])->sole()
+    );
+
+    // So she is closed `taken_by_other` and still waiting — which is what a waiting list means.
+    expect(SeatOffer::query()->where('seat_request_id', $second['id'])->sole()->status)
+        ->toBe(SeatOfferStatus::TakenByOther)
+        ->and(SeatRequest::query()->whereKey($second['id'])->sole()->status)
+        ->toBe(SeatRequestStatus::Waitlisted);
+
+    // Now a second seat frees on the very same morning.
+    $winner = Booking::query()
+        ->where('seat_request_id', $first['id'])
+        ->where('status', BookingStatus::Confirmed->value)
+        ->sole();
+
+    test()->flushHeaders()->withToken($first['token'])
+        ->patchJson("/api/v1/bookings/{$winner->getKey()}/cancel")->assertOk();
+
+    $offers = SeatOffer::query()->where('seat_request_id', $second['id'])->get();
+
+    // 🔴 Two offers for one day, from two different releases, and the live one is the new one.
+    expect($offers)->toHaveCount(2)
+        ->and($offers->pluck('release_event_id')->unique())->toHaveCount(2)
+        ->and($offers->where('status', SeatOfferStatus::Open)->count())->toBe(1);
 });
 
 it('does not promote somebody waiting for a different day', function () {
