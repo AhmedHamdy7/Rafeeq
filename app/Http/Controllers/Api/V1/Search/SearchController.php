@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Api\V1\Search;
 
+use App\Domains\Matching\Actions\RecordRecentSearchAction;
 use App\Domains\Matching\Actions\SearchCommutesAction;
 use App\Domains\Shared\Exceptions\DomainException;
 use App\Domains\Shared\Support\ErrorCode;
@@ -27,11 +28,26 @@ final class SearchController extends Controller
      * someone else's money.
      */
     #[ApiErrors(ErrorCode::TooManyRequests)]
-    public function commutes(SearchCommutesRequest $request, SearchCommutesAction $action): JsonResponse
-    {
+    public function commutes(
+        SearchCommutesRequest $request,
+        SearchCommutesAction $action,
+        RecordRecentSearchAction $remember,
+    ): JsonResponse {
         $this->assertWithinRateLimit($request->user()->id);
 
-        $results = $action->execute($request->user(), $request->criteria());
+        $criteria = $request->criteria();
+
+        $results = $action->execute($request->user(), $criteria);
+
+        /*
+         * Remembered here rather than inside the search engine, and the distinction is not
+         * tidiness: `SearchCommutesAction` is also run by the background matching that works
+         * through saved demands, so recording there would fill her Recent Searches with searches
+         * she never made every time a driver published anything near her.
+         *
+         * After the results, and it cannot fail the request — see the Action.
+         */
+        $remember->execute($request->user(), $criteria);
 
         return ApiResponse::success(
             MatchResultResource::collection($results),

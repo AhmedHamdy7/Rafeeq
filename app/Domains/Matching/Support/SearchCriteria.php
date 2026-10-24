@@ -121,6 +121,41 @@ final readonly class SearchCriteria
     }
 
     /**
+     * The same search, in the shape {@see fromArray} accepts.
+     *
+     * 🔴 Exists so a recorded search can be handed back to a client and re-run by sending it
+     * straight back (Feature 03 v5's Recent Searches). Written from the object rather than by
+     * storing the request's own input, because a search arrives as a QUERY STRING: every value in
+     * it is a string, so `daysMask` would come back as `"62"` and a client doing arithmetic on it
+     * would be surprised by its own data. Round-tripping through here makes the stored criteria
+     * independent of the transport that carried them.
+     *
+     * Optional fields are omitted rather than sent as null, so what comes back looks like what a
+     * person actually filled in.
+     *
+     * @return array<string, mixed>
+     */
+    public function toArray(): array
+    {
+        return array_filter([
+            'origin' => ['lat' => $this->origin->lat, 'lng' => $this->origin->lng],
+            'destination' => ['lat' => $this->destination->lat, 'lng' => $this->destination->lng],
+            'daysMask' => $this->days->value,
+            'arrivalWindowStart' => $this->arrivalWindowStart,
+            'arrivalWindowEnd' => $this->arrivalWindowEnd,
+            'maxWalkMinutes' => $this->maxWalk->minutes,
+            'maxDetourMinutes' => $this->maxDetourMinutes,
+            'seatsNeeded' => $this->seatsNeeded,
+            'audiencePreference' => $this->audiencePreference?->value,
+            'budgetMonthlyPiastres' => $this->budgetMonthlyPiastres,
+            'flexibilityMinutes' => $this->flexibilityMinutes,
+            'wantsReturnTrip' => $this->wantsReturnTrip,
+            'rules' => $this->requiredRules,
+            'minRating' => $this->minRating,
+        ], fn (mixed $value): bool => $value !== null && $value !== []);
+    }
+
+    /**
      * The cache key for this search.
      *
      * Coordinates are rounded to three decimals (~110m) before hashing. Exact

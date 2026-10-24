@@ -3,6 +3,7 @@
 use App\Domains\Admin\Models\AdminAction;
 use App\Domains\Identity\Models\OtpChallenge;
 use App\Domains\Identity\Models\SecurityEvent;
+use App\Domains\Matching\Models\SearchHistory;
 use App\Domains\Notification\Models\Message;
 use App\Domains\Notification\Models\Notification;
 use App\Domains\Outbox\Models\OutboxEvent;
@@ -25,6 +26,8 @@ dataset('retained', [
     'payment webhooks, 90 days' => [PaymentWebhook::class, fn () => now()->subDays(91), fn () => now()->subDays(89)],
     'security log, 24 months' => [SecurityEvent::class, fn () => now()->subMonths(24)->subDay(), fn () => now()->subMonths(23)],
     'admin audit log, 24 months' => [AdminAction::class, fn () => now()->subMonths(24)->subDay(), fn () => now()->subMonths(23)],
+    // 🔒 Recent searches: a record of where somebody lives and works, kept only to save her typing.
+    'recent searches, 90 days' => [SearchHistory::class, fn () => now()->subDays(91), fn () => now()->subDays(89)],
 ]);
 
 it('deletes rows past their lifetime and keeps the rest', function (string $model, Closure $old, Closure $recent) {
@@ -62,4 +65,4 @@ it('names every retained model in the schedule', function (string $model) {
 
     expect($prune)->not->toBeNull()
         ->and($prune)->toContain($model);
-})->with([OtpChallenge::class, Notification::class, Message::class, PaymentWebhook::class, SecurityEvent::class, AdminAction::class, OutboxEvent::class]);
+})->with([OtpChallenge::class, Notification::class, Message::class, PaymentWebhook::class, SecurityEvent::class, AdminAction::class, SearchHistory::class, OutboxEvent::class]);

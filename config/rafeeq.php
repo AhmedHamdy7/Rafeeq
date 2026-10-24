@@ -337,6 +337,16 @@ return [
 
         // Chapter 5: "search requests rate limited".
         'searches_per_user_per_minute' => 20,
+
+        /*
+         * How many Recent Searches are kept and shown (Feature 03 v5 §3).
+         *
+         * 🔒 A bound rather than a growing log, and the reason is privacy rather than storage. "We
+         * keep your last twenty searches" is a sentence that can be said out loud; the same data
+         * described honestly as "ninety days of everywhere you looked" is something nobody would
+         * agree to. Twenty is also more than a search box can show.
+         */
+        'recent_searches_kept' => 20,
     ],
 
     'commute' => [
@@ -1025,6 +1035,17 @@ return [
         'payment_webhooks_days' => 90,
         'security_events_months' => 24,
         'admin_actions_months' => 24,
+
+        /*
+         * Recent searches (Feature 03 v5). v5 gives no number, so this is a policy decision stated
+         * here rather than buried in the model.
+         *
+         * 🔒 Ninety days, matching the shortest log tier on this list, because a search history is
+         * a record of where somebody lives and works that exists only to save her typing — the
+         * weakest reason to keep anything, so the shortest lifetime. Measured from when a search was
+         * FIRST made, never from the last time she re-ran it.
+         */
+        'search_history_days' => 90,
     ],
 
 ];

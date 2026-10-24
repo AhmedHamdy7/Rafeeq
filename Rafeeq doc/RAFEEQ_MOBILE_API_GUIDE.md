@@ -14,7 +14,7 @@
 >
 > **Base URL:** `{host}/api/v1` · **Auth:** bearer token · **Format:** JSON only.
 
-**Last updated:** 2026-10-23 · **158 endpoints live** · Phases 0–7, 9 and 11 complete · 10, 12 and 13 all but a decision each
+**Last updated:** 2026-10-23 · **160 endpoints live** · Phases 0–7, 9 and 11 complete · 10, 12 and 13 all but a decision each
 
 ---
 
@@ -22,7 +22,7 @@
 
 ### What is ready
 
-**158 endpoints live** and tested, across the 47 designed screens:
+**160 endpoints live** and tested, across the 47 designed screens:
 
 | | Count | Covers |
 |---|---|---|
@@ -737,6 +737,8 @@ fails if this list and the running routes ever disagree in either direction.
 | `GET /saved-searches` | 4.6 Search, demands, saved searches |
 | `POST /saved-searches` | 4.6 Search, demands, saved searches |
 | `DELETE /saved-searches/{search}` | 4.6 Search, demands, saved searches |
+| `GET /me/recent-searches` | 4.6 Search, demands, saved searches |
+| `DELETE /me/recent-searches` | 4.6 Search, demands, saved searches |
 | `GET /search/commutes` | 4.6 Search, demands, saved searches |
 | `GET /bookings/{booking}` | 4.7 Seat requests and bookings |
 | `PATCH /bookings/{booking}/cancel` | 4.7 Seat requests and bookings |
@@ -1625,6 +1627,36 @@ Commutes found for the caller's demands, newest first.
 **POST request:** `title`, `filters{...}` — the same shape the search endpoint accepts.
 
 Returns `id`, `title`, `filters`, `createdAt`. The dedup signature is internal and not returned.
+
+#### `GET` / `DELETE /me/recent-searches` — active, profile complete
+
+The chips to show **on search-field focus**, plus the `Clear All` behind them (Feature 03 v5 §3).
+Account-synced: she searched on the bus, and the list is there on a new handset.
+
+Nothing creates these explicitly — **running a search records it**. There is no POST.
+
+| Field | Means |
+|---|---|
+| `criteria` | The search, in the exact shape `GET /search/commutes` accepts. **Tap = send this object straight back.** Values are properly typed (`daysMask` is a number, not `"62"`), whatever the query string that produced them looked like. |
+| `searchedAt` | When she last ran it. **The list is ordered by this**, newest first. |
+| `firstSearchedAt` | When it first appeared. Retention is measured from here. |
+
+🔴 **Running the same search again does not add a row** — it moves the existing one to the top. At
+most **20** are kept; older ones fall off.
+
+🔴 **`DELETE` clears history and nothing else.** v5 says it twice, and it matters: her **saved
+searches** (`/saved-searches`) and her **private demands** (`/commute-demands`) survive. They are
+things she deliberately made — one she named, the other makes the platform notify her — and a button
+that erased them because she wanted her search box tidy would delete work she cannot get back.
+Returns `{ "cleared": n }`.
+
+🔴 **And searching creates neither of those.** v5: "search alone doesn't create a demand", "do not
+auto-save demand". If you want a demand, post one.
+
+> 🔒 There is no id and no parameter on either call, and nothing anywhere reads another person's
+> list. What is in here is where somebody lives and where she works, with timestamps — so it is
+> hers only, erasable in one call, and it ages out by itself after **90 days** measured from
+> `firstSearchedAt`.
 
 #### `GET /places` — signed-in
 
@@ -3429,6 +3461,7 @@ exist, and every live endpoint must be named here.
 
 | Date | Change |
 |---|---|
+| 2026-10-24 | 🕘 **Recent searches: `GET` / `DELETE /me/recent-searches`.** The chips to show on search-field focus, account-synced, with `Clear All` behind the DELETE. **Nothing creates them explicitly — running a search records it**, so there is no POST. Each entry's `criteria` is the search in the exact shape `GET /search/commutes` accepts, **properly typed** (`daysMask` is a number, not `"62"`), so a tap is "send this object straight back". Re-running the same search moves its entry to the top instead of adding one, and at most **20** are kept. 🔴 **`DELETE` clears history and nothing else**: her saved searches and her private demands survive, because those are things she deliberately made — one she named, the other makes us notify her — and a button that erased them because she wanted her search box tidy would delete work she cannot get back. 🔴 **And searching creates neither**: v5 says "search alone doesn't create a demand". 🔒 No id and no parameter on either call, and nothing reads another person's list — this is where somebody lives and works, with timestamps. It ages out by itself after **90 days**, measured from `firstSearchedAt` rather than from the last time she re-ran it. |
 | 2026-10-24 | 🧬 **The two create shortcuts: `POST /commutes/{commute}/duplicate` and `/return`.** Both answer `201` with a **new draft** and leave the original untouched. 🔴 **Neither copies a passenger** — no booking, no seat request, no waiting list, no group, no generated day — and v5 asks you to say that on the screen, because a driver who assumes her riders came with her will publish the copy believing the car is full and find out on the morning. `duplicate` carries the route, the terms, the house rules and the whole weekly pattern including per-weekday times, prices and capacity; the **date window moves** (start → tomorrow when the original's has passed, her end date kept) and comes back **`null`** when the original's window is entirely spent, so check for that and open the schedule step. `return` reverses the route **properly** — ends swapped, stops in the opposite order, and each stop's **role flipped**, because a place she picks somebody up near home in the morning is where she sets her down on the way back — flips `direction`, and deliberately carries **no schedule**: a journey home leaves at a different time of day, and a prefilled `07:05` is a wrong value in the field she is least likely to re-read. Refusals are a creation's: `422 COMMUTE_VEHICLE_UNAVAILABLE` if the car has since been replaced, `404` for somebody else's. An archived commute **can** be duplicated. ⚠️ v5 proposes these under `/driver/commutes/{id}`; every other commute-management endpoint here lives under `/commutes`. |
 | 2026-10-23 | 🙋‍♀️ **A waiting passenger can now say no to one seat, and "not today", without losing her place.** `POST /seat-offers/{offer}/decline` ends **that offer only** — her position, her membership and the driver's approval of her are untouched, and the next seat that frees is offered to her like anybody else's. New status `DECLINED`, separate from `CLOSED` on purpose: in her own history "I turned that Tuesday down" must not read like "that Tuesday fell through". `PATCH /seat-requests/{seatRequest}/availability` takes `{available: false}` and leaves her out of **today's** offers only; read it back as **`availableToday`** on any seat request. 🔴 **It clears itself at midnight** — the server stores the day she meant, in the commute's own timezone, so do not cache it across a day boundary and do not send a date (there is no date field, and a phone with a wrong clock would exclude her from a morning she meant to ride). Neither control costs anything: **no penalty, no reliability effect** — say so on the screen, because a woman who thinks "not today" is held against her will stop saying it. ⚠️ v5 proposes the toggle at `/waiting-list-memberships/{id}/availability`; there is no such resource — a membership **is** a waitlisted seat request, and the id you hold is that request's. Coming back available does **not** reopen offers that closed while she was out. New refusal: `409 SEAT_REQUEST_NOT_WAITLISTED`. |
 | 2026-10-23 | 🔴 **Bug fix, and it was emptying cars.** When a second seat freed on a day whose first fan-out had already closed, the offer went out to **nobody** — and nothing reported a failure. Three women waiting, one seat frees, one accepts, the other two are closed `TAKEN_BY_OTHER`; a second passenger then cancels the same morning and the two who are still waiting were never told, so the car left with an empty seat. The cause was a uniqueness key on (day, request) that allowed one offer per person per day **for ever** rather than one *live* offer. Keyed on the release now. **What changes for you:** `GET /seat-offers` can legitimately show **more than one offer for the same `tripId`** on one `seatRequestId` — at most one of them `OPEN`, the rest history. Key your list by offer `id`, never by `tripId`. |

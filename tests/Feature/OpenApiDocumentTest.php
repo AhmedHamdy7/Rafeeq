@@ -229,6 +229,8 @@ it('generates a document describing every /v1 route', function () {
         'GET /v1/saved-searches',
         'POST /v1/saved-searches',
         'DELETE /v1/saved-searches/{search}',
+        'GET /v1/me/recent-searches',
+        'DELETE /v1/me/recent-searches',
 
         // Phase 7 — seat requests, bookings and groups (Chapter 6, §889).
         'POST /v1/commutes/{commute}/seat-requests',

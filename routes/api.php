@@ -33,6 +33,7 @@ use App\Http\Controllers\Api\V1\PlaceController;
 use App\Http\Controllers\Api\V1\Rating\RatingController;
 use App\Http\Controllers\Api\V1\Safety\SafetyController;
 use App\Http\Controllers\Api\V1\Search\CommuteDemandController;
+use App\Http\Controllers\Api\V1\Search\RecentSearchController;
 use App\Http\Controllers\Api\V1\Search\SavedSearchController;
 use App\Http\Controllers\Api\V1\Search\SearchController;
 use App\Http\Controllers\Api\V1\Trip\AttendanceController;
@@ -430,6 +431,21 @@ Route::prefix('v1')->group(function (): void {
         Route::get('saved-searches', [SavedSearchController::class, 'index']);
         Route::post('saved-searches', [SavedSearchController::class, 'store']);
         Route::delete('saved-searches/{search}', [SavedSearchController::class, 'destroy']);
+
+        /*
+         * The chips under the search box (Feature 03 v5 §3).
+         *
+         * 🔴 Three tables and three different promises, which v5 is emphatic about keeping apart:
+         * "Clear All removes history, **not demands**", and "search alone doesn't create a demand".
+         * A recent search is a convenience nobody asked for, a saved search is one she named, and a
+         * demand is a standing instruction that makes the platform notify her. The DELETE here
+         * touches only the first.
+         *
+         * 🔒 There is no id and no parameter on either: a recent search is where somebody lives and
+         * where she works, and the only person who can reach the list is the person who made it.
+         */
+        Route::get('me/recent-searches', [RecentSearchController::class, 'index']);
+        Route::delete('me/recent-searches', [RecentSearchController::class, 'destroy']);
 
         /*
          * Seat requests and bookings (Chapter 6).

@@ -3,6 +3,7 @@
 use App\Domains\Admin\Models\AdminAction;
 use App\Domains\Identity\Models\OtpChallenge;
 use App\Domains\Identity\Models\SecurityEvent;
+use App\Domains\Matching\Models\SearchHistory;
 use App\Domains\Notification\Models\Message;
 use App\Domains\Notification\Models\Notification;
 use App\Domains\Outbox\Models\OutboxEvent;
@@ -209,6 +210,12 @@ Schedule::command('model:prune', ['--model' => [
     PaymentWebhook::class,
     SecurityEvent::class,
     AdminAction::class,
+    /*
+     * 🔒 Recent searches (90 days). On this list for a privacy reason rather than a storage one: a
+     * search history is a record of where somebody lives and works, kept only to save her typing.
+     * Measured from when a search was first made, so a route she re-runs weekly still ages out.
+     */
+    SearchHistory::class,
     /*
      * Delivered outbox events, on the same clock as the push log (14 days). Unlike every other
      * model on this list, its `prunable()` is keyed on `published_at` rather than age — an
