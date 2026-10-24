@@ -35,6 +35,15 @@ final class ScheduledTripResource extends JsonResource
             // not move it.
             'pricePerSeatPiastres' => $this->price_snapshot_piastres,
             'bookingDeadlineAt' => $this->booking_deadline_at?->toIso8601String(),
+
+            /*
+             * 🔒 `receives_requests_during_ride` is deliberately NOT here, although it is a column
+             * on this model. This shape reaches passengers — it is embedded in a booking and in the
+             * live trip — and the driver's willingness to be interrupted mid-journey is an
+             * operational setting of hers that no passenger screen has any use for. It is published
+             * on the driver-only navigation route, which is where v5 §9 puts the toggle, and
+             * returned from the PATCH that sets it.
+             */
         ];
     }
 }

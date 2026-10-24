@@ -47,6 +47,16 @@ class ScheduledTrip extends Model
             'booking_deadline_at' => 'datetime',
 
             /*
+             * Whether she is willing to be asked for a seat mid-journey (Feature 03 v5 §8's
+             * `Receive Requests During Ride`). True unless she said otherwise.
+             *
+             * ⚠️ Nothing reads it yet — the active-ride request flow it governs is not built. See
+             * the migration `add_receive_requests_to_scheduled_trips` on why her answer is
+             * collected anyway.
+             */
+            'receives_requests_during_ride' => 'boolean',
+
+            /*
              * The navigation itinerary for this day (Feature 03 v5 §3).
              *
              * Two versions, not one: `itinerary_version` is bumped by anything that changes which

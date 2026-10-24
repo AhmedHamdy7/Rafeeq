@@ -50,12 +50,27 @@ final class NavigationRouteController extends Controller
         // Re-read: the build writes the totals onto the trip, and the instance above predates it.
         $occurrence->refresh();
 
-        return ApiResponse::success(NavigationRouteResource::confirmed(
-            $stops,
-            $occurrence->itinerary_polyline,
-            $occurrence->itinerary_distance_meters,
-            $occurrence->itinerary_duration_seconds,
-        ));
+        return ApiResponse::success([
+            ...NavigationRouteResource::confirmed(
+                $stops,
+                $occurrence->itinerary_polyline,
+                $occurrence->itinerary_distance_meters,
+                $occurrence->itinerary_duration_seconds,
+            ),
+
+            /*
+             * Her `Receive Requests During Ride` answer for this morning (Feature 03 v5 §9: the
+             * toggle is "accessible without interrupting navigation"), so the navigation screen can
+             * render the switch it owns without a second call.
+             *
+             * 🔒 Published here rather than on the shared trip shape, which reaches passengers
+             * through a booking: whether she is willing to be interrupted is an operational setting
+             * of hers that no passenger screen has any use for.
+             *
+             * ⚠️ Nothing acts on it yet — see `PATCH /v1/trips/{trip}/receive-requests`.
+             */
+            'receivesRequestsDuringRide' => (bool) $occurrence->receives_requests_during_ride,
+        ]);
     }
 
     /**

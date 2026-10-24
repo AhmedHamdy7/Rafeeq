@@ -185,6 +185,7 @@ it('generates a document describing every /v1 route', function () {
         'POST /v1/bookings/{booking}/end-early',
         'POST /v1/trips/{trip}/drop-off',
         'POST /v1/trips/{trip}/still-driving',
+        'PATCH /v1/trips/{trip}/receive-requests',
         'GET /v1/trips/{trip}/wait-timers',
         'POST /v1/trips/{trip}/wait-timers',
         'POST /v1/trips/{trip}/wait-timers/{timer}/extend',

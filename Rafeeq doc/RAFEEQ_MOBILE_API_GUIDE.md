@@ -14,7 +14,7 @@
 >
 > **Base URL:** `{host}/api/v1` · **Auth:** bearer token · **Format:** JSON only.
 
-**Last updated:** 2026-10-23 · **162 endpoints live** · Phases 0–7, 9 and 11 complete · 10, 12 and 13 all but a decision each
+**Last updated:** 2026-10-23 · **163 endpoints live** · Phases 0–7, 9 and 11 complete · 10, 12 and 13 all but a decision each
 
 ---
 
@@ -22,7 +22,7 @@
 
 ### What is ready
 
-**162 endpoints live** and tested, across the 47 designed screens:
+**163 endpoints live** and tested, across the 47 designed screens:
 
 | | Count | Covers |
 |---|---|---|
@@ -789,6 +789,7 @@ fails if this list and the running routes ever disagree in either direction.
 | `POST /trips/{trip}/no-show` | 4.9 Live trip |
 | `POST /trips/{trip}/drop-off` | 4.9 Live trip |
 | `POST /trips/{trip}/still-driving` | 4.9 Live trip |
+| `PATCH /trips/{trip}/receive-requests` | 4.9 Live trip |
 | `POST /bookings/{booking}/end-early` | 4.9 Live trip |
 | `POST /trips/{trip}/start` | 4.9 Live trip |
 | `POST /trips/{trip}/status` | 4.9 Live trip |
@@ -2438,6 +2439,37 @@ Show it once the run is past its promised arrival, beside `complete`. Response c
 > live location while she is moving; closing one with a `PENDING` row would freeze a decision nobody
 > made.
 
+#### `PATCH /trips/{trip}/receive-requests` — active, profile complete, driver only
+
+`Receive Requests During Ride`, for **one morning**. Body: `{ "receiveRequests": true | false }`.
+Answers `{ "tripId", "receivesRequestsDuringRide" }`.
+
+⚠️ 🔴 **Nothing acts on this yet, and you should not build a screen that implies otherwise.** The
+mid-journey seat request it governs — v5's "separate incoming active-ride requests expire in 3
+minutes" — **is not built**. v5 leaves its hardest part open ("reachability depends on actual route
+progress and predicted ETA"), and its own out-of-scope note asks for exactly what this is instead:
+*"implement durable states/hooks, not speculative behavior."*
+
+So why ship the toggle now? Because the default is **yes**, so every driver's stored answer already
+matches the behaviour she gets today — nothing can be wrong. The only answer that could ever be
+broken is "no", and a "no" first collected on the day the feature launches would mean the first
+mid-journey request reaching a driver who had already refused them in an earlier version of the app.
+
+| | |
+|---|---|
+| Default | **`true`** on every day, as v5 specifies. |
+| Scope | **This day only.** Tomorrow is a separate answer — whether she can take another passenger depends on who is aboard this morning and how late she is. |
+| Where to read it | **`receivesRequestsDuringRide`** on `GET /driver/commute-occurrences/{trip}/navigation-route`, which is where v5 §9 puts the toggle ("accessible without interrupting navigation"). |
+| When it is refused | `409` with `error.fields.tripStatus` on a day that is `COMPLETED` or `CANCELLED` — a toggle on a finished morning changes nothing. `404` for a day that is not hers. |
+
+> 🔒 It is **not** on the trip shape inside a booking, and that is deliberate: whether a driver is
+> willing to be interrupted is an operational setting of hers, and no passenger screen has any use
+> for it.
+
+⚠️ v5 proposes this at `/driver/commutes/{id}/receive-requests`, where `{id}` is an occurrence.
+Occurrences are `/trips/{trip}` throughout this API, as `start`, `complete` and `still-driving`
+already are.
+
 #### `POST /bookings/{booking}/end-early` — active, profile complete, **passenger only**
 
 🔴 **The safety exit.** She is in the car and wants out before her drop-off.
@@ -3498,6 +3530,7 @@ exist, and every live endpoint must be named here.
 
 | Date | Change |
 |---|---|
+| 2026-10-24 | 🔕 **`PATCH /trips/{trip}/receive-requests`** — `Receive Requests During Ride`, per morning, default **`true`**. ⚠️ 🔴 **Nothing acts on it yet and you should not build a screen that implies otherwise**: the mid-journey seat request it governs is not built, because v5 leaves its hardest part open ("reachability depends on actual route progress and predicted ETA") and its own out-of-scope note asks for "durable states/hooks, not speculative behavior". It ships now because the default is yes — so every driver's stored answer already matches today's behaviour, and the only answer that could be broken is "no", which first collected on launch day would mean the first mid-journey request reaching a driver who had already refused. Read it back as **`receivesRequestsDuringRide`** on `GET /driver/commute-occurrences/{trip}/navigation-route`, where v5 §9 puts the toggle. Scoped to **one day**; `409` on a finished morning; `404` for a day that is not hers. 🔒 Deliberately **not** on the trip shape inside a booking — whether a driver is willing to be interrupted is hers, and no passenger screen needs it. |
 | 2026-10-24 | 💬 **Chat on a seat request, before there is any seat: `GET` / `POST /seat-requests/{seatRequest}/messages`.** v5 scopes chat to the request, the booking or the waiting list, and this was the missing one — a driver weighing a request could not ask "could you be at the second gate instead?", and a passenger could not ask anything at all about the car she is about to get into. Same shapes, same refusals, same rate limit as the booking thread. 🔴 **No window**: it is open while the request is a live question (`PENDING` · `COUNTEROFFERED` · `WAITLISTED`), so read **`meta.requestStatus`** and `meta.canSend` rather than `opensAt`/`closesAt`. It **stays open through a counteroffer**, which is when it matters most, and while she is on the waiting list. The moment the request is answered it closes with `409 CHAT_NOT_OPEN` carrying the status — **the history stays readable, show it**. An approved request hands over to the booking's own thread, so keep the entry point on the request card ("no Messages tab"). ⚠️ 🔴 **Chat is not consent** — v5 §2 in terms, and it is a rule about your UI too: two people agreeing a corner in messages changes **nothing**, the meeting point moves only through a counteroffer, and a dispute is settled against that. Do not add an "agree" affordance to a message. 🔒 `POST /messages/{message}/report` now reaches a request thread as well — the thread where it matters most, since it is the one place two people talk with no relationship approved between them; it used to require a booking and would have refused her. |
 | 2026-10-24 | 🕘 **Recent searches: `GET` / `DELETE /me/recent-searches`.** The chips to show on search-field focus, account-synced, with `Clear All` behind the DELETE. **Nothing creates them explicitly — running a search records it**, so there is no POST. Each entry's `criteria` is the search in the exact shape `GET /search/commutes` accepts, **properly typed** (`daysMask` is a number, not `"62"`), so a tap is "send this object straight back". Re-running the same search moves its entry to the top instead of adding one, and at most **20** are kept. 🔴 **`DELETE` clears history and nothing else**: her saved searches and her private demands survive, because those are things she deliberately made — one she named, the other makes us notify her — and a button that erased them because she wanted her search box tidy would delete work she cannot get back. 🔴 **And searching creates neither**: v5 says "search alone doesn't create a demand". 🔒 No id and no parameter on either call, and nothing reads another person's list — this is where somebody lives and works, with timestamps. It ages out by itself after **90 days**, measured from `firstSearchedAt` rather than from the last time she re-ran it. |
 | 2026-10-24 | 🧬 **The two create shortcuts: `POST /commutes/{commute}/duplicate` and `/return`.** Both answer `201` with a **new draft** and leave the original untouched. 🔴 **Neither copies a passenger** — no booking, no seat request, no waiting list, no group, no generated day — and v5 asks you to say that on the screen, because a driver who assumes her riders came with her will publish the copy believing the car is full and find out on the morning. `duplicate` carries the route, the terms, the house rules and the whole weekly pattern including per-weekday times, prices and capacity; the **date window moves** (start → tomorrow when the original's has passed, her end date kept) and comes back **`null`** when the original's window is entirely spent, so check for that and open the schedule step. `return` reverses the route **properly** — ends swapped, stops in the opposite order, and each stop's **role flipped**, because a place she picks somebody up near home in the morning is where she sets her down on the way back — flips `direction`, and deliberately carries **no schedule**: a journey home leaves at a different time of day, and a prefilled `07:05` is a wrong value in the field she is least likely to re-read. Refusals are a creation's: `422 COMMUTE_VEHICLE_UNAVAILABLE` if the car has since been replaced, `404` for somebody else's. An archived commute **can** be duplicated. ⚠️ v5 proposes these under `/driver/commutes/{id}`; every other commute-management endpoint here lives under `/commutes`. |

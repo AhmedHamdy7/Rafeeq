@@ -18,6 +18,7 @@ use App\Http\Controllers\Controller;
 use App\Http\OpenApi\ApiErrors;
 use App\Http\Requests\Trip\AdvanceTripRequest;
 use App\Http\Requests\Trip\CancelTripDayRequest;
+use App\Http\Requests\Trip\SetReceiveRequestsRequest;
 use App\Http\Resources\ScheduledTripResource;
 use App\Http\Resources\TripSessionResource;
 use App\Http\Responses\ApiResponse;
@@ -165,6 +166,63 @@ final class TripController extends Controller
     /**
      * A day of the caller's OWN commute. 404 for anybody else's, drivers included.
      */
+    /**
+     * PATCH /v1/trips/{trip}/receive-requests — `Receive Requests During Ride` for one morning
+     * (Feature 03 v5 §8, §9).
+     *
+     * ⚠️ **Nothing acts on this yet, and the guide says so.** The mid-journey seat request it
+     * governs is not built: v5 leaves its hardest part open — *"on active trip, reachability depends
+     * on actual route progress and predicted ETA"* — and building the flow would mean inventing
+     * that model. v5's own out-of-scope note asks for the opposite: *"implement durable
+     * states/hooks, not speculative behavior"*, which is exactly what this is.
+     *
+     * 🔴 Her answer is collected now rather than when the feature ships, and the direction matters:
+     * the default is **yes**, so every driver's stored state already matches the behaviour she gets
+     * today. The only answer that could be broken is "no" — and a "no" first asked for on the day
+     * the feature launches would mean the first mid-journey request reaching a driver who had
+     * already refused them.
+     *
+     * **Per occurrence, as v5 specifies.** Whether she can take another passenger depends on this
+     * morning — who is aboard, how late she is, where she has got to — so a commute-wide switch
+     * would make her answer for a quiet Thursday on the strength of a bad Tuesday.
+     *
+     * ⚠️ v5 proposes this at `/driver/commutes/{id}/receive-requests`, where `{id}` is an
+     * occurrence; occurrences are `/trips/{trip}` throughout this API, as `start`, `complete` and
+     * `still-driving` already are.
+     */
+    #[ApiErrors(ErrorCode::NotFound, ErrorCode::TripNotStarted)]
+    public function receiveRequests(SetReceiveRequestsRequest $request, string $trip): JsonResponse
+    {
+        $day = $this->driven($request, $trip);
+
+        /*
+         * Refused on a morning that is over. A toggle on a finished or cancelled day changes
+         * nothing, and answering OK to it would tell a client it had been applied.
+         */
+        if ($day->status->isTerminal()) {
+            throw DomainException::of(ErrorCode::TripNotStarted, fields: [
+                'tripStatus' => [strtoupper($day->status->value)],
+            ]);
+        }
+
+        // `forceFill`: a fillable flag on this model would let a request that writes a seat count
+        // also write the driver's answer about being interrupted.
+        $day->forceFill([
+            'receives_requests_during_ride' => (bool) $request->validated('receiveRequests'),
+        ])->save();
+
+        /*
+         * 🔒 Its own small answer rather than the trip shape, which does not carry this flag on
+         * purpose: that shape is embedded in a booking and reaches passengers, and her willingness
+         * to be interrupted mid-journey is hers. The driver reads it back on the navigation route,
+         * which is where the toggle lives.
+         */
+        return ApiResponse::success([
+            'tripId' => (string) $day->getKey(),
+            'receivesRequestsDuringRide' => (bool) $day->receives_requests_during_ride,
+        ]);
+    }
+
     private function driven(Request $request, string $tripId): ScheduledTrip
     {
         return ScheduledTrip::query()

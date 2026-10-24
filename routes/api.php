@@ -667,6 +667,18 @@ Route::prefix('v1')->group(function (): void {
          */
         Route::post('trips/{trip}/still-driving', [TripController::class, 'stillDriving']);
 
+        /*
+         * `Receive Requests During Ride`, per morning (Feature 03 v5 §8, §9).
+         *
+         * ⚠️ **Nothing acts on it yet.** The mid-journey seat request it governs is not built —
+         * v5 leaves its hardest part open ("reachability depends on actual route progress and
+         * predicted ETA"), and its own out-of-scope note asks for "durable states/hooks, not
+         * speculative behavior". Her answer is collected now because the default is YES: a "no"
+         * first asked for on the day the feature ships would mean the first mid-journey request
+         * reaching a driver who had already refused them.
+         */
+        Route::patch('trips/{trip}/receive-requests', [TripController::class, 'receiveRequests']);
+
         // "Cancel today" — one day off, before it starts; the commute stands (screen 23).
         Route::post('trips/{trip}/cancel', [TripController::class, 'cancel']);
 
