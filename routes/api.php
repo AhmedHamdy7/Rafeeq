@@ -727,6 +727,25 @@ Route::prefix('v1')->group(function (): void {
         Route::get('bookings/{booking}/messages', [ChatController::class, 'index']);
         Route::post('bookings/{booking}/messages', [ChatController::class, 'store'])
             ->middleware('throttle:chat-messages');
+
+        /*
+         * The same chat on a seat request nobody has answered yet (Feature 03 v5: chat is scoped to
+         * the request, the booking or the waiting list).
+         *
+         * 🔴 The exchange that decides a booking, and it had nowhere to happen: a driver weighing a
+         * request could not ask "could you be at the second gate instead?", and a passenger could
+         * not ask anything at all about the car she is about to get into.
+         *
+         * ⚠️ And it is NOT consent. v5 §2 says so in terms — the meeting point moves only through a
+         * counteroffer, which is structured and recorded, and a dispute is settled against that
+         * rather than against a thread.
+         *
+         * Same rate limit as the booking thread, because it is the same risk.
+         */
+        Route::get('seat-requests/{seatRequest}/messages', [ChatController::class, 'requestIndex']);
+        Route::post('seat-requests/{seatRequest}/messages', [ChatController::class, 'requestStore'])
+            ->middleware('throttle:chat-messages');
+
         Route::post('messages/{message}/report', [ChatController::class, 'report'])
             ->middleware('throttle:safety-reports');
 

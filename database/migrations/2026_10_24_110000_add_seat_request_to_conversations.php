@@ -7,7 +7,7 @@ use Illuminate\Support\Facades\Schema;
 /**
  * Chat on a seat request, before there is any booking (Feature 03 v5).
  *
- * > *"No Messages tab; chat scoped to **request**/booking/waiting-list."*
+ * > *"No Messages tab; chat scoped to request / booking / waiting-list."*
  *
  * 🔴 **The thread has to exist before the seat does.** Until now a conversation needed a confirmed
  * booking, which put the one exchange that decides a booking out of reach: a driver weighing a

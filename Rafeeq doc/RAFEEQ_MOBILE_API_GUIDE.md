@@ -14,7 +14,7 @@
 >
 > **Base URL:** `{host}/api/v1` · **Auth:** bearer token · **Format:** JSON only.
 
-**Last updated:** 2026-10-23 · **160 endpoints live** · Phases 0–7, 9 and 11 complete · 10, 12 and 13 all but a decision each
+**Last updated:** 2026-10-23 · **162 endpoints live** · Phases 0–7, 9 and 11 complete · 10, 12 and 13 all but a decision each
 
 ---
 
@@ -22,7 +22,7 @@
 
 ### What is ready
 
-**160 endpoints live** and tested, across the 47 designed screens:
+**162 endpoints live** and tested, across the 47 designed screens:
 
 | | Count | Covers |
 |---|---|---|
@@ -836,6 +836,8 @@ fails if this list and the running routes ever disagree in either direction.
 | `PATCH /notifications/preferences` | 4.14 Notifications |
 | `GET /bookings/{booking}/messages` | 4.15 Trip chat |
 | `POST /bookings/{booking}/messages` | 4.15 Trip chat |
+| `GET /seat-requests/{seatRequest}/messages` | 4.15 Trip chat |
+| `POST /seat-requests/{seatRequest}/messages` | 4.15 Trip chat |
 | `POST /messages/{message}/report` | 4.15 Trip chat |
 
 One route is deliberately **not** in this index and **not** in the OpenAPI document: `/s/{token}`,
@@ -3249,11 +3251,46 @@ blocked. Rate-limited per sender (`429` with `Retry-After`).
 The other person gets a `chat_message` notification (4.14) that says **who** wrote, never **what** —
 the body would otherwise appear on a lock screen.
 
+#### `GET` / `POST /seat-requests/{seatRequest}/messages` — the same chat, before there is a seat
+
+A second thread, on the **seat request**, so the two of them can talk while the driver is still
+deciding. v5 scopes chat to the request, the booking or the waiting list — and this was the missing
+one: a driver weighing a request could not ask *"could you be at the second gate instead?"*, and a
+passenger could not ask anything at all about the car she is about to get into.
+
+Same shapes, same refusals, same rate limit as the booking thread above. Two differences:
+
+| | |
+|---|---|
+| **When it is open** | While the request is a **live question** — `PENDING`, `COUNTEROFFERED` or `WAITLISTED`. There is no window and no `opensAt` / `closesAt`: read **`meta.requestStatus`** and `meta.canSend`. |
+| **When it closes** | The moment the request is answered. `409 CHAT_NOT_OPEN` with the status in `error.fields.status`. **The history stays readable** — show it. |
+
+🔴 **It stays open through a counteroffer**, which is the moment it matters most: she has a decision
+to make about a point she did not choose, and the only person who can explain it is the one who
+proposed it. It also stays open while she is on the **waiting list** — the driver has already
+approved her as somebody she would carry.
+
+🔒 **A refusal closes it.** A driver who said no has said everything she owes, and a channel that
+outlived her refusal would be a way to keep talking to somebody who declined to carry you.
+
+⚠️ **An approved request closes its thread and the booking's thread takes over** — a different
+conversation with the 24-hour window above. Do not expect the request history to appear there; keep
+the entry point on the request card, as v5's "no Messages tab" implies.
+
+⚠️ 🔴 **Chat is not consent.** v5 §2 says it in terms, and it is a rule about your UI as much as
+ours: two people agreeing a corner in messages changes **nothing**. The meeting point moves only
+through a counteroffer (4.7), which is structured and recorded — and a dispute is settled against
+that, never against a thread. Do not add an "agree" affordance to a message.
+
 #### `POST /messages/{message}/report` — `{ "reason": "..." }`
 
 Only the **recipient** can report a message (404 otherwise). It files an ordinary report with the
 safety team, quoting the message, and returns `{ "incidentId" }` — the report then shows in
 `GET /incidents` like any other, with its status and the team's answer.
+
+🔒 **This works on a request thread as well as a booking's**, and it is the thread where it matters
+most: it is the one place two people talk with no relationship approved between them. On a request
+report the incident simply carries no booking.
 
 ## 4.16 Money (screen 34, the group's `payments` tab)
 
@@ -3461,6 +3498,7 @@ exist, and every live endpoint must be named here.
 
 | Date | Change |
 |---|---|
+| 2026-10-24 | 💬 **Chat on a seat request, before there is any seat: `GET` / `POST /seat-requests/{seatRequest}/messages`.** v5 scopes chat to the request, the booking or the waiting list, and this was the missing one — a driver weighing a request could not ask "could you be at the second gate instead?", and a passenger could not ask anything at all about the car she is about to get into. Same shapes, same refusals, same rate limit as the booking thread. 🔴 **No window**: it is open while the request is a live question (`PENDING` · `COUNTEROFFERED` · `WAITLISTED`), so read **`meta.requestStatus`** and `meta.canSend` rather than `opensAt`/`closesAt`. It **stays open through a counteroffer**, which is when it matters most, and while she is on the waiting list. The moment the request is answered it closes with `409 CHAT_NOT_OPEN` carrying the status — **the history stays readable, show it**. An approved request hands over to the booking's own thread, so keep the entry point on the request card ("no Messages tab"). ⚠️ 🔴 **Chat is not consent** — v5 §2 in terms, and it is a rule about your UI too: two people agreeing a corner in messages changes **nothing**, the meeting point moves only through a counteroffer, and a dispute is settled against that. Do not add an "agree" affordance to a message. 🔒 `POST /messages/{message}/report` now reaches a request thread as well — the thread where it matters most, since it is the one place two people talk with no relationship approved between them; it used to require a booking and would have refused her. |
 | 2026-10-24 | 🕘 **Recent searches: `GET` / `DELETE /me/recent-searches`.** The chips to show on search-field focus, account-synced, with `Clear All` behind the DELETE. **Nothing creates them explicitly — running a search records it**, so there is no POST. Each entry's `criteria` is the search in the exact shape `GET /search/commutes` accepts, **properly typed** (`daysMask` is a number, not `"62"`), so a tap is "send this object straight back". Re-running the same search moves its entry to the top instead of adding one, and at most **20** are kept. 🔴 **`DELETE` clears history and nothing else**: her saved searches and her private demands survive, because those are things she deliberately made — one she named, the other makes us notify her — and a button that erased them because she wanted her search box tidy would delete work she cannot get back. 🔴 **And searching creates neither**: v5 says "search alone doesn't create a demand". 🔒 No id and no parameter on either call, and nothing reads another person's list — this is where somebody lives and works, with timestamps. It ages out by itself after **90 days**, measured from `firstSearchedAt` rather than from the last time she re-ran it. |
 | 2026-10-24 | 🧬 **The two create shortcuts: `POST /commutes/{commute}/duplicate` and `/return`.** Both answer `201` with a **new draft** and leave the original untouched. 🔴 **Neither copies a passenger** — no booking, no seat request, no waiting list, no group, no generated day — and v5 asks you to say that on the screen, because a driver who assumes her riders came with her will publish the copy believing the car is full and find out on the morning. `duplicate` carries the route, the terms, the house rules and the whole weekly pattern including per-weekday times, prices and capacity; the **date window moves** (start → tomorrow when the original's has passed, her end date kept) and comes back **`null`** when the original's window is entirely spent, so check for that and open the schedule step. `return` reverses the route **properly** — ends swapped, stops in the opposite order, and each stop's **role flipped**, because a place she picks somebody up near home in the morning is where she sets her down on the way back — flips `direction`, and deliberately carries **no schedule**: a journey home leaves at a different time of day, and a prefilled `07:05` is a wrong value in the field she is least likely to re-read. Refusals are a creation's: `422 COMMUTE_VEHICLE_UNAVAILABLE` if the car has since been replaced, `404` for somebody else's. An archived commute **can** be duplicated. ⚠️ v5 proposes these under `/driver/commutes/{id}`; every other commute-management endpoint here lives under `/commutes`. |
 | 2026-10-23 | 🙋‍♀️ **A waiting passenger can now say no to one seat, and "not today", without losing her place.** `POST /seat-offers/{offer}/decline` ends **that offer only** — her position, her membership and the driver's approval of her are untouched, and the next seat that frees is offered to her like anybody else's. New status `DECLINED`, separate from `CLOSED` on purpose: in her own history "I turned that Tuesday down" must not read like "that Tuesday fell through". `PATCH /seat-requests/{seatRequest}/availability` takes `{available: false}` and leaves her out of **today's** offers only; read it back as **`availableToday`** on any seat request. 🔴 **It clears itself at midnight** — the server stores the day she meant, in the commute's own timezone, so do not cache it across a day boundary and do not send a date (there is no date field, and a phone with a wrong clock would exclude her from a morning she meant to ride). Neither control costs anything: **no penalty, no reliability effect** — say so on the screen, because a woman who thinks "not today" is held against her will stop saying it. ⚠️ v5 proposes the toggle at `/waiting-list-memberships/{id}/availability`; there is no such resource — a membership **is** a waitlisted seat request, and the id you hold is that request's. Coming back available does **not** reopen offers that closed while she was out. New refusal: `409 SEAT_REQUEST_NOT_WAITLISTED`. |
