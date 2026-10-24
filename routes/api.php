@@ -247,6 +247,22 @@ Route::prefix('v1')->group(function (): void {
             Route::post('{commute}/publish', [CommuteController::class, 'publish']);
             Route::post('{commute}/pause', [CommuteController::class, 'pause']);
             Route::post('{commute}/resume', [CommuteController::class, 'resume']);
+
+            /*
+             * The two create shortcuts (Feature 03 v5 §4, §5).
+             *
+             * 🔴 Both answer with a DRAFT carrying configuration and nobody else — v5: "explain
+             * neither shortcut copies passengers/bookings/waiting list". The danger is that every
+             * booking, seat request and waiting-list row hangs off the commute being copied, so a
+             * shortcut written as "copy the commute and its relations" would carry real passengers
+             * into a journey they never agreed to.
+             *
+             * ⚠️ v5 proposes these under `/driver/commutes/{id}`. Every other commute-management
+             * endpoint here lives under `/commutes`, and one resource should not answer on two
+             * prefixes.
+             */
+            Route::post('{commute}/duplicate', [CommuteController::class, 'duplicate']);
+            Route::post('{commute}/return', [CommuteController::class, 'returnTrip']);
         });
 
     /*

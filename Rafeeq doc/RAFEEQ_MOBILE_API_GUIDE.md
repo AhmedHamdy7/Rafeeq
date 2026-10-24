@@ -14,7 +14,7 @@
 >
 > **Base URL:** `{host}/api/v1` · **Auth:** bearer token · **Format:** JSON only.
 
-**Last updated:** 2026-10-23 · **156 endpoints live** · Phases 0–7, 9 and 11 complete · 10, 12 and 13 all but a decision each
+**Last updated:** 2026-10-23 · **158 endpoints live** · Phases 0–7, 9 and 11 complete · 10, 12 and 13 all but a decision each
 
 ---
 
@@ -22,7 +22,7 @@
 
 ### What is ready
 
-**156 endpoints live** and tested, across the 47 designed screens:
+**158 endpoints live** and tested, across the 47 designed screens:
 
 | | Count | Covers |
 |---|---|---|
@@ -719,11 +719,13 @@ fails if this list and the running routes ever disagree in either direction.
 | `GET /commutes/{commute}` | 4.5 Commutes (driver) |
 | `PATCH /commutes/{commute}` | 4.5 Commutes (driver) |
 | `DELETE /commutes/{commute}` | 4.5 Commutes (driver) |
+| `POST /commutes/{commute}/duplicate` | 4.5 Commutes (driver) |
 | `POST /commutes/{commute}/pause` | 4.5 Commutes (driver) |
 | `POST /commutes/{commute}/pickup-preview` | 4.5 Commutes (driver) |
 | `GET /commutes/{commute}/price-suggestion` | 4.5 Commutes (driver) |
 | `POST /commutes/{commute}/publish` | 4.5 Commutes (driver) |
 | `POST /commutes/{commute}/resume` | 4.5 Commutes (driver) |
+| `POST /commutes/{commute}/return` | 4.5 Commutes (driver) |
 | `PUT /commutes/{commute}/route` | 4.5 Commutes (driver) |
 | `PUT /commutes/{commute}/schedule` | 4.5 Commutes (driver) |
 | `POST /commutes/{commute}/seat-requests` | 4.5 Commutes (driver) |
@@ -1502,6 +1504,43 @@ go back on your waiting list."*
 > her licence lapses or her vehicle is suspended. The passenger's notification is deliberately
 > passive — *"X's commute has been paused"* — because naming the real cause would tell her
 > passengers about her documents.
+
+#### `POST /commutes/{commute}/duplicate` · `/return` — verified
+
+The two create shortcuts on the commute menu. Both answer **`201`** with a **new draft** and leave
+the original exactly as it was.
+
+🔴 **Neither copies a single passenger** — no booking, no seat request, no waiting list, no group, no
+generated day. v5 asks us to say this on the screen, and it is worth saying: a driver who assumes her
+riders came with her will publish the copy believing her car is full, and find out on the morning.
+
+| | `duplicate` | `return` |
+|---|---|---|
+| Route | Identical. | **Reversed** — ends swapped, advertised stops in the opposite order, and each stop's **role flipped**. A place she picks somebody up near home on the way to work is where she sets her down on the way back. |
+| `direction` | Same. | Flipped (`to_work` ⇄ `to_home`). |
+| Terms, preferences | Copied: seats, price, detour and walk limits, audience, trust level, custom-pickup, house rules. | Same. |
+| Schedule | Copied, **window moved** — see below. | **`null`.** |
+| Status | `DRAFT`. | `DRAFT`. |
+
+⚠️ **`return` deliberately prefills no times.** A journey home leaves at a different time of day, and
+a prefilled `07:05` is a wrong value in the field she is least likely to re-read, because it already
+looks filled in. v5: "reverse route prefill **only**". Open the schedule step.
+
+⚠️ **`duplicate` moves the date window.** A schedule may not start in the past, so the start becomes
+**tomorrow** when the original's has gone by; the end date she chose is kept. If the original's window
+is entirely in the past there is nothing left to carry and `schedule` comes back **`null`** — check
+for that and send her to the schedule step.
+
+Both also leave `corridor`, `routePolyline`, `routeDistanceMeters` and `routeDurationSeconds` empty:
+those are computed at publish, and copying them would describe a different journey.
+
+Refusals are a creation's, because that is what this is: `422 COMMUTE_VEHICLE_UNAVAILABLE` if the car
+has since been replaced or suspended, `422 DRIVER_NOT_ELIGIBLE` / `LICENCE_EXPIRED` for her own
+standing, `404` for somebody else's commute. An **archived** commute can be duplicated — reviving
+last term's pattern is one of the main reasons to reach for the button.
+
+⚠️ v5 proposes these under `/driver/commutes/{id}`; every other commute-management endpoint here
+lives under `/commutes`, so these do too.
 
 #### `DELETE /commutes/{commute}` — verified
 
@@ -3390,6 +3429,7 @@ exist, and every live endpoint must be named here.
 
 | Date | Change |
 |---|---|
+| 2026-10-24 | 🧬 **The two create shortcuts: `POST /commutes/{commute}/duplicate` and `/return`.** Both answer `201` with a **new draft** and leave the original untouched. 🔴 **Neither copies a passenger** — no booking, no seat request, no waiting list, no group, no generated day — and v5 asks you to say that on the screen, because a driver who assumes her riders came with her will publish the copy believing the car is full and find out on the morning. `duplicate` carries the route, the terms, the house rules and the whole weekly pattern including per-weekday times, prices and capacity; the **date window moves** (start → tomorrow when the original's has passed, her end date kept) and comes back **`null`** when the original's window is entirely spent, so check for that and open the schedule step. `return` reverses the route **properly** — ends swapped, stops in the opposite order, and each stop's **role flipped**, because a place she picks somebody up near home in the morning is where she sets her down on the way back — flips `direction`, and deliberately carries **no schedule**: a journey home leaves at a different time of day, and a prefilled `07:05` is a wrong value in the field she is least likely to re-read. Refusals are a creation's: `422 COMMUTE_VEHICLE_UNAVAILABLE` if the car has since been replaced, `404` for somebody else's. An archived commute **can** be duplicated. ⚠️ v5 proposes these under `/driver/commutes/{id}`; every other commute-management endpoint here lives under `/commutes`. |
 | 2026-10-23 | 🙋‍♀️ **A waiting passenger can now say no to one seat, and "not today", without losing her place.** `POST /seat-offers/{offer}/decline` ends **that offer only** — her position, her membership and the driver's approval of her are untouched, and the next seat that frees is offered to her like anybody else's. New status `DECLINED`, separate from `CLOSED` on purpose: in her own history "I turned that Tuesday down" must not read like "that Tuesday fell through". `PATCH /seat-requests/{seatRequest}/availability` takes `{available: false}` and leaves her out of **today's** offers only; read it back as **`availableToday`** on any seat request. 🔴 **It clears itself at midnight** — the server stores the day she meant, in the commute's own timezone, so do not cache it across a day boundary and do not send a date (there is no date field, and a phone with a wrong clock would exclude her from a morning she meant to ride). Neither control costs anything: **no penalty, no reliability effect** — say so on the screen, because a woman who thinks "not today" is held against her will stop saying it. ⚠️ v5 proposes the toggle at `/waiting-list-memberships/{id}/availability`; there is no such resource — a membership **is** a waitlisted seat request, and the id you hold is that request's. Coming back available does **not** reopen offers that closed while she was out. New refusal: `409 SEAT_REQUEST_NOT_WAITLISTED`. |
 | 2026-10-23 | 🔴 **Bug fix, and it was emptying cars.** When a second seat freed on a day whose first fan-out had already closed, the offer went out to **nobody** — and nothing reported a failure. Three women waiting, one seat frees, one accepts, the other two are closed `TAKEN_BY_OTHER`; a second passenger then cancels the same morning and the two who are still waiting were never told, so the car left with an empty seat. The cause was a uniqueness key on (day, request) that allowed one offer per person per day **for ever** rather than one *live* offer. Keyed on the release now. **What changes for you:** `GET /seat-offers` can legitimately show **more than one offer for the same `tripId`** on one `seatRequestId` — at most one of them `OPEN`, the rest history. Key your list by offer `id`, never by `tripId`. |
 | 2026-10-23 | 📡 **The seat race is now live on the socket — and every message carries an `id` you must deduplicate on.** Section 6.2 is new: four events (`seat.opened`, `offer.accepted`, `offer.closed`, `booking.cancelled`) on two new private channels, `private-occurrence.{scheduledTripId}` for a day of a commute and `private-user.{userId}` for news that is yours alone. 🔴 **The deduplication is a requirement, not a nicety.** Each event is written into a table in the same transaction as the fact and sent by a separate pass, which is what guarantees you are never told about something that did not happen — and the price is that a crash mid-send can deliver the same event twice. Keep the last few hundred ids and drop a repeat. 🔒 The occurrence channel admits the driver, anybody holding a live booking on that day, **and anybody still waiting for a seat on it** — a woman on the waiting list has no booking at all and is exactly who "a seat opened" is for. `offer.closed` goes to her **own** channel, because putting "you did not get it" on the day's channel would tell everybody on the commute which of them lost. ⚠️ **Everything else is still inbox-only** — a new request, a counteroffer, an approval, a pickup arrival, a proposal revision, an SOS. Nothing is lost; it is simply not live yet. Keep polling `GET /notifications`. |

@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Api\V1\Driver;
 
 use App\Domains\Commute\Actions\ChangeCommuteStatusAction;
 use App\Domains\Commute\Actions\CreateCommuteOfferAction;
+use App\Domains\Commute\Actions\DuplicateCommuteOfferAction;
 use App\Domains\Commute\Actions\PublishCommuteOfferAction;
 use App\Domains\Commute\Actions\ReviseCommuteOfferAction;
 use App\Domains\Commute\Actions\SaveCommuteRouteAction;
@@ -199,6 +200,71 @@ final class CommuteController extends Controller
         return ApiResponse::success(new CommuteOfferResource(
             $offer->load(['locations', 'schedule', 'rules'])
         ));
+    }
+
+    /**
+     * POST /v1/commutes/{commute}/duplicate — the same journey again (Feature 03 v5 §4, §5).
+     *
+     * 🔴 **It copies configuration and nobody else.** No booking, no seat request, no waiting list,
+     * no group, no generated day — the answer is a **draft** with the route, the terms, the
+     * preferences and the weekly pattern, and nothing in it that belongs to a passenger. Say so on
+     * the screen: v5 asks us to "explain neither shortcut copies passengers/bookings/waiting list",
+     * and a driver who assumes otherwise will publish believing her riders came with her.
+     *
+     * ⚠️ The date window moves: the start becomes **tomorrow** if the original's has passed, because
+     * a schedule may not start in the past and a literal copy would be a draft she could not
+     * publish. A window with nothing left in it carries no schedule at all — check `schedule` on
+     * the response and send her to the schedule step when it is null.
+     *
+     * ⚠️ v5 proposes this at `/driver/commutes/{id}/duplicate`. Every other commute-management
+     * endpoint in this API lives under `/commutes`, so this does too.
+     */
+    #[ApiErrors(
+        ErrorCode::DriverNotEligible,
+        ErrorCode::LicenceExpired,
+        ErrorCode::CommuteVehicleUnavailable,
+        ErrorCode::ValidationFailed,
+        ErrorCode::NotFound,
+    )]
+    public function duplicate(Request $request, string $commute, DuplicateCommuteOfferAction $action): JsonResponse
+    {
+        $draft = $action->copy(
+            $this->profile($request),
+            $this->owned($request, $commute)->load(['locations', 'schedule', 'rules', 'weekdaySchedules']),
+        );
+
+        return ApiResponse::success(new CommuteOfferResource($draft), status: 201);
+    }
+
+    /**
+     * POST /v1/commutes/{commute}/return — the same journey home (Feature 03 v5 §4).
+     *
+     * The route comes back reversed, and reversed properly: the ends swap, the advertised stops come
+     * back in the opposite order, and each one's role flips. A stop where she picks somebody up near
+     * home on the way to work is where she **sets her down** on the way back, so a reversal that
+     * kept the roles would advertise a journey home that collects people from their own front doors.
+     *
+     * 🔴 **It carries no schedule, deliberately.** A journey home leaves at a different time of day,
+     * and a prefilled 07:05 is a wrong value in the field a driver is least likely to re-read
+     * because it already looks filled in. v5: "Reverse route prefill **only**".
+     *
+     * Same promise as `duplicate` about people: nothing but configuration crosses over.
+     */
+    #[ApiErrors(
+        ErrorCode::DriverNotEligible,
+        ErrorCode::LicenceExpired,
+        ErrorCode::CommuteVehicleUnavailable,
+        ErrorCode::ValidationFailed,
+        ErrorCode::NotFound,
+    )]
+    public function returnTrip(Request $request, string $commute, DuplicateCommuteOfferAction $action): JsonResponse
+    {
+        $draft = $action->reverse(
+            $this->profile($request),
+            $this->owned($request, $commute)->load(['locations', 'schedule', 'rules', 'weekdaySchedules']),
+        );
+
+        return ApiResponse::success(new CommuteOfferResource($draft), status: 201);
     }
 
     /**
