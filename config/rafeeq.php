@@ -428,6 +428,25 @@ return [
          * {@see \App\Domains\Trip\Actions\AutoFinishTripsAction}.
          */
         'auto_finish_grace_minutes' => 20,
+
+        /*
+         * The driver-not-started ladder, in minutes after departure (Feature 03 v5 §240: "+1m
+         * reminder; +5m passenger warning; +10m violation/escalation; +20m auto-EXPIRED only if
+         * never started").
+         *
+         * 🔴 These are v5's own numbers rather than a judgement, which is why they are stated
+         * without an argument for each. What they are NOT is the on-time rule:
+         * `on_time_threshold_minutes` (ten) decides whether a driver is marked late, and these
+         * decide when the people waiting for her are told and when the morning is written off.
+         * One is about her record; the other is about somebody standing in a street.
+         *
+         * ⚠️ Nothing between the rungs is retried or escalated on its own — see
+         * {@see \App\Domains\Trip\Actions\SweepDelayedTripsAction}.
+         */
+        'delay_driver_reminder_minutes' => 1,
+        'delay_passenger_warning_minutes' => 5,
+        'delay_violation_minutes' => 10,
+        'delay_expiry_minutes' => 20,
         'still_driving_extension_minutes' => 15,
 
         /*

@@ -14,7 +14,7 @@
 >
 > **Base URL:** `{host}/api/v1` · **Auth:** bearer token · **Format:** JSON only.
 
-**Last updated:** 2026-10-23 · **164 endpoints live** · Phases 0–7, 9 and 11 complete · 10, 12 and 13 all but a decision each
+**Last updated:** 2026-10-27 · **164 endpoints live** · Phases 0–7, 9 and 11 complete · 10, 12 and 13 all but a decision each
 
 ---
 
@@ -2222,7 +2222,7 @@ attendance decision acceptable, and it is the passenger's only move.
 | `id` | Pass as `scheduledTripId`. |
 | `tripDate` | The **local** day. |
 | `departureAt` / `departureLocal` | Compute from the first; display the second. They do not differ by a constant across a DST change. |
-| `status` | `SCHEDULED` · `PREPARING` · `EN_ROUTE` · `IN_PROGRESS` · `COMPLETED` · `CANCELLED`. |
+| `status` | `SCHEDULED` · `PREPARING` · `EN_ROUTE` · `IN_PROGRESS` · `COMPLETED` · `CANCELLED` · **`EXPIRED`** (new — the morning was never driven, see 4.9). |
 | `seatsTotal` / `seatsTaken` / `seatsAvailable` | Snapshotted when the day was generated — a later change to the commute does not retroactively move them. |
 | `pricePerSeatPiastres` | Snapshotted the same way. |
 | `bookingDeadlineAt` | **21:00 the night before.** After this, requests are refused with `BOOKING_DEADLINE_PASSED`. |
@@ -2534,6 +2534,38 @@ agreed *place*, and the only time attached to it is the routing provider's ETA, 
 whenever the stops change. Calling that estimate a commitment would mean telling a driver she broke
 a promise she never made. So the server asks the question the data can answer honestly: has the car
 driven past her? Do not write copy that implies a promised pickup time exists.
+
+#### When the driver never sets off — the ladder you will see push notifications from
+
+No endpoint. This is a server-side sweep, every minute, over mornings that should have left and have
+not (Feature 03 v5 §240). It matters to you because **three new notification types** arrive from it
+and because a trip can now reach a status you have not handled.
+
+| After departure | What happens | Who hears |
+|---|---|---|
+| **+1 min** | `commute_not_started_reminder` | **Driver.** Worded as a reminder, not a warning — the commonest reason a run has not started is that she is already driving and has not tapped it. |
+| **+5 min** | `commute_not_started_warning` | **Each passenger holding a seat.** |
+| **+10 min** | A violation is stamped on the day for ops escalation. | Nobody. ⚠️ No surface reads it yet. |
+| **+20 min** | The day becomes **`EXPIRED`** and every seat on it ends. | `commute_day_expired` to each passenger. |
+
+Each rung fires **once**, however many times the sweep runs.
+
+**What expiry does to a booking:** status becomes **`EXITED_DUE_TO_DRIVER_DELAY`** with
+`cancelledReason: "trip_expired"`, `cancellationFeePiastres: 0`, and her attendance becomes
+**`DRIVER_NO_SHOW`**. It is the same status as the manual exit above, deliberately: the consequences
+have to be identical, and one status is how two paths stay identical instead of drifting.
+
+🔴 **Starting late does not expire anything.** v5: *"if started at +12m, remains IN_PROGRESS"*. The
+sweep only looks at days that never started, and a violation already stamped is never cleared.
+
+⚠️ **Do not show the +5 warning as permission to leave.** It says only that the driver has not set
+off. Whether leaving is free is `driverDelay` on her booking, and the two become true at different
+moments.
+
+> 🔴 **A morning nobody had booked costs the driver nothing.** The reliability cost is recorded per
+> passenger left waiting, not per late day — so a driver who skips an empty Thursday gets the day
+> written off and nothing on her record. Whether she was late at all is measured separately, by her
+> on-time rate.
 
 #### Attendance fields (from check-in, no-show, dispute and the list)
 
@@ -3574,6 +3606,7 @@ exist, and every live endpoint must be named here.
 
 | Date | Change |
 |---|---|
+| 2026-10-27 | ⏰ **A morning the driver never starts now has an ending.** No endpoint — a server sweep every minute (v5 §240), but it reaches you as **three new notification types** and a **new trip status**. `+1` `commute_not_started_reminder` to the driver · `+5` `commute_not_started_warning` to each passenger · `+10` a violation stamped for ops · `+20` the day becomes **`EXPIRED`** and every seat ends as `EXITED_DUE_TO_DRIVER_DELAY` (`cancelledReason: "trip_expired"`, no fee) with attendance **`DRIVER_NO_SHOW`**, plus `commute_day_expired` to each passenger. **Handle `EXPIRED` on the trip shape** — before this, a seat stayed `CONFIRMED` for ever on a morning that never happened, so a trip list claimed journeys nobody took. Each rung fires **once**. 🔴 Starting late expires nothing (v5: "if started at +12m, remains IN_PROGRESS"). ⚠️ **Do not read the +5 warning as permission to leave** — whether leaving is free is `driverDelay` on her booking, and the two become true at different moments. 🔴 And a morning **nobody had booked** costs the driver nothing: the reliability cost is per passenger left waiting, not per late day, so skipping an empty Thursday is written off with nothing on her record. |
 | 2026-10-24 | 🚶‍♀️ **`POST /bookings/{booking}/exit-without-fee` — the driver never came, and leaving now costs her nothing.** She could always cancel; what it cost her was a fee, a line in the cancellation history a future driver reads, and a mark on her reliability record — **for a morning somebody else ruined**. All three move to the driver. New booking status **`EXITED_DUE_TO_DRIVER_DELAY`** (not her cancellation, not the driver's — she was *late*, which is a different failure), `cancellationFeePiastres: 0`, and the reliability event lands on the driver. She is told **with** the reason, unlike `passenger_ended_early`, because this one is about her driving. 🔒 **Entitlement is the server's finding, never a claim**: read **`driverDelay`** on `GET /bookings/{booking}` — `not_started` (departure passed, run not begun, **no grace period**), `passed_your_stop` (the car reached a stop beyond hers), or `null` meaning **do not show the button**. There is no `delayed: true`; a flag like that would be a free cancellation for the asking, paid for by a driver who was on time. Calling too early answers `409` + `error.fields.driverDelay: ["NOT_DELAYED"]`. ⚠️ v5 words the second condition as "missed agreed pickup" — nothing stores an agreed pickup **time**, only a place, so **do not write copy implying a promised pickup time exists**. 🔴 **And a fix that matters the day fees switch on:** a driver-fault cancellation used to record the configured cancellation fee against the **passenger**. It now records `0`. Harmless until today only because the fee is `0`. |
 | 2026-10-24 | 🔕 **`PATCH /trips/{trip}/receive-requests`** — `Receive Requests During Ride`, per morning, default **`true`**. ⚠️ 🔴 **Nothing acts on it yet and you should not build a screen that implies otherwise**: the mid-journey seat request it governs is not built, because v5 leaves its hardest part open ("reachability depends on actual route progress and predicted ETA") and its own out-of-scope note asks for "durable states/hooks, not speculative behavior". It ships now because the default is yes — so every driver's stored answer already matches today's behaviour, and the only answer that could be broken is "no", which first collected on launch day would mean the first mid-journey request reaching a driver who had already refused. Read it back as **`receivesRequestsDuringRide`** on `GET /driver/commute-occurrences/{trip}/navigation-route`, where v5 §9 puts the toggle. Scoped to **one day**; `409` on a finished morning; `404` for a day that is not hers. 🔒 Deliberately **not** on the trip shape inside a booking — whether a driver is willing to be interrupted is hers, and no passenger screen needs it. |
 | 2026-10-24 | 💬 **Chat on a seat request, before there is any seat: `GET` / `POST /seat-requests/{seatRequest}/messages`.** v5 scopes chat to the request, the booking or the waiting list, and this was the missing one — a driver weighing a request could not ask "could you be at the second gate instead?", and a passenger could not ask anything at all about the car she is about to get into. Same shapes, same refusals, same rate limit as the booking thread. 🔴 **No window**: it is open while the request is a live question (`PENDING` · `COUNTEROFFERED` · `WAITLISTED`), so read **`meta.requestStatus`** and `meta.canSend` rather than `opensAt`/`closesAt`. It **stays open through a counteroffer**, which is when it matters most, and while she is on the waiting list. The moment the request is answered it closes with `409 CHAT_NOT_OPEN` carrying the status — **the history stays readable, show it**. An approved request hands over to the booking's own thread, so keep the entry point on the request card ("no Messages tab"). ⚠️ 🔴 **Chat is not consent** — v5 §2 in terms, and it is a rule about your UI too: two people agreeing a corner in messages changes **nothing**, the meeting point moves only through a counteroffer, and a dispute is settled against that. Do not add an "agree" affordance to a message. 🔒 `POST /messages/{message}/report` now reaches a request thread as well — the thread where it matters most, since it is the one place two people talk with no relationship approved between them; it used to require a booking and would have refused her. |

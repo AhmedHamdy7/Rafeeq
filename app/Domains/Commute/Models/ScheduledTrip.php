@@ -57,6 +57,16 @@ class ScheduledTrip extends Model
             'receives_requests_during_ride' => 'boolean',
 
             /*
+             * Which rungs of the driver-not-started ladder have fired (Feature 03 v5 §240).
+             * Each is set once and never cleared — see the migration
+             * `add_delay_ladder_to_scheduled_trips` on why these are columns rather than a question
+             * asked of the inbox.
+             */
+            'delay_driver_reminded_at' => 'datetime',
+            'delay_passengers_warned_at' => 'datetime',
+            'delay_violation_at' => 'datetime',
+
+            /*
              * The navigation itinerary for this day (Feature 03 v5 §3).
              *
              * Two versions, not one: `itinerary_version` is bumped by anything that changes which

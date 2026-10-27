@@ -71,6 +71,38 @@ enum NotificationType: string
      */
     case PassengerExitedDriverDelay = 'passenger_exited_driver_delay';
 
+    /**
+     * Her commute was due to leave and has not (Feature 03 v5 §240's `+1m reminder`).
+     *
+     * To the DRIVER, one minute after departure. A minute is not an accusation — it is the most
+     * useful moment to be reminded, because the commonest reason a run has not started is that she
+     * is driving and has not tapped anything.
+     */
+    case CommuteNotStartedReminder = 'commute_not_started_reminder';
+
+    /**
+     * The driver has not set off (Feature 03 v5 §240's `+5m passenger warning`).
+     *
+     * 🔴 To each PASSENGER, and the earliest honest moment to say it. Five minutes of standing on a
+     * kerb wondering is the thing this exists to end — she can decide to keep waiting, to ask in
+     * the chat, or to make another arrangement, and all three need her to know.
+     *
+     * ⚠️ It does not tell her she may leave for free. That becomes true at departure, and it is on
+     * her booking as `driverDelay` — a notification that announced an entitlement would be read as
+     * advice to use it.
+     */
+    case CommuteNotStartedWarning = 'commute_not_started_warning';
+
+    /**
+     * The morning was never driven (Feature 03 v5 §240's `+20m auto-EXPIRED`, and the "Commute
+     * expired" state in its home-screen list).
+     *
+     * To each passenger holding a seat. The day is written off, nothing is charged to her, and her
+     * attendance is recorded as the driver not having come — so she needs to be told plainly rather
+     * than discovering it from a journey that quietly stopped being upcoming.
+     */
+    case CommuteDayExpired = 'commute_day_expired';
+
     case ChatMessage = 'chat_message';
     case RatingDue = 'rating_due';
     case RatingDueRiders = 'rating_due_riders';
@@ -198,6 +230,9 @@ enum NotificationType: string
             self::TripStarted,
             self::PassengerEndedEarly,
             self::PassengerExitedDriverDelay,
+            self::CommuteNotStartedReminder,
+            self::CommuteNotStartedWarning,
+            self::CommuteDayExpired,
             self::ChatMessage,
             self::RatingDue,
             self::RatingDueRiders,

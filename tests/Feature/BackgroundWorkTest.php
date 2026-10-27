@@ -91,6 +91,14 @@ it('registers every scheduled command the platform depends on', function (string
      * client was ever told a seat opened.
      */
     'outbox:publish',
+
+    /*
+     * The driver-not-started ladder (Feature 03 v5 §240). Without it nothing tells a woman standing
+     * on a kerb that her driver never set off, and a seat stays `confirmed` on a morning that never
+     * happened — so her trip list claims a journey she did not take and the driver's record shows
+     * none of it.
+     */
+    'trips:sweep-delays',
 ]);
 
 /**

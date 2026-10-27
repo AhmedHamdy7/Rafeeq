@@ -166,6 +166,21 @@ Schedule::command('trips:auto-finish')
     ->withoutOverlapping();
 
 /*
+ * The other end of the same problem: mornings that never STARTED (Feature 03 v5 §240).
+ *
+ * 🔴 Every minute, and it has to be: the first rung is at +1 and the warning to the people waiting
+ * is at +5. On a five-minute cadence the warning would land anywhere between five and ten minutes
+ * late, and the whole point of it is the woman standing on a kerb deciding whether to keep waiting.
+ *
+ * If it does not run: nobody is told their driver never set off, seats stay `confirmed` on mornings
+ * that never happened — so a trip list claims journeys nobody took — and no driver's record shows
+ * any of it.
+ */
+Schedule::command('trips:sweep-delays')
+    ->everyMinute()
+    ->withoutOverlapping();
+
+/*
  * 🔒 Deletes GPS trails past their retention date (ERD §23.4: 90 days).
  *
  * Not housekeeping. `trip_locations` is a record of where real people were, kept for one

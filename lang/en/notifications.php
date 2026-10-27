@@ -177,4 +177,24 @@ return [
         'title' => ':name is no longer riding today',
         'body' => ':name left because the commute had not set off. No charge to her; you do not need to stop for her.',
     ],
+    /*
+     * To the driver, a minute after departure. Worded as a reminder and not a warning: the
+     * commonest reason a run has not started is that she is already driving and has not tapped it.
+     */
+    'commute_not_started_reminder' => [
+        'title' => 'Your commute was due to leave',
+        'body' => 'It was due to leave at :time and has not been started. Tap Start Commute so your passengers can see you are on the way.',
+    ],
+    /*
+     * 🔴 To the passenger. It says what is true and stops there — it does NOT tell her she may
+     * leave for free, because a notification announcing an entitlement reads as advice to use it.
+     */
+    'commute_not_started_warning' => [
+        'title' => 'Your driver has not set off yet',
+        'body' => ':name’s commute was due to leave at :time and has not started yet.',
+    ],
+    'commute_day_expired' => [
+        'title' => 'Today’s commute did not run',
+        'body' => ':name’s commute of :date was never started, so your seat for today has ended. You have not been charged.',
+    ],
 ];
