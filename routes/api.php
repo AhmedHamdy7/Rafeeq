@@ -518,6 +518,19 @@ Route::prefix('v1')->group(function (): void {
          */
         Route::post('bookings/{booking}/end-early', [BookingController::class, 'endEarly']);
 
+        /*
+         * Walking away from a journey the driver never came for (Feature 03 v5 §241).
+         *
+         * 🔴 She could always cancel. What it cost her was a fee, a line in the cancellation
+         * history a future driver reads, and a mark on her reliability record — for a morning
+         * somebody else ruined. This moves all three to the driver.
+         *
+         * 🔒 Entitlement is the SERVER's finding, from facts it owns: the run has not set off after
+         * its departure, or the car has already reached a stop beyond hers. A `delayed: true` in a
+         * body would be a free cancellation for the asking, paid for by a driver who was on time.
+         */
+        Route::post('bookings/{booking}/exit-without-fee', [BookingController::class, 'exitWithoutFee']);
+
         // The driver's side of the same conversation.
         Route::get('driver/seat-requests', [SeatRequestController::class, 'inbox']);
         Route::post('driver/seat-requests/{seatRequest}/approve', [SeatRequestController::class, 'approve']);

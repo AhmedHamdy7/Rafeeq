@@ -41,6 +41,19 @@ enum ReliabilityEventKind: string
     /** She called off a whole day that people had booked. */
     case DriverCancelledDay = 'driver_cancelled_day';
 
+    /**
+     * She was late enough, or drove past somebody, that a passenger gave up on the journey
+     * (Feature 03 v5 §241's driver-fault exit).
+     *
+     * 🔴 The one kind here that is recorded by somebody ELSE pressing a button — a woman leaving a
+     * journey the car never came for. It lands on the driver because that is whose failure it was,
+     * and nothing lands on the passenger, which is the whole point of the status the exit writes.
+     *
+     * Recorded per passenger left behind, like a displacement and for the same reason: three women
+     * who gave up on one morning is three mornings wasted.
+     */
+    case DriverLateCausedExit = 'driver_late_caused_exit';
+
     /** She was recorded as not having travelled, by the driver who was there. */
     case PassengerNoShow = 'passenger_no_show';
 
@@ -60,7 +73,8 @@ enum ReliabilityEventKind: string
         return match ($this) {
             self::DriverCancelledBooking,
             self::DriverDisplacedPassenger,
-            self::DriverCancelledDay => ReliabilityRole::Driver,
+            self::DriverCancelledDay,
+            self::DriverLateCausedExit => ReliabilityRole::Driver,
 
             self::PassengerNoShow,
             self::PassengerCancelledLate => ReliabilityRole::Passenger,

@@ -231,8 +231,24 @@ final readonly class CancelBookingAction
                 'status' => $to->value,
                 'cancelled_at' => now(),
                 'cancelled_reason' => $reason,
-                // Zero until the policy exists. See the class note.
-                'cancellation_fee_piastres' => (int) config('rafeeq.booking.cancellation_fee_piastres'),
+                /*
+                 * 🔴 Charged only when SHE cancelled. This line used to write the configured fee
+                 * whoever cancelled and for whatever reason, which is a bug that was harmless only
+                 * because the number is currently zero — the day somebody sets it, a woman whose
+                 * seat the DRIVER cancelled, or whose commute the driver paused, or whose vehicle
+                 * the driver replaced, would be charged for it.
+                 *
+                 * v5 is explicit that driver fault costs the passenger nothing ("`DRIVER_DELAY_
+                 * SWITCH` and driver-fault exit carry no passenger cancellation fee"), and three of
+                 * the four cancellation paths in this codebase already wrote a deliberate zero —
+                 * {@see SwitchReason::chargesPassenger()},
+                 * {@see CancelTripDayAction} and
+                 * {@see EndBookingEarlyAction}. This was the fourth, and the
+                 * only one that decided by configuration rather than by who was at fault.
+                 */
+                'cancellation_fee_piastres' => $to === BookingStatus::CancelledByPassenger
+                    ? (int) config('rafeeq.booking.cancellation_fee_piastres')
+                    : 0,
             ])->save();
 
             // Never below zero, however the data got there: a negative seat count

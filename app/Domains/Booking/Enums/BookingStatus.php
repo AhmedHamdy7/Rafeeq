@@ -31,6 +31,26 @@ enum BookingStatus: string
      */
     case EndedEarly = 'ended_early';
 
+    /**
+     * She gave up on a journey the driver never came for (Feature 03 v5, which names
+     * `EXITED_DUE_TO_DRIVER_DELAY` among a booking's states).
+     *
+     * 🔴 Its own status rather than `cancelled_by_passenger`, and the distinction is the whole
+     * point of v5 §241. She did cancel, in the sense that she pressed the button — but *she* is not
+     * why the journey did not happen, and the three things that follow from the word all land on
+     * the wrong person otherwise: the fee (v5: "driver-fault exit carr[ies] **no** passenger
+     * cancellation fee"), her reliability record, and the cancellation history a future driver
+     * reads before deciding whether to carry her.
+     *
+     * Distinct from `cancelled_by_driver` too, because the driver did not cancel either — she was
+     * late, which is a different failure with its own record. Writing this as her cancellation or
+     * as the driver's would both be a smaller lie than it looks: one charges a woman for somebody
+     * else's lateness, the other reports a cancellation that never happened.
+     *
+     * Terminal.
+     */
+    case ExitedDueToDriverDelay = 'exited_due_to_driver_delay';
+
     public function canTransitionTo(self $next): bool
     {
         return in_array($next, $this->allowedTransitions(), true);
@@ -64,7 +84,14 @@ enum BookingStatus: string
              * and got into that car. And she is the one most likely to need the details afterwards,
              * because a safety exit is exactly what a report is written about.
              */
-            || $this === self::EndedEarly;
+            || $this === self::EndedEarly
+            /*
+             * And somebody the driver left standing keeps them for the same reason: she held a
+             * confirmed seat, so she has already been shown the plate and the meeting point, and
+             * taking them away afterwards would protect nothing while removing exactly what she
+             * needs to describe the car that never came.
+             */
+            || $this === self::ExitedDueToDriverDelay;
     }
 
     /**
@@ -79,6 +106,9 @@ enum BookingStatus: string
                 // She was picked up and got out early. Only reachable from confirmed, because a
                 // journey has to have started for there to be one to leave.
                 self::EndedEarly,
+                // The driver never came. Also only from confirmed: there is no journey to be let
+                // down by until she holds a seat on it.
+                self::ExitedDueToDriverDelay,
             ],
             default => [],
         };

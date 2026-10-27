@@ -55,6 +55,22 @@ enum NotificationType: string
      * justify to them.
      */
     case PassengerEndedEarly = 'passenger_ended_early';
+
+    /**
+     * A passenger gave up on the journey because the driver had not set off, or had driven past her
+     * stop (Feature 03 v5 §241).
+     *
+     * 🔴 Separate from {@see self::PassengerEndedEarly} although both say "somebody is no longer
+     * travelling with you", because they are opposite news to a driver. That one is about a
+     * passenger's own decision inside a journey that is going fine. This one says **the driver's own
+     * lateness just cost her a passenger** — and she may still be able to save the rest of the
+     * morning if she is told plainly rather than discovering an empty seat.
+     *
+     * Unlike that one, the reason IS carried: it is a fact about her driving, not about the
+     * passenger, and a driver told she lost somebody without being told why cannot act on it.
+     */
+    case PassengerExitedDriverDelay = 'passenger_exited_driver_delay';
+
     case ChatMessage = 'chat_message';
     case RatingDue = 'rating_due';
     case RatingDueRiders = 'rating_due_riders';
@@ -181,6 +197,7 @@ enum NotificationType: string
 
             self::TripStarted,
             self::PassengerEndedEarly,
+            self::PassengerExitedDriverDelay,
             self::ChatMessage,
             self::RatingDue,
             self::RatingDueRiders,

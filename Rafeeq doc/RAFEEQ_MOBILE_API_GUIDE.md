@@ -14,7 +14,7 @@
 >
 > **Base URL:** `{host}/api/v1` · **Auth:** bearer token · **Format:** JSON only.
 
-**Last updated:** 2026-10-23 · **163 endpoints live** · Phases 0–7, 9 and 11 complete · 10, 12 and 13 all but a decision each
+**Last updated:** 2026-10-23 · **164 endpoints live** · Phases 0–7, 9 and 11 complete · 10, 12 and 13 all but a decision each
 
 ---
 
@@ -22,7 +22,7 @@
 
 ### What is ready
 
-**163 endpoints live** and tested, across the 47 designed screens:
+**164 endpoints live** and tested, across the 47 designed screens:
 
 | | Count | Covers |
 |---|---|---|
@@ -791,6 +791,7 @@ fails if this list and the running routes ever disagree in either direction.
 | `POST /trips/{trip}/still-driving` | 4.9 Live trip |
 | `PATCH /trips/{trip}/receive-requests` | 4.9 Live trip |
 | `POST /bookings/{booking}/end-early` | 4.9 Live trip |
+| `POST /bookings/{booking}/exit-without-fee` | 4.9 Live trip |
 | `POST /trips/{trip}/start` | 4.9 Live trip |
 | `POST /trips/{trip}/status` | 4.9 Live trip |
 | `GET /trips/{trip}/wait-timers` | 4.9 Live trip |
@@ -2491,6 +2492,49 @@ Before she has been picked up this is the wrong call and answers
 "passenger pre-pickup cancel anytime; after pickup end early". The driver calling it gets `404`:
 putting somebody out of her car is Cancel Active Trip, with a reason and a safe stop.
 
+#### `POST /bookings/{booking}/exit-without-fee` — active, profile complete, **passenger only**
+
+🔴 **The driver never came.** She gives up on the morning, and it costs her nothing.
+
+She could always cancel. What that cost her was a cancellation fee, a line in the cancellation
+history a future driver reads, and a mark on her reliability record — **for a morning somebody else
+ruined**. This moves all three to the driver.
+
+| | |
+|---|---|
+| **Her booking becomes `EXITED_DUE_TO_DRIVER_DELAY`** | A **new status**. Not `CANCELLED_BY_PASSENGER` (charges her, and reads as her decision for ever) and not `CANCELLED_BY_DRIVER` (reports a cancellation that never happened — the driver was *late*, which is a different failure with its own record). |
+| **No fee** | `cancellationFeePiastres` is `0`. |
+| **Nothing on her record** | The reliability event lands on the **driver** (`driver_late_caused_exit`). |
+| **The driver is told, WITH the reason** | `passenger_exited_driver_delay`. Unlike `passenger_ended_early`, where the reason is withheld because it may be about her, this one *is* about her driving — and a driver told she lost somebody without being told why cannot act on it. |
+| `reason` in the body | Optional. The server records its own finding regardless. |
+
+🔒 **When she is entitled is the server's finding, never a claim you can make.** There is no
+`delayed: true` — a flag like that would be a free cancellation for the asking, paid for by a driver
+who was on time. Two conditions, both facts:
+
+| `driverDelay` on the booking | Means |
+|---|---|
+| `not_started` | Departure has passed and the run has not begun. **No grace period** — a tolerance would be us deciding how long a woman should stand in the street. Nothing happens automatically; it only becomes *her* option, and she is free to keep waiting. |
+| `passed_your_stop` | The car has already reached a stop **beyond hers**. This is the one that means stop waiting. |
+| `null` | Not entitled — **do not show the button.** |
+
+Read `driverDelay` off `GET /bookings/{booking}`; it is computed per request, never stored, because
+it is true only for as long as it is true. Calling too early answers
+**`409`** with `error.fields.driverDelay: ["NOT_DELAYED"]` — send her to `PATCH /bookings/{booking}/cancel`
+instead, because at that moment nobody has let her down.
+
+⚠️ **The other half of v5 §241 already exists**: if she finds an alternative commute she can switch
+into it with no fee while this booking is still confirmed — `POST /seat-offers/{offer}/accept` with
+`switchReason: driver_delay` (4.7). This endpoint is for the woman who has **no** alternative to
+switch to, and who until now paid to walk away.
+
+⚠️ **What is NOT implemented, and why it matters to your copy:** v5 words the second condition as
+"missed agreed pickup". Nothing in this system stores an agreed pickup *time* — a booking carries an
+agreed *place*, and the only time attached to it is the routing provider's ETA, which is recomputed
+whenever the stops change. Calling that estimate a commitment would mean telling a driver she broke
+a promise she never made. So the server asks the question the data can answer honestly: has the car
+driven past her? Do not write copy that implies a promised pickup time exists.
+
 #### Attendance fields (from check-in, no-show, dispute and the list)
 
 | Field | Meaning |
@@ -3530,6 +3574,7 @@ exist, and every live endpoint must be named here.
 
 | Date | Change |
 |---|---|
+| 2026-10-24 | 🚶‍♀️ **`POST /bookings/{booking}/exit-without-fee` — the driver never came, and leaving now costs her nothing.** She could always cancel; what it cost her was a fee, a line in the cancellation history a future driver reads, and a mark on her reliability record — **for a morning somebody else ruined**. All three move to the driver. New booking status **`EXITED_DUE_TO_DRIVER_DELAY`** (not her cancellation, not the driver's — she was *late*, which is a different failure), `cancellationFeePiastres: 0`, and the reliability event lands on the driver. She is told **with** the reason, unlike `passenger_ended_early`, because this one is about her driving. 🔒 **Entitlement is the server's finding, never a claim**: read **`driverDelay`** on `GET /bookings/{booking}` — `not_started` (departure passed, run not begun, **no grace period**), `passed_your_stop` (the car reached a stop beyond hers), or `null` meaning **do not show the button**. There is no `delayed: true`; a flag like that would be a free cancellation for the asking, paid for by a driver who was on time. Calling too early answers `409` + `error.fields.driverDelay: ["NOT_DELAYED"]`. ⚠️ v5 words the second condition as "missed agreed pickup" — nothing stores an agreed pickup **time**, only a place, so **do not write copy implying a promised pickup time exists**. 🔴 **And a fix that matters the day fees switch on:** a driver-fault cancellation used to record the configured cancellation fee against the **passenger**. It now records `0`. Harmless until today only because the fee is `0`. |
 | 2026-10-24 | 🔕 **`PATCH /trips/{trip}/receive-requests`** — `Receive Requests During Ride`, per morning, default **`true`**. ⚠️ 🔴 **Nothing acts on it yet and you should not build a screen that implies otherwise**: the mid-journey seat request it governs is not built, because v5 leaves its hardest part open ("reachability depends on actual route progress and predicted ETA") and its own out-of-scope note asks for "durable states/hooks, not speculative behavior". It ships now because the default is yes — so every driver's stored answer already matches today's behaviour, and the only answer that could be broken is "no", which first collected on launch day would mean the first mid-journey request reaching a driver who had already refused. Read it back as **`receivesRequestsDuringRide`** on `GET /driver/commute-occurrences/{trip}/navigation-route`, where v5 §9 puts the toggle. Scoped to **one day**; `409` on a finished morning; `404` for a day that is not hers. 🔒 Deliberately **not** on the trip shape inside a booking — whether a driver is willing to be interrupted is hers, and no passenger screen needs it. |
 | 2026-10-24 | 💬 **Chat on a seat request, before there is any seat: `GET` / `POST /seat-requests/{seatRequest}/messages`.** v5 scopes chat to the request, the booking or the waiting list, and this was the missing one — a driver weighing a request could not ask "could you be at the second gate instead?", and a passenger could not ask anything at all about the car she is about to get into. Same shapes, same refusals, same rate limit as the booking thread. 🔴 **No window**: it is open while the request is a live question (`PENDING` · `COUNTEROFFERED` · `WAITLISTED`), so read **`meta.requestStatus`** and `meta.canSend` rather than `opensAt`/`closesAt`. It **stays open through a counteroffer**, which is when it matters most, and while she is on the waiting list. The moment the request is answered it closes with `409 CHAT_NOT_OPEN` carrying the status — **the history stays readable, show it**. An approved request hands over to the booking's own thread, so keep the entry point on the request card ("no Messages tab"). ⚠️ 🔴 **Chat is not consent** — v5 §2 in terms, and it is a rule about your UI too: two people agreeing a corner in messages changes **nothing**, the meeting point moves only through a counteroffer, and a dispute is settled against that. Do not add an "agree" affordance to a message. 🔒 `POST /messages/{message}/report` now reaches a request thread as well — the thread where it matters most, since it is the one place two people talk with no relationship approved between them; it used to require a booking and would have refused her. |
 | 2026-10-24 | 🕘 **Recent searches: `GET` / `DELETE /me/recent-searches`.** The chips to show on search-field focus, account-synced, with `Clear All` behind the DELETE. **Nothing creates them explicitly — running a search records it**, so there is no POST. Each entry's `criteria` is the search in the exact shape `GET /search/commutes` accepts, **properly typed** (`daysMask` is a number, not `"62"`), so a tap is "send this object straight back". Re-running the same search moves its entry to the top instead of adding one, and at most **20** are kept. 🔴 **`DELETE` clears history and nothing else**: her saved searches and her private demands survive, because those are things she deliberately made — one she named, the other makes us notify her — and a button that erased them because she wanted her search box tidy would delete work she cannot get back. 🔴 **And searching creates neither**: v5 says "search alone doesn't create a demand". 🔒 No id and no parameter on either call, and nothing reads another person's list — this is where somebody lives and works, with timestamps. It ages out by itself after **90 days**, measured from `firstSearchedAt` rather than from the last time she re-ran it. |

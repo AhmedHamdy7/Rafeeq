@@ -850,6 +850,13 @@ return [
             'driver_cancelled_booking' => 8,
             'driver_cancelled_day' => 6,
             'driver_displaced_passenger' => 3,
+            /*
+             * A passenger gave up on a journey the car never came for (v5 §241). Weighted with a
+             * targeted cancellation rather than below it: from the passenger's morning the two are
+             * the same event — she has no lift and has to find one now — and the only difference is
+             * that this one left her standing in the street to find out.
+             */
+            'driver_late_caused_exit' => 8,
             'passenger_no_show' => 8,
             'passenger_cancelled_late' => 4,
         ],

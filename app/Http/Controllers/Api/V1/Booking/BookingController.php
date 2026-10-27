@@ -9,6 +9,7 @@ use App\Domains\Shared\Exceptions\DomainException;
 use App\Domains\Shared\Support\ErrorCode;
 use App\Domains\Trip\Actions\AdvanceTripAction;
 use App\Domains\Trip\Actions\EndBookingEarlyAction;
+use App\Domains\Trip\Actions\ExitForDriverDelayAction;
 use App\Http\Controllers\Controller;
 use App\Http\OpenApi\ApiErrors;
 use App\Http\Resources\BookingResource;
@@ -144,6 +145,37 @@ final class BookingController extends Controller
     /**
      * A booking the caller is a party to — as its passenger or as its driver.
      */
+    /**
+     * POST /v1/bookings/{booking}/exit-without-fee — she gives up on a journey the driver never
+     * came for (Feature 03 v5 §241).
+     *
+     * 🔴 **The feature is what it does not cost her.** She could always cancel before pickup; what
+     * it cost was a cancellation fee, a line in the cancellation history a future driver reads, and
+     * a mark on her reliability record — for a morning somebody else ruined. All three move to the
+     * driver, and the booking gets its own status so none of it reads as her decision.
+     *
+     * 🔒 **Entitlement is decided by the server from facts it owns** — the run has not set off after
+     * its departure, or the car has already reached a stop beyond hers. A `delayed: true` in a
+     * request body would be a free cancellation for the asking, paid for by a driver who was on
+     * time. Asking too early answers `409` with `error.fields.driverDelay: ["NOT_DELAYED"]`;
+     * `driverDelay` on the booking tells the client when to show the button at all.
+     */
+    #[ApiErrors(ErrorCode::BookingNotCancellable, ErrorCode::NotFound)]
+    public function exitWithoutFee(Request $request, string $booking, ExitForDriverDelayAction $action): JsonResponse
+    {
+        $target = $this->visible($request, $booking);
+
+        // 🔒 Hers alone. A driver has her own paths for a run she cannot make, and routing hers
+        // through here would record her failure as the passenger's exit.
+        if ($target->passenger_user_id !== $request->user()->id) {
+            throw DomainException::of(ErrorCode::NotFound);
+        }
+
+        return ApiResponse::success(new BookingResource(
+            $action->execute($target, $request->input('reason'))
+        ));
+    }
+
     private function visible(Request $request, string $bookingId): Booking
     {
         $userId = $request->user()->id;

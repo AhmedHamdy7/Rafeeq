@@ -183,6 +183,7 @@ it('generates a document describing every /v1 route', function () {
          * carries on, a passenger's safety exit, and the driver saying she is still on the road.
          */
         'POST /v1/bookings/{booking}/end-early',
+        'POST /v1/bookings/{booking}/exit-without-fee',
         'POST /v1/trips/{trip}/drop-off',
         'POST /v1/trips/{trip}/still-driving',
         'PATCH /v1/trips/{trip}/receive-requests',

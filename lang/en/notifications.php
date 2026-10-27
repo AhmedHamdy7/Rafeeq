@@ -169,4 +169,12 @@ return [
         'title' => ':name has left the car',
         'body' => ':name ended her journey early. You do not need to stop for her drop-off.',
     ],
+    /*
+     * 🔴 Says plainly that her own lateness caused it, because that is the only version she can act
+     * on — and because the alternative is a seat that empties with no explanation.
+     */
+    'passenger_exited_driver_delay' => [
+        'title' => ':name is no longer riding today',
+        'body' => ':name left because the commute had not set off. No charge to her; you do not need to stop for her.',
+    ],
 ];

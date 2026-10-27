@@ -2,7 +2,9 @@
 
 namespace App\Http\Resources;
 
+use App\Domains\Booking\Enums\BookingStatus;
 use App\Domains\Booking\Models\Booking;
+use App\Domains\Trip\Support\DriverDelay;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
 
@@ -86,6 +88,27 @@ final class BookingResource extends JsonResource
             'cancelledReason' => $this->cancelled_reason,
             'cancellationFeePiastres' => $this->cancellation_fee_piastres,
             'createdAt' => $this->created_at->toIso8601String(),
+
+            /*
+             * Whether the driver has let her down badly enough that leaving is free right now
+             * (Feature 03 v5 §241), and which way — `not_started` or `passed_your_stop`.
+             *
+             * 🔴 Null is the normal answer and means "do not show the button". The entitlement is
+             * the server's finding, not a claim a client can make, so this is the only way a client
+             * can know whether `POST /bookings/{booking}/exit-without-fee` would be accepted — and
+             * the two reasons read completely differently on a screen: one is "your driver has not
+             * set off", the other is "your driver has passed your stop", and only the second means
+             * stop waiting.
+             *
+             * Computed, never stored: it is true only for as long as it is true, and a column would
+             * go stale the moment the driver finally set off.
+             */
+            'driverDelay' => $this->when(
+                $this->resource->relationLoaded('scheduledTrip') && $this->scheduledTrip !== null,
+                fn (): ?string => $this->status === BookingStatus::Confirmed
+                    ? DriverDelay::reasonFor($this->resource, $this->scheduledTrip)
+                    : null,
+            ),
 
             'trip' => new ScheduledTripResource($this->whenLoaded('scheduledTrip')),
         ];
