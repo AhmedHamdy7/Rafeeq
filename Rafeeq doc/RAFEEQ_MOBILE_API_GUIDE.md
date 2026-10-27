@@ -14,7 +14,7 @@
 >
 > **Base URL:** `{host}/api/v1` · **Auth:** bearer token · **Format:** JSON only.
 
-**Last updated:** 2026-10-27 · **164 endpoints live** · Phases 0–7, 9 and 11 complete · 10, 12 and 13 all but a decision each
+**Last updated:** 2026-10-27 · **165 endpoints live** · Phases 0–7, 9 and 11 complete · 10, 12 and 13 all but a decision each
 
 ---
 
@@ -22,7 +22,7 @@
 
 ### What is ready
 
-**164 endpoints live** and tested, across the 47 designed screens:
+**165 endpoints live** and tested, across the 47 designed screens:
 
 | | Count | Covers |
 |---|---|---|
@@ -836,6 +836,7 @@ fails if this list and the running routes ever disagree in either direction.
 | `PATCH /notifications/read` | 4.14 Notifications |
 | `GET /notifications/preferences` | 4.14 Notifications |
 | `PATCH /notifications/preferences` | 4.14 Notifications |
+| `GET /bookings/{booking}/call` | 4.15 Trip chat |
 | `GET /bookings/{booking}/messages` | 4.15 Trip chat |
 | `POST /bookings/{booking}/messages` | 4.15 Trip chat |
 | `GET /seat-requests/{seatRequest}/messages` | 4.15 Trip chat |
@@ -1158,9 +1159,11 @@ plain row.
 > event's impact while leaving it readable — but a driver cannot yet file one from the app, so that
 > happens through support.
 
-**What is deliberately absent:** `cancellationRate` on `GET /account/stats` is still always `null`.
-It was published before anything computed it; the reliability score is the measure that now exists,
-and the rate will either be derived or removed rather than left as a field that looks computed.
+**`cancellationRate` has been removed from `GET /account/stats`** — **if you read it, stop.** It was
+published before anything computed it and answered `null` for every account from the day it shipped.
+It is gone rather than computed: a single rate conflates a driver calling off a morning with a
+passenger not turning up, which is the exact conflation the two scores above keep apart. This
+endpoint is the measure that exists.
 
 ---
 
@@ -1203,7 +1206,7 @@ and the rate will either be derived or removed rather than left as a field that 
 |---|---|
 | `completedTripsAsPassenger` / `completedTripsAsDriver` | Counts. |
 | `ratingAsPassenger` / `ratingAsDriver` | `null` until Phase 10. |
-| `onTimeRate` / `cancellationRate` | `0`–`100`, or `null` when not yet computed. |
+| `onTimeRate` | `0`–`100`, or `null` when not yet computed. ⚠️ `cancellationRate` used to sit here and has been **removed** — it was never computed; use `GET /account/reliability` (4.x). |
 | `noShowCount` | |
 | `computedAt` | When these were last recalculated. `null` means never. |
 
@@ -3390,6 +3393,43 @@ ours: two people agreeing a corner in messages changes **nothing**. The meeting 
 through a counteroffer (4.7), which is structured and recorded — and a dispute is settled against
 that, never against a thread. Do not add an "agree" affordance to a message.
 
+#### `GET /bookings/{booking}/call` — the number behind the **Call** button
+
+Returns `{ "phone", "name" }` — a dialable E.164 number and the first name to put on the dialler
+screen. Nothing else.
+
+🔒 **This is the only way to a phone number in the whole API, and that is deliberate.** It is an
+endpoint rather than a field because a booking payload is fetched in lists, cached by your client
+and logged by proxies — a number in it would be disclosed to all of that instead of to the person
+who tapped Call. Every successful call writes a line to our security log saying who got whose.
+
+**The two gates are not symmetric**, exactly as v5 specifies:
+
+| Caller | Available from | Until |
+|---|---|---|
+| **Passenger → driver** | **Booking acceptance.** She is about to get into that person's car, and most of what she needs a phone for happens before it arrives. | Her seat stops being live. A completed ride still counts — "I left my bag in your car" only comes up afterwards. |
+| **Driver → passenger** | **Only the one passenger she is next to pick up, and only after she has started the run.** | She collects her. Then the next passenger becomes reachable and this one stops. |
+
+🔴 **A driver holding five confirmed bookings does not get five phone numbers.** "Next to pick up"
+is read off her own itinerary — the earliest pickup she has not reached — so a number becomes
+available at the moment she is actually approaching somebody and stops the moment she has collected
+her. Build the driver's Call icon to appear and disappear with that, as the design draws it.
+
+Refused with **`409 CALL_NOT_AVAILABLE`** and `error.fields.reason`:
+
+| `reason` | Means |
+|---|---|
+| `booking_not_live` | The seat is cancelled or expired. |
+| `trip_not_started` | The driver has not set off. (Driver side only.) |
+| `not_next_pickup` | She is not the passenger being approached — or no itinerary has been built yet. |
+
+Somebody who is neither of the two gets **`404`**.
+
+⚠️ **The number is not masked.** v5 says the call opens the device dialler, so what you get is the
+real number. Masking behind a relay needs a telephony provider, which v5 defers — until then the
+disclosure is narrowed by the gates above and logged. Do not cache it, do not store it, and do not
+show it as text where it can be screenshotted: hand it to the dialler.
+
 #### `POST /messages/{message}/report` — `{ "reason": "..." }`
 
 Only the **recipient** can report a message (404 otherwise). It files an ordinary report with the
@@ -3606,6 +3646,8 @@ exist, and every live endpoint must be named here.
 
 | Date | Change |
 |---|---|
+| 2026-10-27 | ☎️ **The Call button has something behind it: `GET /bookings/{booking}/call`.** Returns `{phone, name}` — a dialable number and the first name for the dialler screen. 🔒 **The only way to a phone number in the whole API, and an endpoint rather than a field on purpose**: a booking payload is listed, cached and proxy-logged, so a number in it would be disclosed to all of that instead of to the person who tapped Call. Every success writes a `phone_number_disclosed` line to our security log. **The gates are asymmetric, as v5 §426 specifies:** the passenger from **booking acceptance** (and a completed ride still counts — "I left my bag in your car"), the driver **only for the one passenger she is next to pick up and only after she has started**. 🔴 A driver with five confirmed bookings does **not** get five numbers: "next to pick up" is the earliest pickup she has not reached, so the icon should appear and disappear with it. Refusals are `409 CALL_NOT_AVAILABLE` with `error.fields.reason` — `booking_not_live` · `trip_not_started` · `not_next_pickup` — so you can explain instead of greying a button out; `404` for anybody who is neither party. ⚠️ **Not masked**: v5 says the call opens the device dialler, and a relay needs a telephony provider v5 defers. Hand it to the dialler — do not cache it, store it, or render it as screenshottable text. |
+| 2026-10-27 | 🧹 **`cancellationRate` is removed from `GET /account/stats`.** **If you read it, stop.** It was published before anything computed it and answered `null` for every account from the day it shipped. Removed rather than computed: one rate conflates a driver calling off a morning with a passenger not turning up, which is exactly what the two Reliability scores keep apart. Use `GET /account/reliability`. |
 | 2026-10-27 | ⏰ **A morning the driver never starts now has an ending.** No endpoint — a server sweep every minute (v5 §240), but it reaches you as **three new notification types** and a **new trip status**. `+1` `commute_not_started_reminder` to the driver · `+5` `commute_not_started_warning` to each passenger · `+10` a violation stamped for ops · `+20` the day becomes **`EXPIRED`** and every seat ends as `EXITED_DUE_TO_DRIVER_DELAY` (`cancelledReason: "trip_expired"`, no fee) with attendance **`DRIVER_NO_SHOW`**, plus `commute_day_expired` to each passenger. **Handle `EXPIRED` on the trip shape** — before this, a seat stayed `CONFIRMED` for ever on a morning that never happened, so a trip list claimed journeys nobody took. Each rung fires **once**. 🔴 Starting late expires nothing (v5: "if started at +12m, remains IN_PROGRESS"). ⚠️ **Do not read the +5 warning as permission to leave** — whether leaving is free is `driverDelay` on her booking, and the two become true at different moments. 🔴 And a morning **nobody had booked** costs the driver nothing: the reliability cost is per passenger left waiting, not per late day, so skipping an empty Thursday is written off with nothing on her record. |
 | 2026-10-24 | 🚶‍♀️ **`POST /bookings/{booking}/exit-without-fee` — the driver never came, and leaving now costs her nothing.** She could always cancel; what it cost her was a fee, a line in the cancellation history a future driver reads, and a mark on her reliability record — **for a morning somebody else ruined**. All three move to the driver. New booking status **`EXITED_DUE_TO_DRIVER_DELAY`** (not her cancellation, not the driver's — she was *late*, which is a different failure), `cancellationFeePiastres: 0`, and the reliability event lands on the driver. She is told **with** the reason, unlike `passenger_ended_early`, because this one is about her driving. 🔒 **Entitlement is the server's finding, never a claim**: read **`driverDelay`** on `GET /bookings/{booking}` — `not_started` (departure passed, run not begun, **no grace period**), `passed_your_stop` (the car reached a stop beyond hers), or `null` meaning **do not show the button**. There is no `delayed: true`; a flag like that would be a free cancellation for the asking, paid for by a driver who was on time. Calling too early answers `409` + `error.fields.driverDelay: ["NOT_DELAYED"]`. ⚠️ v5 words the second condition as "missed agreed pickup" — nothing stores an agreed pickup **time**, only a place, so **do not write copy implying a promised pickup time exists**. 🔴 **And a fix that matters the day fees switch on:** a driver-fault cancellation used to record the configured cancellation fee against the **passenger**. It now records `0`. Harmless until today only because the fee is `0`. |
 | 2026-10-24 | 🔕 **`PATCH /trips/{trip}/receive-requests`** — `Receive Requests During Ride`, per morning, default **`true`**. ⚠️ 🔴 **Nothing acts on it yet and you should not build a screen that implies otherwise**: the mid-journey seat request it governs is not built, because v5 leaves its hardest part open ("reachability depends on actual route progress and predicted ETA") and its own out-of-scope note asks for "durable states/hooks, not speculative behavior". It ships now because the default is yes — so every driver's stored answer already matches today's behaviour, and the only answer that could be broken is "no", which first collected on launch day would mean the first mid-journey request reaching a driver who had already refused. Read it back as **`receivesRequestsDuringRide`** on `GET /driver/commute-occurrences/{trip}/navigation-route`, where v5 §9 puts the toggle. Scoped to **one day**; `409` on a finished morning; `404` for a day that is not hers. 🔒 Deliberately **not** on the trip shape inside a booking — whether a driver is willing to be interrupted is hers, and no passenger screen needs it. |

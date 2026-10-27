@@ -73,6 +73,7 @@ return [
     'BOOKING_DEADLINE_PASSED' => 'Bookings for that day have closed.',
     'SEAT_REQUEST_NOT_PENDING' => 'That request has already been answered.',
     'SEAT_REQUEST_NOT_WAITLISTED' => 'That request is not on a waiting list.',
+    'CALL_NOT_AVAILABLE' => 'A phone number is not available for this booking right now.',
     'BOOKING_WAITLIST_FULL' => 'The waiting list for this commute is full.',
     'BOOKING_NOT_CANCELLABLE' => 'That booking can no longer be cancelled.',
     'BOOKING_OWN_COMMUTE' => 'You cannot book a seat on your own commute.',

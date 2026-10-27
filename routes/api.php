@@ -531,6 +531,20 @@ Route::prefix('v1')->group(function (): void {
          */
         Route::post('bookings/{booking}/exit-without-fee', [BookingController::class, 'exitWithoutFee']);
 
+        /*
+         * The Call button beside Message (Feature 03 v5 §247, §426: "call opens device dialer").
+         *
+         * 🔒 An endpoint rather than a field on the booking, because a booking payload is fetched in
+         * lists, cached by clients and logged by proxies — a phone number in it would be disclosed
+         * to all of that instead of to the person who asked. Every disclosure writes a security-log
+         * line saying who got whose.
+         *
+         * 🔒 And asymmetric, as v5 specifies: the passenger from booking acceptance, the driver only
+         * for the ONE passenger she is approaching and only once she has set off. A driver holding
+         * five confirmed bookings does not get five phone numbers for the week.
+         */
+        Route::get('bookings/{booking}/call', [BookingController::class, 'call']);
+
         // The driver's side of the same conversation.
         Route::get('driver/seat-requests', [SeatRequestController::class, 'inbox']);
         Route::post('driver/seat-requests/{seatRequest}/approve', [SeatRequestController::class, 'approve']);

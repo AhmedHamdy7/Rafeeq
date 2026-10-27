@@ -249,6 +249,7 @@ it('generates a document describing every /v1 route', function () {
         'GET /v1/notifications',
         'GET /v1/notifications/preferences',
         'GET /v1/bookings/{booking}',
+        'GET /v1/bookings/{booking}/call',
         'PATCH /v1/bookings/{booking}/cancel',
         'GET /v1/driver/seat-requests',
         'POST /v1/driver/seat-requests/{seatRequest}/approve',

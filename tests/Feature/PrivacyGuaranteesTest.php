@@ -13,6 +13,25 @@ use App\Domains\Verification\Models\TrustScore;
  *
  * These assert the safe DEFAULT. A Resource that deliberately shows someone
  * their own data opts in with ->makeVisible(); nothing leaks by accident.
+ *
+ * ---
+ *
+ * ⚠️ **"Hidden from other members — always" has exactly one exception, and it is recorded here so
+ * that nobody reads the promise as wider than it is.** Feature 03 v5 §426 gives the designed Call
+ * button a real number: *"driver call icon ... only for next passenger to pick up and after trip
+ * starts; passenger call icon from booking acceptance. Call opens device dialer."*
+ *
+ * `GET /bookings/{booking}/call` is that one door, and the shape of it is what keeps this file's
+ * promise meaningful:
+ *
+ *   - it is an ENDPOINT, never a field, so a number is never carried in a payload that gets listed,
+ *     cached and proxy-logged;
+ *   - both gates are narrow and asymmetric, and `tests/Feature/Trip/CallTheOtherPartyTest.php`
+ *     holds them — a driver with five confirmed bookings gets one number at a time;
+ *   - every disclosure writes a `phone_number_disclosed` security event saying who got whose.
+ *
+ * The Bible's wording survives intact: it forbids `phone_e164` in any **public** API response, and
+ * v5 forbids leaking a phone to **unrelated** users. Two people about to share a car are neither.
  */
 it('never serializes personal data by default', function (string $attribute) {
     $user = User::factory()->create();

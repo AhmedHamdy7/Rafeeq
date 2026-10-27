@@ -25,6 +25,16 @@ enum SecurityEventType: string
     // ---- Verification (Phase 3) ---------------------------------------
     case DocumentRejected = 'document_rejected';
     case DocumentAccessed = 'document_accessed';
+
+    /**
+     * One member was handed another member's phone number (Feature 03 v5 §426's call icons).
+     *
+     * 🔒 Logged because it is a disclosure and not a read. The gates are narrow — a passenger from
+     * booking acceptance, a driver only for the one passenger she is approaching once under way —
+     * and a number that is handed over rather than masked is a thing that should be answerable
+     * afterwards: who got whose, on which booking, and when.
+     */
+    case PhoneNumberDisclosed = 'phone_number_disclosed';
     case VerificationSubmitted = 'verification_submitted';
     case VerificationApproved = 'verification_approved';
     case VerificationRejected = 'verification_rejected';

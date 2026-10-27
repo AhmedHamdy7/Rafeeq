@@ -26,6 +26,33 @@ use App\Domains\Shared\Support\ErrorCode;
  *   inform them of it.
  * - **It records no reason to anybody but us.** The optional reason is for a support case, never
  *   shown to the blocked party.
+ *
+ * ---
+ *
+ * 🔴 **This diverges from Feature 03 v5 §248, knowingly, and the divergence is recorded here
+ * because that is what the house rule requires of a conflict rather than a silent choice.**
+ *
+ * v5 says: *"block only after shared trip and only after upcoming shared confirmed bookings
+ * canceled."* Both halves are refused here, and both would cost the person the rule exists to
+ * protect:
+ *
+ *   1. **"Only after a shared trip."** Under that rule a woman cannot block somebody she has never
+ *      ridden with — which now includes anybody who has written to her on a seat-request thread,
+ *      since chat starts at the request and no ride has happened yet. The place a stranger can
+ *      first say something unwelcome would be the one place she could not act on it.
+ *   2. **"Only after upcoming shared confirmed bookings are cancelled."** That makes the block
+ *      conditional on her first giving up a seat — and, once the cancellation policy exists, on
+ *      paying to do so. Somebody frightened of a driver she is booked with on Thursday would have
+ *      to pay before she could stop being matched with him again.
+ *
+ * What makes refusing it safe rather than merely kinder is that **a block here does not pretend to
+ * end an existing arrangement.** v5's second clause reads as a guard against block-as-cancellation
+ * — blocking to make a booking disappear — and nothing of the sort is possible: the block changes
+ * future matching only, in both directions, and leaves every confirmed seat exactly where it was.
+ * So the worry the rule addresses does not arise, and the cost it imposes is paid for nothing.
+ *
+ * Her existing booking is still hers to cancel, with whatever that costs. She simply does not have
+ * to do it first in order to be left alone afterwards.
  */
 final readonly class BlockUserAction
 {

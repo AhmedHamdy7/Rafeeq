@@ -5,11 +5,15 @@ namespace App\Http\Controllers\Api\V1\Booking;
 use App\Domains\Booking\Actions\CancelBookingAction;
 use App\Domains\Booking\Models\Booking;
 use App\Domains\Commute\Models\ScheduledTrip;
+use App\Domains\Identity\Enums\SecurityEventType;
+use App\Domains\Identity\Models\User;
+use App\Domains\Identity\Support\SecurityLog;
 use App\Domains\Shared\Exceptions\DomainException;
 use App\Domains\Shared\Support\ErrorCode;
 use App\Domains\Trip\Actions\AdvanceTripAction;
 use App\Domains\Trip\Actions\EndBookingEarlyAction;
 use App\Domains\Trip\Actions\ExitForDriverDelayAction;
+use App\Domains\Trip\Support\CallEntitlement;
 use App\Http\Controllers\Controller;
 use App\Http\OpenApi\ApiErrors;
 use App\Http\Resources\BookingResource;
@@ -174,6 +178,68 @@ final class BookingController extends Controller
         return ApiResponse::success(new BookingResource(
             $action->execute($target, $request->input('reason'))
         ));
+    }
+
+    /**
+     * GET /v1/bookings/{booking}/call — the other party's phone number, for the dialler
+     * (Feature 03 v5 §247, §426).
+     *
+     * > *"Driver call icon appears only for next passenger to pick up and after trip starts;
+     * > passenger call icon from booking acceptance. Call opens device dialer."*
+     *
+     * 🔒 **An endpoint rather than a field, and that is the privacy design.** A booking payload is
+     * fetched in lists, cached by clients and logged by proxies; a phone number riding along in it
+     * would be disclosed to all of that rather than to the person who asked for it. Here the
+     * disclosure is an explicit act with one caller, one booking, and a line in the security log.
+     *
+     * 🔒 **The gates are asymmetric on purpose** — see {@see CallEntitlement}. A passenger may call
+     * her driver from the moment her seat is confirmed, because she is about to get into that
+     * person's car. A driver may call only the ONE passenger she is on her way to, and only once
+     * she has set off: what she needs a phone for is "I am at the gate, where are you?", which is
+     * true of one person at a time. A driver holding five bookings does not get five numbers.
+     *
+     * Refused with `409 CALL_NOT_AVAILABLE` and a `reason` the client can explain —
+     * `booking_not_live`, `trip_not_started` or `not_next_pickup` — rather than a greyed-out button
+     * with nothing behind it.
+     *
+     * ⚠️ The number is the real one, because v5 says the call opens the device dialler. Masking it
+     * behind a relay needs a telephony provider, which v5 defers; until then the disclosure is
+     * narrowed by the gates and written to the log, which is the honest version of "not masked yet".
+     */
+    #[ApiErrors(ErrorCode::CallNotAvailable, ErrorCode::NotFound)]
+    public function call(Request $request, string $booking): JsonResponse
+    {
+        $target = $this->visible($request, $booking);
+        $callerId = (string) $request->user()->id;
+
+        $refusal = CallEntitlement::refusalFor($target, $callerId);
+
+        if ($refusal !== null) {
+            throw DomainException::of(ErrorCode::CallNotAvailable, fields: ['reason' => [$refusal]]);
+        }
+
+        $otherId = $callerId === $target->passenger_user_id
+            ? $target->driver_profile_id
+            : $target->passenger_user_id;
+
+        $other = User::query()->whereKey($otherId)->first()
+            ?? throw DomainException::of(ErrorCode::NotFound);
+
+        SecurityLog::record(SecurityEventType::PhoneNumberDisclosed, $request->user(), metadata: [
+            'booking_id' => (string) $target->getKey(),
+            // Who it was about, so the log answers "who got whose" without storing the number twice.
+            'disclosed_user_id' => (string) $otherId,
+        ]);
+
+        return ApiResponse::success([
+            /*
+             * The number and the name it belongs to, and nothing else. The client needs enough to
+             * put a name on the dialler screen; anything more would make this a profile endpoint
+             * that happens to leak a phone number.
+             */
+            'phone' => $other->phone_e164,
+            'name' => $other->public_first_name,
+        ]);
     }
 
     private function visible(Request $request, string $bookingId): Booking

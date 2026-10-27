@@ -97,6 +97,17 @@ enum ErrorCode: string
     case SeatRequestNotPending = 'SEAT_REQUEST_NOT_PENDING';
 
     /**
+     * The other party's phone number is not available to this caller right now (Feature 03 v5 §426).
+     *
+     * 🔒 A state refusal, not a permission error, and the state is the gate: a passenger may call
+     * from the moment her seat is confirmed, a driver only the one passenger she is approaching and
+     * only once she has set off. `error.fields.reason` says which — `booking_not_live`,
+     * `trip_not_started` or `not_next_pickup` — so a client can explain rather than grey a button
+     * out with no reason.
+     */
+    case CallNotAvailable = 'CALL_NOT_AVAILABLE';
+
+    /**
      * She is trying to manage a waiting-list membership on a request that is not on a waiting list
      * (Feature 03 v5 §8: `Available Today` lives "on standby management").
      *
@@ -327,6 +338,8 @@ enum ErrorCode: string
             self::AlreadyBooked,
             self::SeatRequestNotPending,
             self::SeatRequestNotWaitlisted,
+            // The booking is real and hers; the gate is the state of the journey.
+            self::CallNotAvailable,
             self::WaitlistFull,
             self::BookingNotCancellable,
             self::PickupAlreadyRequested,

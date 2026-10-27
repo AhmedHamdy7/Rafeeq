@@ -42,7 +42,24 @@ final class UserStatsResource extends JsonResource
             'ratingAsPassenger' => $this->asFloat($this->avg_rating_as_passenger),
             'ratingAsDriver' => $this->asFloat($this->avg_rating_as_driver),
             'onTimeRate' => $this->asFloat($this->on_time_rate),
-            'cancellationRate' => $this->asFloat($this->cancellation_rate),
+
+            /*
+             * 🔴 `cancellationRate` was published here and NOTHING ever computed it — no job, no
+             * Action, no admin screen wrote the column, so it answered `null` for every account
+             * from the day it shipped. Removed rather than computed, for a reason that only became
+             * true once the Reliability Score existed.
+             *
+             * A single rate conflates the two roles the whole reliability design keeps apart: a
+             * driver calling off a morning and a passenger not turning up are different failures,
+             * and one number over both would answer neither question. `GET /v1/account/reliability`
+             * now answers it properly — per role, inside a window, with every event behind it and
+             * an appeal that can reverse one. Two instruments for one question eventually tell two
+             * stories, and this was the one with no data behind it.
+             *
+             * ⚠️ Feature 03 v5 never mentions a cancellation rate; it is a leftover from the ERD's
+             * `user_stats`. The columns stay for now — dropping them is a separate migration and
+             * they hold no data to lose — but nothing reads them.
+             */
 
             'noShowCount' => (int) $this->no_show_count,
 
@@ -66,7 +83,6 @@ final class UserStatsResource extends JsonResource
             'ratingAsPassenger' => null,
             'ratingAsDriver' => null,
             'onTimeRate' => null,
-            'cancellationRate' => null,
             'noShowCount' => 0,
             'computedAt' => null,
         ];

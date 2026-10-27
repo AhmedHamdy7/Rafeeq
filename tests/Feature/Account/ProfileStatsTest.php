@@ -59,7 +59,14 @@ it('reports nothing-yet as null, never as zero', function () {
     expect($stats['onTimeRate'])->toBeNull()
         ->and($stats['ratingAsPassenger'])->toBeNull()
         ->and($stats['ratingAsDriver'])->toBeNull()
-        ->and($stats['cancellationRate'])->toBeNull()
+        /*
+         * 🔴 `cancellationRate` is GONE, not null. It was published for months and nothing ever
+         * computed it, so it answered null for every account from the day it shipped — a field that
+         * looked computed and never was. The Reliability Score answers that question properly now,
+         * per role rather than conflating a driver calling off a morning with a passenger not
+         * turning up. See `UserStatsResource`.
+         */
+        ->and($stats)->not->toHaveKey('cancellationRate')
         // Counts are the opposite: "no trips yet" and "zero trips" are the same thing.
         ->and($stats['completedTripsAsPassenger'])->toBe(0)
         ->and($stats['noShowCount'])->toBe(0)
