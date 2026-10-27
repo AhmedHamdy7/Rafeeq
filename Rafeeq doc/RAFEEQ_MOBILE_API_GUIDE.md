@@ -14,7 +14,7 @@
 >
 > **Base URL:** `{host}/api/v1` · **Auth:** bearer token · **Format:** JSON only.
 
-**Last updated:** 2026-10-27 · **165 endpoints live** · Phases 0–7, 9 and 11 complete · 10, 12 and 13 all but a decision each
+**Last updated:** 2026-10-28 · **165 endpoints live** · Phases 0–7, 9 and 11 complete · 10, 12 and 13 all but a decision each
 
 ---
 
@@ -1989,23 +1989,53 @@ commute to another without ever holding two seats or losing both.
 
 ```
 POST /seat-offers/{offer}/accept
-{ switchFromBookingId: "...", switchReason: "voluntary" | "driver_delay", joinOldWaitlist: true }
+{ switchFromBookingId: "...", switchReason: "voluntary" | "driver_delay",
+  switchScope: "this_date" | "all_future_weekdays", joinOldWaitlist: true }
 ```
 
 | Field | Means |
 |---|---|
 | `switchFromBookingId` | The confirmed booking she is giving up. **One transaction**, so there is no instant where both are confirmed and no way to end up with neither. Omit for a plain acceptance. |
 | `switchReason` | `voluntary` applies the **normal cancellation policy** to the seat she leaves. `driver_delay` carries **no cancellation fee** and records the old booking as cancelled **by the driver** — so a driver running late does not land on the passenger's record. |
-| `joinOldWaitlist` | `true` rejoins the old driver's waiting list for that day. **She does not approve it again** — the passenger already held a seat in that car. It **reserves nothing**: she waits for an offer like anybody else, and the seat may go to somebody quicker. |
+| `switchScope` | `this_date` (**the default**) or `all_future_weekdays`. See below — this one needs a warning screen. |
+| `joinOldWaitlist` | `true` rejoins the old driver's waiting list. **She does not approve it again** — the passenger already held a seat in that car. It **reserves nothing**: she waits for an offer like anybody else, and the seat may go to somebody quicker. **Scoped to match**: for `this_date` she rejoins for that one morning; for `all_future_weekdays` for the whole pattern. |
 
 > 🔴 **It never leaves two overlapping confirmed bookings** — if she already holds a confirmed seat
 > on the target day, the call answers `409 BOOKING_ALREADY_BOOKED` and nothing moves.
 >
 > 🔒 The booking in `switchFromBookingId` must be **hers**. Somebody else's answers `404`.
 
-**Not built:** a standalone switch endpoint on the booking itself (v3 proposes one; this is the offer path instead), and **recurring/future-weekday scope**.
-Only a single date switches today. A half-built recurring scope would silently release days she
-still wanted, so it waits rather than shipping partly done.
+##### `switchScope: "all_future_weekdays"` — warn before you send it
+
+🔴 **She gives up every future morning she still holds on the old commute, and gets ONE in
+return** — the day this offer is for. Nothing replaces the rest and nothing gives them back: each
+released seat goes straight to whoever is waiting on that day. An offer is for one occurrence, so no
+implementation could honestly cover a month, and v5 §231 says outright that replacement capacity is
+**not guaranteed** on days she has not confirmed.
+
+So v5 also says the UI must warn clearly, and the response tells you what it cost:
+
+```
+meta: { releasedDates: ["2026-11-02", "2026-11-03", "2026-11-04"] }
+```
+
+**Read `meta.releasedDates` and show them.** It is `[]` for a plain acceptance and for a
+`this_date` switch. She should not have to compare two screens to find out which mornings she lost.
+
+| | |
+|---|---|
+| What is released | Every **future** confirmed booking of hers on the old commute. A morning already over, under way or finished is never touched. |
+| Whose | Hers only. Another passenger's recurring days on the same commute are untouched. |
+| The fee | Per the `switchReason`, applied the same way to every released morning — so `driver_delay` charges **nothing on any of them**, rather than turning one driver's lateness into four fees. |
+| `this_date` | The default on purpose: it is the recoverable choice, and a client that forgets the field must not end somebody's term. |
+
+⚠️ **Not built: the mixed case.** v5 lists *"recurring switch for dates with mixed availability"*
+among the things it has not specified — choosing a subset of future weekdays, or replacing some days
+and not others. This scope is all of them or none, and a per-weekday selector would be a guess at an
+unwritten rule.
+
+**Also not built:** a standalone switch endpoint on the booking itself (v3 proposes one; this is the
+offer path instead).
 
 #### `POST /seat-offers/{offer}/decline` — active, profile complete
 
@@ -3646,6 +3676,7 @@ exist, and every live endpoint must be named here.
 
 | Date | Change |
 |---|---|
+| 2026-10-28 | 🔁 **A switch can now move a whole recurring commitment: `switchScope` on `POST /seat-offers/{offer}/accept`.** `this_date` (**the default**) is what you have today. 🔴 **`all_future_weekdays` gives up every future morning she still holds on the old commute and returns ONE seat** — the day the offer is for. Nothing replaces the rest and nothing gives them back; each released seat goes to whoever is waiting on that day. An offer is for one occurrence, so no implementation could honestly cover a month, and v5 §231 says replacement capacity is **not guaranteed** on days she has not confirmed. **So warn clearly before sending it, and read `meta.releasedDates`** — the exact mornings it cost her, `[]` for everything else. Only **her own future** bookings are released (a morning already over is never touched; another passenger's days are untouched), and `joinOldWaitlist` is now **scoped to match**: that one date, or the whole pattern. `driver_delay` charges **nothing on any** released morning rather than turning one driver's lateness into four fees. ⚠️ **Still not built: the mixed case** — v5 leaves *"recurring switch for dates with mixed availability"* unspecified, so a per-weekday selector would be guessing. This scope is all or none. |
 | 2026-10-27 | ☎️ **The Call button has something behind it: `GET /bookings/{booking}/call`.** Returns `{phone, name}` — a dialable number and the first name for the dialler screen. 🔒 **The only way to a phone number in the whole API, and an endpoint rather than a field on purpose**: a booking payload is listed, cached and proxy-logged, so a number in it would be disclosed to all of that instead of to the person who tapped Call. Every success writes a `phone_number_disclosed` line to our security log. **The gates are asymmetric, as v5 §426 specifies:** the passenger from **booking acceptance** (and a completed ride still counts — "I left my bag in your car"), the driver **only for the one passenger she is next to pick up and only after she has started**. 🔴 A driver with five confirmed bookings does **not** get five numbers: "next to pick up" is the earliest pickup she has not reached, so the icon should appear and disappear with it. Refusals are `409 CALL_NOT_AVAILABLE` with `error.fields.reason` — `booking_not_live` · `trip_not_started` · `not_next_pickup` — so you can explain instead of greying a button out; `404` for anybody who is neither party. ⚠️ **Not masked**: v5 says the call opens the device dialler, and a relay needs a telephony provider v5 defers. Hand it to the dialler — do not cache it, store it, or render it as screenshottable text. |
 | 2026-10-27 | 🧹 **`cancellationRate` is removed from `GET /account/stats`.** **If you read it, stop.** It was published before anything computed it and answered `null` for every account from the day it shipped. Removed rather than computed: one rate conflates a driver calling off a morning with a passenger not turning up, which is exactly what the two Reliability scores keep apart. Use `GET /account/reliability`. |
 | 2026-10-27 | ⏰ **A morning the driver never starts now has an ending.** No endpoint — a server sweep every minute (v5 §240), but it reaches you as **three new notification types** and a **new trip status**. `+1` `commute_not_started_reminder` to the driver · `+5` `commute_not_started_warning` to each passenger · `+10` a violation stamped for ops · `+20` the day becomes **`EXPIRED`** and every seat ends as `EXITED_DUE_TO_DRIVER_DELAY` (`cancelledReason: "trip_expired"`, no fee) with attendance **`DRIVER_NO_SHOW`**, plus `commute_day_expired` to each passenger. **Handle `EXPIRED` on the trip shape** — before this, a seat stayed `CONFIRMED` for ever on a morning that never happened, so a trip list claimed journeys nobody took. Each rung fires **once**. 🔴 Starting late expires nothing (v5: "if started at +12m, remains IN_PROGRESS"). ⚠️ **Do not read the +5 warning as permission to leave** — whether leaving is free is `driverDelay` on her booking, and the two become true at different moments. 🔴 And a morning **nobody had booked** costs the driver nothing: the reliability cost is per passenger left waiting, not per late day, so skipping an empty Thursday is written off with nothing on her record. |

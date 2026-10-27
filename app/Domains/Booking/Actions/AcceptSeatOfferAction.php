@@ -8,10 +8,14 @@ use App\Domains\Booking\Enums\BookingStatus;
 use App\Domains\Booking\Enums\SeatOfferStatus;
 use App\Domains\Booking\Enums\SeatRequestStatus;
 use App\Domains\Booking\Enums\SwitchReason;
+use App\Domains\Booking\Enums\SwitchScope;
 use App\Domains\Booking\Models\Booking;
 use App\Domains\Booking\Models\SeatOffer;
 use App\Domains\Booking\Support\BookingEventLog;
+use App\Domains\Booking\Support\SeatAcceptance;
+use App\Domains\Booking\Support\WaitlistEligibility;
 use App\Domains\Booking\Support\WaitlistPositions;
+use App\Domains\Commute\Enums\ScheduledTripStatus;
 use App\Domains\Commute\Models\ScheduledTrip;
 use App\Domains\Commute\Support\ScheduleLock;
 use App\Domains\Group\Actions\AddMemberToGroupAction;
@@ -23,6 +27,8 @@ use App\Domains\Shared\Exceptions\DomainException;
 use App\Domains\Shared\Support\ErrorCode;
 use App\Domains\Shared\ValueObjects\Coordinate;
 use App\Domains\Trip\Actions\BuildNavigationItineraryAction;
+use Illuminate\Database\Eloquent\Collection;
+use Illuminate\Database\Eloquent\Collection as EloquentCollection;
 use Illuminate\Support\Facades\DB;
 
 /**
@@ -52,13 +58,16 @@ final readonly class AcceptSeatOfferAction
     /**
      * @param  Booking|null  $switchFrom  a confirmed booking she is leaving in the same breath
      * @param  bool  $joinOldWaitlist  re-add her to the OLD commute's waiting list
+     * @param  SwitchScope  $scope  whether the switch moves this morning only or every future day
+     *                              she holds on the old commute — see {@see SwitchScope}
      */
     public function execute(
         SeatOffer $offer,
         ?Booking $switchFrom = null,
         SwitchReason $reason = SwitchReason::Voluntary,
         bool $joinOldWaitlist = false,
-    ): Booking {
+        SwitchScope $scope = SwitchScope::ThisDate,
+    ): SeatAcceptance {
         /*
          * 🔴 The 16-hour lock, before the transaction opens (Feature 03 v5: "New bookings after
          * lock only when compatible with frozen commitments").
@@ -71,19 +80,36 @@ final readonly class AcceptSeatOfferAction
          */
         $this->assertKeepsTheFrozenPromise($offer);
 
-        return DB::transaction(function () use ($offer, $switchFrom, $reason, $joinOldWaitlist): Booking {
+        /*
+         * The other days she is giving up, worked out BEFORE the transaction so they can be locked
+         * with everything else in one sorted pass. Empty unless this is a recurring-scope switch.
+         */
+        $alsoReleasing = $switchFrom === null || ! $scope->reachesFutureDays()
+            ? collect()
+            : $this->herOtherFutureDays($switchFrom);
+
+        return DB::transaction(function () use (
+            $offer, $switchFrom, $reason, $joinOldWaitlist, $scope, $alsoReleasing
+        ): SeatAcceptance {
             /*
-             * 1. Lock the trip — and the one she is leaving, if this is a switch.
+             * 1. Lock the trip — and the one she is leaving, if this is a switch, and every other
+             *    day a recurring-scope switch gives up.
              *
              * 🔴 Locked in SORTED ID ORDER, always. This is the detail that cannot be got wrong by
              * a later edit: two passengers switching in opposite directions between the same pair
              * of days would, with naive ordering, each hold the lock the other needs. Sorting the
              * ids means they queue instead. The second acceptance of either seat waits here rather
              * than reading a stale `seats_taken` and passing the same check.
+             *
+             * 🔴 And the recurring days join the SAME sorted set rather than being locked later as
+             * they are released. Taking a second round of locks part-way through this transaction
+             * would be taking them in an order nothing else follows, which is exactly how the
+             * queueing above turns back into a deadlock.
              */
             $tripIds = array_unique(array_filter([
                 $offer->scheduled_trip_id,
                 $switchFrom?->scheduled_trip_id,
+                ...$alsoReleasing->pluck('scheduled_trip_id')->all(),
             ]));
 
             sort($tripIds);
@@ -192,8 +218,30 @@ final readonly class AcceptSeatOfferAction
 
             $this->addMember->execute($request, $trip->commuteOffer);
 
+            $released = [];
+
             if ($switchFrom !== null) {
-                $this->releaseOldSeat($switchFrom, $booking, $reason, $joinOldWaitlist);
+                $this->releaseOldSeat($switchFrom, $booking, $reason, $joinOldWaitlist, $scope);
+
+                /*
+                 * 🔴 Every other day she holds on the old commute, for a recurring-scope switch.
+                 *
+                 * She ends up with ONE new seat and loses all of these, and that is what she asked
+                 * for — v5 §231 is explicit that replacement capacity is not guaranteed on days she
+                 * has not confirmed, so the honest thing is to do it and report the cost rather
+                 * than pretend one offer covers a month.
+                 *
+                 * `joinOldWaitlist: false` on each: her place on that list is added once, scoped to
+                 * the whole recurrence, by the call above. Re-adding per day would put her on the
+                 * same list five times.
+                 */
+                foreach ($alsoReleasing as $other) {
+                    $other->setRelation('scheduledTrip', $locked[$other->scheduled_trip_id] ?? $other->scheduledTrip);
+
+                    $this->releaseOldSeat($other, $booking, $reason, joinOldWaitlist: false, scope: $scope);
+
+                    $released[] = $other->scheduledTrip->trip_date->toDateString();
+                }
             }
 
             $this->close($offer, SeatOfferStatus::Accepted);
@@ -268,8 +316,38 @@ final readonly class AcceptSeatOfferAction
                 );
             }
 
-            return $booking;
+            return new SeatAcceptance($booking, $released);
         });
+    }
+
+    /**
+     * Every other future day she holds on the commute she is leaving.
+     *
+     * 🔴 All of them, not the matching weekday. v5 §231 says to release "old affected future
+     * bookings", and what she is giving up is a standing arrangement rather than a Tuesday habit —
+     * a recurring member's days are whichever ones her agreement covers, and a filter on the
+     * switched day's weekday would leave her holding the rest of a commute she has just left.
+     *
+     * ⚠️ Future only. A day already past, under way, or finished is not hers to give up, and
+     * reaching into one would rewrite a journey that happened.
+     *
+     * @return Collection<int, Booking>
+     */
+    private function herOtherFutureDays(Booking $switchFrom): EloquentCollection
+    {
+        return Booking::query()
+            ->where('passenger_user_id', $switchFrom->passenger_user_id)
+            ->where('status', BookingStatus::Confirmed->value)
+            ->whereKeyNot($switchFrom->getKey())
+            ->whereIn('scheduled_trip_id', ScheduledTrip::query()
+                ->where('commute_offer_id', $switchFrom->scheduledTrip?->commute_offer_id)
+                ->where('departure_at', '>', now())
+                ->where('status', ScheduledTripStatus::Scheduled->value)
+                ->select('id'))
+            ->with('scheduledTrip', 'seatRequest')
+            // Sorted so the released dates come back in the order she will read them.
+            ->orderBy('scheduled_trip_id')
+            ->get();
     }
 
     /**
@@ -322,6 +400,7 @@ final readonly class AcceptSeatOfferAction
         Booking $replacement,
         SwitchReason $reason,
         bool $joinOldWaitlist,
+        SwitchScope $scope = SwitchScope::ThisDate,
     ): void {
         $oldTrip = $old->scheduledTrip;
 
@@ -405,7 +484,7 @@ final readonly class AcceptSeatOfferAction
         );
 
         if ($joinOldWaitlist) {
-            $this->rejoinOldWaitlist($old);
+            $this->rejoinOldWaitlist($old, $scope);
         }
     }
 
@@ -418,10 +497,16 @@ final readonly class AcceptSeatOfferAction
      *
      * 🔴 And it reserves nothing. v3: "no guarantee old recurring seat can be reclaimed... Old
      * passenger may only regain seat when it becomes free and receives a new offer." So she joins
-     * the list and waits like everybody else — scoped to the same day she just left, because that
-     * is the day she wanted.
+     * the list and waits like everybody else.
+     *
+     * 🔴 **Scoped to match what she gave up**, which v5 §150 asks for in as many words: *"For
+     * per-date switches scope membership to that date; recurring scope must reflect selected future
+     * weekdays."* A single-date switch puts her back on the list for that one morning. A recurring
+     * switch puts her back for the whole pattern — no named day, carrying the weekdays her old
+     * request covered — because a membership pinned to the one Tuesday she happened to switch off
+     * would never offer her the Wednesday she also just lost.
      */
-    private function rejoinOldWaitlist(Booking $old): void
+    private function rejoinOldWaitlist(Booking $old, SwitchScope $scope): void
     {
         $previous = $old->seatRequest;
 
@@ -435,7 +520,13 @@ final readonly class AcceptSeatOfferAction
         ]);
 
         $rejoined->status = SeatRequestStatus::Waitlisted->value;
-        $rejoined->scheduled_trip_id = $old->scheduled_trip_id;
+        /*
+         * Null for a recurring switch: a waiting request with no single day is the shape the
+         * fan-out treats as "any day of this commute she committed to" — see
+         * {@see WaitlistEligibility::requestsForTrip()}, which admits exactly
+         * that alongside a request naming this day.
+         */
+        $rejoined->scheduled_trip_id = $scope->reachesFutureDays() ? null : $old->scheduled_trip_id;
         $rejoined->expires_at = null;
         $rejoined->save();
 

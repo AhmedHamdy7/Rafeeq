@@ -6,6 +6,7 @@ use App\Domains\Booking\Actions\AcceptSeatOfferAction;
 use App\Domains\Booking\Actions\DeclineSeatOfferAction;
 use App\Domains\Booking\Enums\BookingStatus;
 use App\Domains\Booking\Enums\SwitchReason;
+use App\Domains\Booking\Enums\SwitchScope;
 use App\Domains\Booking\Models\Booking;
 use App\Domains\Booking\Models\SeatOffer;
 use App\Domains\Shared\Exceptions\DomainException;
@@ -104,14 +105,26 @@ final class SeatOfferController extends Controller
             }
         }
 
-        $booking = $action->execute(
+        $accepted = $action->execute(
             $target,
             $switchFrom,
             SwitchReason::from((string) ($request->validated('switchReason') ?? SwitchReason::Voluntary->value)),
             (bool) ($request->validated('joinOldWaitlist') ?? false),
+            SwitchScope::from((string) ($request->validated('switchScope') ?? SwitchScope::ThisDate->value)),
         );
 
-        return ApiResponse::success(new BookingResource($booking));
+        return ApiResponse::success(new BookingResource($accepted->booking), meta: [
+            /*
+             * 🔴 Which other mornings this call gave up — empty for everything except an
+             * `all_future_weekdays` switch.
+             *
+             * v5 §231 asks for the future-materialisation policy to be stated rather than inferred,
+             * and this is the part a passenger needs stated to her: she has just traded a standing
+             * seat for one morning, and the dates she lost should come back from the call that lost
+             * them rather than being worked out by comparing two screens.
+             */
+            'releasedDates' => $accepted->releasedDates,
+        ]);
     }
 
     /**
