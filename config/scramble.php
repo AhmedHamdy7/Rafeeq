@@ -131,7 +131,9 @@ return [
      */
     'servers' => [
         'Local' => 'api',
-        'Staging' => env('API_STAGING_URL', 'https://staging.rafeeq.app/api'),
+        // The instance serving the docs, so "Try it" calls the API next to them rather than a host
+        // that does not exist. `API_STAGING_URL` still overrides it.
+        'Staging' => env('API_STAGING_URL', rtrim((string) env('APP_URL', 'https://staging.rafeeq.app'), '/').'/api'),
     ],
 
     /*

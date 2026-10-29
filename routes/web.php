@@ -3,6 +3,7 @@
 use App\Http\Controllers\Admin\HomeController;
 use App\Http\Controllers\Admin\LogoutController;
 use App\Http\Controllers\Admin\StaffFileController;
+use App\Http\Controllers\Docs\ApiDocsController;
 use App\Http\Controllers\LiveShareController;
 use App\Livewire\Admin\AuditLog;
 use App\Livewire\Admin\Dashboard;
@@ -92,4 +93,13 @@ Route::prefix('admin')->name('admin.')->group(function (): void {
          */
         Route::post('logout', LogoutController::class)->name('logout');
     });
+});
+
+/*
+ * The OpenAPI document for the mobile team, served from a file the container builds at start —
+ * see ApiDocsController for why it is not built per request. Same access rule as before.
+ */
+Route::middleware(config('scramble.middleware'))->group(function () {
+    Route::get('docs/api', [ApiDocsController::class, 'ui'])->name('docs.api');
+    Route::get('docs/api.json', [ApiDocsController::class, 'spec'])->name('docs.api.json');
 });
