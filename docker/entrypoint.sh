@@ -143,6 +143,15 @@ if [ "${PENDING_STATUS}" -eq 3 ]; then
 elif [ "${PENDING_STATUS}" -ne 0 ]; then
     printf '\n⚠️  RAFEEQ — could not check for pending migrations (starting anyway):\n%s\n\n' "${PENDING_OUTPUT}" >&2
 fi
+
+# The API docs, written to a file once per container, in the background: building them takes 30+
+# seconds — longer than a web request may run — so they are never built per request on a server
+# (app/Http/Controllers/Docs/ApiDocsController.php). Written to a temporary name and moved, so a
+# request can never read a half-written file. Until it lands, /docs/api.json answers 503.
+(php artisan scramble:export --path=storage/app/openapi.tmp.json > /tmp/openapi-export.log 2>&1 \
+    && mv storage/app/openapi.tmp.json storage/app/openapi.json \
+    && chown www-data:www-data storage/app/openapi.json &)
+
 #
 # ⚠️ And the queue worker, Reverb and the scheduler are separate services. Without them,
 # notifications never arrive, the live map never moves, and GPS trails are lost — none of which

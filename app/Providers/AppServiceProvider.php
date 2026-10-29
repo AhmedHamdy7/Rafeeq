@@ -44,6 +44,9 @@ class AppServiceProvider extends ServiceProvider
      */
     public function register(): void
     {
+        // `/docs/api` is served from a pre-built file instead (ApiDocsController, routes/web.php).
+        Scramble::ignoreDefaultRoutes();
+
         // The SMS provider is still undecided (MASTER_PLAN §19, question #2).
         // Resolving by name keeps that decision to one config line and one
         // new class; `LogOtpSender` refuses to run in production itself, so
