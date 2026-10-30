@@ -103,6 +103,26 @@ enum NotificationType: string
      */
     case CommuteDayExpired = 'commute_day_expired';
 
+    /**
+     * She kept the car waiting and then boarded (Feature 03 v5 §239, §10).
+     *
+     * 🔴 **Delivered after her drop-off and never during the trip**, which v5 states outright. The
+     * message would otherwise reach a woman sitting in the car beside the people she kept waiting,
+     * with nowhere to go for the next forty minutes.
+     *
+     * Carries which warning it is and whether a fee has become possible, plus the id to dispute it
+     * with — a warning somebody cannot answer is a punishment with no appeal.
+     */
+    case LateBoardingWarning = 'late_boarding_warning';
+
+    /**
+     * She did not travel: a recorded no-show, or a cancellation too close to departure for the seat
+     * to be filled (Feature 03 v5 §239's second counter).
+     *
+     * Told as it is recorded — there is no journey to wait for, because she is not on it.
+     */
+    case MissedCommitmentWarning = 'missed_commitment_warning';
+
     case ChatMessage = 'chat_message';
     case RatingDue = 'rating_due';
     case RatingDueRiders = 'rating_due_riders';
@@ -233,6 +253,8 @@ enum NotificationType: string
             self::CommuteNotStartedReminder,
             self::CommuteNotStartedWarning,
             self::CommuteDayExpired,
+            self::LateBoardingWarning,
+            self::MissedCommitmentWarning,
             self::ChatMessage,
             self::RatingDue,
             self::RatingDueRiders,

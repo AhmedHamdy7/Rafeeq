@@ -10,6 +10,7 @@ use App\Http\Controllers\Api\V1\Account\PublicProfileController;
 use App\Http\Controllers\Api\V1\Account\ReliabilityController;
 use App\Http\Controllers\Api\V1\Account\StatsController;
 use App\Http\Controllers\Api\V1\Account\VerificationController;
+use App\Http\Controllers\Api\V1\Account\WarningController;
 use App\Http\Controllers\Api\V1\Auth\OtpController;
 use App\Http\Controllers\Api\V1\Auth\SessionController;
 use App\Http\Controllers\Api\V1\Booking\BookingController;
@@ -114,6 +115,23 @@ Route::prefix('v1')->group(function (): void {
          * member may look up.
          */
         Route::get('reliability', [ReliabilityController::class, 'show']);
+
+        /*
+         * The escalating warnings, and her answer to one (Feature 03 v5 §239).
+         *
+         * 🔴 A different mechanism from the reliability score above, which v5 describes separately
+         * and this codebase keeps separate: the score is the aggregate a monthly review reads, and
+         * these are the sentences she is actually TOLD — "1st warning", then a fee becomes
+         * possible. One without the other is either a fee nobody saw coming or a warning with no
+         * cumulative meaning.
+         *
+         * 🔒 Hers only, no parameter for whose to read, and the dispute is the "dispute link" v5
+         * requires beside every displayed warning — a warning recorded about somebody by somebody
+         * else, which escalates to money, has to be answerable.
+         */
+        Route::get('warnings', [WarningController::class, 'index']);
+        Route::post('warnings/{warning}/dispute', [WarningController::class, 'dispute'])
+            ->middleware('throttle:safety-reports');
 
         // The Verification Centre stays reachable while suspended: scenario H
         // allows an appeal, and seeing what was checked is part of that.

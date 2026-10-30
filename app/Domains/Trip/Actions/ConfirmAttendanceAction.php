@@ -10,6 +10,7 @@ use App\Domains\Shared\Exceptions\DomainException;
 use App\Domains\Shared\Support\ErrorCode;
 use App\Domains\Shared\ValueObjects\Coordinate;
 use App\Domains\Trip\Enums\AttendanceStatus;
+use App\Domains\Trip\Enums\WarningKind;
 use App\Domains\Trip\Models\Attendance;
 use App\Domains\Trip\Models\TripSession;
 use Illuminate\Support\Facades\DB;
@@ -50,6 +51,7 @@ final readonly class ConfirmAttendanceAction
     public function __construct(
         private GeoQueryEngine $geo,
         private WaitTimerAction $waitTimers,
+        private RecordMemberWarningAction $warnings,
     ) {}
 
     /**
@@ -183,6 +185,29 @@ final readonly class ConfirmAttendanceAction
                     booking: $booking,
                     commuteOfferId: $session->scheduledTrip?->commute_offer_id,
                 );
+            }
+
+            /*
+             * 🔴 And the escalating counter v5 §239 asks for, which is a different mechanism from
+             * the score above and deliberately so: the score is an aggregate that routes to a
+             * monthly review, while this is the thing she is actually TOLD — "1st warning", then a
+             * fee becomes possible. Recording one without the other would mean either a fee nobody
+             * saw coming, or a warning with no cumulative meaning.
+             *
+             * ⚠️ The lateness warning is recorded here and NOT delivered here. v5 §10 forbids
+             * saying anything about lateness during the trip, so it waits for her drop-off — see
+             * {@see RecordMemberWarningAction}.
+             */
+            if ($booking->passenger !== null) {
+                $kind = match ($status) {
+                    AttendanceStatus::Late => WarningKind::LateBoarding,
+                    AttendanceStatus::PassengerNoShow => WarningKind::MissedCommitment,
+                    default => null,
+                };
+
+                if ($kind !== null) {
+                    $this->warnings->record($booking->passenger, $kind, $booking);
+                }
             }
 
             return $attendance;

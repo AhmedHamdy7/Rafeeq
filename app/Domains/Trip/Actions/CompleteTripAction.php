@@ -50,7 +50,10 @@ use Illuminate\Support\Facades\DB;
  */
 final readonly class CompleteTripAction
 {
-    public function __construct(private RecordTripLocationAction $locations) {}
+    public function __construct(
+        private RecordTripLocationAction $locations,
+        private RecordMemberWarningAction $warnings,
+    ) {}
 
     public function execute(TripSession $session): TripSession
     {
@@ -133,6 +136,18 @@ final readonly class CompleteTripAction
         foreach ($checkedOut as $attendance) {
             // The journey ended for everybody who was on it at the same moment.
             $attendance->forceFill(['checked_out_at' => now()])->save();
+        }
+
+        /*
+         * 🔴 And every lateness warning held back for a journey to end is delivered here, for the
+         * same reason it is delivered on a drop-off: this is the other way a journey ends.
+         *
+         * Without this a warning on somebody the driver never tapped `Dropped off` for would wait
+         * for ever — and the driver who closes the whole run at the end is the ordinary case, not
+         * the exception.
+         */
+        foreach ($bookings as $booking) {
+            $this->warnings->deliverFor($booking);
         }
 
         return $bookings;

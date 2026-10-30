@@ -41,6 +41,8 @@ use Illuminate\Support\Facades\DB;
  */
 final readonly class DropOffPassengerAction
 {
+    public function __construct(private RecordMemberWarningAction $warnings) {}
+
     public function execute(TripSession $session, Booking $booking, string $confirmedBy): Attendance
     {
         if (! $session->current_status->isUnderway()) {
@@ -122,6 +124,17 @@ final readonly class DropOffPassengerAction
                     'bookingId' => $booking->getKey(),
                 ]);
             }
+
+            /*
+             * 🔴 Her journey has ended, so a lateness warning recorded at her pickup may finally be
+             * delivered (Feature 03 v5 §10: *"do not show any lateness message during the trip.
+             * After drop-off the passenger receives a push-style notification"*).
+             *
+             * Here rather than in a sweep because this is the moment v5 names, and because a sweep
+             * would deliver it minutes later — after she has put her phone away and while she is
+             * still, as far as she knows, being told something about the ride she just finished.
+             */
+            $this->warnings->deliverFor($booking);
 
             return $attendance;
         });

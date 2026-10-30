@@ -20,6 +20,8 @@ use App\Domains\Reliability\Support\ReliabilityLedger;
 use App\Domains\Shared\Exceptions\DomainException;
 use App\Domains\Shared\Support\ErrorCode;
 use App\Domains\Trip\Actions\BuildNavigationItineraryAction;
+use App\Domains\Trip\Actions\RecordMemberWarningAction;
+use App\Domains\Trip\Enums\WarningKind;
 use Illuminate\Support\Facades\DB;
 
 /**
@@ -44,6 +46,7 @@ final readonly class CancelBookingAction
     public function __construct(
         private OfferSeatToWaitlistAction $offerSeat,
         private BuildNavigationItineraryAction $itinerary,
+        private RecordMemberWarningAction $warnings,
     ) {}
 
     /**
@@ -200,6 +203,18 @@ final readonly class CancelBookingAction
             booking: $booking,
             commuteOfferId: $trip->commute_offer_id,
         );
+
+        /*
+         * 🔴 And the escalating warning (Feature 03 v5 §239's second counter: "first warning,
+         * second fee"). The same event feeds both mechanisms on purpose — the score is the
+         * aggregate a monthly review reads, this is the sentence she is told now.
+         *
+         * Delivered immediately rather than held back: unlike a lateness, there is no journey she
+         * is sitting in, because the whole point is that she is not on it.
+         */
+        if ($booking->passenger !== null) {
+            $this->warnings->record($booking->passenger, WarningKind::MissedCommitment, $booking);
+        }
     }
 
     private function cancel(

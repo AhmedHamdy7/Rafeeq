@@ -128,6 +128,8 @@ it('generates a document describing every /v1 route', function () {
          * member may look up.
          */
         'GET /v1/account/reliability',
+        'GET /v1/account/warnings',
+        'POST /v1/account/warnings/{warning}/dispute',
         'GET /v1/users/{user}/public-profile',
         'GET /v1/users/{user}/avatar',
         'GET /v1/account/verifications',

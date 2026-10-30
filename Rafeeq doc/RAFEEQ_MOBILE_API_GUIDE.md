@@ -14,7 +14,7 @@
 >
 > **Base URL:** `{host}/api/v1` · **Auth:** bearer token · **Format:** JSON only.
 
-**Last updated:** 2026-10-28 · **165 endpoints live** · Phases 0–7, 9 and 11 complete · 10, 12 and 13 all but a decision each
+**Last updated:** 2026-10-30 · **167 endpoints live** · Phases 0–7, 9 and 11 complete · 10, 12 and 13 all but a decision each
 
 ---
 
@@ -22,7 +22,7 @@
 
 ### What is ready
 
-**165 endpoints live** and tested, across the 47 designed screens:
+**167 endpoints live** and tested, across the 47 designed screens:
 
 | | Count | Covers |
 |---|---|---|
@@ -693,6 +693,8 @@ fails if this list and the running routes ever disagree in either direction.
 | `PUT /account/profile/basic` | 4.2 Account, devices, consents |
 | `GET /account/stats` | 4.2 Account, devices, consents |
 | `GET /account/reliability` | 4.2 Account, devices, consents |
+| `GET /account/warnings` | 4.2 Account, devices, consents |
+| `POST /account/warnings/{warning}/dispute` | 4.2 Account, devices, consents |
 | `GET /users/{user}/public-profile` | 4.2 Account, devices, consents |
 | `GET /users/{user}/avatar` | 4.2 Account, devices, consents |
 | `GET /account/comfort-preferences` | 4.2 Account, devices, consents |
@@ -1164,6 +1166,46 @@ published before anything computed it and answered `null` for every account from
 It is gone rather than computed: a single rate conflates a driver calling off a morning with a
 passenger not turning up, which is the exact conflation the two scores above keep apart. This
 endpoint is the measure that exists.
+
+#### `GET /account/warnings` · `POST /account/warnings/{warning}/dispute` — signed-in
+
+The escalating warnings, and her answer to one (v5 §239). **This is a different mechanism from the
+reliability score above and you should present it as one.** The score is an aggregate that routes to
+a monthly review; these are the sentences a member is actually *told* — "1st warning", then a fee
+becomes possible.
+
+**Two counters, and v5 tells us not to confuse them.** They are not degrees of the same thing:
+
+| `kind` | What it is | Warnings before a fee |
+|---|---|---|
+| `LATE_BOARDING` | She kept the car waiting and then got in — `PICKED_UP`, **not** a no-show. | **2** (so the 3rd) |
+| `MISSED_COMMITMENT` | A recorded no-show, or a cancellation too close to departure for the seat to be filled. | **1** (so the 2nd) |
+
+| Field | Means |
+|---|---|
+| `ordinal` | Which warning this was — **what she was told at the time**, never recomputed. |
+| `warningsBeforeFee` | Sent rather than hard-coded, so your copy stays true if the policy changes. |
+| `feeEligible` | 🔴 Whether a fee has become **possible**. ⚠️ **There is no amount and will not be one here** — v5: "amount not shown until Payments rules", and the cancellation policy is still deferred. Do not imply a number. |
+| `stillStands` | `false` once a reviewer overturned it. An overturned warning **stays listed** so she can show she was cleared, and stops counting. |
+| `canDispute` | One dispute per warning. |
+| `meta.standing` | How many of each kind still stand — **use this**, not a count of the page, because an overturned warning is listed and does not count. |
+
+🔴 **A lateness is delivered after her drop-off, never during the trip.** v5 §10 is explicit, and the
+reason is not politeness: the message would otherwise reach a woman sitting in the car beside the
+people she kept waiting, with nowhere to go for the next forty minutes. So it is recorded at her
+pickup and **does not appear in this list** until her journey ends. A missed commitment is told as
+it happens — there is no journey to wait for.
+
+The notification (`late_boarding_warning` / `missed_commitment_warning`) carries `warningId`, which
+is the **dispute link** v5 requires beside every displayed warning.
+
+🔒 **Raising a dispute does not pause the escalation.** If it did, every warning would be disputed as
+a matter of course. A reviewer decides; until then it stands. `POST` once per warning — a second
+attempt answers `422` with `error.fields.dispute: ["ALREADY_DISPUTED"]`, and a further appeal is a
+conversation with support.
+
+> 🔒 Hers only. No parameter for whose warnings to read at any access level: a warning is an
+> accusation, and somebody else's is a private record of a morning she let people down.
 
 ---
 
@@ -3676,6 +3718,7 @@ exist, and every live endpoint must be named here.
 
 | Date | Change |
 |---|---|
+| 2026-10-30 | ⚠️ **The two escalating warning counters: `GET /account/warnings` and `POST /account/warnings/{warning}/dispute`.** Present them as **separate from the reliability score** — the score is the aggregate a monthly review reads, these are the sentences a member is actually told. And v5 tells us not to confuse the two counters with each other: **`LATE_BOARDING`** (she kept the car waiting and boarded — `PICKED_UP`, not a no-show) gets **2** warnings before a fee is possible; **`MISSED_COMMITMENT`** (a no-show, or a cancellation too late to refill the seat) gets **1**. 🔴 **A lateness is delivered after her drop-off and never during the trip** (v5 §10) — so it is recorded at her pickup and **does not appear in this list** until her journey ends; the message would otherwise reach a woman sitting in the car beside the people she kept waiting. The notification carries `warningId`, the **dispute link** v5 requires. ⚠️ **`feeEligible` is a flag and there is no amount** — v5 defers it to the Payments rules, so do not imply a number. Use **`meta.standing`** rather than counting the page: an overturned warning stays listed (so she can show she was cleared) and does not count. 🔒 Disputing does **not** pause the escalation — a reviewer decides — and it is once per warning. |
 | 2026-10-28 | 🔁 **A switch can now move a whole recurring commitment: `switchScope` on `POST /seat-offers/{offer}/accept`.** `this_date` (**the default**) is what you have today. 🔴 **`all_future_weekdays` gives up every future morning she still holds on the old commute and returns ONE seat** — the day the offer is for. Nothing replaces the rest and nothing gives them back; each released seat goes to whoever is waiting on that day. An offer is for one occurrence, so no implementation could honestly cover a month, and v5 §231 says replacement capacity is **not guaranteed** on days she has not confirmed. **So warn clearly before sending it, and read `meta.releasedDates`** — the exact mornings it cost her, `[]` for everything else. Only **her own future** bookings are released (a morning already over is never touched; another passenger's days are untouched), and `joinOldWaitlist` is now **scoped to match**: that one date, or the whole pattern. `driver_delay` charges **nothing on any** released morning rather than turning one driver's lateness into four fees. ⚠️ **Still not built: the mixed case** — v5 leaves *"recurring switch for dates with mixed availability"* unspecified, so a per-weekday selector would be guessing. This scope is all or none. |
 | 2026-10-27 | ☎️ **The Call button has something behind it: `GET /bookings/{booking}/call`.** Returns `{phone, name}` — a dialable number and the first name for the dialler screen. 🔒 **The only way to a phone number in the whole API, and an endpoint rather than a field on purpose**: a booking payload is listed, cached and proxy-logged, so a number in it would be disclosed to all of that instead of to the person who tapped Call. Every success writes a `phone_number_disclosed` line to our security log. **The gates are asymmetric, as v5 §426 specifies:** the passenger from **booking acceptance** (and a completed ride still counts — "I left my bag in your car"), the driver **only for the one passenger she is next to pick up and only after she has started**. 🔴 A driver with five confirmed bookings does **not** get five numbers: "next to pick up" is the earliest pickup she has not reached, so the icon should appear and disappear with it. Refusals are `409 CALL_NOT_AVAILABLE` with `error.fields.reason` — `booking_not_live` · `trip_not_started` · `not_next_pickup` — so you can explain instead of greying a button out; `404` for anybody who is neither party. ⚠️ **Not masked**: v5 says the call opens the device dialler, and a relay needs a telephony provider v5 defers. Hand it to the dialler — do not cache it, store it, or render it as screenshottable text. |
 | 2026-10-27 | 🧹 **`cancellationRate` is removed from `GET /account/stats`.** **If you read it, stop.** It was published before anything computed it and answered `null` for every account from the day it shipped. Removed rather than computed: one rate conflates a driver calling off a morning with a passenger not turning up, which is exactly what the two Reliability scores keep apart. Use `GET /account/reliability`. |

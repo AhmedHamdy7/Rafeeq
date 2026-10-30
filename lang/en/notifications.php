@@ -197,4 +197,20 @@ return [
         'title' => 'Today’s commute did not run',
         'body' => ':name’s commute of :date was never started, so your seat for today has ended. You have not been charged.',
     ],
+    /*
+     * 🔴 v5 §10 gives this message almost word for word, including the explanation and the dispute
+     * invitation: "You boarded after the 5-minute grace on Sun 18 Oct. 1st and 2nd are warnings; a
+     * 3rd may lead to a fee. Tap to review or dispute."
+     *
+     * The explanation is not padding. A bare "warning recorded" is a punishment somebody cannot
+     * place, cannot judge the seriousness of, and does not know she may answer.
+     */
+    'late_boarding_warning' => [
+        'title' => 'Late pickup recorded (warning :ordinal)',
+        'body' => 'You boarded after the 5-minute grace on :date. The 1st and 2nd are warnings; a 3rd may lead to a fee. Tap to review or dispute.',
+    ],
+    'missed_commitment_warning' => [
+        'title' => 'Missed commute recorded (warning :ordinal)',
+        'body' => 'Your seat on :date was not used and was too late to be filled. The 1st is a warning; a 2nd may lead to a fee. Tap to review or dispute.',
+    ],
 ];
