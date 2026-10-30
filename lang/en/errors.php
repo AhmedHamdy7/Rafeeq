@@ -159,4 +159,5 @@ return [
     'MEMBER_NOT_SUSPENDED' => 'This account is not on hold any more. Reload before acting.',
     'ESCORT_ALREADY_ARMED' => 'Escort mode is already on for this corridor.',
     'ESCORT_NOT_ACTIVE' => 'Escort mode is not running on this corridor any more. Reload before acting.',
+    'PICKUP_UNREACHABLE' => 'The driver can no longer reach your pickup point on this journey.',
 ];

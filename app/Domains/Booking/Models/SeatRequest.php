@@ -35,6 +35,13 @@ class SeatRequest extends Model
     {
         return [
             'commitment' => SeatRequestCommitment::class,
+
+            /*
+             * Whether she asked to join a run that was already moving (Feature 03 v5 §416). Set at
+             * creation and never changed: it records the circumstances, not the state, so a request
+             * made mid-journey and answered after the run ended is still one of these.
+             */
+            'requested_during_ride' => 'boolean',
             'requested_days_mask' => 'integer',
             'seats' => 'integer',
             'meeting_preference' => MeetingPreference::class,

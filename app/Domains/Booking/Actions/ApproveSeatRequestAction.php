@@ -88,6 +88,26 @@ final readonly class ApproveSeatRequestAction
             throw DomainException::of(ErrorCode::SeatRequestNotPending);
         }
 
+        /*
+         * 🔴 An expired request cannot be approved, checked here rather than relied on from a
+         * sweep.
+         *
+         * The sweep that marks requests `expired` runs with the daily membership roll, which was
+         * fine while every window was 48 hours. A request to join a run already moving expires in
+         * **three minutes** (Feature 03 v5 §416), so between its expiry and the sweep there was a
+         * long stretch in which a driver could still approve it — seating somebody who had been
+         * told, correctly, that her question had timed out.
+         *
+         * Enforcing it on read makes the rule true whatever the sweep's cadence, which is the
+         * property worth having: the window is three minutes because the question is about where
+         * the car is now, and answering it an hour later answers something else.
+         */
+        if ($request->expires_at !== null && $request->expires_at->isPast()) {
+            throw DomainException::of(ErrorCode::SeatRequestNotPending, fields: [
+                'expiredAt' => [$request->expires_at->toIso8601String()],
+            ]);
+        }
+
         // Read outside the transaction: choosing WHICH days are candidates needs
         // no lock, and doing it inside would hold every lock for longer than the
         // writes require.

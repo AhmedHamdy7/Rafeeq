@@ -206,6 +206,18 @@ return [
          */
         'request_expiry_hours' => 48,
 
+        /*
+         * How long a request to join a run that is ALREADY MOVING waits for an answer
+         * (Feature 03 v5 §416: *"3-minute expiry ... the 3-minute active-ride request is the only
+         * timed item left"*).
+         *
+         * 🔴 v5's number, and the only countdown left in the product — every other timer was
+         * deliberately removed. Three minutes because the question itself is perishable: a woman
+         * asking to be picked up by a car that is two streets away is asking about where it is
+         * now, and an answer ten minutes later is an answer to a different question.
+         */
+        'during_ride_request_expiry_minutes' => 3,
+
         // How many people may wait for a seat on one commute. Beyond this the
         // queue is long enough that joining it is a false hope.
         'max_waitlist_size' => 10,

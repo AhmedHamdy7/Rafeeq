@@ -181,6 +181,22 @@ Schedule::command('trips:sweep-delays')
     ->withoutOverlapping();
 
 /*
+ * Closes seat requests whose window has run out (Feature 03 v5 §416).
+ *
+ * 🔴 Every minute because of the three-minute one. The same sweep already ran with the daily
+ * membership roll, which was right while every window was forty-eight hours — a request sitting
+ * `pending` a few hours past expiry was invisible, since nothing could be done with it. A request to
+ * join a moving run expires in three minutes and the driver is looking at it on a sheet now; a
+ * status that caught up tomorrow would show her a live question that had already timed out.
+ *
+ * ⚠️ Display truth, not the rule: approval reads `expires_at` itself, so a sweep that failed to run
+ * could make the sheet wrong but never make a timed-out request approvable.
+ */
+Schedule::command('requests:expire')
+    ->everyMinute()
+    ->withoutOverlapping();
+
+/*
  * 🔒 Deletes GPS trails past their retention date (ERD §23.4: 90 days).
  *
  * Not housekeeping. `trip_locations` is a record of where real people were, kept for one

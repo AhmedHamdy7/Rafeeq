@@ -108,6 +108,19 @@ enum ErrorCode: string
     case CallNotAvailable = 'CALL_NOT_AVAILABLE';
 
     /**
+     * A car that is already on the road can no longer collect her (Feature 03 v5 §148 and
+     * seat-allocation point 8, which name `PICKUP_UNREACHABLE`).
+     *
+     * 🔴 Measured, never guessed: `error.fields.reachability` says which — `already_passed` (the
+     * car is further along her route than her stop), `would_break_promise` (the detour no longer
+     * fits before the arrival the people aboard were promised), `detour_too_long`,
+     * `position_unknown` or `route_unknown`. v5 forbids a fixed time limit for exactly this
+     * reason: a clock would close an offer on a run crawling five minutes from her gate and keep
+     * one open on a run that had passed her street.
+     */
+    case PickupUnreachable = 'PICKUP_UNREACHABLE';
+
+    /**
      * She is trying to manage a waiting-list membership on a request that is not on a waiting list
      * (Feature 03 v5 §8: `Available Today` lives "on standby management").
      *
@@ -340,6 +353,8 @@ enum ErrorCode: string
             self::SeatRequestNotWaitlisted,
             // The booking is real and hers; the gate is the state of the journey.
             self::CallNotAvailable,
+            // Nothing wrong with what she sent: the car has simply moved on.
+            self::PickupUnreachable,
             self::WaitlistFull,
             self::BookingNotCancellable,
             self::PickupAlreadyRequested,

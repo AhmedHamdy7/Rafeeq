@@ -5,6 +5,7 @@ namespace App\Domains\Booking\Actions;
 use App\Domains\Booking\Enums\SeatRequestCommitment;
 use App\Domains\Booking\Enums\SeatRequestStatus;
 use App\Domains\Booking\Models\SeatRequest;
+use App\Domains\Booking\Support\DuringRideRequests;
 use App\Domains\Booking\Support\RequestedPoints;
 use App\Domains\Booking\Support\SeatAvailabilityChecker;
 use App\Domains\Commute\Models\CommuteOffer;
@@ -16,6 +17,7 @@ use App\Domains\Notification\Enums\NotificationType;
 use App\Domains\Notification\Support\Notifier;
 use App\Domains\Shared\Exceptions\DomainException;
 use App\Domains\Shared\Support\ErrorCode;
+use App\Domains\Trip\Support\PickupReachability;
 use Illuminate\Support\Facades\DB;
 
 /**
@@ -44,6 +46,7 @@ final readonly class RequestSeatAction
     public function __construct(
         private SeatAvailabilityChecker $availability,
         private GeoQueryEngine $geo,
+        private PickupReachability $reachability,
     ) {}
 
     /**
@@ -66,8 +69,21 @@ final readonly class RequestSeatAction
         $this->assertNoOpenRequest($passenger, $offer);
         $this->assertDaysAreOffered($offer, $input);
 
+        /*
+         * 🔴 A run that is already moving is a different question, and v5 §148 allows it: *"driver
+         * may accept new active-ride requests if feasible"*. So the ordinary bookability check —
+         * which refuses anything past its departure — is replaced rather than relaxed, because the
+         * two sets of conditions have almost nothing in common. See
+         * {@see assertMayJoinARunInProgress()}.
+         */
+        $duringRide = $trip !== null && DuringRideRequests::applies($trip);
+
         if ($trip !== null) {
-            $this->availability->assertTripIsBookable($trip);
+            // The cheap half first, so a doomed request never costs a routing call.
+            $duringRide
+                ? DuringRideRequests::assertStillTakingRequests($trip)
+                : $this->availability->assertTripIsBookable($trip);
+
             $this->availability->assertNoDuplicateBooking($trip, $passenger->id);
         }
 
@@ -80,7 +96,21 @@ final readonly class RequestSeatAction
          */
         $points = RequestedPoints::fromInput($this->geo, $offer, $input);
 
-        return DB::transaction(function () use ($passenger, $offer, $trip, $commitment, $input, $points): SeatRequest {
+        /*
+         * 🔴 And the expensive half: can a car that is already on the road still reach her?
+         *
+         * After the points are resolved, because the answer is about her pickup — and v5 leaves
+         * the model open, so {@see PickupReachability} sets out what it is
+         * measured from: how far along the route the car has got, and whether the detour fits in
+         * the slack left before the arrival the people aboard were promised.
+         */
+        if ($duringRide) {
+            $this->reachability->assertReachable($trip, $points->pickup);
+        }
+
+        return DB::transaction(function () use (
+            $passenger, $offer, $trip, $commitment, $input, $points, $duringRide
+        ): SeatRequest {
             $request = new SeatRequest;
 
             $request->fill([
@@ -126,7 +156,18 @@ final readonly class RequestSeatAction
              * than a refusal: it holds the passenger's one active request for this
              * commute, so they cannot ask again while they wait for nothing.
              */
-            $request->expires_at = now()->addHours((int) config('rafeeq.booking.request_expiry_hours'));
+            /*
+             * 🔴 Three minutes for a run that is already moving (v5 §416), and v5 is explicit that
+             * this is the ONLY countdown left in the product — every other timer was deliberately
+             * removed. The question itself is perishable: a woman asking to be collected by a car
+             * two streets away is asking about where it is now, and an answer ten minutes later
+             * answers something else.
+             */
+            $request->requested_during_ride = $duringRide;
+
+            $request->expires_at = $duringRide
+                ? now()->addMinutes((int) config('rafeeq.booking.during_ride_request_expiry_minutes'))
+                : now()->addHours((int) config('rafeeq.booking.request_expiry_hours'));
 
             $request->save();
 

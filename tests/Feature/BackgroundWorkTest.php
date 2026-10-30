@@ -99,6 +99,12 @@ it('registers every scheduled command the platform depends on', function (string
      * none of it.
      */
     'trips:sweep-delays',
+
+    /*
+     * Closes expired seat requests, every minute because of the three-minute one (v5 §416). Without
+     * it a driver's active-ride sheet shows a question that has already timed out — and she taps it.
+     */
+    'requests:expire',
 ]);
 
 /**

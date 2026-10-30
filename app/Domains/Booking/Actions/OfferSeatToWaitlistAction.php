@@ -10,6 +10,10 @@ use App\Domains\Notification\Enums\NotificationType;
 use App\Domains\Notification\Support\Notifier;
 use App\Domains\Outbox\Enums\OutboxEventType;
 use App\Domains\Outbox\Support\Outbox;
+use App\Domains\Shared\ValueObjects\Coordinate;
+use App\Domains\Trip\Enums\TripSessionStatus;
+use App\Domains\Trip\Models\TripSession;
+use App\Domains\Trip\Support\PickupReachability;
 use Illuminate\Support\Str;
 
 /**
@@ -39,6 +43,68 @@ final readonly class OfferSeatToWaitlistAction
      * @param  int  $seatsFreed  how many seats the cancellation released
      * @return int how many people were offered the seat
      */
+    /**
+     * Close open offers on runs that can no longer reach the person they were made to
+     * (Feature 03 v5 seat-allocation point 6, and its required test 4).
+     *
+     * > *"Trip starts while offer is open: offer remains if pickup reachable; **closes once route
+     * > makes pickup unreachable**."* And: *"If pickup unreachable or trip finishes, close with
+     * > `INELIGIBLE`/`CLOSED`."*
+     *
+     * 🔴 **`Ineligible`, not `Closed`.** The seat still exists — she simply stopped qualifying for
+     * it, which is what that status was written for, and the distinction is for the woman reading
+     * her own history: "the car went past my street" is a different morning from "the day was
+     * cancelled".
+     *
+     * ⚠️ Only runs that are UNDER WAY are examined. Before a run sets off there is no route
+     * progress to measure and nothing has become unreachable — v5 is explicit that "trip start
+     * alone doesn't invalidate offers", and so is its opposite: an offer on tomorrow's commute is
+     * not unreachable, it is simply not yet asked.
+     *
+     * @return int how many were closed
+     */
+    public function closeUnreachable(PickupReachability $reachability): int
+    {
+        $open = SeatOffer::query()
+            ->open()
+            ->whereIn('scheduled_trip_id', ScheduledTrip::query()
+                ->whereIn('id', TripSession::query()
+                    ->whereIn('current_status', TripSessionStatus::underwayValues())
+                    ->select('scheduled_trip_id'))
+                ->select('id'))
+            ->with('seatRequest', 'scheduledTrip.commuteOffer.locations', 'scheduledTrip.tripSession')
+            ->get();
+
+        $closed = 0;
+
+        foreach ($open as $offer) {
+            $request = $offer->seatRequest;
+            $trip = $offer->scheduledTrip;
+
+            if ($request === null || $trip === null) {
+                continue;
+            }
+
+            $pickup = new Coordinate(
+                (float) $request->requested_pickup_lat,
+                (float) $request->requested_pickup_lng,
+            );
+
+            if ($reachability->isReachable($trip, $pickup)) {
+                continue;
+            }
+
+            $offer->forceFill([
+                'status' => SeatOfferStatus::Ineligible->value,
+                'closed_at' => now(),
+            ])->save();
+
+            $closed++;
+        }
+
+        return $closed;
+    }
+
     public function forTrip(ScheduledTrip $trip, int $seatsFreed): int
     {
         if ($seatsFreed < 1) {

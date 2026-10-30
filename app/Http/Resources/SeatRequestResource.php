@@ -27,6 +27,15 @@ final class SeatRequestResource extends JsonResource
             'tripId' => $this->scheduled_trip_id,
             'status' => strtoupper($this->status->value),
             'commitment' => $this->commitment->value,
+
+            /*
+             * 🔴 She asked to join a run that was already moving (Feature 03 v5 §416). Published so
+             * the driver's app can put it in the **separate sheet** v5 describes rather than mixed
+             * into tomorrow's requests — the two need completely different attention: one is a
+             * decision for this minute, with `expiresAt` three minutes out, and the other can wait
+             * until she parks.
+             */
+            'requestedDuringRide' => (bool) $this->requested_during_ride,
             'requestedDaysMask' => $this->requested_days_mask,
             'seats' => $this->seats,
             'meetingPreference' => $this->meeting_preference->value,

@@ -49,6 +49,29 @@ enum TripSessionStatus: string
     }
 
     /**
+     * The same three, as column values, for the queries that have to ask it in SQL.
+     *
+     * 🔴 Derived from `isUnderway()` rather than listed again. A sweep that hard-coded the three
+     * strings would be a second definition of "under way", and the day a fourth status joined them
+     * the sweep would quietly stop seeing those runs — which for the sweep that closes unreachable
+     * offers means leaving somebody holding an offer for a car that has gone.
+     *
+     * @return list<string>
+     */
+    public static function underwayValues(): array
+    {
+        $values = [];
+
+        foreach (self::cases() as $case) {
+            if ($case->isUnderway()) {
+                $values[] = $case->value;
+            }
+        }
+
+        return $values;
+    }
+
+    /**
      * @return list<self>
      */
     private function allowedTransitions(): array
