@@ -57,6 +57,25 @@ enum NotificationType: string
     case PassengerEndedEarly = 'passenger_ended_early';
 
     /**
+     * The driver stopped a journey that had set off, and this passenger had not been collected yet
+     * (Feature 03 v5 §126's Cancel Active Trip).
+     *
+     * 🔴 The urgent one. She is probably standing somewhere waiting, and what she needs first is
+     * "no car is coming" — a message that led with the cancellation of a booking would read, on a
+     * lock screen, like paperwork about tomorrow.
+     */
+    case ActiveTripCancelled = 'active_trip_cancelled';
+
+    /**
+     * The same cancellation, reaching somebody who was in the car.
+     *
+     * 🔴 Separate from the one above although one act causes both, because she already knows the
+     * journey stopped — she was there. What she does not know is whether she is stranded, so hers
+     * says the ride she made still counts and points at what else runs from where she is.
+     */
+    case ActiveTripCancelledAboard = 'active_trip_cancelled_aboard';
+
+    /**
      * A passenger gave up on the journey because the driver had not set off, or had driven past her
      * stop (Feature 03 v5 §241).
      *
@@ -261,6 +280,8 @@ enum NotificationType: string
 
             self::TripStarted,
             self::PassengerEndedEarly,
+            self::ActiveTripCancelled,
+            self::ActiveTripCancelledAboard,
             self::PassengerExitedDriverDelay,
             self::CommuteNotStartedReminder,
             self::CommuteNotStartedWarning,

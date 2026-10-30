@@ -559,8 +559,19 @@ it('keeps the state machine honest about its own transitions', function () {
     // it — so its shape is worth pinning directly.
     expect(TripSessionStatus::Preparing->canTransitionTo(TripSessionStatus::InProgress))->toBeFalse()
         ->and(TripSessionStatus::Preparing->canTransitionTo(TripSessionStatus::EnRoute))->toBeTrue()
-        ->and(TripSessionStatus::InProgress->canTransitionTo(TripSessionStatus::Cancelled))->toBeFalse()
+        /*
+         * 🔴 Cancelling IS legal from every live state, including with people in the car — v5 §125's
+         * Cancel Active Trip. This line used to assert the opposite, and the change is deliberate:
+         * refusing the transition never stopped a driver abandoning a journey, it only stopped the
+         * system recording one, and v5 asks for the record.
+         *
+         * What makes it safe is not the enum. `AdvanceTripAction` refuses `cancelled` outright, so
+         * the only way to reach it is `CancelActiveTripAction`, which resolves every passenger
+         * first — and that is pinned where it belongs, in `CancelActiveTripTest`.
+         */
+        ->and(TripSessionStatus::InProgress->canTransitionTo(TripSessionStatus::Cancelled))->toBeTrue()
         ->and(TripSessionStatus::InProgress->canTransitionTo(TripSessionStatus::Completed))->toBeTrue()
+        ->and(TripSessionStatus::Completed->canTransitionTo(TripSessionStatus::Cancelled))->toBeFalse()
         ->and(TripSessionStatus::Completed->isTerminal())->toBeTrue()
         // Reachable from every live state, and from nowhere else.
         ->and(TripSessionStatus::Preparing->canTransitionTo(TripSessionStatus::Emergency))->toBeTrue()

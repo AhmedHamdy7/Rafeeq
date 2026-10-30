@@ -88,11 +88,20 @@ enum TripSessionStatus: string
             // Back to `en_route` for the next pickup, or forward once everybody aboard.
             self::AtPickup => [self::EnRoute, self::InProgress, self::Cancelled, self::Emergency],
             /*
-             * No `Cancelled` from here. Once people are in the car the run either
-             * finishes or becomes an emergency; "cancelled" would leave passengers
-             * mid-journey with no record of having travelled.
+             * `Cancelled` IS reachable from here — v5 §125's Cancel Active Trip — but only through
+             * {@see \App\Domains\Trip\Actions\CancelActiveTripAction}, and the restriction is not a
+             * convention. This used to read "no cancelled from here", because cancelling with
+             * people in the car would leave them mid-journey with no record of having travelled.
+             * That objection was right about the danger and wrong about the cure: refusing the
+             * transition did not stop a driver abandoning a journey, it only stopped the system
+             * recording it, and v5 asks for the record — a fee, a reliability event, an appeal.
+             *
+             * What answers the objection is that the Action resolves every passenger FIRST:
+             * whoever was aboard keeps her attendance and ends up `ended_early`, so the journey she
+             * made is still on her booking. {@see \App\Domains\Trip\Actions\AdvanceTripAction}
+             * refuses `Cancelled` outright so no bare transition can skip that.
              */
-            self::InProgress => [self::Completed, self::Emergency],
+            self::InProgress => [self::Completed, self::Cancelled, self::Emergency],
             default => [],
         };
     }

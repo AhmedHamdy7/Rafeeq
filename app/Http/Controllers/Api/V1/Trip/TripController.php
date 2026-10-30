@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Api\V1\Trip;
 
 use App\Domains\Booking\Enums\BookingStatus;
 use App\Domains\Booking\Models\Booking;
+use App\Domains\Booking\Support\DuringRideRequests;
 use App\Domains\Commute\Actions\CancelTripDayAction;
 use App\Domains\Commute\Models\CommuteOffer;
 use App\Domains\Commute\Models\ScheduledTrip;
@@ -11,12 +12,15 @@ use App\Domains\Shared\Exceptions\DomainException;
 use App\Domains\Shared\Support\ErrorCode;
 use App\Domains\Trip\Actions\AdvanceTripAction;
 use App\Domains\Trip\Actions\AutoFinishTripsAction;
+use App\Domains\Trip\Actions\CancelActiveTripAction;
 use App\Domains\Trip\Actions\CompleteTripAction;
 use App\Domains\Trip\Actions\StartTripAction;
 use App\Domains\Trip\Enums\TripSessionStatus;
+use App\Domains\Trip\Support\PickupReachability;
 use App\Http\Controllers\Controller;
 use App\Http\OpenApi\ApiErrors;
 use App\Http\Requests\Trip\AdvanceTripRequest;
+use App\Http\Requests\Trip\CancelActiveTripRequest;
 use App\Http\Requests\Trip\CancelTripDayRequest;
 use App\Http\Requests\Trip\SetReceiveRequestsRequest;
 use App\Http\Resources\ScheduledTripResource;
@@ -164,22 +168,60 @@ final class TripController extends Controller
     }
 
     /**
+     * POST /v1/trips/{trip}/cancel-active — "Cancel Active Trip" (Feature 03 v5 §123–125): the
+     * driver stops a run that has already set off.
+     *
+     * 🔴 **A separate endpoint from "cancel today" on purpose.** v5 opens the section with *"Pause
+     * Commute cannot cancel an already-started trip"*, and the two acts differ in everything that
+     * follows: this one carries the heaviest reliability weight in the ledger, ends the journeys of
+     * people who are in the car, and may be appealed. One endpoint that meant "call off tomorrow"
+     * or "stop the car" depending on whether the run had departed is how a driver cancels a
+     * morning she meant to cancel the next day.
+     *
+     * The response says how many passengers were aboard and how many were still waiting, because
+     * those are two different things for her to deal with and v5 §127 asks her to handle them
+     * safely. It does not book anybody anything — each passenger is pointed at
+     * `GET /v1/bookings/{booking}/alternatives`, which suggests and never commits.
+     */
+    #[ApiErrors(ErrorCode::TripNotStarted, ErrorCode::TripNotCancellable, ErrorCode::NotFound)]
+    public function cancelActive(
+        CancelActiveTripRequest $request,
+        string $trip,
+        CancelActiveTripAction $action,
+    ): JsonResponse {
+        $session = AdvanceTripAction::sessionFor($this->driven($request, $trip));
+
+        $outcome = $action->execute($session, $request->user(), $request->validated('reason'));
+
+        return ApiResponse::success(
+            new ScheduledTripResource($outcome['trip']),
+            meta: [
+                // Passengers who were in the car: their bookings are `ENDED_EARLY` and the part
+                // they rode still counts.
+                'endedEarly' => $outcome['endedEarly'],
+                // Passengers never collected: `CANCELLED_BY_DRIVER`.
+                'cancelled' => $outcome['cancelled'],
+            ],
+        );
+    }
+
+    /**
      * A day of the caller's OWN commute. 404 for anybody else's, drivers included.
      */
     /**
      * PATCH /v1/trips/{trip}/receive-requests — `Receive Requests During Ride` for one morning
      * (Feature 03 v5 §8, §9).
      *
-     * ⚠️ **Nothing acts on this yet, and the guide says so.** The mid-journey seat request it
-     * governs is not built: v5 leaves its hardest part open — *"on active trip, reachability depends
-     * on actual route progress and predicted ETA"* — and building the flow would mean inventing
-     * that model. v5's own out-of-scope note asks for the opposite: *"implement durable
-     * states/hooks, not speculative behavior"*, which is exactly what this is.
+     * 🔴 This is the first gate on a request made to a car that is already moving, and it is read
+     * before any geometry runs: honouring a "no" costs nothing, while answering "could she still
+     * reach you" costs a route calculation. See
+     * {@see DuringRideRequests} for the gate and
+     * {@see PickupReachability} for what it guards.
      *
-     * 🔴 Her answer is collected now rather than when the feature ships, and the direction matters:
-     * the default is **yes**, so every driver's stored state already matches the behaviour she gets
-     * today. The only answer that could be broken is "no" — and a "no" first asked for on the day
-     * the feature launches would mean the first mid-journey request reaching a driver who had
+     * The switch shipped before the feature it governs, and the direction is why: the default is
+     * **yes**, so every driver's stored state already matched the behaviour she had. The only
+     * answer that could have been broken was "no" — and a "no" first asked for on the day the
+     * feature launched would have meant the first mid-journey request reaching a driver who had
      * already refused them.
      *
      * **Per occurrence, as v5 specifies.** Whether she can take another passenger depends on this

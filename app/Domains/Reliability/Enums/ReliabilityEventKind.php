@@ -9,9 +9,9 @@ namespace App\Domains\Reliability\Enums;
  * > reviews low Reliability/repeat violations for drivers and passengers."*
  *
  * 🔴 Only kinds the system can actually observe are here. v5 names more consequences than the code
- * can currently witness — a driver who never starts, an active trip cancelled mid-run — and an enum
- * case for an event nothing emits would read as a measured thing that is permanently zero. Those
- * arrive with the features that produce them.
+ * can currently witness — a driver who never starts, for one — and an enum case for an event
+ * nothing emits would read as a measured thing that is permanently zero. Those arrive with the
+ * features that produce them, which is how {@see self::DriverAbandonedActiveTrip} arrived.
  *
  * 🔴 Each case says whose record it lands on, because one account is one person doing two things.
  * A driver's cancellations must not reach her passenger standing: a woman who drives badly and
@@ -40,6 +40,20 @@ enum ReliabilityEventKind: string
 
     /** She called off a whole day that people had booked. */
     case DriverCancelledDay = 'driver_cancelled_day';
+
+    /**
+     * She stopped a run that had already set off (Feature 03 v5 §125's Cancel Active Trip).
+     *
+     * 🔴 The heaviest of the driver kinds, and the reason is where it leaves people rather than how
+     * deliberate it was. Every other cancellation here happens while a passenger is still at home
+     * with her phone: she has lost a lift and has to find another. This one can end with a woman on
+     * the side of a road she did not choose, part-way to work, with no lift from there — and v5
+     * treats that as its own act, with its own screen and its own emergency appeal.
+     *
+     * Recorded per affected passenger, like a displacement and for the same reason, and that
+     * includes the ones who were never collected: their morning is ruined either way.
+     */
+    case DriverAbandonedActiveTrip = 'driver_abandoned_active_trip';
 
     /**
      * She was late enough, or drove past somebody, that a passenger gave up on the journey
@@ -74,6 +88,7 @@ enum ReliabilityEventKind: string
             self::DriverCancelledBooking,
             self::DriverDisplacedPassenger,
             self::DriverCancelledDay,
+            self::DriverAbandonedActiveTrip,
             self::DriverLateCausedExit => ReliabilityRole::Driver,
 
             self::PassengerNoShow,

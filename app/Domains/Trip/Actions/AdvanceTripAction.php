@@ -47,6 +47,25 @@ final readonly class AdvanceTripAction
 
     public function execute(TripSession $session, TripSessionStatus $next): TripSession
     {
+        /*
+         * 🔴 Cancelling is never a bare state move, and this refusal closes a real hole rather than
+         * guarding a hypothetical one. `AdvanceTripRequest` validates `status` with `Rule::enum`,
+         * which accepts `cancelled`, and the state machine used to ALLOW `preparing → cancelled`
+         * and `en_route → cancelled` — so a driver could send one request and leave the run and the
+         * day marked cancelled while every booking on it still read CONFIRMED, the seats still
+         * counted as taken, and not one passenger was told. The transition was legal; nothing
+         * resolved the people.
+         *
+         * Who is in the car and who is still waiting have to be settled before the run can be
+         * called off, so cancelling lives in {@see CancelActiveTripAction} and this method says so.
+         */
+        if ($next === TripSessionStatus::Cancelled) {
+            throw DomainException::of(ErrorCode::TripInvalidTransition, fields: [
+                'currentStatus' => [strtoupper($session->current_status->value)],
+                'use' => ['POST /v1/trips/{trip}/cancel-active'],
+            ]);
+        }
+
         $this->assertCanTransitionTo($session, $next);
 
         return DB::transaction(function () use ($session, $next): TripSession {
@@ -85,6 +104,28 @@ final readonly class AdvanceTripAction
     }
 
     /**
+     * The one way a run becomes `cancelled`, called only by {@see CancelActiveTripAction} once it
+     * has resolved every passenger on it.
+     *
+     * Here rather than in that Action so the pairing of `trip_sessions.current_status` with
+     * `scheduled_trips.status` stays written in exactly one place — see the class note on why those
+     * two columns exist and why keeping them in step is this class's job. It is not a second door
+     * into {@see execute}: there is no status argument, so the only thing it can write is this one.
+     *
+     * ⚠️ No transaction of its own. It is called from inside the Action's, where the trip row is
+     * already locked; opening another here would nest for nothing.
+     */
+    public function cancelled(TripSession $session): TripSession
+    {
+        self::assertCanTransitionTo($session, TripSessionStatus::Cancelled);
+
+        $session->forceFill(['current_status' => TripSessionStatus::Cancelled->value])->save();
+        $session->scheduledTrip->forceFill(['status' => ScheduledTripStatus::Cancelled->value])->save();
+
+        return $session;
+    }
+
+    /**
      * 🔴 The refusal names where the run IS and what it could do instead, rather than
      * only that the step failed. A driver who taps "arrived" on a run she has not
      * started yet needs to be told to start it — "invalid transition" tells her the app
@@ -99,7 +140,11 @@ final readonly class AdvanceTripAction
         $allowed = [];
 
         foreach (TripSessionStatus::cases() as $case) {
-            if ($session->current_status->canTransitionTo($case)) {
+            /*
+             * `cancelled` is a legal transition that this endpoint does not serve, so listing it
+             * would send a client back here to be refused again. See {@see execute}.
+             */
+            if ($case !== TripSessionStatus::Cancelled && $session->current_status->canTransitionTo($case)) {
                 $allowed[] = strtoupper($case->value);
             }
         }

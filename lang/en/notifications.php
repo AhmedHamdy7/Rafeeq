@@ -51,6 +51,18 @@ return [
         'title' => 'No ride on :date',
         'body' => ':name cancelled the commute for :date. Your other days are unchanged.',
     ],
+    /*
+     * 🔴 Leads with the fact she can act on. She is waiting somewhere, so "no car is coming" comes
+     * before anything about a booking, and the second line is where to look rather than an apology.
+     */
+    'active_trip_cancelled' => [
+        'title' => 'No car is coming',
+        'body' => ':name had to stop the trip. Open it to see other commutes you can still catch.',
+    ],
+    'active_trip_cancelled_aboard' => [
+        'title' => 'The trip was stopped',
+        'body' => 'The part you rode still counts and you owe nothing. Open it to see what else runs from here.',
+    ],
     'booking_cancelled' => [
         'title' => 'A seat was cancelled',
         'body' => ':name cancelled the booking for :date.',
