@@ -41,6 +41,12 @@ final class SeatRequestController extends Controller
         ErrorCode::CannotBookOwnCommute,
         ErrorCode::RecurringDaysNotOffered,
         /*
+         * Asking a car that is already moving (Feature 03 v5 §148). `error.fields.reachability`
+         * says which: the car has passed her, the detour no longer fits before the promised
+         * arrival, or nothing can place the car at all.
+         */
+        ErrorCode::PickupUnreachable,
+        /*
          * Her two required points can each be refused (Feature 03 v5 §2): the same place twice,
          * the wrong way round for this commute, a suggestion this commute does not advertise, or a
          * pair that together takes the driver further out of her way than she agreed to.

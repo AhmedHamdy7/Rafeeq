@@ -1836,6 +1836,49 @@ at 21:00 the night before), `BOOKING_ALREADY_REQUESTED` (one open request per co
 > never accepted from the request. Use `POST /commutes/{commute}/pickup-preview` to show the cost
 > beside the pin while she is still choosing.
 
+##### Asking a car that is already moving (v5 §148, §416)
+
+🔴 **Same endpoint.** Send a `scheduledTripId` for a run that has already set off and you get one of
+v5's active-ride requests — there is no separate path, and **no flag you send**: the circumstances
+decide it, because a client that could declare it would be choosing which rules to be judged by.
+
+What comes back differs in two ways, and both belong in the **separate sheet** v5 describes on the
+driver's side:
+
+| | |
+|---|---|
+| `requestedDuringRide` | `true`. Published on the seat-request shape so the driver's app can keep this sheet apart from tomorrow's inbox — one is a decision for this minute, the other can wait until she parks. |
+| `expiresAt` | **Three minutes out**, and v5 says this is the **only countdown left in the product**. Every other timer was deliberately removed. |
+
+**The clock is real on the server.** Approval reads `expiresAt` itself, so a driver who taps a
+timed-out request gets `409 SEAT_REQUEST_NOT_PENDING` with `error.fields.expiredAt` — do not rely on
+your own timer to hide it, and do not treat a late tap as a network failure.
+
+**Two new refusals**, both `409`:
+
+| Code | Means |
+|---|---|
+| `SEAT_UNAVAILABLE` + `error.fields.duringRide: ["NOT_ACCEPTING"]` | The driver turned `Receive Requests During Ride` off for this morning (`PATCH /trips/{trip}/receive-requests`, 4.9). |
+| **`PICKUP_UNREACHABLE`** + `error.fields.reachability` | The car can no longer get to her. |
+
+| `reachability` | Means |
+|---|---|
+| `already_passed` | The car is further along the route than her stop. **Nothing she can do** — say so, and offer her the alternatives list rather than a retry. |
+| `would_break_promise` | The detour no longer fits before the arrival the people aboard were promised. |
+| `detour_too_long` | Past the driver's own `maxDetourMinutes`, on a day with no promised arrival. |
+| `position_unknown` · `route_unknown` | We cannot place the car, so the answer is no. **Retrying may work** once a position arrives. |
+
+🔴 **It is measured, never timed.** v5 forbids a fixed limit twice over, and the reason shows in both
+directions: a clock would refuse her on a run crawling five minutes from her gate, and accept her on
+a run that had already passed her street. So do not build a countdown of your own for reachability —
+only for `expiresAt`, which is a real three minutes.
+
+⚠️ **And an existing waiting-list offer behaves the same way.** v5: *"trip start alone doesn't
+invalidate offers"* — an open offer **stays** open after the run sets off while the pickup is still
+reachable, and closes as **`INELIGIBLE`** once the car has passed. In `GET /seat-offers` that reads
+as "she stopped qualifying", not "the seat stopped existing" — keep showing it differently from
+`CLOSED`.
+
 #### `GET /seat-requests` — active, profile complete, paginated
 
 The caller's own requests. See 4.7 for the shape.
@@ -3739,6 +3782,7 @@ exist, and every live endpoint must be named here.
 
 | Date | Change |
 |---|---|
+| 2026-10-30 | 🚗 **A car that is already moving can be asked for a seat — v5's active-ride request.** **Same endpoint**: send `scheduledTripId` for a run that has set off and you get one, with **no flag you send** (the circumstances decide, not the client). Two differences, both for the separate sheet v5 draws on the driver's side: **`requestedDuringRide: true`** on the seat-request shape, and **`expiresAt` three minutes out** — v5 says this is the **only countdown left in the product**. The clock is real on the server: approval reads `expiresAt`, so a late tap answers `409 SEAT_REQUEST_NOT_PENDING` with `error.fields.expiredAt`. Two new refusals: `SEAT_UNAVAILABLE` + `duringRide: ["NOT_ACCEPTING"]` when the driver turned the toggle off for that morning, and **`PICKUP_UNREACHABLE`** + `error.fields.reachability` — `already_passed` (**nothing she can do**, offer alternatives rather than a retry) · `would_break_promise` · `detour_too_long` · `position_unknown`/`route_unknown` (**a retry may work**). 🔴 **Reachability is measured, never timed** — v5 forbids a fixed limit twice, because a clock would refuse her on a run crawling five minutes from her gate and accept her on one that had passed her street. ⚠️ And an existing waiting-list **offer** now behaves the same way: it stays open after the run sets off while she is still reachable, and closes **`INELIGIBLE`** once the car has passed — "she stopped qualifying", not "the seat stopped existing". |
 | 2026-10-30 | ⚠️ **The two escalating warning counters: `GET /account/warnings` and `POST /account/warnings/{warning}/dispute`.** Present them as **separate from the reliability score** — the score is the aggregate a monthly review reads, these are the sentences a member is actually told. And v5 tells us not to confuse the two counters with each other: **`LATE_BOARDING`** (she kept the car waiting and boarded — `PICKED_UP`, not a no-show) gets **2** warnings before a fee is possible; **`MISSED_COMMITMENT`** (a no-show, or a cancellation too late to refill the seat) gets **1**. 🔴 **A lateness is delivered after her drop-off and never during the trip** (v5 §10) — so it is recorded at her pickup and **does not appear in this list** until her journey ends; the message would otherwise reach a woman sitting in the car beside the people she kept waiting. The notification carries `warningId`, the **dispute link** v5 requires. ⚠️ **`feeEligible` is a flag and there is no amount** — v5 defers it to the Payments rules, so do not imply a number. Use **`meta.standing`** rather than counting the page: an overturned warning stays listed (so she can show she was cleared) and does not count. 🔒 Disputing does **not** pause the escalation — a reviewer decides — and it is once per warning. |
 | 2026-10-28 | 🔁 **A switch can now move a whole recurring commitment: `switchScope` on `POST /seat-offers/{offer}/accept`.** `this_date` (**the default**) is what you have today. 🔴 **`all_future_weekdays` gives up every future morning she still holds on the old commute and returns ONE seat** — the day the offer is for. Nothing replaces the rest and nothing gives them back; each released seat goes to whoever is waiting on that day. An offer is for one occurrence, so no implementation could honestly cover a month, and v5 §231 says replacement capacity is **not guaranteed** on days she has not confirmed. **So warn clearly before sending it, and read `meta.releasedDates`** — the exact mornings it cost her, `[]` for everything else. Only **her own future** bookings are released (a morning already over is never touched; another passenger's days are untouched), and `joinOldWaitlist` is now **scoped to match**: that one date, or the whole pattern. `driver_delay` charges **nothing on any** released morning rather than turning one driver's lateness into four fees. ⚠️ **Still not built: the mixed case** — v5 leaves *"recurring switch for dates with mixed availability"* unspecified, so a per-weekday selector would be guessing. This scope is all or none. |
 | 2026-10-27 | ☎️ **The Call button has something behind it: `GET /bookings/{booking}/call`.** Returns `{phone, name}` — a dialable number and the first name for the dialler screen. 🔒 **The only way to a phone number in the whole API, and an endpoint rather than a field on purpose**: a booking payload is listed, cached and proxy-logged, so a number in it would be disclosed to all of that instead of to the person who tapped Call. Every success writes a `phone_number_disclosed` line to our security log. **The gates are asymmetric, as v5 §426 specifies:** the passenger from **booking acceptance** (and a completed ride still counts — "I left my bag in your car"), the driver **only for the one passenger she is next to pick up and only after she has started**. 🔴 A driver with five confirmed bookings does **not** get five numbers: "next to pick up" is the earliest pickup she has not reached, so the icon should appear and disappear with it. Refusals are `409 CALL_NOT_AVAILABLE` with `error.fields.reason` — `booking_not_live` · `trip_not_started` · `not_next_pickup` — so you can explain instead of greying a button out; `404` for anybody who is neither party. ⚠️ **Not masked**: v5 says the call opens the device dialler, and a relay needs a telephony provider v5 defers. Hand it to the dialler — do not cache it, store it, or render it as screenshottable text. |

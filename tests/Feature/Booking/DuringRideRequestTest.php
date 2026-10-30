@@ -1,9 +1,14 @@
 <?php
 
+use App\Domains\Booking\Actions\OfferSeatToWaitlistAction;
+use App\Domains\Booking\Enums\SeatOfferStatus;
+use App\Domains\Booking\Models\SeatOffer;
 use App\Domains\Booking\Models\SeatRequest;
+use App\Domains\Commute\Enums\ScheduledTripStatus;
 use App\Domains\Commute\Models\ScheduledTrip;
 use App\Domains\Driver\Models\Vehicle;
 use App\Domains\Trip\Models\TripLocation;
+use App\Domains\Trip\Models\TripSession;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Storage;
 
@@ -283,4 +288,115 @@ it('leaves an ordinary request’s window alone', function () {
     test()->artisan('requests:expire')->assertExitCode(0);
 
     expect(SeatRequest::query()->whereKey($requestId)->sole()->status->value)->toBe('pending');
+});
+
+/*
+|--------------------------------------------------------------------------
+| v5's required test 4 — an open offer on a run that has set off
+|--------------------------------------------------------------------------
+*/
+
+/**
+ * 🔴 *"Trip starts while offer is open: offer remains if pickup reachable; closes once route makes
+ * pickup unreachable."* And: *"trip start alone doesn't invalidate offers."*
+ *
+ * Both halves in one test, because the pair is the point: the run setting off changes nothing, and
+ * the car passing her street changes everything.
+ */
+it('keeps an open offer alive after the run sets off, and closes it once the car passes her', function () {
+    /*
+     * ⚠️ She joins the waiting list BEFORE the run sets off, and that is behaviour rather than a
+     * fixture quirk: on a moving run a full day is REFUSED, not waitlisted. A place in a queue for
+     * a car that is currently driving past is meaningless — the morning ends in forty minutes — and
+     * v5 describes an active-ride request as something a driver may accept "if feasible", not a
+     * queue entry. So the run is stopped, she joins, and then it sets off again.
+     */
+    $trip = ScheduledTrip::query()->whereKey($this->trip->id)->sole();
+
+    // Put the day back to scheduled so she can join the queue at all — see the note above.
+    $trip->forceFill([
+        'status' => ScheduledTripStatus::Scheduled->value,
+        'seats_taken' => $trip->seats_total,
+    ])->save();
+
+    TripSession::query()
+        ->where('scheduled_trip_id', $this->trip->id)
+        ->update(['current_status' => 'preparing']);
+
+    $waiting = verifiedPassenger('01222220009', device: 'pax-9');
+
+    $requestId = requestSeat($waiting, $this->commuteId, [
+        'scheduledTripId' => $this->trip->id,
+        'pickup' => ['lat' => 30.0624, 'lng' => 31.3614, 'label' => 'Ring Road, Rehab exit'],
+        'dropoff' => ['lat' => 30.0684, 'lng' => 31.1015, 'label' => 'Mehwar, Sheikh Zayed'],
+    ])->assertStatus(201)->assertJsonPath('data.status', 'WAITLISTED')->json('data.id');
+
+    // Back on the road, and a seat frees — so she is offered it mid-journey.
+    TripSession::query()
+        ->where('scheduled_trip_id', $this->trip->id)
+        ->update(['current_status' => 'en_route']);
+
+    $trip->forceFill(['seats_taken' => 0])->save();
+
+    app(OfferSeatToWaitlistAction::class)
+        ->forTrip($trip->refresh(), 1);
+
+    $offer = SeatOffer::query()
+        ->where('seat_request_id', $requestId)->sole();
+
+    expect($offer->status)->toBe(SeatOfferStatus::Open);
+
+    // 🔴 The car is still behind her, so the sweep leaves it alone — "trip start alone doesn't
+    // invalidate offers".
+    carAt($this->driverToken, $this->trip->id, 30.0594, 31.4800);
+
+    test()->artisan('requests:expire')->assertExitCode(0);
+
+    expect(SeatOffer::query()->whereKey($offer->getKey())->sole()->status)
+        ->toBe(SeatOfferStatus::Open);
+
+    // And now it has gone past her.
+    carAt($this->driverToken, $this->trip->id, 30.0684, 31.2000);
+
+    test()->artisan('requests:expire')->assertExitCode(0);
+
+    $closed = SeatOffer::query()->whereKey($offer->getKey())->sole();
+
+    /*
+     * 🔴 `INELIGIBLE`, not `CLOSED`. The seat still exists — she stopped qualifying for it — and a
+     * woman reading her own history should be able to tell "the car went past my street" from "the
+     * day was cancelled".
+     */
+    expect($closed->status)->toBe(SeatOfferStatus::Ineligible)
+        ->and($closed->closed_at)->not->toBeNull();
+});
+
+/**
+ * ⚠️ And an offer on a run that has NOT set off is never touched by it. There is no route progress
+ * to measure, so nothing has become unreachable — an offer on tomorrow's commute is not
+ * unreachable, it is simply not yet asked.
+ */
+it('never closes an offer on a run that has not started', function () {
+    $otherDay = ScheduledTrip::query()
+        ->where('commute_offer_id', $this->commuteId)
+        ->whereKeyNot($this->trip->getKey())
+        ->orderBy('trip_date')
+        ->firstOrFail();
+
+    $waiting = verifiedPassenger('01222220010', device: 'pax-10');
+
+    $otherDay->forceFill(['seats_taken' => $otherDay->seats_total])->save();
+
+    $requestId = requestSeat($waiting, $this->commuteId, ['scheduledTripId' => $otherDay->getKey()])
+        ->assertStatus(201)->json('data.id');
+
+    $otherDay->forceFill(['seats_taken' => 0])->save();
+
+    app(OfferSeatToWaitlistAction::class)
+        ->forTrip($otherDay->refresh(), 1);
+
+    test()->artisan('requests:expire')->assertExitCode(0);
+
+    expect(SeatOffer::query()->where('seat_request_id', $requestId)->sole()->status)
+        ->toBe(SeatOfferStatus::Open);
 });
