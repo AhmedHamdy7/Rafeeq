@@ -726,12 +726,15 @@ Route::prefix('v1')->group(function (): void {
         /*
          * `Receive Requests During Ride`, per morning (Feature 03 v5 §8, §9).
          *
-         * ⚠️ **Nothing acts on it yet.** The mid-journey seat request it governs is not built —
-         * v5 leaves its hardest part open ("reachability depends on actual route progress and
-         * predicted ETA"), and its own out-of-scope note asks for "durable states/hooks, not
-         * speculative behavior". Her answer is collected now because the default is YES: a "no"
-         * first asked for on the day the feature ships would mean the first mid-journey request
-         * reaching a driver who had already refused them.
+         * 🔴 Her answer is the first gate on a request made to a car that is already moving, and it
+         * is checked before anything is computed: a "no" costs nothing to honour, while the geometry
+         * behind "could she still reach you" is the expensive part. The default is YES, which is why
+         * the switch shipped before the feature it governs — a "no" first collected on the day the
+         * feature arrived would have meant the first mid-journey request reaching a driver who had
+         * already refused them.
+         *
+         * {@see \App\Domains\Booking\Support\DuringRideRequests} for the gate,
+         * {@see \App\Domains\Trip\Support\PickupReachability} for what it guards.
          */
         Route::patch('trips/{trip}/receive-requests', [TripController::class, 'receiveRequests']);
 
