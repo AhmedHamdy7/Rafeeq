@@ -14,7 +14,7 @@
 >
 > **Base URL:** `{host}/api/v1` · **Auth:** bearer token · **Format:** JSON only.
 
-**Last updated:** 2026-10-30 · **168 endpoints live** · Phases 0–7, 9 and 11 complete · 10, 12 and 13 all but a decision each
+**Last updated:** 2026-10-30 · **170 endpoints live** · Phases 0–7, 9 and 11 complete · 10, 12 and 13 all but a decision each
 
 ---
 
@@ -22,7 +22,7 @@
 
 ### What is ready
 
-**168 endpoints live** and tested, across the 47 designed screens:
+**170 endpoints live** and tested, across the 47 designed screens:
 
 | | Count | Covers |
 |---|---|---|
@@ -785,6 +785,7 @@ fails if this list and the running routes ever disagree in either direction.
 | `GET /trips/{trip}` | 4.9 Live trip |
 | `GET /trips/{trip}/attendance` | 4.9 Live trip |
 | `POST /trips/{trip}/cancel` | 4.9 Live trip |
+| `POST /trips/{trip}/cancel-active` | 4.9 Live trip |
 | `POST /trips/{trip}/check-in` | 4.9 Live trip |
 | `POST /trips/{trip}/complete` | 4.9 Live trip |
 | `GET /trips/{trip}/location` | 4.9 Live trip |
@@ -795,6 +796,7 @@ fails if this list and the running routes ever disagree in either direction.
 | `PATCH /trips/{trip}/receive-requests` | 4.9 Live trip |
 | `POST /bookings/{booking}/end-early` | 4.9 Live trip |
 | `POST /bookings/{booking}/exit-without-fee` | 4.9 Live trip |
+| `GET /bookings/{booking}/alternatives` | 4.9 Live trip |
 | `POST /trips/{trip}/start` | 4.9 Live trip |
 | `POST /trips/{trip}/status` | 4.9 Live trip |
 | `GET /trips/{trip}/wait-timers` | 4.9 Live trip |
@@ -2505,12 +2507,49 @@ stand. `200` with the day (`ScheduledTrip`, `status: "CANCELLED"`, `seatsTaken: 
   reason**, which may be personal and shows on a lock screen. Nothing is charged.
 - A pending one-day request for that date is expired.
 - `TRIP_NOT_CANCELLABLE` (409, `error.fields.status`) once the run has started, or if the day is
-  already cancelled. A run already under way is ended through `POST /trips/{trip}/status` instead.
+  already cancelled. A run already under way is stopped with `POST /trips/{trip}/cancel-active`
+  below — **not** with `POST /trips/{trip}/status`, which refuses `CANCELLED` outright.
 - Anybody but the day's driver gets `404`.
 - A cancelled day stays cancelled: it cannot be booked or started, and is not regenerated.
 
 Ask for confirmation first, and say how many people will be told (`GET /driver/home` already
 has the count for today).
+
+#### `POST /trips/{trip}/cancel-active` — active, profile complete, driver only — "Cancel Active Trip"
+
+`{ "reason": "..." }` — **required**, 3 to 255 characters. Stops a run that has **already set off**
+(v5 §123–125). `200` with the day, plus a `meta` the confirmation screen needs:
+
+```json
+{ "data": { "status": "CANCELLED", "seatsTaken": 0 },
+  "meta": { "endedEarly": 1, "cancelled": 2 } }
+```
+
+**This is a different endpoint from "cancel today" and the difference is not cosmetic.** That one
+refuses once the car has moved. This one is the heaviest act a driver can take: it goes on her
+reliability record at the largest weight in the ledger, and she can appeal it
+(`POST /account/reliability/events/{event}/appeal`, 4.2). Put it behind its own confirmation, worded as
+stopping the journey rather than cancelling a booking, and never behind the same button as
+"cancel today".
+
+**The two groups of passengers are handled differently, and your screens should say so:**
+
+| | Booking becomes | What she is told | Where alternatives start |
+|---|---|---|---|
+| **Was in the car** (`meta.endedEarly`) | `ENDED_EARLY` | `active_trip_cancelled_aboard` | where the car stopped |
+| **Never collected** (`meta.cancelled`) | `CANCELLED_BY_DRIVER` | `active_trip_cancelled` | her agreed pickup |
+
+- A passenger who was aboard **keeps her attendance** (`PRESENT`/`LATE`): the part she rode still
+  happened, and her booking is `ENDED_EARLY`, not cancelled. Do not show it as a cancellation.
+- Nobody is charged a cancellation fee either way — the fee and the record fall on the driver.
+- The driver's typed reason is **never** sent to passengers. Support reads it on the booking.
+- Freed seats are offered to **nobody**: a seat on a run that has stopped is not a seat.
+- `TRIP_NOT_STARTED` (409) if the run never began — use `POST /trips/{trip}/cancel`.
+  `TRIP_NOT_CANCELLABLE` (409, with `error.fields.status`) if it is `PREPARING` (it has not left yet,
+  so "cancel today" is the cheaper and correct call) or already cancelled.
+- **There is no safe-stop picker and you should not build one** (v5 §129). The server reads where
+  each passenger ended up from what the run already recorded. See
+  `GET /bookings/{booking}/alternatives`.
 
 #### `GET /trips/{trip}` — active, profile complete, driver or anybody on the run
 
@@ -2661,6 +2700,54 @@ Read `driverDelay` off `GET /bookings/{booking}`; it is computed per request, ne
 it is true only for as long as it is true. Calling too early answers
 **`409`** with `error.fields.driverDelay: ["NOT_DELAYED"]` — send her to `PATCH /bookings/{booking}/cancel`
 instead, because at that moment nobody has let her down.
+
+#### `GET /bookings/{booking}/alternatives` — active, profile complete, **passenger only**
+
+🔴 **"Find another commute"** (v5 §126–128, §441). What she could still catch, after a morning was
+taken away from her. No request body — the server works out the question from her booking.
+
+**It books nothing.** Not a seat, not a request, not a hold. The payload is the ordinary search's
+result cards (same shape as `GET /search/commutes`, 4.5), so asking for a seat on one is the
+ordinary `POST /commutes/{commute}/seat-requests` with the ordinary driver approval. v5 says this
+twice, and it is a product rule, not an implementation detail: a woman whose ride just collapsed is
+the last person who should discover she has been committed to a stranger's car on her behalf.
+
+**The whole point is that she does not retype a journey while standing at a roadside**, so
+`meta.origin` tells you where the server searched from and on what authority. The caption over the
+list depends on it:
+
+| `meta.origin.kind` | What happened | Suggested caption |
+|---|---|---|
+| `AGREED_PICKUP` | She was never collected; she is where she always stands | "Other commutes from your usual stop" |
+| `WHERE_THE_CAR_STOPPED` | She was aboard and the car reported its position | "Other commutes from here" |
+| `LAST_STOP_REACHED` | She was aboard; the position had expired, so this is the furthest stop the run reached | "Other commutes from near here" |
+| `AGREED_PICKUP_UNVERIFIED` | She was aboard and **nothing recorded where the car got to** | "Other commutes from your usual stop" — and offer her the map, because this one is a guess |
+
+```json
+{ "meta": { "origin": { "lat": 30.0624, "lng": 31.3614,
+                        "label": "Ring Road, Rehab exit", "kind": "AGREED_PICKUP" },
+            "matched": 3 } }
+```
+
+- **Readable while her booking is still `CONFIRMED`**, which v5 §241 asks for in those words: she
+  has to see what else runs before she gives up a seat on a driver who has not come. So this pairs
+  with `exit-without-fee` above — show the list first, let her exit second.
+- Also readable on `CANCELLED_BY_DRIVER`, `ENDED_EARLY` and `EXITED_DUE_TO_DRIVER_DELAY`.
+  `COMPLETED` answers `404`: a finished journey needs no alternative.
+- Only commutes with **free seats** come back, and each card carries the **car** (v5 §444) — she is
+  choosing between strangers' cars at a roadside and needs to know which one to look for.
+- `matched: 0` with `data: []` is a normal answer, not an error. **Rafeeq does not dispatch**: the
+  search only returns days that have not departed, so for a run stopped at 08:20 the honest answer
+  is often tomorrow. Offer to save a demand (`POST /commute-demands`, 4.5), exactly as the ordinary
+  empty search does.
+- `404` for the driver too. The list of cars her passenger is being offered is not the driver's to
+  read.
+- `404` if the booking has no agreed drop-off recorded. Where she was going is the one thing that
+  cannot be inferred, and a search without it would rank every car heading vaguely her way.
+
+⚠️ **Do not build a "where are you?" step.** v5 §129 forbids a safe-stop picker, and a form asking
+her position is that picker with a different label. If `kind` is `AGREED_PICKUP_UNVERIFIED`, offer
+the map as a *choice*, never as a required field.
 
 ⚠️ **The other half of v5 §241 already exists**: if she finds an alternative commute she can switch
 into it with no fee while this booking is still confirmed — `POST /seat-offers/{offer}/accept` with
@@ -3782,6 +3869,7 @@ exist, and every live endpoint must be named here.
 
 | Date | Change |
 |---|---|
+| 2026-10-30 | 🛑 **`POST /trips/{trip}/cancel-active` — the driver stops a run that has already set off (v5 §123–125), and `GET /bookings/{booking}/alternatives` — "find another commute" (§126–128, §441).** Until now there was no lawful way to end a journey that had gone wrong: "cancel today" refuses once the car has moved — correctly — so a driver whose car broke down on the Mehwar could drive it anyway or abandon people while the system insisted the trip was in progress. **`reason` is required** on the new endpoint, because it carries the heaviest weight in the reliability ledger and she can appeal it. 🔴 **The two groups of passengers are not the same and your screens must not treat them so:** whoever was **in the car** ends `ENDED_EARLY` **keeping her attendance** — the part she rode happened — while whoever was **never collected** ends `CANCELLED_BY_DRIVER`; `meta.endedEarly` and `meta.cancelled` give you the counts, and each group gets a different notification. Nobody is charged either way; freed seats are offered to **nobody**. 🔴 **The alternatives list books NOTHING** — v5 says so twice — and `meta.origin.kind` tells you where the server searched from (`WHERE_THE_CAR_STOPPED` · `LAST_STOP_REACHED` · `AGREED_PICKUP` · `AGREED_PICKUP_UNVERIFIED`), which decides your caption. It is readable **while her booking is still `CONFIRMED`**, so she can look before she gives up a seat on a driver who has not come (§241). ⚠️ **Do not build a "where are you?" step** — v5 §129 forbids a safe-stop picker. ⚠️ **And a hole that is now closed:** `POST /trips/{trip}/status` accepted `CANCELLED` and the state machine allowed it from `PREPARING` and `EN_ROUTE`, so one ordinary request marked a run cancelled while every booking on it still read `CONFIRMED`, seats still counted as taken, and no passenger was told. It now refuses with `TRIP_INVALID_TRANSITION` and `error.fields.use` naming the right endpoint. |
 | 2026-10-30 | 🚗 **A car that is already moving can be asked for a seat — v5's active-ride request.** **Same endpoint**: send `scheduledTripId` for a run that has set off and you get one, with **no flag you send** (the circumstances decide, not the client). Two differences, both for the separate sheet v5 draws on the driver's side: **`requestedDuringRide: true`** on the seat-request shape, and **`expiresAt` three minutes out** — v5 says this is the **only countdown left in the product**. The clock is real on the server: approval reads `expiresAt`, so a late tap answers `409 SEAT_REQUEST_NOT_PENDING` with `error.fields.expiredAt`. Two new refusals: `SEAT_UNAVAILABLE` + `duringRide: ["NOT_ACCEPTING"]` when the driver turned the toggle off for that morning, and **`PICKUP_UNREACHABLE`** + `error.fields.reachability` — `already_passed` (**nothing she can do**, offer alternatives rather than a retry) · `would_break_promise` · `detour_too_long` · `position_unknown`/`route_unknown` (**a retry may work**). 🔴 **Reachability is measured, never timed** — v5 forbids a fixed limit twice, because a clock would refuse her on a run crawling five minutes from her gate and accept her on one that had passed her street. ⚠️ And an existing waiting-list **offer** now behaves the same way: it stays open after the run sets off while she is still reachable, and closes **`INELIGIBLE`** once the car has passed — "she stopped qualifying", not "the seat stopped existing". |
 | 2026-10-30 | ⚠️ **The two escalating warning counters: `GET /account/warnings` and `POST /account/warnings/{warning}/dispute`.** Present them as **separate from the reliability score** — the score is the aggregate a monthly review reads, these are the sentences a member is actually told. And v5 tells us not to confuse the two counters with each other: **`LATE_BOARDING`** (she kept the car waiting and boarded — `PICKED_UP`, not a no-show) gets **2** warnings before a fee is possible; **`MISSED_COMMITMENT`** (a no-show, or a cancellation too late to refill the seat) gets **1**. 🔴 **A lateness is delivered after her drop-off and never during the trip** (v5 §10) — so it is recorded at her pickup and **does not appear in this list** until her journey ends; the message would otherwise reach a woman sitting in the car beside the people she kept waiting. The notification carries `warningId`, the **dispute link** v5 requires. ⚠️ **`feeEligible` is a flag and there is no amount** — v5 defers it to the Payments rules, so do not imply a number. Use **`meta.standing`** rather than counting the page: an overturned warning stays listed (so she can show she was cleared) and does not count. 🔒 Disputing does **not** pause the escalation — a reviewer decides — and it is once per warning. |
 | 2026-10-28 | 🔁 **A switch can now move a whole recurring commitment: `switchScope` on `POST /seat-offers/{offer}/accept`.** `this_date` (**the default**) is what you have today. 🔴 **`all_future_weekdays` gives up every future morning she still holds on the old commute and returns ONE seat** — the day the offer is for. Nothing replaces the rest and nothing gives them back; each released seat goes to whoever is waiting on that day. An offer is for one occurrence, so no implementation could honestly cover a month, and v5 §231 says replacement capacity is **not guaranteed** on days she has not confirmed. **So warn clearly before sending it, and read `meta.releasedDates`** — the exact mornings it cost her, `[]` for everything else. Only **her own future** bookings are released (a morning already over is never touched; another passenger's days are untouched), and `joinOldWaitlist` is now **scoped to match**: that one date, or the whole pattern. `driver_delay` charges **nothing on any** released morning rather than turning one driver's lateness into four fees. ⚠️ **Still not built: the mixed case** — v5 leaves *"recurring switch for dates with mixed availability"* unspecified, so a per-weekday selector would be guessing. This scope is all or none. |

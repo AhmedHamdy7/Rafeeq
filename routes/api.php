@@ -561,6 +561,20 @@ Route::prefix('v1')->group(function (): void {
         Route::post('bookings/{booking}/exit-without-fee', [BookingController::class, 'exitWithoutFee']);
 
         /*
+         * "Find another commute" — what she could still catch, after a morning was taken away from
+         * her (Feature 03 v5 §126–128, §441).
+         *
+         * 🔴 It books NOTHING. v5 says so twice, and it returns the ordinary search's result cards
+         * so that asking for a seat on one is the ordinary flow: a woman whose ride just collapsed
+         * is the last person who should find she has been put in a stranger's car on her behalf.
+         *
+         * 🔴 Readable while the booking is still CONFIRMED, which v5 §241 asks for in those words:
+         * she has to see what else there is before she gives up a seat on a driver who has not
+         * come. The server derives where to search from — there is no safe-stop picker, per §129.
+         */
+        Route::get('bookings/{booking}/alternatives', [BookingController::class, 'alternatives']);
+
+        /*
          * The Call button beside Message (Feature 03 v5 §247, §426: "call opens device dialer").
          *
          * 🔒 An endpoint rather than a field on the booking, because a booking payload is fetched in
@@ -740,6 +754,20 @@ Route::prefix('v1')->group(function (): void {
 
         // "Cancel today" — one day off, before it starts; the commute stands (screen 23).
         Route::post('trips/{trip}/cancel', [TripController::class, 'cancel']);
+
+        /*
+         * "Cancel Active Trip" — she stops a run that has already set off (Feature 03 v5 §123–125).
+         *
+         * 🔴 A second endpoint rather than a flag on the one above, because v5 opens that section
+         * with *"Pause Commute cannot cancel an already-started trip"* and the two acts share
+         * almost nothing: this one ends journeys people are inside, carries the heaviest weight in
+         * the reliability ledger and may be appealed. One route whose meaning turned on whether the
+         * car had moved is how a driver cancels the wrong morning.
+         *
+         * ⚠️ `PATCH trips/{trip}/advance` cannot do this and now refuses to pretend it can —
+         * {@see \App\Domains\Trip\Actions\AdvanceTripAction::execute} on the hole that closed.
+         */
+        Route::post('trips/{trip}/cancel-active', [TripController::class, 'cancelActive']);
 
         /*
          * Who actually travelled (decision D18).

@@ -3,11 +3,15 @@
 namespace App\Http\Controllers\Api\V1\Booking;
 
 use App\Domains\Booking\Actions\CancelBookingAction;
+use App\Domains\Booking\Enums\BookingStatus;
 use App\Domains\Booking\Models\Booking;
 use App\Domains\Commute\Models\ScheduledTrip;
 use App\Domains\Identity\Enums\SecurityEventType;
 use App\Domains\Identity\Models\User;
 use App\Domains\Identity\Support\SecurityLog;
+use App\Domains\Matching\Actions\SuggestAlternativesAction;
+use App\Domains\Matching\Support\AlternativeOrigin;
+use App\Domains\Matching\Support\SearchRateLimit;
 use App\Domains\Shared\Exceptions\DomainException;
 use App\Domains\Shared\Support\ErrorCode;
 use App\Domains\Trip\Actions\AdvanceTripAction;
@@ -17,6 +21,7 @@ use App\Domains\Trip\Support\CallEntitlement;
 use App\Http\Controllers\Controller;
 use App\Http\OpenApi\ApiErrors;
 use App\Http\Resources\BookingResource;
+use App\Http\Resources\MatchResultResource;
 use App\Http\Responses\ApiResponse;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -240,6 +245,77 @@ final class BookingController extends Controller
             'phone' => $other->phone_e164,
             'name' => $other->public_first_name,
         ]);
+    }
+
+    /**
+     * GET /v1/bookings/{booking}/alternatives — "Find another commute" for a journey that was taken
+     * away from her (Feature 03 v5 §126–128, §441, §444).
+     *
+     * 🔴 **Suggestions only.** Nothing is reserved, nothing is requested, nothing is held. v5 says
+     * it twice — *"offer suggestions … never automatically book"* — and the list it returns is the
+     * ordinary search's own result cards, so asking for a seat on one is the ordinary flow with the
+     * ordinary approval. See {@see SuggestAlternativesAction} for why that restraint matters most to
+     * the person this endpoint exists for.
+     *
+     * 🔴 **Hers, not the driver's**, which is the one place this diverges from every other route in
+     * this controller: {@see visible} admits either party, and a driver reading the list of cars her
+     * passenger is being offered is not something to build. The refusal is a 404, like the rest.
+     *
+     * Available while the booking is anything but `COMPLETED`, and `CONFIRMED` is deliberately in
+     * that set — v5 §241 asks for exactly it: *"allow alternative request while old booking still
+     * confirmed, then atomic driver-fault switch."* A woman deciding whether to give up on a driver
+     * who has not arrived has to be able to see what else there is BEFORE she lets go of her seat.
+     *
+     * `meta.origin` says where the search started from and on what authority. The client needs it:
+     * "other commutes from here" and "other commutes from your usual stop" are different captions,
+     * and {@see AlternativeOrigin} explains why showing the wrong one
+     * misleads her about which cars pass where she is standing.
+     */
+    #[ApiErrors(ErrorCode::NotFound, ErrorCode::TooManyRequests)]
+    public function alternatives(
+        Request $request,
+        string $booking,
+        SuggestAlternativesAction $action,
+    ): JsonResponse {
+        $target = $this->visible($request, $booking);
+
+        if ($target->passenger_user_id !== $request->user()->id) {
+            throw DomainException::of(ErrorCode::NotFound);
+        }
+
+        /*
+         * 🔴 The same bucket `GET /search/commutes` draws on, because this runs the same engine and
+         * the engine ends in routing-provider work. Limited there and unlimited here would be one
+         * limit with a door beside it. See {@see SearchRateLimit}.
+         */
+        SearchRateLimit::assert($request->user()->id);
+
+        if ($target->status === BookingStatus::Completed) {
+            // A finished journey needs no alternative. Not an error state worth its own code: the
+            // booking is simply not one this endpoint is about.
+            throw DomainException::of(ErrorCode::NotFound);
+        }
+
+        $target->load(['scheduledTrip.commuteSchedule', 'scheduledTrip.commuteOffer', 'scheduledTrip.tripSession', 'passenger']);
+
+        $suggested = $action->execute($target);
+
+        return ApiResponse::success(
+            MatchResultResource::collection($suggested['results']),
+            meta: [
+                'origin' => [
+                    'lat' => $suggested['origin']->point->lat,
+                    'lng' => $suggested['origin']->point->lng,
+                    'label' => $suggested['origin']->label,
+                    // AGREED_PICKUP · WHERE_THE_CAR_STOPPED · LAST_STOP_REACHED ·
+                    // AGREED_PICKUP_UNVERIFIED — see AlternativeOrigin.
+                    'kind' => strtoupper($suggested['origin']->kind),
+                ],
+                // An empty list is not an error: it means nothing else runs this way today, and
+                // the client offers to save a demand instead — as the ordinary search does.
+                'matched' => count($suggested['results']),
+            ],
+        );
     }
 
     private function visible(Request $request, string $bookingId): Booking

@@ -359,6 +359,29 @@ return [
          * agree to. Twenty is also more than a search box can show.
          */
         'recent_searches_kept' => 20,
+
+        /*
+         * "Find another commute", for a journey that was taken away from her (Feature 03 v5 §126,
+         * §441). She is not filling a search form in — the server answers from her booking — so
+         * these are the figures it answers WITH, and they are deliberately more generous than the
+         * ones she would pick herself.
+         *
+         * A woman at a roadside whose ride just stopped will walk further and accept a longer way
+         * round than the same woman planning next month's commute on her sofa, and a list filtered
+         * to her sofa preferences would be empty exactly when she needs it. They are ceilings, not
+         * targets: results are still ranked, so a nearer one still comes first.
+         */
+        'alternatives' => [
+            'max_walk_minutes' => 20,
+            'max_detour_minutes' => 20,
+
+            /*
+             * How far ahead of now still counts as "soon". Three hours rather than the rest of the
+             * day: past that it is not a replacement for this morning, and the ordinary search is
+             * the better tool for planning another day.
+             */
+            'window_minutes' => 180,
+        ],
     ],
 
     'commute' => [
@@ -878,6 +901,12 @@ return [
          * working shape so the ledger can be built and tested, not a policy.
          */
         'weights' => [
+            /*
+             * The heaviest, and the proportion is about where it leaves people rather than how
+             * deliberate it was: every other cancellation reaches a woman who is still at home,
+             * while this one can end with her part-way to work on a road she did not choose.
+             */
+            'driver_abandoned_active_trip' => 12,
             'driver_cancelled_booking' => 8,
             'driver_cancelled_day' => 6,
             'driver_displaced_passenger' => 3,
