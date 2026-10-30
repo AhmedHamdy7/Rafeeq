@@ -213,4 +213,12 @@ return [
         'title' => 'Missed commute recorded (warning :ordinal)',
         'body' => 'Your seat on :date was not used and was too late to be filled. The 1st is a warning; a 2nd may lead to a fee. Tap to review or dispute.',
     ],
+    'appeal_approved' => [
+        'title' => 'Your appeal was approved',
+        'body' => 'The record from :date no longer counts towards your reliability. It stays visible so you can see it was cleared.',
+    ],
+    'appeal_declined' => [
+        'title' => 'Your appeal was reviewed',
+        'body' => 'After review, the record from :date still stands. Contact support if you would like to discuss it.',
+    ],
 ];

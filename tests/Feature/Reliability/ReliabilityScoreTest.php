@@ -12,6 +12,7 @@ use App\Domains\Reliability\Enums\ReliabilityEventKind;
 use App\Domains\Reliability\Enums\ReliabilityRole;
 use App\Domains\Reliability\Models\ReliabilityEvent;
 use App\Domains\Reliability\Support\ReliabilityLedger;
+use Illuminate\Support\Facades\Route;
 
 /**
  * The Reliability Score, and the ledger it is derived from (Feature 03 v5).
@@ -382,8 +383,26 @@ it('offers no way to read another member’s reliability', function () {
     $paths = collect(registeredV1Paths())
         ->filter(fn (string $path): bool => str_contains($path, 'reliability'));
 
-    expect($paths)->toHaveCount(1)
-        ->and($paths->first())->not->toContain('{');
+    /*
+     * 🔒 The rule is about READING, so it is written that way rather than as "one path with no
+     * placeholders" — which is what this asserted until the appeal shipped.
+     *
+     * The appeal takes an event id, so a placeholder now exists and has to: she is answering one
+     * specific judgement. What must stay impossible is reading somebody's standing, and that is a
+     * property of the GET surface — every readable reliability path takes no parameter at all, so
+     * there is nothing to substitute somebody else's id into. The appeal's own scoping (hers only,
+     * 404 otherwise) is held in `AppealTest`.
+     */
+    $readable = collect(Route::getRoutes())
+        ->filter(fn ($route): bool => str_starts_with($route->uri(), 'api/v1/')
+            && str_contains($route->uri(), 'reliability')
+            && in_array('GET', $route->methods(), true))
+        ->map(fn ($route): string => $route->uri())
+        ->values();
+
+    expect($paths)->not->toBeEmpty()
+        ->and($readable)->toHaveCount(1)
+        ->and($readable->first())->not->toContain('{');
 
     // And hers answers about her, not about the driver whose commute she is on.
     expect(test()->flushHeaders()->withToken($stranger)

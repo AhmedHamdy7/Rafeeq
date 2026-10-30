@@ -39,6 +39,14 @@ class ReliabilityEvent extends Model
             'weight' => 'integer',
             'occurred_at' => 'datetime',
             'reversed_at' => 'datetime',
+
+            /*
+             * Her appeal (Feature 03 v5 §115), kept apart from the reviewer's answer above:
+             * `appealed_at` is hers and `reversed_at` is somebody else's, and only one of them
+             * changes what the score says.
+             */
+            'appealed_at' => 'datetime',
+            'appeal_declined_at' => 'datetime',
         ];
     }
 
@@ -89,5 +97,31 @@ class ReliabilityEvent extends Model
     public function scopeCounting(Builder $query): Builder
     {
         return $query->whereNull('reversed_at');
+    }
+
+    /**
+     * Appeals nobody has answered yet — the reviewer's queue.
+     *
+     * 🔴 Open means filed and answered neither way. The two outcomes are stored in different
+     * columns on purpose, so "still waiting" is the absence of both rather than a status somebody
+     * has to remember to set — and an appeal that fell out of the queue because a status was missed
+     * is the failure this shape makes impossible.
+     *
+     * @param  Builder<self>  $query
+     */
+    public function scopeAwaitingAppealReview(Builder $query): Builder
+    {
+        return $query
+            ->whereNotNull('appealed_at')
+            ->whereNull('reversed_at')
+            ->whereNull('appeal_declined_at');
+    }
+
+    /**
+     * Whether she may still file one. Once per event, which is v5's "appeal once".
+     */
+    public function isAppealable(): bool
+    {
+        return $this->appealed_at === null && $this->reversed_at === null;
     }
 }

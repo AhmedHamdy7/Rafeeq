@@ -14,7 +14,7 @@
 >
 > **Base URL:** `{host}/api/v1` · **Auth:** bearer token · **Format:** JSON only.
 
-**Last updated:** 2026-10-30 · **167 endpoints live** · Phases 0–7, 9 and 11 complete · 10, 12 and 13 all but a decision each
+**Last updated:** 2026-10-30 · **168 endpoints live** · Phases 0–7, 9 and 11 complete · 10, 12 and 13 all but a decision each
 
 ---
 
@@ -22,7 +22,7 @@
 
 ### What is ready
 
-**167 endpoints live** and tested, across the 47 designed screens:
+**168 endpoints live** and tested, across the 47 designed screens:
 
 | | Count | Covers |
 |---|---|---|
@@ -693,6 +693,7 @@ fails if this list and the running routes ever disagree in either direction.
 | `PUT /account/profile/basic` | 4.2 Account, devices, consents |
 | `GET /account/stats` | 4.2 Account, devices, consents |
 | `GET /account/reliability` | 4.2 Account, devices, consents |
+| `POST /account/reliability/events/{event}/appeal` | 4.2 Account, devices, consents |
 | `GET /account/warnings` | 4.2 Account, devices, consents |
 | `POST /account/warnings/{warning}/dispute` | 4.2 Account, devices, consents |
 | `GET /users/{user}/public-profile` | 4.2 Account, devices, consents |
@@ -1157,9 +1158,29 @@ plain row.
 > 🔒 **There is no endpoint for anybody else's.** The number is a judgement, and the path takes no
 > parameter at all. It is not on public profiles and v5 does not ask for it to be.
 >
-> **Not built:** the appeal *submission* flow. The reversal exists — an approved appeal clears an
-> event's impact while leaving it readable — but a driver cannot yet file one from the app, so that
-> happens through support.
+#### `POST /account/reliability/events/{event}/appeal` — signed-in
+
+🔴 **Now built.** `{ "reason": "..." }`, required, 3–255 characters — her account of that morning,
+which is the entire case, because nothing is attached to a reliability event for a reviewer to weigh.
+
+Answers `{ reliabilityEventId, appealedAt, stillCounts }`.
+
+⚠️ **`stillCounts` is `true` and that is not a bug — show it.** Filing changes nothing on its own:
+the event keeps counting until a reviewer reverses it. If asking were enough to suspend the
+consequence, everything would be appealed as a matter of course and the score would stop meaning
+anything. What filing buys her is that a person has to look, and that she is told the answer.
+
+| | |
+|---|---|
+| Once per event | `422` with `error.fields.appeal`: `ALREADY_APPEALED`, or `ALREADY_REVERSED` if it has already been cleared. |
+| Somebody else's event | `404`, never `403` — a `403` would confirm the id names a real judgement about a real person. |
+| The answer | `appeal_approved` or `appeal_declined` notification. An **approved** appeal stops the event counting and **leaves it readable** (`reversed: true` in the events list), so she can see she was cleared. |
+| 🔒 The reviewer's note | Never sent to her. It is written for the desk and may name another member or quote a driver; she is told the outcome and support explains the rest. |
+
+⚠️ **The reviewer's own screen is not built, and v5 says not to build it yet**: §275 lists "admin
+UI" among the things to leave as "durable states/hooks, not speculative behavior". The decision
+Actions exist and are tested, so the desk can act today; the queue page lands with the admin
+dashboard (Phase 12). Nothing about the member-facing half changes when it does.
 
 **`cancellationRate` has been removed from `GET /account/stats`** — **if you read it, stop.** It was
 published before anything computed it and answered `null` for every account from the day it shipped.

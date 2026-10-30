@@ -123,6 +123,18 @@ enum NotificationType: string
      */
     case MissedCommitmentWarning = 'missed_commitment_warning';
 
+    /**
+     * Her appeal against a reliability event was approved (Feature 03 v5 §115).
+     *
+     * 🔒 The outcome only. The reviewer's note is written for the desk — it may name another
+     * member, quote a driver, or record something about an investigation — so she is told what was
+     * decided and support explains the rest.
+     */
+    case AppealApproved = 'appeal_approved';
+
+    /** Her appeal was declined, and the event keeps counting. */
+    case AppealDeclined = 'appeal_declined';
+
     case ChatMessage = 'chat_message';
     case RatingDue = 'rating_due';
     case RatingDueRiders = 'rating_due_riders';
@@ -255,6 +267,8 @@ enum NotificationType: string
             self::CommuteDayExpired,
             self::LateBoardingWarning,
             self::MissedCommitmentWarning,
+            self::AppealApproved,
+            self::AppealDeclined,
             self::ChatMessage,
             self::RatingDue,
             self::RatingDueRiders,

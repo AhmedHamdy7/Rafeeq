@@ -117,6 +117,17 @@ Route::prefix('v1')->group(function (): void {
         Route::get('reliability', [ReliabilityController::class, 'show']);
 
         /*
+         * 🔴 Her appeal against one event (Feature 03 v5 §115: a ban comes "with appeal").
+         *
+         * This was the missing half of a mechanism that already had its outcome: the ledger could
+         * record a reversal from the day it was built and nothing could ever write one, because
+         * there was no way to file. Filing changes nothing by itself — a reviewer decides, and she
+         * is told either way — but a score that can end an account has to be answerable.
+         */
+        Route::post('reliability/events/{event}/appeal', [ReliabilityController::class, 'appeal'])
+            ->middleware('throttle:safety-reports');
+
+        /*
          * The escalating warnings, and her answer to one (Feature 03 v5 §239).
          *
          * 🔴 A different mechanism from the reliability score above, which v5 describes separately
