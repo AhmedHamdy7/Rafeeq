@@ -169,9 +169,10 @@ final class RatingController extends Controller
     public function commuteReviews(Request $request, string $commute): JsonResponse
     {
         /*
-         * The same eligibility that governs seeing the commute at all. Without it, somebody
-         * excluded from a women-only commute could still read its driver's reviews — a smaller
-         * leak than seeing the commute, and the same rule should decide both.
+         * The same eligibility that governs seeing the commute at all. Without it, somebody a
+         * driver blocked could still read her reviews — a smaller leak than seeing the commute,
+         * and the same rule should decide both. (Women-only commutes are visible to everybody,
+         * Feature 03 C-11, so their reviews are too.)
          */
         $offer = CommuteOffer::query()
             ->whereKey($commute)

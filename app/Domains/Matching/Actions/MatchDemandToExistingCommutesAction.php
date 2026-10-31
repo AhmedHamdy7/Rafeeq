@@ -5,6 +5,7 @@ namespace App\Domains\Matching\Actions;
 use App\Domains\Matching\Enums\CommuteDemandStatus;
 use App\Domains\Matching\Models\CommuteDemand;
 use App\Domains\Matching\Models\MatchNotification;
+use App\Domains\Matching\Support\HardFilters;
 
 /**
  * The other half of matching: a NEW request against commutes that already exist.
@@ -38,6 +39,12 @@ final readonly class MatchDemandToExistingCommutesAction
 
         foreach ($this->search->execute($demand->passenger, NotifyMatchingDemandsAction::criteriaFor($demand)) as $result) {
             if ($result->score->total() < $threshold) {
+                continue;
+            }
+
+            // Search shows women-only commutes to everybody (C-11); an alert is an invitation to
+            // ask for a seat, so only for a commute she may ask on.
+            if (! HardFilters::mayJoinAudience($demand->passenger, $result->offer)) {
                 continue;
             }
 

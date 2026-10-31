@@ -45,14 +45,6 @@ final class CommuteDemandResource extends JsonResource
             'maxDetourMinutes' => $this->max_detour_minutes,
             'audiencePreference' => $this->audience_preference->value,
 
-            /*
-             * A MONTHLY ceiling, which is the number screen 18 asks for and the number a
-             * passenger actually knows about their own budget. The per-ride ceiling the
-             * scoring uses is derived from it and the committed days — see
-             * `SearchCriteria::perSeatCeilingPiastres()`.
-             */
-            'budgetMonthlyPiastres' => $this->budget_monthly_piastres,
-
             // Screen 18's "Add a return ride (~5:00 PM)". Recorded; matching the evening
             // leg itself is still open (the column has been here since Phase 1).
             'wantsReturnTrip' => $this->wants_return_trip,

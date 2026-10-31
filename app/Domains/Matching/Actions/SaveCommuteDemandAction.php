@@ -46,7 +46,6 @@ final readonly class SaveCommuteDemandAction
             'preferred_arrival_end' => $criteria->arrivalWindowEnd,
             'max_walk_minutes' => $criteria->maxWalk->minutes,
             'max_detour_minutes' => $criteria->maxDetourMinutes,
-            'budget_monthly_piastres' => $criteria->budgetMonthlyPiastres,
             'flexibility_minutes' => $criteria->flexibilityMinutes,
             'wants_return_trip' => $criteria->wantsReturnTrip,
             'audience_preference' => ($criteria->audiencePreference?->value)

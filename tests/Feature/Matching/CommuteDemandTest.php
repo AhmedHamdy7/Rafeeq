@@ -6,11 +6,8 @@ use App\Domains\Matching\Enums\CommuteDemandStatus;
 use App\Domains\Matching\Jobs\NotifyMatchingDemands;
 use App\Domains\Matching\Models\CommuteDemand;
 use App\Domains\Matching\Models\MatchNotification;
-use App\Domains\Matching\Support\SearchCriteria;
 use App\Domains\Notification\Models\Notification;
-use App\Domains\Shared\ValueObjects\Coordinate;
 use App\Domains\Shared\ValueObjects\DaysMask;
-use App\Domains\Shared\ValueObjects\WalkTime;
 use Illuminate\Database\QueryException;
 use Illuminate\Support\Facades\Queue;
 use Illuminate\Support\Facades\Storage;
@@ -350,81 +347,24 @@ it('requires authentication for every matching route', function (string $method,
 ]);
 
 /**
- * 🔴 The budget is a MONTHLY ceiling, and treating it as a per-ride one silently disabled
- * a whole scoring component.
- *
- * Three sources say monthly — the column, the ERD, and screen 18's stepper, which runs from
- * 800 to 3000 EGP in steps of 100 where a per-ride price is 70 to 95. A passenger who
- * filled the screen in as designed sent ~1600, it was compared against one trip's price,
- * every commute came in "under budget", and the five points for price were full marks for
- * everybody.
+ * 🔴 Feature 03 S-2 (decision C11): a demand has no budget any more. The price is computed by
+ * RAFEEQ, so there is nothing for one to choose between. An old client still sending it is ignored.
  */
-it('records the budget as a monthly ceiling', function () {
+it('keeps a demand without a budget, and ignores one an old client still sends', function () {
     $demand = saveDemand($this->paxToken, [
         'budgetMonthlyPiastres' => 160000,
         'flexibilityMinutes' => 20,
         'wantsReturnTrip' => true,
     ])->assertStatus(201)->json('data');
 
-    expect($demand['budgetMonthlyPiastres'])->toBe(160000)
+    expect($demand)->not->toHaveKey('budgetMonthlyPiastres')
         ->and($demand['flexibilityMinutes'])->toBe(20)
         ->and($demand['wantsReturnTrip'])->toBeTrue();
 
     $stored = CommuteDemand::sole();
 
-    expect($stored->budget_monthly_piastres)->toBe(160000)
-        ->and($stored->flexibility_minutes)->toBe(20)
+    expect($stored->flexibility_minutes)->toBe(20)
         ->and($stored->wants_return_trip)->toBeTrue();
-});
-
-it('derives the per-ride ceiling from the month and the days', function () {
-    // 1,600 EGP a month over five days a week, one way.
-    $criteria = new SearchCriteria(
-        origin: new Coordinate(30.0594, 31.4913),
-        destination: new Coordinate(30.0714, 30.9716),
-        days: DaysMask::weekdaysSunToThu(),
-        arrivalWindowStart: '08:00',
-        arrivalWindowEnd: '08:30',
-        maxWalk: WalkTime::fromMinutes(15),
-        maxDetourMinutes: 10,
-        budgetMonthlyPiastres: 160000,
-    );
-
-    // Five days × 52/12 weeks ≈ 21.7 rides, so about 73 EGP a ride.
-    expect($criteria->perSeatCeilingPiastres())->toBeGreaterThan(7000)
-        ->and($criteria->perSeatCeilingPiastres())->toBeLessThan(7500);
-});
-
-it('halves the per-ride ceiling when a return leg is wanted', function () {
-    $oneWay = fn (bool $return) => (new SearchCriteria(
-        origin: new Coordinate(30.0594, 31.4913),
-        destination: new Coordinate(30.0714, 30.9716),
-        days: DaysMask::weekdaysSunToThu(),
-        arrivalWindowStart: '08:00',
-        arrivalWindowEnd: '08:30',
-        maxWalk: WalkTime::fromMinutes(15),
-        maxDetourMinutes: 10,
-        budgetMonthlyPiastres: 160000,
-        wantsReturnTrip: $return,
-    ))->perSeatCeilingPiastres();
-
-    // Twice the rides for the same money.
-    expect($oneWay(true))->toBe((int) floor($oneWay(false) / 2));
-});
-
-it('treats no budget as no constraint', function () {
-    $criteria = new SearchCriteria(
-        origin: new Coordinate(30.0594, 31.4913),
-        destination: new Coordinate(30.0714, 30.9716),
-        days: DaysMask::weekdaysSunToThu(),
-        arrivalWindowStart: '08:00',
-        arrivalWindowEnd: '08:30',
-        maxWalk: WalkTime::fromMinutes(15),
-        maxDetourMinutes: 10,
-    );
-
-    // A passenger who named no budget is not disappointed by any price.
-    expect($criteria->perSeatCeilingPiastres())->toBeNull();
 });
 
 it('defaults the flexibility rather than leaving it null', function () {

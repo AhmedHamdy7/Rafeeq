@@ -16,9 +16,11 @@ use Illuminate\Validation\Rule;
  * Maintainer notes, kept out of the rules array because comments there are
  * published as field descriptions to the external mobile team:
  *
- * - `audiencePreference` here is a PREFERENCE that feeds the score. Eligibility is
- *   decided in the query from the account's own gender, never from anything sent
- *   in a request — a women-only commute excludes non-women before scoring runs.
+ * - `audiencePreference` here is a PREFERENCE that feeds the score; `womenOnly` is
+ *   the filter. Women-only commutes are shown to everybody (Feature 03 C-11); who may
+ *   ask for a seat on one is decided at request time from the account's own gender.
+ * - There is no budget (Feature 03 S-2): the price is computed by RAFEEQ and the
+ *   same for everybody, so a budget could only hide commutes (BOOK-02: no price filter).
  * - `rules` are scored as comfort rather than filtered on: a quiet commute is a
  *   preference, and excluding on it would hide otherwise strong matches.
  * - Both walk and detour limits belong to the passenger. The driver's own detour
@@ -63,14 +65,18 @@ final class SearchCommutesRequest extends FormRequest
             // How many seats you need. Commutes with fewer available are excluded.
             'seatsNeeded' => ['sometimes', 'integer', 'min:1', 'max:4'],
 
-            // Set to `women_only` to rank women-only commutes highest. Whether you
-            // are eligible for one is decided by your account, not by this field.
+            // Set to `women_only` to rank women-only commutes highest. It does not
+            // hide anything: use `womenOnly` for that.
             'audiencePreference' => ['nullable', 'string', Rule::enum(CommuteAudience::class)],
 
-            // What you would rather not pay more than per seat, in piastres.
-            // What you can spend on commuting in a MONTH. The per-ride ceiling is
-            // derived from it and the days you chose, so a month is the number you know.
-            'budgetMonthlyPiastres' => ['nullable', 'integer', 'min:0'],
+            /*
+             * The Women-only filter: `true` returns women-only commutes only.
+             *
+             * Women-only commutes are shown to everybody, with `womenOnly: true` on the card.
+             * Only an account whose gender is `woman` can request a seat on one; anybody else
+             * gets `403 SEAT_REQUEST_WOMEN_ONLY`, so show the card without the request button.
+             */
+            'womenOnly' => ['nullable', 'boolean'],
 
             /*
              * The lowest driver rating you will consider, 1 to 5.

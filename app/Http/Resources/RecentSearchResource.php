@@ -63,9 +63,10 @@ final class RecentSearchResource extends JsonResource
                     isset($this->criteria['audiencePreference']),
                     fn (): string => (string) $this->criteria['audiencePreference'],
                 ),
-                'budgetMonthlyPiastres' => $this->when(
-                    isset($this->criteria['budgetMonthlyPiastres']),
-                    fn (): int => (int) $this->criteria['budgetMonthlyPiastres'],
+                // The Women-only filter, when she used it (Feature 03 C-11).
+                'womenOnly' => $this->when(
+                    ! empty($this->criteria['womenOnly']),
+                    fn (): bool => true,
                 ),
                 'minRating' => $this->when(
                     isset($this->criteria['minRating']),

@@ -9,6 +9,7 @@ use App\Domains\Booking\Actions\RespondToSeatRequestAction;
 use App\Domains\Booking\Actions\SetStandbyAvailabilityAction;
 use App\Domains\Booking\Enums\SeatRequestStatus;
 use App\Domains\Booking\Models\SeatRequest;
+use App\Domains\Booking\Support\OtherConfirmedCommutes;
 use App\Domains\Commute\Models\CommuteOffer;
 use App\Domains\Shared\Exceptions\DomainException;
 use App\Domains\Shared\Support\ErrorCode;
@@ -26,10 +27,14 @@ use Illuminate\Http\Request;
 final class SeatRequestController extends Controller
 {
     /**
-     * POST /v1/commutes/{commute}/seat-requests — asking a driver for a seat.
+     * POST /v1/commutes/{commute}/seat-requests — asking a driver for a seat, or to join
+     * his waiting list.
      *
      * Rafeeq does not book directly: the driver decides who rides with them, so
-     * this creates a question rather than a reservation.
+     * this creates a question rather than a reservation. On a full day — or at a time
+     * she already rides with somebody else — it is a waiting-list application
+     * (`kind: waitlist_application`, Feature 03 R-1), never a refusal. Either way it is
+     * `PENDING` until the driver answers, and it never expires (R-4).
      */
     #[ApiErrors(
         ErrorCode::RulesNotAgreed,
@@ -37,8 +42,9 @@ final class SeatRequestController extends Controller
         ErrorCode::AlreadyBooked,
         ErrorCode::SeatUnavailable,
         ErrorCode::BookingDeadlinePassed,
-        ErrorCode::WaitlistFull,
         ErrorCode::CannotBookOwnCommute,
+        // A women-only commute, and the account's gender is not `woman` (Feature 03 C-11).
+        ErrorCode::SeatRequestWomenOnly,
         ErrorCode::RecurringDaysNotOffered,
         /*
          * Asking a car that is already moving (Feature 03 v5 §148). `error.fields.reachability`
@@ -88,6 +94,9 @@ final class SeatRequestController extends Controller
     /**
      * GET /v1/driver/seat-requests — requests waiting for the caller's answer, as a
      * driver.
+     *
+     * Each row carries the passenger's state (Feature 03 R-2, BOOK-34): `kind` — a seat request
+     * or an application to join the waiting list — and `hasOtherConfirmedCommute`.
      */
     public function inbox(Request $request): JsonResponse
     {
@@ -102,7 +111,22 @@ final class SeatRequestController extends Controller
             ->orderByDesc('id')
             ->paginate(ApiResponse::perPage($request));
 
-        return ApiResponse::paginated($requests, SeatRequestResource::collection($requests->items()));
+        // Once for the page, not per row — see OtherConfirmedCommutes.
+        $elsewhere = OtherConfirmedCommutes::forPassengers(
+            collect($requests->items())->pluck('passenger_user_id'),
+        );
+
+        $rows = SeatRequestResource::collection($requests->items());
+
+        foreach ($rows->collection as $row) {
+            $row->withPassengerState(OtherConfirmedCommutes::elsewhere(
+                $elsewhere,
+                $row->resource->passenger_user_id,
+                $row->resource->commute_offer_id,
+            ));
+        }
+
+        return ApiResponse::paginated($requests, $rows);
     }
 
     /**

@@ -12,6 +12,8 @@ use App\Domains\Booking\Enums\SwitchScope;
 use App\Domains\Booking\Models\Booking;
 use App\Domains\Booking\Models\SeatOffer;
 use App\Domains\Booking\Support\BookingEventLog;
+use App\Domains\Booking\Support\RequestKinds;
+use App\Domains\Booking\Support\SameTimeBookings;
 use App\Domains\Booking\Support\SeatAcceptance;
 use App\Domains\Booking\Support\WaitlistEligibility;
 use App\Domains\Booking\Support\WaitlistPositions;
@@ -184,6 +186,22 @@ final readonly class AcceptSeatOfferAction
                 throw DomainException::of(ErrorCode::AlreadyBooked);
             }
 
+            /*
+             * 🔴 The per-time-slot guard (BOOK-17, Feature 03 R-3): not a seat that overlaps one she
+             * holds on ANOTHER commute. The check above is this exact day only; this is everything
+             * at the same time.
+             *
+             * A switch is the exception and the reason for `$except`: the booking she is leaving —
+             * and, for a recurring switch, every other day she is giving up — is released a few
+             * lines below in this same transaction, and that overlap is the switch itself. The
+             * offer is NOT closed on a refusal: the answer for her is "switch", and the client
+             * offers it with `error.fields.overlapsBookingId`.
+             */
+            SameTimeBookings::assertNone($trip, $request->passenger_user_id, array_values(array_filter([
+                $switchFrom?->getKey(),
+                ...$alsoReleasing->pluck('id')->all(),
+            ])));
+
             if ($trip->seats_taken + $request->seats > $trip->seats_total) {
                 $this->close($offer, SeatOfferStatus::TakenByOther);
 
@@ -245,6 +263,11 @@ final readonly class AcceptSeatOfferAction
             }
 
             $this->close($offer, SeatOfferStatus::Accepted);
+
+            // BOOK-34: her other pending requests at this time become waiting-list applications,
+            // and a one-day request on a day this filled can only be one now (R-4).
+            RequestKinds::afterConfirmation($request->passenger_user_id, [$booking]);
+            RequestKinds::afterSeatsTaken([$trip]);
 
             /*
              * 🔴 She won it, and everybody else watching this day finds out at the same moment.

@@ -47,13 +47,22 @@ beforeEach(function () {
 
 /**
  * Joins the queue and returns the position it was given.
+ *
+ * Two steps since Feature 03 R-1 (BOOK-18): on a full day her request is an application to join
+ * the waiting list, and the driver's yes is what puts her on it.
  */
 function joinWaitlist(string $phone, string $device, string $commuteId, string $tripId): array
 {
     $token = verifiedPassenger($phone, device: $device);
 
     $data = requestSeat($token, $commuteId, ['scheduledTripId' => $tripId])
-        ->assertStatus(201)->json('data');
+        ->assertStatus(201)
+        ->assertJsonPath('data.kind', 'waitlist_application')
+        ->json('data');
+
+    $data = test()->withToken(test()->driverToken)
+        ->postJson("/api/v1/driver/seat-requests/{$data['id']}/waitlist")
+        ->assertOk()->json('data');
 
     return ['token' => $token, 'id' => $data['id'], 'position' => $data['waitlistPosition']];
 }
@@ -293,7 +302,12 @@ it('refuses to lengthen a queue that is already a false hope', function () {
 
     $third = verifiedPassenger('01222220003', device: 'pax-4');
 
-    requestSeat($third, $this->commuteId, ['scheduledTripId' => $this->trip->id])
+    // Her application is taken — it is the driver's yes that the full list refuses.
+    $requestId = requestSeat($third, $this->commuteId, ['scheduledTripId' => $this->trip->id])
+        ->assertStatus(201)->json('data.id');
+
+    test()->withToken($this->driverToken)
+        ->postJson("/api/v1/driver/seat-requests/{$requestId}/waitlist")
         ->assertStatus(409)
         ->assertJsonPath('error.code', 'BOOKING_WAITLIST_FULL');
 });
@@ -369,6 +383,10 @@ it('does not promote somebody who needs more seats than came free', function () 
         'seats' => 2,
     ])->assertStatus(201)->json('data');
 
+    $request = test()->withToken($this->driverToken)
+        ->postJson("/api/v1/driver/seat-requests/{$request['id']}/waitlist")
+        ->assertOk()->json('data');
+
     expect($request['status'])->toBe('WAITLISTED');
 
     test()->withToken($this->riderToken)
@@ -423,7 +441,10 @@ it('lets the driver park a request instead of refusing it', function () {
     expect(Booking::query()->where('seat_request_id', $requestId)->exists())->toBeFalse();
 });
 
-it('gives a parked request a fresh window, since the driver just answered', function () {
+/**
+ * 🔴 Feature 03 R-4: a waiting-list place never expires. It used to restart a 48-hour clock.
+ */
+it('gives a parked request no deadline at all', function () {
     $this->trip->forceFill(['seats_taken' => 0])->save();
 
     $token = verifiedPassenger('01222220009', device: 'pax-9');
@@ -431,14 +452,10 @@ it('gives a parked request a fresh window, since the driver just answered', func
     $requestId = requestSeat($token, $this->commuteId, ['scheduledTripId' => $this->trip->id])
         ->assertStatus(201)->json('data.id');
 
-    SeatRequest::query()->whereKey($requestId)->update(['expires_at' => now()->addHour()]);
-
     test()->withToken($this->driverToken)
         ->postJson("/api/v1/driver/seat-requests/{$requestId}/waitlist")->assertOk();
 
-    // The 48 hours it had were for the driver to answer, and they did.
-    expect(SeatRequest::query()->whereKey($requestId)->sole()->expires_at
-        ->isAfter(now()->addHours((int) config('rafeeq.booking.request_expiry_hours') - 1)))->toBeTrue();
+    expect(SeatRequest::query()->whereKey($requestId)->sole()->expires_at)->toBeNull();
 });
 
 it('refuses to park a request that is already answered', function () {

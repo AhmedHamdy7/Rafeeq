@@ -6,6 +6,8 @@ use App\Domains\Booking\Enums\SeatRequestCommitment;
 use App\Domains\Booking\Enums\SeatRequestStatus;
 use App\Domains\Booking\Models\Booking;
 use App\Domains\Booking\Models\SeatRequest;
+use App\Domains\Booking\Support\RequestKinds;
+use App\Domains\Booking\Support\SameTimeBookings;
 use App\Domains\Booking\Support\SeatApproval;
 use App\Domains\Booking\Support\SeatAvailabilityChecker;
 use App\Domains\Commute\Enums\ScheduledTripStatus;
@@ -92,11 +94,11 @@ final readonly class ApproveSeatRequestAction
          * 🔴 An expired request cannot be approved, checked here rather than relied on from a
          * sweep.
          *
-         * The sweep that marks requests `expired` runs with the daily membership roll, which was
-         * fine while every window was 48 hours. A request to join a run already moving expires in
-         * **three minutes** (Feature 03 v5 §416), so between its expiry and the sweep there was a
-         * long stretch in which a driver could still approve it — seating somebody who had been
-         * told, correctly, that her question had timed out.
+         * Only a request to join a run already moving carries a deadline now — **three minutes**
+         * (Feature 03 v5 §416); every other request stays open until it is answered (R-4). The
+         * sweep runs every minute, so between its expiry and the sweep there is a stretch in which
+         * a driver could still approve it — seating somebody who had been told, correctly, that
+         * her question had timed out.
          *
          * Enforcing it on read makes the rule true whatever the sweep's cadence, which is the
          * property worth having: the window is three minutes because the question is about where
@@ -187,6 +189,17 @@ final readonly class ApproveSeatRequestAction
                  * leg, and this transaction holds the seat lock — the busiest lock in the system.
                  */
                 $this->itinerary->bump($trip->getKey());
+            }
+
+            /*
+             * 🔴 BOOK-34 (Feature 03 R-3): she is confirmed now, so her other pending seat requests
+             * for an overlapping time become applications to those drivers' waiting lists. And a
+             * one-day request on a day this approval just filled can only be an application now
+             * (R-4: "…or the seat is filled"). Inside the transaction, so a rollback undoes both.
+             */
+            if ($bookings !== []) {
+                RequestKinds::afterConfirmation($request->passenger_user_id, $bookings);
+                RequestKinds::afterSeatsTaken($trips);
             }
 
             if ($bookings === []) {
@@ -320,6 +333,14 @@ final readonly class ApproveSeatRequestAction
             $this->availability->assertHasSeats($trip, $request->seats);
             $this->availability->assertDriverStillEligible($trip);
             $this->availability->assertNoDuplicateBooking($trip, $request->passenger_user_id);
+
+            /*
+             * 🔴 And not at a time she already rides with somebody else (BOOK-17, Feature 03 R-3).
+             * `assertNoDuplicateBooking` is per trip; this is per time slot, across commutes. A
+             * recurring approval skips the overlapping days, a one-day one is refused with
+             * `ALREADY_BOOKED` — her request stays open as an application to his waiting list.
+             */
+            SameTimeBookings::assertNone($trip, $request->passenger_user_id);
         } catch (DomainException $refused) {
             if ($request->commitment === SeatRequestCommitment::Trial) {
                 // One day was asked for and it cannot be seated. There is nothing

@@ -131,6 +131,21 @@ enum ErrorCode: string
     case WaitlistFull = 'BOOKING_WAITLIST_FULL';
     case BookingNotCancellable = 'BOOKING_NOT_CANCELLABLE';
     case CannotBookOwnCommute = 'BOOKING_OWN_COMMUTE';
+
+    /**
+     * A seat request on a women-only commute from an account whose gender is not `woman` (Feature
+     * 03 C-11, BOOK-31).
+     *
+     * Women-only commutes are shown to everybody now, so this is an answer rather than a secret:
+     * the commute is visible with `womenOnly: true`, and only a woman may ask for a seat on it.
+     */
+    case SeatRequestWomenOnly = 'SEAT_REQUEST_WOMEN_ONLY';
+
+    /**
+     * Editing or pausing a saved demand that is no longer live — cancelled or expired (Feature 03
+     * S-4). Save a new one instead.
+     */
+    case CommuteDemandNotEditable = 'COMMUTE_DEMAND_NOT_EDITABLE';
     case RecurringDaysNotOffered = 'BOOKING_RECURRING_DAYS_NOT_OFFERED';
 
     /*
@@ -390,7 +405,13 @@ enum ErrorCode: string
 
             // 403: the account is fine, this particular person may not do this.
             self::CannotBookOwnCommute,
+            // 403: the commute is visible to her and the account is fine — this car is not one
+            // she may ask to ride in.
+            self::SeatRequestWomenOnly,
             self::GroupDriverCannotLeave => 403,
+
+            // 409: a well-formed edit the demand's current state refuses.
+            self::CommuteDemandNotEditable => 409,
 
             /*
              * 409: the same reasoning as the booking group. A driver tapping "start"

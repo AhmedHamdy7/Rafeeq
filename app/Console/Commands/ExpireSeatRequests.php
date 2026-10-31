@@ -8,7 +8,11 @@ use App\Domains\Trip\Support\PickupReachability;
 use Illuminate\Console\Command;
 
 /**
- * Closes seat requests whose window has run out (Feature 03 v5 §416).
+ * Closes seat requests that can no longer be answered: a during-ride request past its three minutes
+ * (Feature 03 v5 §416), and a one-day request whose day has gone by (R-4, `closed_date_passed`).
+ *
+ * Nothing else is closed here. Requests do not expire any more (R-4, BOOK-36): the 48-hour window
+ * is gone, and only the during-ride one carries an `expires_at`.
  *
  * 🔴 **Every minute, because of the three-minute one.** The same sweep already ran with the daily
  * membership roll, which was the right cadence while every window was forty-eight hours: a request
@@ -28,11 +32,12 @@ final class ExpireSeatRequests extends Command
 {
     protected $signature = 'requests:expire';
 
-    protected $description = 'Mark seat requests expired once their window has passed';
+    protected $description = 'Close during-ride requests past their three minutes, and one-day requests whose day has passed';
 
     public function handle(OfferSeatToWaitlistAction $offers, PickupReachability $reachability): int
     {
         $expired = RespondToSeatRequestAction::expireOverdue();
+        $datePassed = RespondToSeatRequestAction::closeDatePassed();
 
         /*
          * 🔴 And offers on runs that have driven past the person they were made to (v5
@@ -46,7 +51,7 @@ final class ExpireSeatRequests extends Command
          */
         $unreachable = $offers->closeUnreachable($reachability);
 
-        $this->info("Expired {$expired} seat request(s); closed {$unreachable} unreachable offer(s).");
+        $this->info("Expired {$expired} seat request(s); closed {$datePassed} whose day passed; closed {$unreachable} unreachable offer(s).");
 
         return self::SUCCESS;
     }
