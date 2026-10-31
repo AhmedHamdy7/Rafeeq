@@ -11,6 +11,8 @@ use App\Domains\Driver\Models\Vehicle;
 use App\Domains\Driver\Models\VerificationLog;
 use App\Domains\Identity\Enums\SecurityEventType;
 use App\Domains\Identity\Support\SecurityLog;
+use App\Domains\Notification\Enums\NotificationType;
+use App\Domains\Notification\Support\Notifier;
 use App\Domains\Shared\Exceptions\DomainException;
 use App\Domains\Shared\Support\ErrorCode;
 use Illuminate\Support\Facades\DB;
@@ -62,6 +64,11 @@ final readonly class ReviewDriverApplicationAction
                 'reviewer_id' => $reviewer->id,
             ]);
 
+            // Feature 03 files §8: "documents approved". The push itself is queued after commit.
+            Notifier::send($profile->user, NotificationType::DriverDocumentsApproved, data: [
+                'driverProfileId' => (string) $profile->getKey(),
+            ]);
+
             return $profile;
         });
     }
@@ -95,6 +102,14 @@ final readonly class ReviewDriverApplicationAction
 
             SecurityLog::record(SecurityEventType::DriverRejected, $profile->user, metadata: [
                 'reviewer_id' => $reviewer->id,
+            ]);
+
+            /*
+             * Feature 03 files §8: "documents rejected". 🔒 Without the reason: it is on the
+             * application screen the push opens, not on a lock screen.
+             */
+            Notifier::send($profile->user, NotificationType::DriverDocumentsRejected, data: [
+                'driverProfileId' => (string) $profile->getKey(),
             ]);
 
             return $profile;

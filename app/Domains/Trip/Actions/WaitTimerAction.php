@@ -8,6 +8,7 @@ use App\Domains\Shared\Support\ErrorCode;
 use App\Domains\Trip\Enums\WaitTimerOutcome;
 use App\Domains\Trip\Models\TripSession;
 use App\Domains\Trip\Models\TripWaitTimer;
+use App\Domains\Trip\Support\DriverArrivalNotice;
 use App\Domains\Trip\Support\TripSettings;
 use Illuminate\Support\Facades\DB;
 
@@ -67,6 +68,13 @@ final readonly class WaitTimerAction
         $timer->extended_seconds = 0;
 
         $timer->save();
+
+        /*
+         * Starting the wait IS the driver saying "I'm here" today, so the passenger is told
+         * (Feature 03 files §8: "Driver arrived"). Through the one method that says it, so the
+         * per-passenger arrival replacing this path tells her in the same words — and at most once.
+         */
+        DriverArrivalNotice::send($session, $booking);
 
         return $timer;
     }

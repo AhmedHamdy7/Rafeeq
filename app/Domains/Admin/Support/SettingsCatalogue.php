@@ -75,6 +75,9 @@ final class SettingsCatalogue
         'trip.location_retention_days' => ['group' => 'trip', 'min' => 30, 'max' => 730, 'unit' => 'days'],
         'trip.deviation_threshold_meters' => ['group' => 'trip', 'min' => 200, 'max' => 10_000, 'unit' => 'meters'],
         'trip.gps_silence_alert_seconds' => ['group' => 'trip', 'min' => 30, 'max' => 1_800, 'unit' => 'seconds'],
+        // The 1-hour and 10-minute reminders (Feature 03 files §8). Filed with the trip: they are about the day.
+        'notifications.trip_reminder_early_minutes' => ['group' => 'trip', 'min' => 15, 'max' => 240, 'unit' => 'minutes'],
+        'notifications.trip_reminder_final_minutes' => ['group' => 'trip', 'min' => 1, 'max' => 30, 'unit' => 'minutes'],
 
         // ---- Ratings (Chapter 9) -----------------------------------------
         'rating.window_days' => ['group' => 'rating', 'min' => 1, 'max' => 30, 'unit' => 'days'],
@@ -87,10 +90,27 @@ final class SettingsCatalogue
         'safety.sos_countdown_seconds' => ['group' => 'safety', 'min' => 3, 'max' => 30, 'unit' => 'seconds'],
         'safety.max_emergency_contacts' => ['group' => 'safety', 'min' => 1, 'max' => 10, 'unit' => 'contacts'],
         'safety.reports_per_hour' => ['group' => 'safety', 'min' => 3, 'max' => 100, 'unit' => 'per_hour'],
+        // Feature 03 files X-7, SAFE-08: a report about a journey within 24 hours of it.
+        'safety.report_window_hours' => ['group' => 'safety', 'min' => 1, 'max' => 168, 'unit' => 'hours'],
         'safety.max_evidence_per_incident' => ['group' => 'safety', 'min' => 1, 'max' => 20, 'unit' => 'files'],
         'safety.evidence_retention_days' => ['group' => 'safety', 'min' => 90, 'max' => 3_650, 'unit' => 'days'],
         'safety.live_share_grace_minutes' => ['group' => 'safety', 'min' => 0, 'max' => 120, 'unit' => 'minutes'],
         'safety.live_share_max_minutes' => ['group' => 'safety', 'min' => 30, 'max' => 720, 'unit' => 'minutes'],
+
+        // ---- Reliability score (Feature 03 files X-3, D3/D4) -------------
+        // Points lost per event. Only a number for now: it gates nothing (D4).
+        'reliability.window_days' => ['group' => 'reliability', 'min' => 30, 'max' => 365, 'unit' => 'days'],
+        // Below the schedule lock (16 h): the mid-notice row is "10–16 h".
+        'reliability.late_cancellation_hours' => ['group' => 'reliability', 'min' => 1, 'max' => 15, 'unit' => 'hours'],
+        'reliability.weights.driver_no_show' => ['group' => 'reliability', 'min' => 0, 'max' => 50, 'unit' => 'score_points'],
+        'reliability.weights.passenger_no_show' => ['group' => 'reliability', 'min' => 0, 'max' => 50, 'unit' => 'score_points'],
+        'reliability.weights.driver_cancel_short_notice' => ['group' => 'reliability', 'min' => 0, 'max' => 50, 'unit' => 'score_points'],
+        'reliability.weights.driver_cancel_mid_notice' => ['group' => 'reliability', 'min' => 0, 'max' => 50, 'unit' => 'score_points'],
+        'reliability.weights.driver_cancel_long_notice' => ['group' => 'reliability', 'min' => 0, 'max' => 50, 'unit' => 'score_points'],
+        'reliability.weights.passenger_cancel_short_notice' => ['group' => 'reliability', 'min' => 0, 'max' => 50, 'unit' => 'score_points'],
+        'reliability.weights.driver_late' => ['group' => 'reliability', 'min' => 0, 'max' => 50, 'unit' => 'score_points'],
+        'reliability.weights.passenger_late' => ['group' => 'reliability', 'min' => 0, 'max' => 50, 'unit' => 'score_points'],
+        'reliability.weights.driver_ended_trip' => ['group' => 'reliability', 'min' => 0, 'max' => 50, 'unit' => 'score_points'],
 
         // ---- Trip chat (Chapter 11) ---------------------------------------
         'chat.opens_hours_before' => ['group' => 'chat', 'min' => 1, 'max' => 72, 'unit' => 'hours'],
@@ -102,7 +122,7 @@ final class SettingsCatalogue
         'admin.suspension_review_hours' => ['group' => 'admin', 'min' => 1, 'max' => 168, 'unit' => 'hours'],
     ];
 
-    public const array GROUPS = ['auth', 'profile', 'commute', 'booking', 'trip', 'rating', 'safety', 'chat', 'admin'];
+    public const array GROUPS = ['auth', 'profile', 'commute', 'booking', 'trip', 'rating', 'reliability', 'safety', 'chat', 'admin'];
 
     /**
      * @return array{group: string, min: int, max: int, unit: string, locked?: string}|null

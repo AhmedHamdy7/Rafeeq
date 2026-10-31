@@ -3,6 +3,7 @@
 namespace App\Domains\Reliability\Support;
 
 use App\Domains\Booking\Models\Booking;
+use App\Domains\Commute\Models\ScheduledTrip;
 use App\Domains\Reliability\Enums\ReliabilityEventKind;
 use App\Domains\Reliability\Enums\ReliabilityRole;
 use App\Domains\Reliability\Models\ReliabilityEvent;
@@ -24,9 +25,11 @@ use Illuminate\Support\Str;
  * the same choice `PersonSummary` makes for an unrated driver, and for the same reason: a new
  * member has not failed anybody, and starting her at zero would make the number say she had.
  *
- * ⚠️ **The weights are placeholders pending a product decision.** v5 defers the fee brackets
- * outright and says nothing about score weights. What is defensible is their proportion to each
- * other, not their absolute size — see {@see ReliabilityEventKind::weight()}.
+ * **The weights are the partners' (Feature 03 files X-3, decisions D3/D4)**, admin settings read
+ * through {@see ReliabilitySettings} — see {@see ReliabilityEventKind::weight()}.
+ *
+ * ⚠️ **The score gates nothing** (D4). v5 routed a low score to suspension and a ban; the partners
+ * decided it stays a number for now. Nothing reads it to refuse anybody anything.
  */
 final class ReliabilityLedger
 {
@@ -58,6 +61,21 @@ final class ReliabilityLedger
             return null;
         }
 
+        $occurredAt ??= CarbonImmutable::now();
+
+        $weight = $kind->weight(
+            $kind->dependsOnNotice() ? self::hoursNotice($occurredAt, $booking, $scheduledTripId) : null,
+        );
+
+        /*
+         * A weight of nothing is recorded as nothing. The table gives some events no cost at all,
+         * and an operator may set a weight to 0 to switch one off; a row worth zero would sit in
+         * her history looking like a mark against her while counting for nothing.
+         */
+        if ($weight === 0) {
+            return null;
+        }
+
         $event = new ReliabilityEvent;
 
         $event->forceFill([
@@ -69,8 +87,8 @@ final class ReliabilityLedger
              * Snapshotted, never re-read at score time: a weight change must not rewrite a record
              * that has already been reviewed and acted on.
              */
-            'weight' => $kind->weight(),
-            'occurred_at' => $occurredAt ?? CarbonImmutable::now(),
+            'weight' => $weight,
+            'occurred_at' => $occurredAt,
             'booking_id' => $booking?->getKey(),
             'scheduled_trip_id' => $scheduledTripId ?? $booking?->scheduled_trip_id,
             'commute_offer_id' => $commuteOfferId,
@@ -130,7 +148,7 @@ final class ReliabilityLedger
      */
     public static function windowOpensAt(): CarbonImmutable
     {
-        return CarbonImmutable::now()->subDays((int) config('rafeeq.reliability.window_days'));
+        return CarbonImmutable::now()->subDays(ReliabilitySettings::windowDays());
     }
 
     /**
@@ -138,7 +156,31 @@ final class ReliabilityLedger
      */
     public static function lateCancellationHours(): int
     {
-        return (int) config('rafeeq.reliability.late_cancellation_hours');
+        return ReliabilitySettings::lateCancellationHours();
+    }
+
+    /**
+     * How many hours before the day's departure this happened — the notice a cancellation gave.
+     *
+     * Read from the day itself rather than asked of every caller, so the six places that record a
+     * cancellation cannot each measure it differently. Null when the day has no departure time;
+     * {@see ReliabilityEventKind::weight()} weighs that as short notice.
+     */
+    private static function hoursNotice(CarbonImmutable $occurredAt, ?Booking $booking, ?string $scheduledTripId): ?float
+    {
+        $tripId = $scheduledTripId ?? $booking?->scheduled_trip_id;
+
+        if ($tripId === null) {
+            return null;
+        }
+
+        $departure = ScheduledTrip::query()->whereKey($tripId)->value('departure_at');
+
+        if ($departure === null) {
+            return null;
+        }
+
+        return $occurredAt->diffInSeconds(CarbonImmutable::parse($departure), absolute: false) / 3600;
     }
 
     private static function alreadyRecorded(string $userId, ReliabilityEventKind $kind, string $bookingId): bool

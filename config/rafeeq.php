@@ -668,11 +668,26 @@ return [
      */
     'notifications' => [
         /*
-         * Which push transport sends to phones. Only `log` exists today: choosing FCM/APNs needs
-         * a project and credentials that do not exist yet. Until then every message still lands
-         * in the member's in-app inbox, and each push row records `no_push_provider`.
+         * Which push transport sends to phones (D-0023: FCM, with the APNs key uploaded to the
+         * Firebase project for iPhone).
+         *
+         *   - `log` (the default): nothing reaches a phone. Every message still lands in the
+         *     member's in-app inbox, and each push row records `no_push_provider`. What tests and
+         *     every development machine run.
+         *   - `fcm`: FCM HTTP v1, credentials in `services.fcm` (FcmPushSender).
          */
         'push_driver' => env('RAFEEQ_PUSH_DRIVER', 'log'),
+
+        /*
+         * "Your commute leaves in an hour" / "…in 10 minutes" (Feature 03 files §8), to the driver
+         * and every confirmed passenger. Minutes before the day's departure.
+         *
+         * Sent by `trips:send-reminders` every minute, once each, stamped on the day. When a seat
+         * is confirmed inside the final window, only the final reminder is sent — two buzzes a
+         * minute apart about the same departure is noise.
+         */
+        'trip_reminder_early_minutes' => 60,
+        'trip_reminder_final_minutes' => 10,
     ],
 
     /*
@@ -726,10 +741,26 @@ return [
          * How many emergency contacts one person may keep.
          *
          * A limit because this list is who gets told where somebody is, and an unbounded one is a
-         * way to broadcast a person's movements to a crowd. Five is more than anybody needs and
-         * fewer than an abuser could use.
+         * way to broadcast a person's movements to a crowd.
+         *
+         * Three, by partner decision (Feature 03 files X-6, SAFE-14: "up to 3"). It was five.
+         * Lowering it removes nobody: the cap is checked only when a contact is ADDED, so somebody
+         * who already keeps four or five keeps them all and simply cannot add another until she is
+         * below three. Taking a trusted contact away from a person without asking would be the
+         * worse failure.
          */
-        'max_emergency_contacts' => 5,
+        'max_emergency_contacts' => 3,
+
+        /*
+         * How long after a journey a problem with it can still be reported, in hours (SAFE-08:
+         * "reported within 24h", Feature 03 files X-7).
+         *
+         * Measured from the END of that journey — when the run finished, or, for a morning that
+         * never ran, from when it should have left. Only a report tied to a booking has a journey
+         * to measure from; a report about somebody impersonating a Rafeeq driver has none and is
+         * always accepted. See ReportIncidentAction.
+         */
+        'report_window_hours' => 24,
 
         /*
          * How many reports one person may file in an hour.
@@ -882,43 +913,54 @@ return [
     */
     'reliability' => [
         /*
-         * 🔴 **These weights are PLACEHOLDERS pending a product decision**, in exactly the sense
-         * `booking.cancellation_fee_piastres` is. v5 defers the fee brackets outright — "exact
-         * brackets/amounts are not decided" — and says nothing at all about score weights.
+         * 🔴 **The weights decided by the partners on 2026-10-31** (Feature 03 files X-3, decisions
+         * D3/D4, Q-067). They replace the placeholders this block used to ship. Points LOST per
+         * event; a member starts at 100.
          *
-         * What is defensible here is their PROPORTION, not their size:
+         *   | Event                                   | Driver | Passenger |
+         *   |-----------------------------------------|--------|-----------|
+         *   | No-show                                 | −10    | −5        |
+         *   | Cancel < 10h before (or a late cancel)  | −5     | −2        |
+         *   | Cancel 10–16h before                    | −3     | —         |
+         *   | Cancel ≥ 16h before                     | −1     | 0         |
+         *   | Lateness                                | −2     | −1        |
+         *   | Ends a trip for "other reason"          | −8     | —         |
          *
-         *   - cancelling one named passenger's seat is the most pointed act, so it costs most: she
-         *     looked at one person's booking and ended it.
-         *   - being swept up in a pause or a vehicle replacement costs least per person, because
-         *     she did not choose any of them individually and a lapsed licence is not the same act.
-         *     It is recorded PER PASSENGER, so pausing on a full car still costs more than pausing
-         *     on an empty one — the harm is per woman rearranging her morning.
-         *   - a passenger's no-show costs her about what a cancellation costs a driver: both are
-         *     one person failing to turn up for an arrangement somebody planned around.
+         * ⚠️ **Only a number for now: it suspends nobody and gates nothing** (D4). Nothing in the
+         * codebase reads the score to refuse anything; it is shown to its owner and to the monthly
+         * review. Each is an admin setting (ReliabilitySettings), and the weight in force is
+         * SNAPSHOTTED onto every event, so changing one never rewrites somebody's history.
          *
-         * ⚠️ Nobody should be suspended on these numbers until a human has agreed them. They are a
-         * working shape so the ledger can be built and tested, not a policy.
+         * Which event kind takes which weight is in ReliabilityEventKind::weight(). A driver's
+         * cancellation weight depends on the notice she gave, measured from the event to the day's
+         * departure: the boundaries are `late_cancellation_hours` (10) and the schedule lock
+         * (`commute.schedule_lock_hours`, 16) — the same lock after which nothing on the day may
+         * change without every passenger's yes.
          */
         'weights' => [
+            // A driver who never came for her: the morning expired, or she gave up waiting.
+            'driver_no_show' => 10,
+            // Recorded by the driver who was there.
+            'passenger_no_show' => 5,
+            'driver_cancel_short_notice' => 5,
+            'driver_cancel_mid_notice' => 3,
+            'driver_cancel_long_notice' => 1,
             /*
-             * The heaviest, and the proportion is about where it leaves people rather than how
-             * deliberate it was: every other cancellation reaches a woman who is still at home,
-             * while this one can end with her part-way to work on a road she did not choose.
+             * The passenger's only cancellation weight. Her 10–16h cancellation is "—" and her
+             * ≥ 16h one is 0 in the table, so neither is recorded at all — see
+             * `late_cancellation_hours` below.
              */
-            'driver_abandoned_active_trip' => 12,
-            'driver_cancelled_booking' => 8,
-            'driver_cancelled_day' => 6,
-            'driver_displaced_passenger' => 3,
+            'passenger_cancel_short_notice' => 2,
+            // The driver still had not set off at the violation rung (+10 min), once per morning.
+            'driver_late' => 2,
+            // She kept the car waiting and boarded (attendance LATE).
+            'passenger_late' => 1,
             /*
-             * A passenger gave up on a journey the car never came for (v5 §241). Weighted with a
-             * targeted cancellation rather than below it: from the passenger's morning the two are
-             * the same event — she has no lift and has to find one now — and the only difference is
-             * that this one left her standing in the street to find out.
+             * The driver stopped a run that had set off (Cancel Active Trip). The table weighs only
+             * the "other reason" ending; the reason list arrives with F-13 (another workstream),
+             * and until it does every such ending is weighed as "other reason".
              */
-            'driver_late_caused_exit' => 8,
-            'passenger_no_show' => 8,
-            'passenger_cancelled_late' => 4,
+            'driver_ended_trip' => 8,
         ],
 
         /*
@@ -926,19 +968,20 @@ return [
          * persist after reinstatement" — and a cancellation from two years ago is part of somebody's
          * history without being part of whether she can be relied on this month.
          *
-         * Six months: long enough that a pattern shows, short enough that one bad week in winter
-         * is not still costing her a seat in summer.
+         * Ninety days (X-3; it was 180): the same window SAFE-20's "no fees in 90 days" uses, so
+         * the two numbers a member is judged on look back over the same stretch of her life.
          */
-        'window_days' => 180,
+        'window_days' => 90,
 
         /*
-         * How close to departure a passenger's OWN cancellation starts to count against her.
+         * The short-notice boundary: a cancellation fewer than this many hours before departure is
+         * "< 10h" in the weights table.
          *
-         * Cancelling a week out costs nobody anything — the seat goes back to the waiting list and
-         * somebody takes it — so it is recorded as nothing at all. Inside this window the driver is
-         * unlikely to fill it, and somebody has driven to a kerb for nobody.
+         * For a PASSENGER it is also the line below which her own cancellation is recorded at all
+         * (her 10–16h and ≥ 16h weights are nothing). Cancelling a week out costs nobody anything —
+         * the seat goes back to the waiting list and somebody takes it.
          */
-        'late_cancellation_hours' => 12,
+        'late_cancellation_hours' => 10,
     ],
 
     /*

@@ -15,6 +15,7 @@ use App\Domains\Identity\Contracts\OtpSender;
 use App\Domains\Identity\Support\LogOtpSender;
 use App\Domains\Notification\Contracts\PushSender;
 use App\Domains\Notification\Support\ChatSettings;
+use App\Domains\Notification\Support\FcmPushSender;
 use App\Domains\Notification\Support\LogPushSender;
 use App\Domains\Safety\Support\SafetySettings;
 use App\Domains\Shared\Support\RateLimits;
@@ -51,9 +52,11 @@ class AppServiceProvider extends ServiceProvider
         // Resolving by name keeps that decision to one config line and one
         // new class; `LogOtpSender` refuses to run in production itself, so
         // an unconfigured deploy fails loudly instead of losing every code.
-        // Push (Chapter 11). Only the development transport exists until a provider is chosen
-        // and its credentials exist; see LogPushSender for why it does not refuse production.
+        // Push (Chapter 11, D-0023). `fcm` is FCM HTTP v1 with the service-account JSON named by
+        // FIREBASE_CREDENTIALS; anything else is the development transport — see LogPushSender
+        // for why it does not refuse production.
         $this->app->bind(PushSender::class, fn () => match (config('rafeeq.notifications.push_driver')) {
+            'fcm' => FcmPushSender::fromConfig(),
             default => new LogPushSender,
         });
 
