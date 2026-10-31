@@ -36,7 +36,7 @@ beforeEach(function () {
 
     $this->trip = ScheduledTrip::query()->orderBy('trip_date')->firstOrFail();
 
-    // One rider seated and the day filled, so anybody asking afterwards is put on the list.
+    // One rider seated and the day filled, so anybody asking afterwards applies to the list.
     $this->riderToken = verifiedPassenger('01112223344', device: 'pax-1');
 
     $seated = requestSeat($this->riderToken, $this->commuteId, ['scheduledTripId' => $this->trip->id])
@@ -51,8 +51,14 @@ beforeEach(function () {
 
     $this->waiterRequestId = requestSeat($this->waiterToken, $this->commuteId, ['scheduledTripId' => $this->trip->id])
         ->assertStatus(201)
-        ->assertJsonPath('data.status', 'WAITLISTED')
+        ->assertJsonPath('data.kind', 'waitlist_application')
         ->json('data.id');
+
+    // The driver's yes puts her on the list (Feature 03 R-1, BOOK-18).
+    test()->withToken($this->driverToken)
+        ->postJson("/api/v1/driver/seat-requests/{$this->waiterRequestId}/waitlist")
+        ->assertOk()
+        ->assertJsonPath('data.status', 'WAITLISTED');
 });
 
 /**

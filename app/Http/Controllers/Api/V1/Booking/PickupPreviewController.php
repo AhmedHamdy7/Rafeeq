@@ -31,8 +31,8 @@ use Illuminate\Http\JsonResponse;
  *
  * - **A way to map a driver's route.** It answers one point at a time with a duration, and
  *   the same eligibility rules as the search decide whether the caller may ask about this
- *   commute at all. Somebody not allowed to see a women-only commute cannot probe its
- *   geometry through here either.
+ *   commute at all, and only somebody who may request a seat on it may preview one — a man
+ *   cannot measure points against a women-only commute he cannot ask to ride on.
  * - **A way around the driver's limit.** The reply says whether the point is acceptable,
  *   and creating the request re-measures and re-checks server-side. Nothing here is
  *   trusted later.
@@ -43,7 +43,7 @@ use Illuminate\Http\JsonResponse;
  */
 final class PickupPreviewController extends Controller
 {
-    #[ApiErrors(ErrorCode::PickupNotOnCommute, ErrorCode::NotFound)]
+    #[ApiErrors(ErrorCode::PickupNotOnCommute, ErrorCode::SeatRequestWomenOnly, ErrorCode::NotFound)]
     public function show(
         RequestPickupPointRequest $request,
         string $commute,
@@ -86,8 +86,9 @@ final class PickupPreviewController extends Controller
      * {@see RequestSeatAction} applies them: this endpoint
      * takes a commute id that may have arrived any way at all.
      *
-     * Without it, a man could measure distances against a women-only commute's route —
-     * learning its shape without ever being able to book it.
+     * And the audience: this is the request screen's own question, so a man gets the same
+     * `403 SEAT_REQUEST_WOMEN_ONLY` on a women-only commute that requesting would give him
+     * (Feature 03 C-11) — not a way to measure its route without ever being able to book it.
      */
     private function assertMayAsk(User $passenger, CommuteOffer $offer): void
     {
@@ -100,6 +101,10 @@ final class PickupPreviewController extends Controller
             // 404, not 403: telling somebody they are excluded confirms both that the
             // commute exists and what it is.
             throw DomainException::of(ErrorCode::NotFound);
+        }
+
+        if (! HardFilters::mayJoinAudience($passenger, $offer)) {
+            throw DomainException::of(ErrorCode::SeatRequestWomenOnly);
         }
     }
 }

@@ -17,7 +17,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
  */
 #[Fillable([
     'demand_signature', 'scheduled_trip_id', 'total', 'overlap_score', 'schedule_score',
-    'detour_score', 'audience_score', 'comfort_score', 'price_score', 'reliability_score',
+    'detour_score', 'audience_score', 'comfort_score', 'reliability_score',
     'walk_minutes', 'detour_minutes', 'expires_at',
 ])]
 class MatchScore extends Model
@@ -34,7 +34,6 @@ class MatchScore extends Model
             'detour_score' => 'integer',
             'audience_score' => 'integer',
             'comfort_score' => 'integer',
-            'price_score' => 'integer',
             'reliability_score' => 'integer',
             'walk_minutes' => 'decimal:1',
             'detour_minutes' => 'decimal:1',

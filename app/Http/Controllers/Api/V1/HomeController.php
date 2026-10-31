@@ -478,7 +478,7 @@ final class HomeController extends Controller
         $requests = $query
             ->with(['passenger.stats', 'passenger.verifications'])
             // Oldest first: the person who has been waiting longest is the one whose
-            // answer is most overdue, and a request expires after 48 hours.
+            // answer is most overdue — and nothing closes a request but an answer (R-4).
             ->oldest('created_at')
             ->orderBy('id')
             ->limit(self::PENDING_REQUESTS)

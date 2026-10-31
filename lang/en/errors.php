@@ -77,6 +77,8 @@ return [
     'BOOKING_WAITLIST_FULL' => 'The waiting list for this commute is full.',
     'BOOKING_NOT_CANCELLABLE' => 'That booking can no longer be cancelled.',
     'BOOKING_OWN_COMMUTE' => 'You cannot book a seat on your own commute.',
+    'SEAT_REQUEST_WOMEN_ONLY' => 'This commute is for women only.',
+    'COMMUTE_DEMAND_NOT_EDITABLE' => 'This saved commute has ended. Save a new one instead.',
     'BOOKING_RECURRING_DAYS_NOT_OFFERED' => 'This commute does not run on all of the days you asked for.',
 
     // Custom pickup points.

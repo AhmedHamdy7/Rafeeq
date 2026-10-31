@@ -192,8 +192,8 @@ final readonly class DisplaceConfirmedBookingsAction
                 'displaced_reason' => $reason->value,
                 /*
                  * Cleared, because a waiting list has no deadline. v5: "Offers have no fixed timer
-                 * while seat/eligibility persists" — and an `expires_at` inherited from the 48-hour
-                 * approval window would quietly drop her off the list she was just promised.
+                 * while seat/eligibility persists" — and an `expires_at` inherited from a during-ride
+                 * request's three minutes would quietly drop her off the list she was just promised.
                  */
                 'expires_at' => null,
             ])->save();

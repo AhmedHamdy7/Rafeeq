@@ -6,6 +6,7 @@ use App\Domains\Booking\Models\Booking;
 use App\Domains\Commute\Models\ScheduledTrip;
 use App\Domains\Matching\Support\AlternativeOrigin;
 use App\Domains\Matching\Support\MatchResult;
+use App\Domains\Matching\Support\HardFilters;
 use App\Domains\Matching\Support\SearchCriteria;
 use App\Domains\Shared\Exceptions\DomainException;
 use App\Domains\Shared\Support\ErrorCode;
@@ -101,13 +102,26 @@ final readonly class SuggestAlternativesAction
             /*
              * Carried over from the commute she lost, as a PREFERENCE rather than a filter. A woman
              * who chose a women-only commute should see women-only ones first; making it a filter
-             * would hide every other option from somebody who may need any lift at all, and
-             * eligibility is enforced by the search's own hard filters regardless.
+             * would hide every other option from somebody who may need any lift at all. Who may
+             * ask on a women-only commute is checked on the results below.
              */
             audiencePreference: $trip->commuteOffer?->audience,
         ));
 
-        return ['origin' => $origin, 'results' => $results];
+        /*
+         * Only commutes she may actually ask on. Search shows women-only commutes to everybody now
+         * (Feature 03 C-11), but this list is "where to ask for a lift right now", and a commute
+         * that would refuse her request is not an alternative.
+         */
+        $askable = [];
+
+        foreach ($results as $result) {
+            if (HardFilters::mayJoinAudience($booking->passenger, $result->offer)) {
+                $askable[] = $result;
+            }
+        }
+
+        return ['origin' => $origin, 'results' => $askable];
     }
 
     /**

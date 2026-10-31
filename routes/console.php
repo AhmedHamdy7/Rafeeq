@@ -181,7 +181,8 @@ Schedule::command('trips:sweep-delays')
     ->withoutOverlapping();
 
 /*
- * Closes seat requests whose window has run out (Feature 03 v5 §416).
+ * Closes seat requests whose window has run out (Feature 03 v5 §416), and one-day requests whose day
+ * has passed (Feature 03 R-4). Nothing else expires: requests stay open until answered.
  *
  * 🔴 Every minute because of the three-minute one. The same sweep already ran with the daily
  * membership roll, which was right while every window was forty-eight hours — a request sitting

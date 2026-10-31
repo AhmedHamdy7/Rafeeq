@@ -2,6 +2,7 @@
 
 namespace App\Http\Resources;
 
+use App\Domains\Commute\Enums\CommuteAudience;
 use App\Domains\Matching\Support\MatchResult;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
@@ -55,6 +56,13 @@ final class MatchResultResource extends JsonResource
             'audience' => $offer->audience->value,
 
             /*
+             * 🔴 Shown to everybody (Feature 03 C-11, BOOK-31). Only an account whose gender is
+             * `woman` can request a seat on it; anybody else is refused with
+             * `403 SEAT_REQUEST_WOMEN_ONLY`, so the app shows the card without the request button.
+             */
+            'womenOnly' => $offer->audience === CommuteAudience::WomenOnly,
+
+            /*
              * What members are meant to see, and all of it — see PersonSummary.
              *
              * `completedTrips` comes from the DRIVER PROFILE rather than from
@@ -93,7 +101,6 @@ final class MatchResultResource extends JsonResource
                 'detour' => $this->score->detour,
                 'audience' => $this->score->audience,
                 'comfort' => $this->score->comfort,
-                'price' => $this->score->price,
                 'reliability' => $this->score->reliability,
             ],
 

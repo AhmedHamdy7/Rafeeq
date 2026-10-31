@@ -2,9 +2,11 @@
 
 namespace App\Domains\Booking\Actions;
 
+use App\Domains\Booking\Enums\SeatRequestCommitment;
 use App\Domains\Booking\Enums\SeatRequestStatus;
 use App\Domains\Booking\Models\SeatRequest;
 use App\Domains\Booking\Support\WaitlistPositions;
+use App\Domains\Commute\Models\ScheduledTrip;
 use App\Domains\Identity\Models\User;
 use App\Domains\Notification\Enums\NotificationType;
 use App\Domains\Notification\Support\Notifier;
@@ -14,8 +16,13 @@ use Illuminate\Support\Facades\DB;
 
 /**
  * The answers to a seat request that are not an approval: a refusal by the driver,
- * a withdrawal by the passenger, and the sweep that closes requests nobody
- * answered.
+ * a withdrawal by the passenger, and the two sweeps that close requests which can no
+ * longer be answered — a during-ride request past its three minutes, and a one-day
+ * request whose day has gone by.
+ *
+ * 🔴 Nothing else closes a request (Feature 03 R-4, BOOK-36, decision C2-note). It stays
+ * until the driver accepts or rejects it, she withdraws it, or its day passes. Waiting-
+ * list places never expire either.
  *
  * Approval lives in its own Action because it is the one that touches seats under
  * a lock. These three change only the request itself.
@@ -62,9 +69,10 @@ final readonly class RespondToSeatRequestAction
      * declined and have to ask again, on a commute they had already been judged suitable
      * for.
      *
-     * Different from the automatic waitlisting at request time, which happens because the
-     * DAY was full. This is the driver choosing, so it works even on a day with a free
-     * seat.
+     * 🔴 Also how a waiting-list application is approved (Feature 03 R-1, BOOK-18): she asked
+     * to join his list — because the day was full, or because she already rides with somebody
+     * else at that time — and this is his yes. Nothing joins a waiting list without it. It
+     * works on a seat request too, even on a day with a free seat: that is the driver choosing.
      */
     public function waitlist(SeatRequest $request, User $driver, ?string $note = null): SeatRequest
     {
@@ -89,11 +97,10 @@ final readonly class RespondToSeatRequestAction
                 'responded_at' => now(),
                 'response_note' => $note,
                 /*
-                 * The clock restarts. The 48 hours it had were for the driver to answer,
-                 * and they just did — expiring it on the old deadline would drop somebody
-                 * out of a queue they were only put in a moment ago.
+                 * A waiting-list place never expires (Feature 03 R-4): it lasts until a seat
+                 * goes to her, she leaves, or the driver removes her.
                  */
-                'expires_at' => now()->addHours((int) config('rafeeq.booking.request_expiry_hours')),
+                'expires_at' => null,
             ])->save();
 
             return $request;
@@ -141,11 +148,12 @@ final readonly class RespondToSeatRequestAction
     }
 
     /**
-     * Requests nobody answered in time.
+     * During-ride requests nobody answered in their three minutes (Feature 03 v5 §416).
      *
-     * Swept rather than judged lazily on read, because an open request holds the
-     * passenger's one active slot for that commute — so leaving it open means they
-     * cannot ask again while waiting for an answer that is not coming.
+     * 🔴 The only requests that carry an `expires_at` any more (R-4): every other one is
+     * written with none, and the migration that removed the 48-hour rule cleared it from the
+     * rows that already had one. The status list stays as it was so a during-ride request is
+     * closed in whatever state it reached.
      *
      * @return int how many expired
      */
@@ -166,6 +174,69 @@ final readonly class RespondToSeatRequestAction
             ->whereNotNull('expires_at')
             ->where('expires_at', '<=', now())
             ->update(['status' => SeatRequestStatus::Expired->value]);
+    }
+
+    /**
+     * One-day requests whose day has gone by (Feature 03 R-4: "a one-day request whose date has
+     * passed closes").
+     *
+     * 🔴 Needed now that requests do not expire: a trial for last Tuesday is not a question
+     * anybody can answer, and left open it would hold her one open request on that commute.
+     * Closed `closed_date_passed`, not `expired` — nobody failed to answer in time; the day simply
+     * passed, and `expired` would read as a mark against the driver.
+     *
+     * One-day means a `trial`, or a waiting-list place pinned to one date (a single-date switch
+     * puts her back on the old list for that morning only). A recurring request that happens to
+     * name a first day is about a pattern, and stays.
+     *
+     * "Passed" is the commute's own calendar: the day before today in Cairo, where every
+     * commute's days are written — a 07:00 run is not "yesterday" at 01:00 UTC on the same date.
+     *
+     * @return int how many closed
+     */
+    public static function closeDatePassed(): int
+    {
+        $today = now('Africa/Cairo')->toDateString();
+
+        $ids = SeatRequest::query()
+            ->whereIn('status', [
+                SeatRequestStatus::Pending->value,
+                SeatRequestStatus::Waitlisted->value,
+                SeatRequestStatus::Counteroffered->value,
+            ])
+            ->whereNotNull('scheduled_trip_id')
+            ->where(fn ($query) => $query
+                ->where('commitment', SeatRequestCommitment::Trial->value)
+                ->orWhere('status', SeatRequestStatus::Waitlisted->value))
+            ->whereIn('scheduled_trip_id', ScheduledTrip::query()
+                ->where('trip_date', '<', $today)
+                ->select('id'))
+            ->orderBy('id')
+            ->pluck('id');
+
+        if ($ids->isEmpty()) {
+            return 0;
+        }
+
+        $offers = SeatRequest::query()
+            ->whereIn('id', $ids->all())
+            ->where('status', SeatRequestStatus::Waitlisted->value)
+            ->distinct()
+            ->pluck('commute_offer_id');
+
+        $closed = SeatRequest::query()
+            ->whereIn('id', $ids->all())
+            ->update([
+                'status' => SeatRequestStatus::ClosedDatePassed->value,
+                'waitlist_position' => null,
+            ]);
+
+        // The places behind them move up, so nobody reads "third in line" when she is second.
+        foreach ($offers as $offerId) {
+            WaitlistPositions::renumber((string) $offerId);
+        }
+
+        return $closed;
     }
 
     /**

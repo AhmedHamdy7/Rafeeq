@@ -23,7 +23,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
     'passenger_user_id', 'origin_point', 'destination_point', 'origin_lat', 'origin_lng',
     'dest_lat', 'dest_lng', 'origin_label', 'destination_label', 'commute_type', 'days_mask',
     'preferred_arrival_start', 'preferred_arrival_end', 'flexibility_minutes', 'max_walk_minutes',
-    'max_detour_minutes', 'budget_monthly_piastres', 'audience_preference', 'wants_return_trip',
+    'max_detour_minutes', 'audience_preference', 'wants_return_trip',
 ])]
 class CommuteDemand extends Model
 {
@@ -44,7 +44,6 @@ class CommuteDemand extends Model
             'flexibility_minutes' => 'integer',
             'max_walk_minutes' => 'integer',
             'max_detour_minutes' => 'integer',
-            'budget_monthly_piastres' => 'integer',
             'audience_preference' => CommuteAudience::class,
             'wants_return_trip' => 'boolean',
             'status' => CommuteDemandStatus::class,

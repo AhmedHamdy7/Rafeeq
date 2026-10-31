@@ -3,11 +3,11 @@
 namespace App\Http\Controllers\Api\V1\Booking;
 
 use App\Domains\Booking\Actions\OfferSeatsToWaitlistMembersAction;
-use App\Domains\Booking\Enums\BookingStatus;
 use App\Domains\Booking\Enums\SeatRequestStatus;
 use App\Domains\Booking\Models\Booking;
 use App\Domains\Booking\Models\SeatOffer;
 use App\Domains\Booking\Models\SeatRequest;
+use App\Domains\Booking\Support\OtherConfirmedCommutes;
 use App\Domains\Commute\Models\CommuteOffer;
 use App\Domains\Commute\Models\ScheduledTrip;
 use App\Domains\Shared\Exceptions\DomainException;
@@ -65,7 +65,7 @@ final class WaitlistController extends Controller
          * screen where a driver may be looking at twenty of them.
          */
         $previous = $this->passengersWhoHaveRidden($offer, $passengerIds);
-        $elsewhere = $this->passengersWithAnotherConfirmedCommute($offer, $passengerIds);
+        $elsewhere = OtherConfirmedCommutes::forPassengers($passengerIds);
 
         $cards = [];
 
@@ -74,7 +74,7 @@ final class WaitlistController extends Controller
                 $member,
                 $request->user(),
                 isPreviousPassenger: in_array($member->passenger_user_id, $previous, true),
-                hasOtherConfirmedCommute: in_array($member->passenger_user_id, $elsewhere, true),
+                hasOtherConfirmedCommute: OtherConfirmedCommutes::elsewhere($elsewhere, $member->passenger_user_id, $offer->getKey()),
             );
         }
 
@@ -175,34 +175,6 @@ final class WaitlistController extends Controller
             ->whereIn('passenger_user_id', $passengerIds->all())
             ->whereIn('scheduled_trip_id', ScheduledTrip::query()
                 ->where('commute_offer_id', $offer->getKey())
-                ->select('id'))
-            ->distinct()
-            ->pluck('passenger_user_id')
-            ->all();
-    }
-
-    /**
-     * Which of these passengers already holds a confirmed future seat somewhere else.
-     *
-     * 🔒 Returns ids only, and the caller turns each into a bare boolean on one card. The driver
-     * learns that a woman may already be covered; she learns nothing about which commute, which
-     * driver, or which days — see {@see WaitlistMemberResource} on why that line is where it is.
-     *
-     * @param  Collection<int, string>  $passengerIds
-     * @return list<string>
-     */
-    private function passengersWithAnotherConfirmedCommute(CommuteOffer $offer, $passengerIds): array
-    {
-        if ($passengerIds->isEmpty()) {
-            return [];
-        }
-
-        return Booking::query()
-            ->whereIn('passenger_user_id', $passengerIds->all())
-            ->where('status', BookingStatus::Confirmed->value)
-            ->whereIn('scheduled_trip_id', ScheduledTrip::query()
-                ->where('commute_offer_id', '!=', $offer->getKey())
-                ->where('departure_at', '>', now())
                 ->select('id'))
             ->distinct()
             ->pluck('passenger_user_id')

@@ -66,7 +66,10 @@ it('says plainly when a point is past the limit', function () {
 it('refuses a commute the caller is not eligible for', function () {
     $manToken = verifiedPassenger('01223334455', gender: 'man', device: 'pax-man');
 
-    previewPickup($manToken, $this->commuteId, onTheWay())->assertStatus(404);
+    // Visible to him now (Feature 03 C-11), but he cannot ask to ride on it — so no preview.
+    previewPickup($manToken, $this->commuteId, onTheWay())
+        ->assertStatus(403)
+        ->assertJsonPath('error.code', 'SEAT_REQUEST_WOMEN_ONLY');
 });
 
 it('refuses a commute whose driver does not take custom pickups', function () {

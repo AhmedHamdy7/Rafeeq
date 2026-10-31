@@ -366,7 +366,6 @@ final readonly class SearchCommutesAction
                 detour: $row->detour_score,
                 audience: $row->audience_score,
                 comfort: $row->comfort_score,
-                price: $row->price_score,
                 reliability: $row->reliability_score,
                 walkMinutes: (float) $row->walk_minutes,
                 detourMinutes: (float) $row->detour_minutes,

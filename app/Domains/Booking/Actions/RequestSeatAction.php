@@ -3,10 +3,12 @@
 namespace App\Domains\Booking\Actions;
 
 use App\Domains\Booking\Enums\SeatRequestCommitment;
+use App\Domains\Booking\Enums\SeatRequestKind;
 use App\Domains\Booking\Enums\SeatRequestStatus;
 use App\Domains\Booking\Models\SeatRequest;
 use App\Domains\Booking\Support\DuringRideRequests;
 use App\Domains\Booking\Support\RequestedPoints;
+use App\Domains\Booking\Support\RequestKinds;
 use App\Domains\Booking\Support\SeatAvailabilityChecker;
 use App\Domains\Commute\Models\CommuteOffer;
 use App\Domains\Commute\Models\ScheduledTrip;
@@ -37,9 +39,12 @@ use Illuminate\Support\Facades\DB;
  *
  * **Eligibility is re-checked with the same filters as the search.** Reusing
  * `HardFilters` rather than writing a second, simpler check is deliberate: a
- * man must not be able to request a seat on a women-only commute by calling this
- * endpoint directly with an id he obtained some other way. One implementation of
+ * passenger a driver blocked must not be able to request a seat by calling this
+ * endpoint directly with an id obtained some other way. One implementation of
  * "may this person ride with this driver" means the two cannot drift apart.
+ *
+ * **A women-only commute is visible to everybody, and only a woman may ask**
+ * (Feature 03 C-11, BOOK-31): anybody else gets `403 SEAT_REQUEST_WOMEN_ONLY`.
  */
 final readonly class RequestSeatAction
 {
@@ -108,8 +113,19 @@ final readonly class RequestSeatAction
             $this->reachability->assertReachable($trip, $points->pickup);
         }
 
+        /*
+         * 🔴 What she is asking for (Feature 03 R-1, BOOK-17, BOOK-18, BOOK-33): a seat, or — on a
+         * day that is full, or at a time she already rides with somebody else — a place on the
+         * waiting list. Never a refusal: "Request to join waiting list" is the whole of what the
+         * app offers on a full commute, and it used to answer that with an error for a recurring
+         * request. Decided on what the days look like now; see {@see RequestKinds::atRequest()}.
+         */
+        $kind = $duringRide
+            ? SeatRequestKind::SeatRequest
+            : RequestKinds::atRequest($offer, $trip, $commitment, $input['requestedDaysMask'] ?? null, (int) ($input['seats'] ?? 1), $passenger->id);
+
         return DB::transaction(function () use (
-            $passenger, $offer, $trip, $commitment, $input, $points, $duringRide
+            $passenger, $offer, $trip, $commitment, $input, $points, $duringRide, $kind
         ): SeatRequest {
             $request = new SeatRequest;
 
@@ -140,45 +156,40 @@ final readonly class RequestSeatAction
             $request->forceFill($points->columns());
 
             // Not fillable: a request must not be able to declare itself approved,
-            // nor claim a place in the queue.
-            $waitlisted = $trip !== null && $this->isFull($trip, (int) ($input['seats'] ?? 1));
-
-            $request->status = $waitlisted
-                ? SeatRequestStatus::Waitlisted->value
-                : SeatRequestStatus::Pending->value;
-
-            if ($waitlisted) {
-                $request->waitlist_position = $this->nextWaitlistPosition($offer);
-            }
+            // nor what it is asking for.
+            $request->status = SeatRequestStatus::Pending->value;
+            $request->kind = $kind->value;
 
             /*
-             * A request nobody answers expires. Leaving it open forever is worse
-             * than a refusal: it holds the passenger's one active request for this
-             * commute, so they cannot ask again while they wait for nothing.
-             */
-            /*
-             * 🔴 Three minutes for a run that is already moving (v5 §416), and v5 is explicit that
-             * this is the ONLY countdown left in the product — every other timer was deliberately
-             * removed. The question itself is perishable: a woman asking to be collected by a car
-             * two streets away is asking about where it is now, and an answer ten minutes later
-             * answers something else.
+             * 🔴 Three minutes for a run that is already moving (v5 §416), and that is now the ONLY
+             * deadline a request can carry (Feature 03 R-4, BOOK-36, decision C2-note). The question
+             * itself is perishable: a woman asking to be collected by a car two streets away is
+             * asking about where it is now, and an answer ten minutes later answers something else.
+             *
+             * Every other request stays open until the driver answers it, she withdraws it, or — for
+             * one day — that day goes by ({@see RespondToSeatRequestAction::closeDatePassed()}). The
+             * 48-hour window that used to close them is gone: a passenger who has asked five drivers
+             * is waiting for any one of them, and expiring the other four would take away exactly
+             * the fallback BOOK-34 promises her.
              */
             $request->requested_during_ride = $duringRide;
 
             $request->expires_at = $duringRide
                 ? now()->addMinutes((int) config('rafeeq.booking.during_ride_request_expiry_minutes'))
-                : now()->addHours((int) config('rafeeq.booking.request_expiry_hours'));
+                : null;
 
             $request->save();
 
-            // Only a request that asks the driver for something. A day that was full put it
-            // straight on the waitlist, and there is nothing for her to answer yet.
-            if (! $waitlisted) {
-                Notifier::send($offer->driverProfile->user, NotificationType::SeatRequested,
-                    ['name' => $passenger->public_first_name],
-                    ['seatRequestId' => $request->id],
-                );
-            }
+            /*
+             * Always the driver's turn now, whichever she asked for (Feature 03 R-1, BOOK-18): a
+             * request on a full day used to go straight onto the waiting list without him ever
+             * seeing it, and BOOK-18 says he approves or rejects an application like any other.
+             * The `kind` travels in the data so his app can open the right card.
+             */
+            Notifier::send($offer->driverProfile->user, NotificationType::SeatRequested,
+                ['name' => $passenger->public_first_name],
+                ['seatRequestId' => $request->id, 'kind' => $kind->value],
+            );
 
             return $request;
         });
@@ -211,12 +222,12 @@ final readonly class RequestSeatAction
     }
 
     /**
-     * 🔴 The same eligibility rules the search applies — audience, blocks in both
-     * directions, trust level, driver still approved — asked of this one commute.
+     * 🔴 The same eligibility rules the search applies — blocks in both directions,
+     * trust level, driver still approved — asked of this one commute, and then the
+     * audience.
      *
      * Shared with the search rather than reimplemented, because this endpoint takes
-     * an id that may have arrived any way at all. Without it, a man could request a
-     * seat on a women-only commute simply by calling this directly.
+     * an id that may have arrived any way at all.
      */
     private function assertPassengerMayRide(User $passenger, CommuteOffer $offer): void
     {
@@ -226,9 +237,18 @@ final readonly class RequestSeatAction
         )->exists();
 
         if (! $allowed) {
-            // 404, not 403: telling someone they are excluded from a women-only
-            // commute confirms both that it exists and what it is.
+            // 404, not 403: telling somebody a driver blocked that he did would be
+            // the one thing the block exists to avoid.
             throw DomainException::of(ErrorCode::NotFound);
+        }
+
+        /*
+         * 🔴 Women-only (Feature 03 C-11, BOOK-31). A 403 with its own code now, not the 404 it
+         * used to be: the commute is shown to everybody, flagged `womenOnly`, so its existence is
+         * no secret — and a clear answer beats a "not found" for something she is looking at.
+         */
+        if (! HardFilters::mayJoinAudience($passenger, $offer)) {
+            throw DomainException::of(ErrorCode::SeatRequestWomenOnly);
         }
     }
 
@@ -284,35 +304,5 @@ final readonly class RequestSeatAction
                 'requestedDaysMask' => [(string) ($offered ?? 0)],
             ]);
         }
-    }
-
-    private function isFull(ScheduledTrip $trip, int $seats): bool
-    {
-        return $trip->seats_taken + $seats > $trip->seats_total;
-    }
-
-    /**
-     * The back of the queue.
-     *
-     * Taken from the highest position in use, NOT from how many people are
-     * waiting: with three waiting at 1, 2, 3, the moment number 2 withdraws the
-     * count says 2 and the next arrival would be handed position 3 — the same
-     * place somebody else is already standing in. The count still decides whether
-     * the queue is full, because that is a question about how many people are
-     * actually waiting.
-     */
-    private function nextWaitlistPosition(CommuteOffer $offer): int
-    {
-        $waiting = SeatRequest::query()
-            ->where('commute_offer_id', $offer->id)
-            ->where('status', SeatRequestStatus::Waitlisted->value);
-
-        if ($waiting->clone()->count() >= (int) config('rafeeq.booking.max_waitlist_size')) {
-            // A queue this long is a false hope, and offering one is worse than
-            // saying no.
-            throw DomainException::of(ErrorCode::WaitlistFull);
-        }
-
-        return (int) $waiting->max('waitlist_position') + 1;
     }
 }

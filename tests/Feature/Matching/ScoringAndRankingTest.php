@@ -12,8 +12,8 @@ use Illuminate\Support\Facades\Storage;
  *
  * The weights are what Rafeeq IS: overlap and schedule together are more than
  * half, because a commute not going the passenger's way at the time they need is
- * not a match however pleasant; price is worth five, because this is shared cost
- * and not a marketplace.
+ * not a match however pleasant. There is no price component (Feature 03 S-2): the
+ * price is computed by RAFEEQ and the same for everybody on a trip.
  */
 beforeEach(function () {
     Storage::fake('documents');
@@ -31,7 +31,7 @@ it('gives a perfect score to a journey that matches on every count', function ()
     $result = search($this->paxToken)->assertOk()->json('data.0');
 
     // Same origin, same destination, inside the window, no detour, no unmet
-    // preference, within budget, driver with no failures on record.
+    // preference, driver with no failures on record.
     expect($result['score'])->toBe([
         'total' => 100,
         'overlap' => 30,
@@ -39,8 +39,7 @@ it('gives a perfect score to a journey that matches on every count', function ()
         'detour' => 15,
         'audience' => 10,
         'comfort' => 10,
-        'price' => 5,
-        'reliability' => 5,
+        'reliability' => 10,
     ]);
 });
 
@@ -52,13 +51,13 @@ it('returns the breakdown, not just a total', function () {
     $score = search($this->paxToken)->assertOk()->json('data.0.score');
 
     expect(array_keys($score))->toEqualCanonicalizing([
-        'total', 'overlap', 'schedule', 'detour', 'audience', 'comfort', 'price', 'reliability',
+        'total', 'overlap', 'schedule', 'detour', 'audience', 'comfort', 'reliability',
     ])
         // And the parts really do add up to the whole, so the screen cannot show a
         // breakdown that contradicts the headline.
         ->and($score['total'])->toBe(
             $score['overlap'] + $score['schedule'] + $score['detour']
-            + $score['audience'] + $score['comfort'] + $score['price'] + $score['reliability']
+            + $score['audience'] + $score['comfort'] + $score['reliability']
         );
 });
 
@@ -89,51 +88,17 @@ it('scores nothing for timing half an hour out', function () {
 });
 
 /**
- * The budget is a MONTHLY ceiling, so these figures are months and the per-ride ceiling is
- * derived from them.
- *
- * The commute costs 8,000 piastres a ride, and the search asks for five days a week one
- * way — about 21.7 rides a month (5 × 52/12). So a month's budget divided by 21.7 is what
- * the 8,000 is actually compared against:
- *
- *   200,000 ÷ 21.7 ≈ 9,200 → under the price, full marks
- *   130,000 ÷ 21.7 ≈ 6,000 → a third over, so it tapers
- *    87,000 ÷ 21.7 ≈ 4,000 → double the ceiling, worth nothing
- *
- * These used to be per-ride figures (10,000 / 5,000 / 2,000), which is the bug the monthly
- * correction fixed: read as months they are a few hundred piastres a ride, so every
- * commute was hopelessly over budget rather than comfortably under it.
+ * 🔴 Feature 03 S-2 (decision C11): the budget left search. The price is RAFEEQ's, the same for
+ * everybody on a trip, so a budget could only hide or demote commutes — and BOOK-02 says there is
+ * no price filter. A client still sending it is ignored rather than refused, so an old app build
+ * keeps working.
  */
-it('loses price points when the commute costs more than the budget', function () {
-    $within = search($this->paxToken, ['budgetMonthlyPiastres' => 200000])
-        ->assertOk()->json('data.0.score.price');
+it('ignores a budget, because the price is not hers to bargain over', function () {
+    $without = search($this->paxToken)->assertOk()->json('data.0.score');
+    $with = search($this->paxToken, ['budgetMonthlyPiastres' => 1000])->assertOk()->json('data.0.score');
 
-    $over = search($this->paxToken, ['budgetMonthlyPiastres' => 130000])
-        ->assertOk()->json('data.0.score.price');
-
-    $wayOver = search($this->paxToken, ['budgetMonthlyPiastres' => 87000])
-        ->assertOk()->json('data.0.score.price');
-
-    expect($within)->toBe(5)
-        ->and($over)->toBeLessThan(5)
-        // Twice the budget is worth nothing, but a commute slightly over still
-        // ranks above one at double.
-        ->and($wayOver)->toBe(0)
-        ->and($over)->toBeGreaterThan($wayOver);
-});
-
-/**
- * 🔴 The bug the monthly correction fixed, pinned so it cannot come back.
- *
- * Read as a per-ride figure, a monthly budget is enormous — so every commute came in under
- * it and the five points for price were full marks for everybody, whatever they cost.
- */
-it('does not hand out full price marks to a commute nobody could afford', function () {
-    // 900 EGP a month over five days is about 41 a ride. The commute costs 80.
-    $score = search($this->paxToken, ['budgetMonthlyPiastres' => 90000])
-        ->assertOk()->json('data.0.score.price');
-
-    expect($score)->toBeLessThan(5);
+    expect($with)->toBe($without)
+        ->and($with)->not->toHaveKey('price');
 });
 
 it('scores comfort by how many of the requested rules the commute actually has', function () {

@@ -17,12 +17,12 @@ use Illuminate\Database\Eloquent\Builder;
  * Stage one of the search: everything a passenger is not allowed to see, removed
  * in SQL before a single score is computed.
  *
- * 🔴 This class is the whole reason pitfall #15 cannot happen. A women-only
- * commute must EXCLUDE non-women, never score them lower — a man appearing in a
- * women-only group's results with six points out of ten instead of ten is a
- * security breach, not a ranking quirk. Exclusion lives in the query, so no
- * scoring change downstream can ever reintroduce it, and no future caller can
- * forget to apply it.
+ * 🔴 Women-only commutes are NOT removed here any more (Feature 03 C-11, BOOK-31, decision C1).
+ * Everybody sees them, flagged `womenOnly: true`, and the line is drawn where it can actually
+ * hold: a man cannot SEND a request ({@see mayJoinAudience()}, `403 SEAT_REQUEST_WOMEN_ONLY`), and
+ * the driver can still refuse anybody. Hiding them protected nothing — gender is self-declared and
+ * never verified — and it hid from half the members what the product offers. A woman who wants
+ * only those uses the women-only filter ({@see SearchCriteria::$womenOnly}).
  *
  * It is also what makes the search affordable. The Bible's figures: roughly
  * 50,000 published trips narrowed to about 800 in ~15ms, using only indexed
@@ -45,6 +45,11 @@ final class HardFilters
                 self::intersectBoundingBox($offer, $criteria);
 
                 self::requireMinimumRating($offer, $criteria);
+
+                // The women-only FILTER she chose (BOOK-02), not an eligibility rule.
+                if ($criteria->womenOnly) {
+                    $offer->where('audience', CommuteAudience::WomenOnly->value);
+                }
             })
             // Only days that can still be booked. A trip whose deadline has
             // passed is not a match, it is a disappointment with a nice score.
@@ -61,15 +66,18 @@ final class HardFilters
     }
 
     /**
-     * 🔴 WHO may ride with this driver — separately from what is relevant to a
+     * 🔴 WHO may see and ask this driver — separately from what is relevant to a
      * search.
      *
      * The split matters because these rules apply wherever a passenger meets a
      * commute, not only in search results. Requesting a seat calls this with an
      * offer id that might have arrived any way at all; if eligibility lived only
-     * inside the search query, a man could request a seat on a women-only commute
-     * by calling that endpoint directly. One implementation means the two cannot
+     * inside the search query, somebody a driver blocked could request a seat by
+     * calling that endpoint directly. One implementation means the two cannot
      * drift apart.
+     *
+     * The audience is not in here: everybody may SEE a women-only commute (C-11).
+     * Who may ASK for a seat on one is {@see mayJoinAudience()}.
      *
      * @param  Builder<CommuteOffer>  $offer
      */
@@ -77,7 +85,6 @@ final class HardFilters
     {
         $offer->where('status', CommuteOfferStatus::Published->value);
 
-        self::excludeForbiddenAudience($offer, $passenger);
         self::requireApprovedDriver($offer);
         self::excludeBlockedEitherWay($offer, $passenger);
         self::requireTrustLevel($offer, $passenger);
@@ -86,20 +93,17 @@ final class HardFilters
     }
 
     /**
-     * 🔴 The hard audience filter. A commute open to any verified member is
-     * always allowed; a women-only one only to women.
+     * 🔴 Whether this person may ask for a seat on this commute's audience (Feature 03 C-11,
+     * BOOK-31).
      *
-     * `gender` is read from the passenger, never from the request: a filter that
-     * trusted a submitted value would be no filter at all.
+     * Only a woman may ask for a seat on a women-only commute. `gender` is read from the account,
+     * never from the request: a rule that trusted a submitted value would be no rule at all. And it
+     * is "is a woman", not "is not a man": a legacy `prefer_not_to_say` account has not said she is
+     * a woman, and a women-only car is a promise to the women already in it.
      */
-    private static function excludeForbiddenAudience(Builder $offer, User $passenger): void
+    public static function mayJoinAudience(User $passenger, CommuteOffer $offer): bool
     {
-        if ($passenger->gender === Gender::Woman) {
-            // A woman may see both kinds, so there is nothing to exclude.
-            return;
-        }
-
-        $offer->where('audience', CommuteAudience::AnyVerified->value);
+        return $offer->audience !== CommuteAudience::WomenOnly || $passenger->gender === Gender::Woman;
     }
 
     /**

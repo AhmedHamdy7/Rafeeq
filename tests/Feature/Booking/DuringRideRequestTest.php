@@ -306,7 +306,7 @@ it('leaves an ordinary request’s window alone', function () {
 it('keeps an open offer alive after the run sets off, and closes it once the car passes her', function () {
     /*
      * ⚠️ She joins the waiting list BEFORE the run sets off, and that is behaviour rather than a
-     * fixture quirk: on a moving run a full day is REFUSED, not waitlisted. A place in a queue for
+     * fixture quirk: on a moving run a full day is REFUSED, not taken as a waiting-list application. A place in a queue for
      * a car that is currently driving past is meaningless — the morning ends in forty minutes — and
      * v5 describes an active-ride request as something a driver may accept "if feasible", not a
      * queue entry. So the run is stopped, she joins, and then it sets off again.
@@ -329,7 +329,12 @@ it('keeps an open offer alive after the run sets off, and closes it once the car
         'scheduledTripId' => $this->trip->id,
         'pickup' => ['lat' => 30.0624, 'lng' => 31.3614, 'label' => 'Ring Road, Rehab exit'],
         'dropoff' => ['lat' => 30.0684, 'lng' => 31.1015, 'label' => 'Mehwar, Sheikh Zayed'],
-    ])->assertStatus(201)->assertJsonPath('data.status', 'WAITLISTED')->json('data.id');
+    ])->assertStatus(201)->assertJsonPath('data.kind', 'waitlist_application')->json('data.id');
+
+    // Her application to the list, and the driver's yes (Feature 03 R-1, BOOK-18).
+    test()->withToken($this->driverToken)
+        ->postJson("/api/v1/driver/seat-requests/{$requestId}/waitlist")
+        ->assertOk()->assertJsonPath('data.status', 'WAITLISTED');
 
     // Back on the road, and a seat frees — so she is offered it mid-journey.
     TripSession::query()

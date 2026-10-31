@@ -152,6 +152,10 @@ it('offers a released seat to the waiting list', function () {
     $waitingId = requestSeat($waitingToken, $this->commuteId, ['scheduledTripId' => $tomorrow->id])
         ->assertStatus(201)->json('data.id');
 
+    // A full day: her request is an application, and the driver's yes puts her on the list.
+    test()->withToken($this->driverToken)
+        ->postJson("/api/v1/driver/seat-requests/{$waitingId}/waitlist")->assertOk();
+
     expect(SeatRequest::query()->whereKey($waitingId)->sole()->status)
         ->toBe(SeatRequestStatus::Waitlisted);
 
