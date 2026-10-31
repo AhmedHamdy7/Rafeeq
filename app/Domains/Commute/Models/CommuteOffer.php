@@ -23,7 +23,7 @@ use Illuminate\Database\Eloquent\Relations\HasOne;
 
 #[Fillable([
     'driver_profile_id', 'vehicle_id', 'corridor_id', 'commute_type', 'direction',
-    'seats_total', 'price_per_seat_piastres', 'currency', 'max_detour_minutes',
+    'seats_total', 'currency', 'max_detour_minutes',
     'max_walk_minutes', 'audience', 'min_trust_level', 'allows_custom_pickup',
 ])]
 class CommuteOffer extends Model
@@ -38,7 +38,13 @@ class CommuteOffer extends Model
             'status' => CommuteOfferStatus::class,
             'direction' => CommuteDirection::class,
             'seats_total' => 'integer',
-            'price_per_seat_piastres' => 'integer',
+            /*
+             * 🔒 The current automatic price, written only by the server when days are generated
+             * (P-1). A cache for the driver's commute screen — each day carries its own frozen
+             * price, and that is what anybody books. Null on a draft: no route length yet.
+             */
+            'seat_price_piastres' => 'integer',
+            'driver_share_piastres' => 'integer',
             'max_detour_minutes' => 'integer',
             'max_walk_minutes' => 'integer',
             'audience' => CommuteAudience::class,
@@ -91,9 +97,9 @@ class CommuteOffer extends Model
     }
 
     /**
-     * One row per weekday this commute runs, each with its own departure, promised arrival, price
-     * and capacity (Feature 03 v3). This is the source of truth for when it leaves and what a seat
-     * costs.
+     * One row per weekday this commute runs, each with its own departure, promised arrival and
+     * capacity (Feature 03 v3). This is the source of truth for when it leaves. What a seat costs
+     * is not per weekday any more: it is automatic (PAY-42).
      */
     public function weekdaySchedules(): HasMany
     {

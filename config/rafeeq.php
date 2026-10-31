@@ -186,20 +186,6 @@ return [
 
     'booking' => [
         /*
-         * The platform's share of each seat, as a percentage.
-         *
-         * ✅ Decided 2026-10-06 (MASTER_PLAN §19 open question #5, Screen Map §8.1): the fee is
-         * DEDUCTED from the driver's price — `price = platform_fee + driver_amount`, the rider
-         * pays the published price and nothing on top — at 3%, flat, and staff may change it
-         * from the dashboard's Settings page (whole percents).
-         *
-         * Building on the documented number is safe because every booking
-         * freezes its own snapshot at approval: changing this later moves
-         * nothing that already exists (pitfall #42).
-         */
-        'platform_fee_percent' => 3.0,
-
-        /*
          * How long a seat request waits for an answer before expiring. A request
          * nobody answered is worse than a refusal: the passenger cannot look
          * elsewhere while it holds their one active request per commute.
@@ -417,20 +403,6 @@ return [
          * so a driver knows their passenger list before they sleep.
          */
         'booking_deadline_hour' => 21,
-
-        /*
-         * A commute is shared cost, not a fare. The ceiling is what stops the platform
-         * being used as an unlicensed taxi service, so it is a legal boundary rather
-         * than a preference.
-         *
-         * 50–120 EGP, per ERD §23.3 and screen 24's own slider, which runs from EGP 50
-         * to EGP 120. These were 5–500, which is not a shared-cost range: at the bottom
-         * it let somebody price a fifty-kilometre commute at five pounds, and at the top
-         * it allowed five hundred — a fare, and the exact thing the ceiling exists to
-         * prevent. Three sources said 50–120 and the config was the outlier.
-         */
-        'min_price_piastres' => 5_000,
-        'max_price_piastres' => 12_000,
 
         // Chapter 4 §4: "no infinite commutes" — an end date is mandatory, and
         // this bounds how far out it may be.
@@ -792,33 +764,40 @@ return [
     ],
 
     /*
-     * "The fair suggested price" on the publish screen (ERD §23.3):
+     * The automatic seat price (P-1 → P-5; PAY-41 → PAY-44, PAY-48; D-0016, D-0025, D-0026).
      *
-     *     per seat = (km × cost per km) ÷ assumed occupancy, rounded to the step
+     *     base       = route km × km rate (Standard or Comfort, from the car's tier)
+     *     share      = base ÷ max(approved seats, min_seat_divisor)          never rounded
+     *     commission = max(commission_rate × share, min_commission)
+     *     seat price = share + commission, rounded to the nearest step; a price exactly halfway
+     *                  rounds DOWN, unless rounding down would leave RAFEEQ under the minimum,
+     *                  in which case it rounds UP. The rounding difference is RAFEEQ's.
      *
-     * Every one of these is a policy figure the dashboard must be able to move
-     * (standard #11), and `cost_per_km_piastres` most of all — it tracks the fuel price,
-     * so it changes on somebody else's schedule, and the ERD notes the dashboard has a
-     * "fuel index update" broadcast that tells drivers when it does. A suggestion built
-     * on a hard-coded fuel cost would quietly advise people to undercharge the week
-     * petrol goes up.
+     * Every figure is an admin setting (ADM-06) read through
+     * {@see \App\Domains\Commute\Support\PricingSettings}, and each generated trip day freezes the
+     * values it was priced with (PAY-44) — so moving one here reaches only days generated after.
+     *
+     * 🔴 The commission is ADDED ON TOP of the driver's share, not taken out of it (PAY-48). The
+     * driver of a full 3-seat car on a 40 km Standard route keeps 300 EGP whatever the rate is.
      */
     'pricing' => [
-        'cost_per_km_piastres' => 750,
+        // PAY-42: 7.5 EGP a kilometre for a Standard car.
+        'km_rate_standard_piastres' => 750,
 
-        /*
-         * How many passengers the cost is split between when suggesting a price.
-         *
-         * An assumption by necessity: the suggestion is made while the driver is still
-         * filling in the form, before anybody has booked. Splitting by seats actually
-         * sold would change the advice every time somebody joined — and the price is
-         * frozen per booking anyway, because a fixed price per seat is a decision
-         * (ERD §23.2: the amount does not move with the number of passengers).
-         */
-        'assumed_occupancy' => 3,
+        // PAY-42, PROF-26: 10 EGP a kilometre for a car with the Comfort badge.
+        'km_rate_comfort_piastres' => 1_000,
 
-        // Suggestions land on round numbers, because they are meant to be typed in.
+        // PAY-41: 10% in the beta, 15% at the public launch. Whole percents.
+        'commission_rate_percent' => 10,
+
+        // PAY-48: RAFEEQ takes at least 8 EGP a seat, so a short trip still earns something.
+        'min_commission_piastres' => 800,
+
+        // PAY-43: seat prices land on 5 EGP steps.
         'rounding_step_piastres' => 500,
+
+        // D-0025 (b): the share is divided by the approved seats, but never by fewer than 3.
+        'min_seat_divisor' => 3,
     ],
 
     'geo' => [
@@ -983,6 +962,18 @@ return [
         'vehicle_maximum_seats' => 8,
 
         'maximum_vehicles_per_driver' => 3,
+
+        /*
+         * The fewest approved seats an admin may give a car at verification (PROF-28: "at least
+         * 3"). An admin setting — see VehicleSettings.
+         */
+        'min_approved_seats' => 3,
+
+        /*
+         * DEPLOY-ONLY. The most approved seats the review form accepts. A guard-rail against a
+         * slip of the keyboard (30 for 3), not a policy: no car in the product sells more.
+         */
+        'max_approved_seats' => 7,
 
         /*
          * A licence must still be valid this far into the future before an
