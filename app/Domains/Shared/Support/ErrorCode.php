@@ -216,6 +216,12 @@ enum ErrorCode: string
     case WaitTimerAlreadyRunning = 'WAIT_TIMER_ALREADY_RUNNING';
     case WaitTimerNotRunning = 'WAIT_TIMER_NOT_RUNNING';
 
+    /**
+     * "I've arrived" from further than `trip.arrival_radius_meters` from THIS passenger's pickup
+     * (TRIP-10). Carries `distanceMeters` so the driver's screen can say how far she still is.
+     */
+    case NotAtPickup = 'NOT_AT_PICKUP';
+
     // ---- Ratings (Phase 10, Chapter 9) ---------------------------------
     case RatingWindowClosed = 'RATING_WINDOW_CLOSED';
     case RatingAlreadySubmitted = 'RATING_ALREADY_SUBMITTED';
@@ -404,7 +410,9 @@ enum ErrorCode: string
             self::TripNotCancellable,
             self::AttendanceNotConfirmable,
             self::WaitTimerAlreadyRunning,
-            self::WaitTimerNotRunning => 409,
+            self::WaitTimerNotRunning,
+            // 409: the request is fine; where the car is right now is not. Drive closer and tap again.
+            self::NotAtPickup => 409,
 
             /*
              * 422 for these two, because both are about WHEN: a run started the night

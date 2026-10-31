@@ -193,7 +193,6 @@ it('generates a document describing every /v1 route', function () {
         'PATCH /v1/trips/{trip}/receive-requests',
         'GET /v1/trips/{trip}/wait-timers',
         'POST /v1/trips/{trip}/wait-timers',
-        'POST /v1/trips/{trip}/wait-timers/{timer}/extend',
         'POST /v1/trips/{trip}/location',
         'GET /v1/trips/{trip}/location',
         'POST /v1/sos',

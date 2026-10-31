@@ -5,6 +5,7 @@ namespace App\Domains\Commute\Actions;
 use App\Domains\Commute\Enums\CommuteLocationType;
 use App\Domains\Commute\Models\CommuteLocation;
 use App\Domains\Commute\Models\CommuteOffer;
+use App\Domains\Commute\Support\RouteSettings;
 use App\Domains\Geo\Contracts\GeoQueryEngine;
 use App\Domains\Shared\Exceptions\DomainException;
 use App\Domains\Shared\Support\ErrorCode;
@@ -48,7 +49,7 @@ final readonly class SaveCommuteRouteAction
         $dropoffs = $route['dropoffs'] ?? [];
 
         $this->assertWithinLimits($pickups, $dropoffs);
-        $this->assertPickupsAreOnTheWay($origin, $destination, $pickups, $offer->max_detour_minutes);
+        $this->assertPickupsAreOnTheWay($origin, $destination, $pickups);
 
         return DB::transaction(function () use ($offer, $route, $pickups, $dropoffs): CommuteOffer {
             $offer->locations()->delete();
@@ -105,8 +106,9 @@ final readonly class SaveCommuteRouteAction
      */
     private function assertWithinLimits(array $pickups, array $dropoffs): void
     {
-        if (count($pickups) > (int) config('rafeeq.commute.max_pickup_points')
-            || count($dropoffs) > (int) config('rafeeq.commute.max_dropoff_points')) {
+        // Admin settings (COM-31: 3 + 3), not config: the partners move these without a deploy.
+        if (count($pickups) > RouteSettings::maxPickupStops()
+            || count($dropoffs) > RouteSettings::maxDropoffStops()) {
             throw DomainException::of(ErrorCode::CommuteRouteInvalid, fields: [
                 'route' => [__('commute.route.too_many_stops')],
             ]);
@@ -116,10 +118,11 @@ final readonly class SaveCommuteRouteAction
     /**
      * Chapter 4 §3: "each pickup must be on the route within tolerance".
      *
-     * The tolerance is the driver's OWN `max_detour_minutes` — the number they
-     * chose to say how far out of their way they will go. Using a fixed figure
-     * instead would either refuse stops a driver was happy with, or accept ones
-     * they were not.
+     * The tolerance is the platform's whole-trip detour cap (COM-31,
+     * `commute.max_trip_detour_minutes`). It used to be the driver's own
+     * `max_detour_minutes`; the partners took that number away from drivers on
+     * 2026-10-31 (C-1), because the time a detour costs is paid by the passengers
+     * already in the car, not by the driver who chose it.
      *
      * @param  array<int, array<string, mixed>>  $pickups
      */
@@ -127,7 +130,6 @@ final readonly class SaveCommuteRouteAction
         Coordinate $origin,
         Coordinate $destination,
         array $pickups,
-        int $maxDetourMinutes,
     ): void {
         if ($pickups === []) {
             return;
@@ -136,6 +138,7 @@ final readonly class SaveCommuteRouteAction
         // One route call for the whole check, not one per pickup: pitfall #16 is
         // exactly this loop calling a provider each time round.
         $direct = $this->geo->routeBetween($origin, $destination);
+        $maxDetourMinutes = RouteSettings::maxTripDetourMinutes();
 
         foreach ($pickups as $index => $pickup) {
             $point = new Coordinate((float) $pickup['lat'], (float) $pickup['lng']);

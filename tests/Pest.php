@@ -3,6 +3,7 @@
 use App\Domains\Admin\Actions\SyncAdminRolesAction;
 use App\Domains\Admin\Enums\AdminRole;
 use App\Domains\Admin\Models\AdminUser;
+use App\Domains\Booking\Models\Booking;
 use App\Domains\Commute\Models\ScheduledTrip;
 use App\Domains\Driver\Actions\ReviewDriverApplicationAction;
 use App\Domains\Driver\Enums\DriverProfileStatus;
@@ -749,4 +750,18 @@ function reportPosition(string $token, string $tripId, array $points)
 function onTheWay(): array
 {
     return ['lat' => 30.0654, 'lng' => 31.2314, 'label' => 'أمام صيدلية العبور'];
+}
+
+/**
+ * Where the car has to be for "I've arrived" to count for this booking (TRIP-10): exactly at her
+ * pickup point. A global helper because the status endpoint and the wait-timer endpoint both need
+ * it, from more than one file.
+ *
+ * @return array{lat: float, lng: float}
+ */
+function atPickupOf(string $bookingId): array
+{
+    $booking = Booking::query()->whereKey($bookingId)->sole();
+
+    return ['lat' => (float) $booking->pickup_lat, 'lng' => (float) $booking->pickup_lng];
 }

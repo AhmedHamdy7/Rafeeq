@@ -42,12 +42,13 @@ final readonly class ScheduleLock
     /**
      * How many hours before departure the day stops changing.
      *
-     * Configurable because it is a policy number, not a technical one (standard #11): sixteen hours
-     * is a choice about how much notice a woman needs to rearrange her morning, and it may move.
+     * An admin setting because it is a policy number, not a technical one (standard #11, COM-16):
+     * sixteen hours is a choice about how much notice a woman needs to rearrange her morning, and it
+     * may move.
      */
     public static function hours(): int
     {
-        return (int) config('rafeeq.commute.schedule_lock_hours');
+        return RouteSettings::scheduleLockHours();
     }
 
     /**

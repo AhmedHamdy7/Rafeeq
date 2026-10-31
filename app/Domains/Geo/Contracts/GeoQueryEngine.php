@@ -5,6 +5,7 @@ namespace App\Domains\Geo\Contracts;
 use App\Domains\Geo\ValueObjects\Route;
 use App\Domains\Shared\ValueObjects\Coordinate;
 use App\Domains\Shared\ValueObjects\Distance;
+use Carbon\CarbonImmutable;
 
 /**
  * Every geographic question the system asks, behind one door (Bible §3.9).
@@ -34,8 +35,25 @@ interface GeoQueryEngine
     public function routeBetween(Coordinate $from, Coordinate $to, array $via = []): Route;
 
     /**
-     * How much longer the journey becomes if it stops for this pickup. The
-     * figure a driver's `max_detour_minutes` is compared against.
+     * The same route, timed for a car that has to ARRIVE by `$arriveBy` — the question the
+     * computed departure asks (C-2, COM-15: the driver says when he must arrive, RAFEEQ says when
+     * to leave).
+     *
+     * 🔴 Separate from {@see self::routeBetween()} because the answer depends on the clock and the
+     * other one's does not. A provider that knows traffic returns the duration for that morning's
+     * roads; one that does not returns the same as `routeBetween`. Callers never have to know which
+     * — the departure is `$arriveBy - durationSeconds` either way.
+     *
+     * The distance is the road distance, exactly as `routeBetween` reports it: only the time moves
+     * with the traffic.
+     *
+     * @param  array<int, Coordinate>  $via  intermediate stops, in the order the car reaches them
+     */
+    public function routeArrivingBy(Coordinate $from, Coordinate $to, array $via, CarbonImmutable $arriveBy): Route;
+
+    /**
+     * How much longer the journey becomes if it stops for this pickup. Feeds search ranking and
+     * the whole-trip detour cap (COM-31), which the platform — not the driver — sets.
      */
     public function detourMinutes(Route $original, Coordinate $pickup): float;
 

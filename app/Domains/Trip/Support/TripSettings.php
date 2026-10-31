@@ -30,10 +30,16 @@ final class TripSettings
         return max(1, (int) self::get('trip.wait_grace_seconds'));
     }
 
-    /** The most a driver may add in one extension. */
-    public static function waitExtensionSeconds(): int
+    /**
+     * How close to a passenger's pickup the driver must be for "I've arrived" to count (TRIP-10).
+     *
+     * 🔴 The grace starts from that arrival, and the lateness and no-show fees start from the
+     * grace — so this radius is the one thing standing between a driver and charging somebody for
+     * not being at a kerb he never reached.
+     */
+    public static function arrivalRadiusMeters(): int
     {
-        return max(1, (int) self::get('trip.wait_extension_seconds'));
+        return max(1, (int) self::get('trip.arrival_radius_meters'));
     }
 
     /**

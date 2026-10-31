@@ -81,7 +81,7 @@ it('searches from her agreed pickup when the car never reached her', function ()
     underway($this->driverToken, $this->trip->id);
 
     test()->withToken($this->driverToken)
-        ->postJson("/api/v1/trips/{$this->trip->id}/cancel-active", ['reason' => 'Engine gave out'])
+        ->postJson("/api/v1/trips/{$this->trip->id}/cancel-active", ['reason' => 'breakdown', 'note' => 'Engine gave out'])
         ->assertOk();
 
     $booking = Booking::query()->findOrFail($this->bookingId);
@@ -110,7 +110,7 @@ it('searches from where the car actually stopped, for somebody it was carrying',
     ]])->assertOk();
 
     test()->withToken($this->driverToken)
-        ->postJson("/api/v1/trips/{$this->trip->id}/cancel-active", ['reason' => 'Accident on the Mehwar'])
+        ->postJson("/api/v1/trips/{$this->trip->id}/cancel-active", ['reason' => 'accident', 'note' => 'Accident on the Mehwar'])
         ->assertOk();
 
     alternatives($this->paxToken, $this->bookingId)
@@ -130,7 +130,7 @@ it('still answers for somebody it carried when nothing recorded where the car go
     checkIn($this->driverToken, $this->trip->id, ['bookingId' => $this->bookingId])->assertOk();
 
     test()->withToken($this->driverToken)
-        ->postJson("/api/v1/trips/{$this->trip->id}/cancel-active", ['reason' => 'Breakdown'])
+        ->postJson("/api/v1/trips/{$this->trip->id}/cancel-active", ['reason' => 'breakdown'])
         ->assertOk();
 
     $booking = Booking::query()->findOrFail($this->bookingId);
@@ -183,7 +183,7 @@ it('falls back to a stop the car really reached, when one exists', function () {
         ->assertOk();
 
     test()->withToken($this->driverToken)
-        ->postJson("/api/v1/trips/{$this->trip->id}/cancel-active", ['reason' => 'Flat tyre'])
+        ->postJson("/api/v1/trips/{$this->trip->id}/cancel-active", ['reason' => 'breakdown', 'note' => 'Flat tyre'])
         ->assertOk();
 
     alternatives($this->paxToken, $this->bookingId)

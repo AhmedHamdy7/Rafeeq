@@ -7,8 +7,9 @@ use App\Domains\Commute\Models\CommuteOffer;
 use App\Domains\Commute\Models\ScheduledTrip;
 use App\Domains\Shared\Exceptions\DomainException;
 use App\Domains\Shared\Support\ErrorCode;
+use App\Domains\Shared\ValueObjects\Coordinate;
 use App\Domains\Trip\Actions\AdvanceTripAction;
-use App\Domains\Trip\Actions\WaitTimerAction;
+use App\Domains\Trip\Actions\ArriveAtPickupAction;
 use App\Domains\Trip\Models\TripWaitTimer;
 use App\Http\Controllers\Controller;
 use App\Http\OpenApi\ApiErrors;
@@ -58,46 +59,32 @@ final class WaitTimerController extends Controller
     }
 
     /**
-     * POST /v1/trips/{trip}/wait-timers — "Start the 5-minute wait timer".
+     * POST /v1/trips/{trip}/wait-timers — "I've arrived", for one passenger: starts her 5-minute
+     * grace once the server has checked the car is at her pickup (TRIP-10, TRIP-11).
+     *
+     * The same arrival as `POST /trips/{trip}/status` with `AT_PICKUP`; this one answers with the
+     * timer rather than the run.
      */
     #[ApiErrors(
         ErrorCode::TripNotStarted,
         ErrorCode::WaitTimerAlreadyRunning,
         ErrorCode::AttendanceNotConfirmable,
+        ErrorCode::NotAtPickup,
+        ErrorCode::TripInvalidTransition,
         ErrorCode::NotFound,
     )]
-    public function store(StartWaitTimerRequest $request, string $trip, WaitTimerAction $action): JsonResponse
+    public function store(StartWaitTimerRequest $request, string $trip, ArriveAtPickupAction $action): JsonResponse
     {
         $scheduled = $this->driven($request, $trip);
         $session = AdvanceTripAction::sessionFor($scheduled);
 
-        $timer = $action->start(
+        $timer = $action->execute(
             $session,
             $this->bookingOn($scheduled, $request->string('bookingId')->value()),
+            new Coordinate((float) $request->validated('lat'), (float) $request->validated('lng')),
         );
 
         return ApiResponse::success(new WaitTimerResource($timer), status: 201);
-    }
-
-    /**
-     * POST /v1/trips/{trip}/wait-timers/{timer}/extend — the "+2 min" button.
-     */
-    #[ApiErrors(
-        ErrorCode::TripNotStarted,
-        ErrorCode::WaitTimerNotRunning,
-        ErrorCode::NotFound,
-    )]
-    public function extend(Request $request, string $trip, string $timer, WaitTimerAction $action): JsonResponse
-    {
-        $session = AdvanceTripAction::sessionFor($this->driven($request, $trip));
-
-        $running = TripWaitTimer::query()
-            ->whereKey($timer)
-            ->where('trip_session_id', $session->id)
-            ->first()
-            ?? throw DomainException::of(ErrorCode::NotFound);
-
-        return ApiResponse::success(new WaitTimerResource($action->extend($running)));
     }
 
     /**
