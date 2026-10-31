@@ -805,7 +805,6 @@ Route::prefix('v1')->group(function (): void {
          */
         Route::get('trips/{trip}/wait-timers', [WaitTimerController::class, 'index']);
         Route::post('trips/{trip}/wait-timers', [WaitTimerController::class, 'store']);
-        Route::post('trips/{trip}/wait-timers/{timer}/extend', [WaitTimerController::class, 'extend']);
 
         /*
          * Where the car is (Chapter 8, Live Location).

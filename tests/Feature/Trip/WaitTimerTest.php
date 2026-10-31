@@ -7,6 +7,7 @@ use App\Domains\Trip\Enums\AttendanceStatus;
 use App\Domains\Trip\Enums\WaitTimerOutcome;
 use App\Domains\Trip\Models\Attendance;
 use App\Domains\Trip\Models\TripWaitTimer;
+use Carbon\CarbonImmutable;
 use Illuminate\Support\Facades\Storage;
 
 /**
@@ -38,15 +39,31 @@ beforeEach(function () {
     ])->assertStatus(201)->json('data.id'));
 });
 
-function startTimer(string $driverToken, string $tripId, string $bookingId)
+/**
+ * "I've arrived" for this passenger, from exactly her pickup point unless told otherwise.
+ *
+ * @param  array{lat: float, lng: float}|null  $at
+ */
+function startTimer(string $driverToken, string $tripId, string $bookingId, ?array $at = null)
 {
     return test()->withToken($driverToken)
-        ->postJson("/api/v1/trips/{$tripId}/wait-timers", ['bookingId' => $bookingId]);
+        ->postJson("/api/v1/trips/{$tripId}/wait-timers", ['bookingId' => $bookingId, ...($at ?? atPickupOf($bookingId))]);
+}
+
+/**
+ * Moves a timer's grace into the past, as if the car had been waiting for that long already.
+ */
+function graceStartedAgo(string $timerId, int $seconds): void
+{
+    TripWaitTimer::query()->whereKey($timerId)->update([
+        'started_at' => now()->subSeconds($seconds),
+        'grace_starts_at' => now()->subSeconds($seconds),
+    ]);
 }
 
 /*
 |--------------------------------------------------------------------------
-| Starting and extending
+| Arriving and starting the grace (TRIP-10, TRIP-11)
 |--------------------------------------------------------------------------
 */
 
@@ -57,7 +74,9 @@ it('starts a five-minute wait for one passenger', function () {
         ->assertStatus(201)->json('data');
 
     expect($timer['graceSeconds'])->toBe(300)
-        ->and($timer['extendedSeconds'])->toBe(0)
+        ->and($timer['arrivedAt'])->not->toBeNull()
+        ->and($timer['arrivalDistanceMeters'])->toBe(0)
+        ->and($timer)->not->toHaveKey('extendedSeconds')
         ->and($timer['isRunning'])->toBeTrue()
         ->and($timer['hasExpired'])->toBeFalse()
         ->and($timer['outcome'])->toBeNull()
@@ -104,58 +123,122 @@ it('follows the grace from settings for a new timer', function () {
 });
 
 /**
- * Extends rather than restarts, so the record can still say "she waited five minutes and
- * then gave two more" — a restart would erase the generous half of the story.
+ * 🔴 TRIP-10: the grace starts here and the fees start from the grace, so a driver must not be
+ * able to say "arrived" two kilometres away and then charge somebody for not being at the kerb.
  */
-it('adds time on top without moving when the waiting began', function () {
+it('refuses "I\'ve arrived" from further than 150 m from her pickup, and says how far', function () {
     underway($this->driverToken, $this->tripId);
 
-    $timer = startTimer($this->driverToken, $this->tripId, $this->bookingId)
-        ->assertStatus(201)->json('data');
+    $pickup = atPickupOf($this->bookingId);
 
-    $extended = test()->withToken($this->driverToken)
-        ->postJson("/api/v1/trips/{$this->tripId}/wait-timers/{$timer['id']}/extend")
-        ->assertOk()->json('data');
+    // About 330 m north of her pickup.
+    $distance = startTimer($this->driverToken, $this->tripId, $this->bookingId, ['lat' => $pickup['lat'] + 0.003, 'lng' => $pickup['lng']])
+        ->assertStatus(409)
+        ->assertJsonPath('error.code', 'NOT_AT_PICKUP')
+        ->assertJsonPath('error.fields.radiusMeters.0', '150')
+        ->json('error.fields.distanceMeters.0');
 
-    expect($extended['extendedSeconds'])->toBe(120)
-        ->and($extended['graceSeconds'])->toBe(300)
-        ->and($extended['startedAt'])->toBe($timer['startedAt'])
-        ->and($extended['remainingSeconds'])->toBeGreaterThan($timer['remainingSeconds']);
+    expect((int) $distance)->toBeGreaterThan(300)->toBeLessThan(360);
+
+    expect(TripWaitTimer::count())->toBe(0);
 });
 
-it('adds time twice when the driver keeps waiting', function () {
+it('accepts an arrival a little way off the pin, and records the distance', function () {
     underway($this->driverToken, $this->tripId);
 
-    $timerId = startTimer($this->driverToken, $this->tripId, $this->bookingId)
-        ->assertStatus(201)->json('data.id');
+    $pickup = atPickupOf($this->bookingId);
 
-    test()->withToken($this->driverToken)
-        ->postJson("/api/v1/trips/{$this->tripId}/wait-timers/{$timerId}/extend")->assertOk();
+    // About 100 m: a car pulled in across the road.
+    $timer = startTimer($this->driverToken, $this->tripId, $this->bookingId, ['lat' => $pickup['lat'] + 0.0009, 'lng' => $pickup['lng']])
+        ->assertStatus(201)->json('data');
 
-    expect(test()->withToken($this->driverToken)
-        ->postJson("/api/v1/trips/{$this->tripId}/wait-timers/{$timerId}/extend")
-        ->assertOk()->json('data.extendedSeconds'))->toBe(240);
+    expect($timer['arrivalDistanceMeters'])->toBeGreaterThan(90)->toBeLessThan(110);
+});
+
+it('follows the arrival radius from settings', function () {
+    PlatformSetting::query()->create([
+        'setting_key' => 'trip.arrival_radius_meters',
+        'setting_value' => 50,
+        'value_type' => 'integer',
+        'description' => 'Tighter',
+    ]);
+
+    underway($this->driverToken, $this->tripId);
+
+    $pickup = atPickupOf($this->bookingId);
+
+    startTimer($this->driverToken, $this->tripId, $this->bookingId, ['lat' => $pickup['lat'] + 0.0009, 'lng' => $pickup['lng']])
+        ->assertStatus(409)
+        ->assertJsonPath('error.code', 'NOT_AT_PICKUP');
 });
 
 /**
- * 🔴 Allowed after the grace has run out. A driver who sees somebody running towards the
- * car at 5:10 should be able to give them another two minutes — refusing would make the
- * generous act the one the app forbids.
+ * 🔴 TRIP-11: the grace runs from the LATER of the arrival and her pickup time. A driver who
+ * turns up early does not start somebody's five minutes early.
  */
-it('still lets the driver give more time after the grace has ended', function () {
+it('starts the grace at her pickup time when the driver arrives early', function () {
     underway($this->driverToken, $this->tripId);
 
-    $timerId = startTimer($this->driverToken, $this->tripId, $this->bookingId)
-        ->assertStatus(201)->json('data.id');
+    // `underway` puts the departure ten minutes from now; her pickup is at or after it.
+    $timer = startTimer($this->driverToken, $this->tripId, $this->bookingId)->assertStatus(201)->json('data');
 
-    TripWaitTimer::query()->whereKey($timerId)->update(['started_at' => now()->subMinutes(6)]);
+    $departure = ScheduledTrip::query()->whereKey($this->tripId)->sole()->departure_at;
 
-    $extended = test()->withToken($this->driverToken)
+    expect(CarbonImmutable::parse($timer['graceStartsAt'])->greaterThanOrEqualTo($departure->copy()->startOfSecond()))->toBeTrue()
+        ->and($timer['remainingSeconds'])->toBeGreaterThan(300 + 9 * 60)
+        ->and($timer['hasExpired'])->toBeFalse();
+});
+
+it('starts the grace at the arrival when the driver is late', function () {
+    underway($this->driverToken, $this->tripId);
+    runLeavingIn($this->tripId, -90);
+
+    $timer = startTimer($this->driverToken, $this->tripId, $this->bookingId)->assertStatus(201)->json('data');
+
+    expect($timer['graceStartsAt'])->toBe($timer['arrivedAt'])
+        ->and($timer['remainingSeconds'])->toBeLessThanOrEqual(300)->toBeGreaterThan(290);
+});
+
+/**
+ * The status endpoint is the same arrival: AT_PICKUP names the passenger and where the car is.
+ */
+it('records the arrival through AT_PICKUP too, and refuses it far from her pickup', function () {
+    underway($this->driverToken, $this->tripId);
+
+    $pickup = atPickupOf($this->bookingId);
+
+    test()->withToken($this->driverToken)->postJson("/api/v1/trips/{$this->tripId}/status", [
+        'status' => 'AT_PICKUP', 'bookingId' => $this->bookingId, 'lat' => $pickup['lat'] + 0.02, 'lng' => $pickup['lng'],
+    ])->assertStatus(409)->assertJsonPath('error.code', 'NOT_AT_PICKUP');
+
+    expect(test()->withToken($this->driverToken)->postJson("/api/v1/trips/{$this->tripId}/status", [
+        'status' => 'AT_PICKUP', 'bookingId' => $this->bookingId, ...$pickup,
+    ])->assertOk()->json('data.status'))->toBe('AT_PICKUP');
+
+    expect(TripWaitTimer::sole()->arrived_at)->not->toBeNull();
+});
+
+it('needs the passenger and the position for AT_PICKUP', function () {
+    underway($this->driverToken, $this->tripId);
+
+    test()->withToken($this->driverToken)
+        ->postJson("/api/v1/trips/{$this->tripId}/status", ['status' => 'AT_PICKUP'])
+        ->assertStatus(422)
+        ->assertJsonValidationErrors(['bookingId', 'lat', 'lng'], 'error.fields');
+});
+
+/**
+ * T-2 / TRIP-11: there is no "+2 min". Every passenger gets the same grace.
+ */
+it('has no way to extend the wait any more', function () {
+    underway($this->driverToken, $this->tripId);
+    $timerId = startTimer($this->driverToken, $this->tripId, $this->bookingId)->assertStatus(201)->json('data.id');
+
+    test()->withToken($this->driverToken)
         ->postJson("/api/v1/trips/{$this->tripId}/wait-timers/{$timerId}/extend")
-        ->assertOk()->json('data');
+        ->assertStatus(404);
 
-    expect($extended['extendedSeconds'])->toBe(120)
-        ->and($extended['hasExpired'])->toBeFalse();
+    expect(TripWaitTimer::sole()->extended_seconds)->toBe(0);
 });
 
 it('reports a timer past its grace as expired, with the overrun', function () {
@@ -164,7 +247,7 @@ it('reports a timer past its grace as expired, with the overrun', function () {
     $timerId = startTimer($this->driverToken, $this->tripId, $this->bookingId)
         ->assertStatus(201)->json('data.id');
 
-    TripWaitTimer::query()->whereKey($timerId)->update(['started_at' => now()->subMinutes(7)]);
+    graceStartedAgo($timerId, 7 * 60);
 
     $timers = test()->withToken($this->driverToken)->getJson("/api/v1/trips/{$this->tripId}/wait-timers")
         ->assertOk()->json('data');
@@ -236,7 +319,8 @@ it('closes the timer as arrived when the driver checks her in', function () {
  */
 it('records a passenger who kept the car waiting as late', function () {
     underway($this->driverToken, $this->tripId);
-    startTimer($this->driverToken, $this->tripId, $this->bookingId)->assertStatus(201);
+    $timerId = startTimer($this->driverToken, $this->tripId, $this->bookingId)->assertStatus(201)->json('data.id');
+    graceStartedAgo($timerId, 60);
 
     expect(checkIn($this->driverToken, $this->tripId, ['bookingId' => $this->bookingId])
         ->assertOk()->json('data.status'))->toBe('LATE');
@@ -264,7 +348,7 @@ it('calls it a no-show when the driver waited the full grace', function () {
     $timerId = startTimer($this->driverToken, $this->tripId, $this->bookingId)
         ->assertStatus(201)->json('data.id');
 
-    TripWaitTimer::query()->whereKey($timerId)->update(['started_at' => now()->subMinutes(6)]);
+    graceStartedAgo($timerId, 6 * 60);
 
     test()->withToken($this->driverToken)
         ->postJson("/api/v1/trips/{$this->tripId}/no-show", ['bookingId' => $this->bookingId])
@@ -279,7 +363,7 @@ it('says the driver left early when she departs inside the grace', function () {
     startTimer($this->driverToken, $this->tripId, $this->bookingId)->assertStatus(201);
 
     // Ninety seconds into a five-minute promise.
-    TripWaitTimer::query()->update(['started_at' => now()->subSeconds(90)]);
+    graceStartedAgo(TripWaitTimer::sole()->id, 90);
 
     test()->withToken($this->driverToken)
         ->postJson("/api/v1/trips/{$this->tripId}/no-show", ['bookingId' => $this->bookingId])
@@ -312,20 +396,6 @@ it('gives the driver no way to choose the outcome herself', function () {
         ])->assertOk();
 
     expect(TripWaitTimer::sole()->outcome)->toBe(WaitTimerOutcome::DriverLeft);
-});
-
-it('refuses to extend a timer that has already been answered', function () {
-    underway($this->driverToken, $this->tripId);
-    $timerId = startTimer($this->driverToken, $this->tripId, $this->bookingId)
-        ->assertStatus(201)->json('data.id');
-
-    checkIn($this->driverToken, $this->tripId, ['bookingId' => $this->bookingId])->assertOk();
-
-    test()->withToken($this->driverToken)
-        ->postJson("/api/v1/trips/{$this->tripId}/wait-timers/{$timerId}/extend")
-        ->assertStatus(409)
-        ->assertJsonPath('error.code', 'WAIT_TIMER_NOT_RUNNING')
-        ->assertJsonPath('error.fields.outcome.0', 'ARRIVED');
 });
 
 /**
@@ -389,24 +459,6 @@ it('refuses a timer for a booking on another day', function () {
     underway($this->driverToken, $this->tripId);
 
     startTimer($this->driverToken, $this->tripId, $otherBooking)->assertStatus(404);
-});
-
-it('refuses to extend a timer belonging to a different run', function () {
-    underway($this->driverToken, $this->tripId);
-    $timerId = startTimer($this->driverToken, $this->tripId, $this->bookingId)
-        ->assertStatus(201)->json('data.id');
-
-    $second = ScheduledTrip::query()->where('id', '!=', $this->tripId)->orderBy('departure_at')->first();
-
-    runLeavingIn($second->id, 10, dayOffset: 1);
-    test()->withToken($this->driverToken)->postJson("/api/v1/trips/{$second->id}/start")->assertStatus(201);
-    test()->withToken($this->driverToken)
-        ->postJson("/api/v1/trips/{$second->id}/status", ['status' => 'EN_ROUTE'])->assertOk();
-
-    // The timer exists and the caller drives both runs — and it still does not belong here.
-    test()->withToken($this->driverToken)
-        ->postJson("/api/v1/trips/{$second->id}/wait-timers/{$timerId}/extend")
-        ->assertStatus(404);
 });
 
 it('requires a token', function () {

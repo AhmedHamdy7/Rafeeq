@@ -8,6 +8,7 @@ use App\Domains\Notification\Models\Notification;
 use App\Domains\Trip\Actions\RecordMemberWarningAction;
 use App\Domains\Trip\Enums\WarningKind;
 use App\Domains\Trip\Models\MemberWarning;
+use App\Domains\Trip\Models\TripWaitTimer;
 use Illuminate\Support\Facades\Storage;
 
 /**
@@ -55,9 +56,12 @@ function boardedLate(string $driverToken, string $tripId, string $bookingId): vo
 {
     underway($driverToken, $tripId);
 
-    test()->flushHeaders()->withToken($driverToken)
-        ->postJson("/api/v1/trips/{$tripId}/wait-timers", ['bookingId' => $bookingId])
-        ->assertStatus(201);
+    $timerId = test()->flushHeaders()->withToken($driverToken)
+        ->postJson("/api/v1/trips/{$tripId}/wait-timers", ['bookingId' => $bookingId, ...atPickupOf($bookingId)])
+        ->assertStatus(201)->json('data.id');
+
+    // Her grace had started: the car was waiting past her pickup time when she got in.
+    TripWaitTimer::query()->whereKey($timerId)->update(['grace_starts_at' => now()->subMinute()]);
 
     checkIn($driverToken, $tripId, ['bookingId' => $bookingId])->assertOk();
 }

@@ -115,6 +115,7 @@ return [
     'ATTENDANCE_DISPUTE_WINDOW_CLOSED' => 'The window to dispute this trip has closed. Please contact support.',
     'WAIT_TIMER_ALREADY_RUNNING' => 'A wait timer is already running for this passenger.',
     'WAIT_TIMER_NOT_RUNNING' => 'There is no wait timer running for this passenger.',
+    'NOT_AT_PICKUP' => "You're not at this passenger's pickup point yet. Get closer and tap again.",
 
     /*
      * Ratings. Double-blind, so the wording must not hint at whether the other person has

@@ -226,10 +226,16 @@ final readonly class ConfirmAttendanceAction
      * turned up. Until wait timers exist, nothing produces `late`, and that is honest —
      * inventing it from the departure time would mark the whole car late whenever the
      * DRIVER was, which is the opposite of what the value means.
+     *
+     * Since "I've arrived" starts a timer for every passenger (TRIP-10), the timer alone no longer
+     * means she kept anybody waiting: a driver who arrives early waits for her pickup time first.
+     * So it is late only once her grace had actually started (TRIP-11).
      */
     private function arrivalStatus(TripSession $session, Booking $booking): AttendanceStatus
     {
-        return $this->waitTimers->running($session, $booking->id) === null
+        $timer = $this->waitTimers->running($session, $booking->id);
+
+        return $timer === null || ! $timer->graceHasStarted()
             ? AttendanceStatus::Present
             : AttendanceStatus::Late;
     }

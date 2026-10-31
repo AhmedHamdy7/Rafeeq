@@ -20,12 +20,16 @@ final readonly class Route
 {
     /**
      * @param  array<int, Coordinate>|null  $points  decoded lazily from the polyline when absent
+     * @param  bool  $isFallback  true when the configured provider failed and this is the
+     *                            straight-line estimate standing in for it. Never cached: an
+     *                            outage must not leave a month of guesses in `route_cache`.
      */
     public function __construct(
         public string $polyline,
         public Distance $distance,
         public int $durationSeconds,
         private ?array $points = null,
+        public bool $isFallback = false,
     ) {}
 
     /**

@@ -21,6 +21,7 @@ use App\Domains\Reliability\Support\ReliabilityLedger;
 use App\Domains\Safety\Models\LiveShare;
 use App\Domains\Shared\Exceptions\DomainException;
 use App\Domains\Shared\Support\ErrorCode;
+use App\Domains\Trip\Enums\ActiveTripCancelReason;
 use App\Domains\Trip\Enums\AttendanceStatus;
 use App\Domains\Trip\Enums\TripSessionStatus;
 use App\Domains\Trip\Models\Attendance;
@@ -73,11 +74,19 @@ final readonly class CancelActiveTripAction
     public function __construct(private AdvanceTripAction $advance) {}
 
     /**
-     * @param  string  $reason  required, unlike most reasons in this codebase — see the method note
+     * @param  ActiveTripCancelReason  $category  required (TRIP-22, F-13): what the fees read
+     * @param  string|null  $note  her own words, for support and her appeal; never sent to the car
      * @return array{trip: ScheduledTrip, endedEarly: int, cancelled: int}
      */
-    public function execute(TripSession $session, User $driver, string $reason): array
+    public function execute(TripSession $session, User $driver, ActiveTripCancelReason $category, ?string $note = null): array
     {
+        /*
+         * The text written on the day and on each booking: the category, then her words. Support
+         * reads it there as it always has; the category itself is kept on the session, typed, for
+         * the fee rules.
+         */
+        $reason = $note === null || trim($note) === '' ? $category->value : $category->value.': '.trim($note);
+
         /*
          * Only a run that is actually out on the road. A `preparing` run has not left, so calling
          * it off is "cancel today" and costs less; a finished one is finished. Both would otherwise
@@ -89,7 +98,7 @@ final readonly class CancelActiveTripAction
             ]);
         }
 
-        return DB::transaction(function () use ($session, $driver, $reason): array {
+        return DB::transaction(function () use ($session, $driver, $reason, $category): array {
             // Locked for the same reason every seat-count write is: nobody may read the day
             // between resolving its passengers and marking it cancelled.
             $trip = ScheduledTrip::query()->whereKey($session->scheduled_trip_id)->lockForUpdate()->firstOrFail();
@@ -154,6 +163,8 @@ final readonly class CancelActiveTripAction
              * anybody on it is still marked as travelling. `cancelled()` is the only writer of this
              * status for exactly that reason.
              */
+            $session->forceFill(['cancel_reason' => $category->value])->save();
+
             $this->advance->cancelled($session);
 
             return ['trip' => $trip->refresh(), 'endedEarly' => $endedEarly, 'cancelled' => $cancelled];

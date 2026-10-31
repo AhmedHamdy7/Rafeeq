@@ -385,9 +385,27 @@ return [
     ],
 
     'commute' => [
-        // Chapter 4 §3: "maximum pickup points configurable".
-        'max_pickup_points' => 4,
-        'max_dropoff_points' => 2,
+        /*
+         * 🔴 The matching limits (COM-31, decision C8 of 2026-10-31). These used to be the driver's
+         * own `maxDetourMinutes` / `maxWalkMinutes` per commute; they are now the platform's, and
+         * only an admin moves them (ADM-06). A driver who could choose a thirty-minute detour was
+         * choosing to make his first passenger late for work.
+         *
+         * - `max_pickup_points` / `max_dropoff_points`: the most distinct stops of each kind one
+         *   commute takes — the driver's suggested points when he draws the route, and the riders'
+         *   own points on any one day. Chapter 4 said 4 + 2; the partners decided 3 + 3.
+         * - `match_radius_meters`: how far a passenger's pickup or drop-off may sit from the
+         *   driver's route.
+         * - `max_trip_detour_minutes` / `max_trip_detour_meters`: the detour the WHOLE trip may
+         *   carry — every rider's points together, measured against the driver's straight run from
+         *   start to end. Both must hold ("10 minutes or 5 km, whichever is less"). This cap is what
+         *   stops "leave at 08:00" turning into "leave at 06:00" as riders join (C-2).
+         */
+        'max_pickup_points' => 3,
+        'max_dropoff_points' => 3,
+        'match_radius_meters' => 1500,
+        'max_trip_detour_minutes' => 10,
+        'max_trip_detour_meters' => 5000,
 
         /*
          * 🔴 How many hours before departure a day's arrangements freeze (Feature 03 v5).
@@ -532,8 +550,16 @@ return [
          */
         'wait_grace_seconds' => 300,
 
-        // The most a driver may add on top, in one extension.
-        'wait_extension_seconds' => 120,
+        /*
+         * 🔴 How close the driver must be to a passenger's pickup for "I've arrived" to be accepted
+         * (TRIP-10, decision C14: 150 m). Fees hang off the grace that arrival starts — lateness,
+         * no-show — so a driver must not be able to tap "arrived" two kilometres away and then
+         * charge somebody for not being at the kerb.
+         *
+         * (`wait_extension_seconds` lived here. The "+2 min" extension was removed — TRIP-11, B7:
+         * every passenger gets the same grace, and nobody can stretch or shorten it.)
+         */
+        'arrival_radius_meters' => 150,
 
         /*
          * How long a passenger has to say "that is not right" about a trip they were
@@ -832,6 +858,32 @@ return [
          * publishing down entirely would be a broken one.
          */
         'engine' => env('RAFEEQ_GEO_ENGINE', 'straight_line'),
+
+        /*
+         * DEPLOY-ONLY. Google Routes API v2 (`RAFEEQ_GEO_ENGINE=google`). The key itself lives in
+         * `config/services.php` (`GOOGLE_MAPS_API_KEY`), never here.
+         *
+         * `timeout_seconds` is short on purpose: every caller falls back to the straight-line
+         * estimate when Google does not answer, so waiting longer only makes a driver stare at a
+         * spinner for an answer that will be the fallback anyway.
+         */
+        'google' => [
+            'endpoint' => env('GOOGLE_ROUTES_ENDPOINT', 'https://routes.googleapis.com/directions/v2:computeRoutes'),
+            'timeout_seconds' => 5,
+        ],
+
+        /*
+         * Traffic-aware durations ("arrive by 09:00 on a Sunday") are cached per local weekday and
+         * per slice of the clock, because Cairo's traffic repeats by the week and not by the date:
+         * 08:40 on one Sunday is the same road as 08:40 on the next. The slice is how coarse that
+         * is; the lifetime is deliberately far shorter than `route_cache_days`, because a duration
+         * goes stale (pitfall #20) and a distance does not.
+         */
+        'traffic_bucket_minutes' => 15,
+        'traffic_cache_hours' => 72,
+        // The zone the slice above is read in. Commutes are Cairo commutes (`commute_schedules`
+        // defaults to it), and the bucket must follow the wall clock across DST, not UTC.
+        'traffic_timezone' => 'Africa/Cairo',
 
         /*
          * How long a cached route stays usable. The DISTANCE between two places

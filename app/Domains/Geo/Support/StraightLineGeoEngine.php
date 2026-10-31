@@ -6,6 +6,7 @@ use App\Domains\Geo\Contracts\GeoQueryEngine;
 use App\Domains\Geo\ValueObjects\Route;
 use App\Domains\Shared\ValueObjects\Coordinate;
 use App\Domains\Shared\ValueObjects\Distance;
+use Carbon\CarbonImmutable;
 
 /**
  * A routing engine with no provider behind it: every route is straight lines
@@ -47,6 +48,16 @@ final class StraightLineGeoEngine implements GeoQueryEngine
             durationSeconds: (int) round($distance->kilometres() / self::ASSUMED_KMH * 3600),
             points: $points,
         );
+    }
+
+    /**
+     * No traffic to know about, so the clock changes nothing: the same straight lines at the same
+     * assumed speed. Honest rather than clever — a departure computed from this is the same
+     * estimate the rest of this engine gives, and the caller can see which engine answered.
+     */
+    public function routeArrivingBy(Coordinate $from, Coordinate $to, array $via, CarbonImmutable $arriveBy): Route
+    {
+        return $this->routeBetween($from, $to, $via);
     }
 
     public function detourMinutes(Route $original, Coordinate $pickup): float

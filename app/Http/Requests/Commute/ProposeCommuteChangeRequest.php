@@ -3,6 +3,7 @@
 namespace App\Http\Requests\Commute;
 
 use App\Domains\Commute\Enums\ChangeProposalScope;
+use App\Domains\Commute\Support\RouteSettings;
 use Illuminate\Contracts\Validation\Validator;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
@@ -50,7 +51,7 @@ final class ProposeCommuteChangeRequest extends FormRequest
 
             // The advertised pickup points, replaced as a whole list in the order you would reach
             // them. Requires the all-future scope.
-            'pickupPoints' => ['sometimes', 'array', 'max:'.config('rafeeq.commute.max_pickup_points')],
+            'pickupPoints' => ['sometimes', 'array', 'max:'.RouteSettings::maxPickupStops()],
             'pickupPoints.*.lat' => ['required', 'numeric', 'between:-90,90'],
             'pickupPoints.*.lng' => ['required', 'numeric', 'between:-180,180'],
             'pickupPoints.*.address' => ['nullable', 'string', 'max:255'],
