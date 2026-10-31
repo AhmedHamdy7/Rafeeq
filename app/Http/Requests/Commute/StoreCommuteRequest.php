@@ -19,10 +19,13 @@ use Illuminate\Validation\Rule;
  * - The route and schedule have their own endpoints. Each is a whole thing that
  *   has to be validated together, and a partial update of either could describe
  *   a journey that makes no sense.
- * - `seatsTotal` is checked against the vehicle in the Action, not here: the
- *   limit depends on which vehicle was chosen, which a static rule cannot know.
- * - The price ceiling is what stops the platform being used as an unlicensed
- *   taxi service. A commute is shared cost, not a fare.
+ * - `seatsTotal` is checked against the vehicle's APPROVED seats in the Action,
+ *   not here: the limit depends on which vehicle was chosen, which a static rule
+ *   cannot know (C-3).
+ * - `pricePerSeatPiastres` is `prohibited`, not merely dropped from the list (P-1,
+ *   D-0016). An app still on the old contract would otherwise send a price, get a
+ *   201, and show the driver a number the server silently ignored — a refusal
+ *   tells its developer on the first try.
  */
 final class StoreCommuteRequest extends FormRequest
 {
@@ -41,15 +44,12 @@ final class StoreCommuteRequest extends FormRequest
             'direction' => ['required', 'string', Rule::enum(CommuteDirection::class)],
 
             // Seats offered to passengers, NOT counting your own. Cannot exceed
-            // your vehicle's capacity minus one.
+            // the seats approved on your car (`approvedSeats` on the vehicle).
             'seatsTotal' => ['required', 'integer', 'min:1', 'max:7'],
 
-            // Contribution per passenger, in piastres (100 piastres = 1 EGP).
-            'pricePerSeatPiastres' => [
-                'required', 'integer',
-                'min:'.config('rafeeq.commute.min_price_piastres'),
-                'max:'.config('rafeeq.commute.max_price_piastres'),
-            ],
+            // Do not send. RAFEEQ computes the seat price from your route and your
+            // car; sending a price is refused.
+            'pricePerSeatPiastres' => ['prohibited'],
 
             // How far out of your way you will go for a pickup. Also the
             // tolerance used to check that pickup points are along your route.
@@ -68,6 +68,16 @@ final class StoreCommuteRequest extends FormRequest
 
             // Whether a passenger may propose a meeting point you did not list.
             'allowsCustomPickup' => ['sometimes', 'boolean'],
+        ];
+    }
+
+    /**
+     * @return array<string, string>
+     */
+    public function messages(): array
+    {
+        return [
+            'pricePerSeatPiastres.prohibited' => __('commute.price.set_by_rafeeq'),
         ];
     }
 }

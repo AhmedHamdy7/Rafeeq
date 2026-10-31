@@ -62,9 +62,12 @@ return [
     'COMMUTE_ROUTE_INVALID' => 'Please check the route: the origin and destination must differ, and pickup points must be along the way.',
     'COMMUTE_SEATS_CONFLICT' => 'You already have more passengers booked than that number of seats.',
     'COMMUTE_VEHICLE_UNAVAILABLE' => 'That vehicle is not approved and active, so it cannot be used for a commute.',
+    'COMMUTE_SEATS_EXCEED_APPROVED' => 'That is more seats than were approved on your car.',
+    'VEHICLE_SEATS_NOT_APPROVED' => 'Your car has not been reviewed yet, so it has no approved seats. You can publish once the review is done.',
 
     // Seat requests and bookings.
     'SEAT_UNAVAILABLE' => 'The seats on that day have just been taken.',
+    'PAYMENT_TYPE_NOT_AVAILABLE' => 'Only cash is available for now. Choose cash to send your request.',
     // Somebody was quicker. Not a fault of hers, and the wording should not imply one.
     'SEAT_OFFER_CLOSED' => 'That seat has already gone to someone else.',
     'BOOKING_RULES_NOT_AGREED' => 'Please agree to the group rules before requesting a seat.',

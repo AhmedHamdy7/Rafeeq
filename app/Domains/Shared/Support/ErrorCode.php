@@ -77,6 +77,18 @@ enum ErrorCode: string
     case CommuteSeatsConflict = 'COMMUTE_SEATS_CONFLICT';
     case CommuteVehicleUnavailable = 'COMMUTE_VEHICLE_UNAVAILABLE';
 
+    /**
+     * More seats than the admin approved on the car (C-3, PROF-28). `error.fields.approvedSeats`
+     * carries the most that may be offered, so the seat stepper can stop there.
+     */
+    case CommuteSeatsExceedApproved = 'COMMUTE_SEATS_EXCEED_APPROVED';
+
+    /**
+     * The car has not been through the admin's car review, so it has no approved seats yet and no
+     * price can be divided by them (F2-6, PROF-28). Nothing for the driver to correct: he waits.
+     */
+    case VehicleSeatsNotApproved = 'VEHICLE_SEATS_NOT_APPROVED';
+
     // ---- Seat requests & bookings (Phase 7, Chapter 6) -----------------
     case SeatUnavailable = 'SEAT_UNAVAILABLE';
     case RulesNotAgreed = 'BOOKING_RULES_NOT_AGREED';
@@ -132,6 +144,12 @@ enum ErrorCode: string
     case BookingNotCancellable = 'BOOKING_NOT_CANCELLABLE';
     case CannotBookOwnCommute = 'BOOKING_OWN_COMMUTE';
     case RecurringDaysNotOffered = 'BOOKING_RECURRING_DAYS_NOT_OFFERED';
+
+    /**
+     * The beta is cash only (P-4, PAY-01). `online` stays in the enum for when a provider exists,
+     * and is refused until then rather than accepted and never collected.
+     */
+    case PaymentTypeNotAvailable = 'PAYMENT_TYPE_NOT_AVAILABLE';
 
     /*
      * ---- The passenger's two required points (Feature 03 v5 §2) ---------
@@ -330,7 +348,14 @@ enum ErrorCode: string
             // A conflict, not a validation error: the request is well formed and
             // the seat count is legal — it is the already-booked passengers that
             // make it impossible right now.
-            self::CommuteSeatsConflict => 409,
+            self::CommuteSeatsConflict,
+            // 409: the car's review state refuses it; the request itself is fine.
+            self::VehicleSeatsNotApproved => 409,
+
+            // 422: fixed by offering fewer seats.
+            self::CommuteSeatsExceedApproved,
+            // 422: fixed by choosing cash.
+            self::PaymentTypeNotAvailable => 422,
 
             self::CommuteIncomplete,
             self::CommuteRouteInvalid,

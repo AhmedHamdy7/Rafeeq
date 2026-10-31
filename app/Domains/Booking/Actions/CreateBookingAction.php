@@ -10,19 +10,25 @@ use App\Domains\Booking\Enums\PaymentType;
 use App\Domains\Booking\Models\Booking;
 use App\Domains\Booking\Models\SeatRequest;
 use App\Domains\Booking\Support\BookingEventLog;
-use App\Domains\Booking\Support\FeeSplit;
 use App\Domains\Commute\Models\ScheduledTrip;
 use App\Domains\Group\Models\CommuteGroup;
 
 /**
  * Turns an approved seat request into a booking for one day.
  *
- * 🔒 Three money figures are frozen here and never recomputed: the price, the
- * platform's share and the driver's share. Pitfall #42 is computing the fee at
- * collection time instead — the percentage changes from 3% to 4% and bookings
- * made last month are suddenly charged the new rate. Pitfall #13 is the same
- * shape for price: a driver raises the fare and people who already booked are
- * billed the new one.
+ * 🔒 Three money figures are frozen here and never recomputed, all copied from the
+ * trip day's own automatic-price snapshot (PAY-44) times the seats she took:
+ *
+ * - `price_snapshot_piastres` — what she pays: the seat price × seats;
+ * - `driver_amount_snapshot_piastres` — the driver's share × seats;
+ * - `platform_fee_snapshot_piastres` — RAFEEQ's commission × seats (PAY-48). In cash the
+ *   driver keeps the whole price and this becomes his debt.
+ *
+ * The column names predate the automatic price and are kept so the ledger and every reader
+ * that already uses them go on working; the CHECK `price = platform_fee + driver_amount` holds
+ * because the day's own CHECK holds per seat. Pitfall #42 is recomputing any of this at
+ * collection time — the rate moves from 10% to 15% at launch and last month's bookings would be
+ * charged the new rate.
  *
  * Called only from inside a transaction that holds a lock on the trip. It does
  * not check seat availability itself — the caller does that under the lock, and a
@@ -32,7 +38,7 @@ final readonly class CreateBookingAction
 {
     public function execute(SeatRequest $request, ScheduledTrip $trip, ?CommuteGroup $group = null): Booking
     {
-        $split = FeeSplit::forSeats($trip->price_snapshot_piastres, $request->seats);
+        $seats = (int) $request->seats;
 
         $booking = new Booking;
 
@@ -44,10 +50,10 @@ final readonly class CreateBookingAction
             'driver_profile_id' => $trip->commuteOffer->driver_profile_id,
             'commute_group_id' => $group?->id,
             'seat_request_id' => $request->id,
-            'seats_reserved' => $request->seats,
-            'price_snapshot_piastres' => $split['price'],
-            'platform_fee_snapshot_piastres' => $split['platformFee'],
-            'driver_amount_snapshot_piastres' => $split['driverAmount'],
+            'seats_reserved' => $seats,
+            'price_snapshot_piastres' => (int) $trip->seat_price_piastres * $seats,
+            'platform_fee_snapshot_piastres' => (int) $trip->commission_piastres * $seats,
+            'driver_amount_snapshot_piastres' => (int) $trip->driver_share_piastres * $seats,
             'payment_type' => $request->payment_type->value,
             'pickup_place_id' => $request->custom_pickup_place_id,
         ]);

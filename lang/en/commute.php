@@ -18,8 +18,13 @@ return [
         'too_far_ahead' => 'A commute can run for at most :months months.',
     ],
 
+    // P-1: the price is automatic, so a request that sends one is refused.
+    'price' => [
+        'set_by_rafeeq' => 'RAFEEQ sets the seat price from your route and your car. It cannot be sent or changed.',
+    ],
+
     'seats' => [
-        'exceeds_vehicle' => 'Your vehicle seats :seats people including you, so you cannot offer more than :bookable.',
+        'exceeds_approved' => 'You can offer at most :approved seats: that is how many seats with working seat belts were approved on your car.',
     ],
 
     /*
