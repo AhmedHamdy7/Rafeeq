@@ -4,6 +4,7 @@ namespace App\Http\Resources;
 
 use App\Domains\Reliability\Enums\ReliabilityRole;
 use App\Domains\Reliability\Support\ReliabilityLedger;
+use App\Domains\Reliability\Support\ReliabilitySettings;
 
 /**
  * Somebody's reliability standing, as she reads it about herself (Feature 03 v5).
@@ -36,7 +37,7 @@ final class ReliabilityResource
              * Published so the number is readable rather than mysterious: "100 out of 100 over the
              * last 180 days" is a statement somebody can act on, and "100" alone is not.
              */
-            'windowDays' => (int) config('rafeeq.reliability.window_days'),
+            'windowDays' => ReliabilitySettings::windowDays(),
             'perfectScore' => ReliabilityLedger::PERFECT,
         ];
     }

@@ -197,6 +197,28 @@ Schedule::command('requests:expire')
     ->withoutOverlapping();
 
 /*
+ * "Your commute leaves in an hour" / "…in 10 minutes", to the driver and every confirmed passenger
+ * (Feature 03 files §8). Every minute, because the ten-minute one is useless five minutes late.
+ * Each is sent once per day, stamped on the day, so overlapping or repeated runs cannot repeat it.
+ *
+ * If it does not run: nobody is reminded. The commute still happens.
+ */
+Schedule::command('trips:send-reminders')
+    ->everyMinute()
+    ->withoutOverlapping();
+
+/*
+ * "Your driving licence expires soon" (Feature 03 files §8), once per expiry date, starting the
+ * same day the driver card starts saying "Expiring". Mid-morning Cairo time, not at night.
+ *
+ * If it does not run: the card still warns her, but nothing reaches her phone.
+ */
+Schedule::command('licences:warn-expiring')
+    ->dailyAt('10:15')
+    ->timezone('Africa/Cairo')
+    ->withoutOverlapping();
+
+/*
  * 🔒 Deletes GPS trails past their retention date (ERD §23.4: 90 days).
  *
  * Not housekeeping. `trip_locations` is a record of where real people were, kept for one

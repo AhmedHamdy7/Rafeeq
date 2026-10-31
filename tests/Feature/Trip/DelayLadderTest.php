@@ -140,8 +140,6 @@ it('does not tell her to leave', function () {
 
 /**
  * +10: v5's "violation/escalation", as a durable stamp.
- *
- * ⚠️ And NOT a reliability event — see the next test for why.
  */
 it('stamps a violation at ten minutes', function () {
     expect(sweepAt($this->tripId, 10)['violations'])->toBe(1);
@@ -154,11 +152,33 @@ it('stamps a violation at ten minutes', function () {
 });
 
 /**
- * 🔴 A morning nobody had booked harms nobody, so it costs nothing on the score.
- *
- * This is why the violation rung carries no reliability event: the cost is per passenger, recorded
- * at expiry. A flat penalty here would charge a driver for not driving an empty Thursday — and
- * would charge four penalties for one failure on a day with three riders.
+ * +10 is also lateness on her record (Feature 03 files X-3: driver lateness −2) — once per morning,
+ * not per passenger — and the second "not set off" to everybody waiting (§8: late +5 / +10).
+ */
+it('records her lateness once and tells the passengers again at ten minutes', function () {
+    sweepAt($this->tripId, 5);
+    sweepAt($this->tripId, 10);
+    sweepAt($this->tripId, 11);
+
+    $event = ReliabilityEvent::query()->sole();
+
+    expect($event->user_id)->toBe($this->driver->id)
+        ->and($event->kind)->toBe(ReliabilityEventKind::DriverLate)
+        ->and($event->weight)->toBe(2)
+        ->and($event->booking_id)->toBeNull();
+
+    expect(countNotifications($this->pax->id, 'commute_not_started_warning'))->toBe(1)
+        ->and(countNotifications($this->pax->id, 'commute_still_not_started'))->toBe(1);
+
+    $push = Notification::query()->where('user_id', $this->pax->id)
+        ->where('type', 'commute_still_not_started')->sole();
+
+    expect($push->title)->toContain('10');
+});
+
+/**
+ * 🔴 A morning nobody had booked harms nobody, so it costs nothing on the score — neither the
+ * lateness at +10 nor anything at expiry.
  */
 it('costs nothing on a day nobody had booked', function () {
     $empty = ScheduledTrip::query()

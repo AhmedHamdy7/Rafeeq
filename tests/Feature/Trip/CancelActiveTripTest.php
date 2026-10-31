@@ -140,7 +140,7 @@ it('settles the attendance of somebody nobody decided about, rather than leaving
         ->toBe(AttendanceStatus::Cancelled);
 });
 
-it('charges the driver, not the passenger, at the heaviest weight in the ledger', function () {
+it('charges the driver, not the passenger, as ending a trip for another reason', function () {
     setOff($this->driverToken, $this->trip->id);
 
     cancelActive($this->driverToken, $this->trip->id)->assertOk();
@@ -150,8 +150,10 @@ it('charges the driver, not the passenger, at the heaviest weight in the ledger'
     expect($event->kind)->toBe(ReliabilityEventKind::DriverAbandonedActiveTrip)
         ->and($event->user_id)->toBe(Booking::query()->findOrFail($this->bookingId)->driver_profile_id)
         // Snapshotted, so a later config change never rewrites what her record said.
-        ->and($event->weight)->toBe((int) config('rafeeq.reliability.weights.driver_abandoned_active_trip'))
-        ->and($event->weight)->toBeGreaterThan((int) config('rafeeq.reliability.weights.driver_cancelled_booking'));
+        // Feature 03 files X-3: "ends a trip for other reason" −8 — until F-13's reason list lands,
+        // every such ending is weighed as "other reason".
+        ->and($event->weight)->toBe(8)
+        ->and($event->weight)->toBeGreaterThan((int) config('rafeeq.reliability.weights.driver_cancel_short_notice'));
 });
 
 /**

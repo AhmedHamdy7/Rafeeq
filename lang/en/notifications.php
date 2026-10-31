@@ -233,4 +233,40 @@ return [
         'title' => 'Your appeal was reviewed',
         'body' => 'After review, the record from :date still stands. Contact support if you would like to discuss it.',
     ],
+
+    /*
+     * Feature 03 files §8 — the pushes that were missing (W6). Each deep-links through `data`.
+     */
+    'trip_starts_in_hour' => [
+        'title' => 'Your commute leaves in about an hour',
+        'body' => 'Departure is at :time. Open the trip for the details.',
+    ],
+    'trip_starts_soon' => [
+        'title' => 'Your commute leaves in :minutes minutes',
+        'body' => 'Departure is at :time.',
+    ],
+    'driver_heading_to_you' => [
+        'title' => ':name is on the way to you',
+        'body' => 'You are the next pickup. Be ready at your meeting point.',
+    ],
+    'driver_arrived' => [
+        'title' => ':name has arrived',
+        'body' => 'Your driver is at your meeting point.',
+    ],
+    'commute_still_not_started' => [
+        'title' => 'Your driver is :minutes minutes late',
+        'body' => ':name’s commute was due to leave at :time and still has not started.',
+    ],
+    'driver_documents_approved' => [
+        'title' => 'You are a verified driver',
+        'body' => 'Your documents were approved. You can publish your commute now.',
+    ],
+    'driver_documents_rejected' => [
+        'title' => 'Your documents need a change',
+        'body' => 'Open the app to see what to fix and send it again.',
+    ],
+    'licence_expiring' => [
+        'title' => 'Your driving licence expires soon',
+        'body' => 'It expires on :date. Upload the renewed licence to keep driving.',
+    ],
 ];

@@ -52,6 +52,7 @@ final readonly class ConfirmAttendanceAction
         private GeoQueryEngine $geo,
         private WaitTimerAction $waitTimers,
         private RecordMemberWarningAction $warnings,
+        private NotifyNextPickupAction $nextPickup,
     ) {}
 
     /**
@@ -119,7 +120,7 @@ final readonly class ConfirmAttendanceAction
             ]);
         }
 
-        return DB::transaction(function () use ($session, $attendance, $booking, $status, $confirmedBy, $at): Attendance {
+        $decided = DB::transaction(function () use ($session, $attendance, $booking, $status, $confirmedBy, $at): Attendance {
             $changes = [
                 'status' => $status->value,
                 // 'driver', per D18. A column rather than an assumption, because the day
@@ -178,6 +179,20 @@ final readonly class ConfirmAttendanceAction
              * to, and {@see ReliabilityLedger::record()} is idempotent on the booking so a retried
              * tap cannot mark her twice.
              */
+            /*
+             * Her lateness goes on her record too (Feature 03 files X-3: passenger lateness −1).
+             * Idempotent on the booking, like the no-show below; the warning she is told about is
+             * recorded separately, further down.
+             */
+            if ($status === AttendanceStatus::Late) {
+                ReliabilityLedger::record(
+                    $booking->passenger_user_id,
+                    ReliabilityEventKind::PassengerLate,
+                    booking: $booking,
+                    commuteOfferId: $session->scheduledTrip?->commute_offer_id,
+                );
+            }
+
             if ($status === AttendanceStatus::PassengerNoShow) {
                 ReliabilityLedger::record(
                     $booking->passenger_user_id,
@@ -212,6 +227,15 @@ final readonly class ConfirmAttendanceAction
 
             return $attendance;
         });
+
+        /*
+         * This pickup is finished either way — collected or recorded absent — so the next woman on
+         * the route is told the car is coming to her (Feature 03 files §8). After the commit, never
+         * inside it: see NotifyNextPickupAction.
+         */
+        $this->nextPickup->after($session, $booking);
+
+        return $decided;
     }
 
     /**
