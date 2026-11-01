@@ -245,13 +245,9 @@ it('lands each role on the first page it can open', function (AdminRole $role, s
     'operations' => [AdminRole::Operations, 'admin.dashboard'],
     'verification' => [AdminRole::Verification, 'admin.dashboard'],
     'support' => [AdminRole::Support, 'admin.dashboard'],
+    // Finance has no dashboard tile; its page is PAYMENTS, the transfers waiting to be confirmed.
+    'finance' => [AdminRole::Finance, 'admin.payments'],
 ]);
-
-it('says plainly when a role has no page yet, instead of bouncing it to one that refuses', function () {
-    actingAsAdmin(adminWithRole(AdminRole::Finance));
-
-    $this->get(route('admin.home'))->assertForbidden();
-});
 
 it('sends a signed-out visitor at the bare dashboard address to the sign-in page', function () {
     $this->get('/admin')->assertRedirect(route('admin.login'));
