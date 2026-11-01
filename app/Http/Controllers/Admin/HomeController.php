@@ -27,6 +27,8 @@ final class HomeController extends Controller
         'admin.verifications' => AdminPermission::VerificationView,
         'admin.drivers' => AdminPermission::DriverView,
         'admin.members' => AdminPermission::MemberView,
+        // Finance: the InstaPay transfers waiting to be confirmed (PAY-09, ADM-03).
+        'admin.payments' => AdminPermission::PaymentView,
         'admin.settings' => AdminPermission::SettingsManage,
     ];
 
@@ -52,8 +54,8 @@ final class HomeController extends Controller
         }
 
         /*
-         * A role with no page yet (finance, until PAYMENTS exists). Said plainly rather than
-         * bounced to a page that refuses them.
+         * A role with no page it may open. Said plainly rather than bounced to a page that
+         * refuses them.
          */
         abort(403, __('admin.home.nothing_yet'));
     }
