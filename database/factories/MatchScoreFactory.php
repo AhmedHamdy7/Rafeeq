@@ -28,7 +28,6 @@ class MatchScoreFactory extends Factory
             'detour_score' => 15,
             'audience_score' => 10,
             'comfort_score' => 9,
-            'price_score' => 5,
             'reliability_score' => 5,
             'walk_minutes' => 4.0,
             'detour_minutes' => 6.0,

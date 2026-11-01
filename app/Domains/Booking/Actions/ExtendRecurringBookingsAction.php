@@ -6,6 +6,7 @@ use App\Domains\Booking\Enums\BookingStatus;
 use App\Domains\Booking\Enums\SeatRequestStatus;
 use App\Domains\Booking\Models\Booking;
 use App\Domains\Booking\Models\SeatRequest;
+use App\Domains\Booking\Support\SameTimeBookings;
 use App\Domains\Booking\Support\SeatAvailabilityChecker;
 use App\Domains\Commute\Enums\ScheduledTripStatus;
 use App\Domains\Commute\Models\ScheduledTrip;
@@ -136,9 +137,11 @@ final readonly class ExtendRecurringBookingsAction
                 $this->availability->assertHasSeats($trip, $request->seats);
                 $this->availability->assertDriverStillEligible($trip);
                 $this->availability->assertNoDuplicateBooking($trip, $member->user_id);
+                // Not at a time she already rides with somebody else (BOOK-17, Feature 03 R-3).
+                SameTimeBookings::assertNone($trip, $member->user_id);
             } catch (DomainException) {
-                // Full, closed, or already booked. Skipped, because the alternative
-                // is forcing a seat that is not there.
+                // Full, closed, already booked, or she is in another car at that time. Skipped,
+                // because the alternative is forcing a seat that is not there.
                 return false;
             }
 

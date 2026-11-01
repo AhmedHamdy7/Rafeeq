@@ -4,7 +4,7 @@ use App\Domains\Admin\Enums\AdminRole;
 use App\Domains\Admin\Models\AdminAction;
 use App\Domains\Admin\Models\PlatformSetting;
 use App\Domains\Admin\Support\SettingsCatalogue;
-use App\Domains\Booking\Support\FeeSplit;
+use App\Domains\Commute\Support\PricingSettings;
 use App\Domains\Trip\Support\TripSettings;
 use App\Livewire\Admin\Settings;
 use Illuminate\Support\Facades\Lang;
@@ -115,13 +115,13 @@ it('requires a reason', function () {
     changeSetting('trip.wait_grace_seconds', '420', reason: '')->assertHasErrors('reason');
 });
 
-it('keeps a minimum below its maximum', function () {
+it('keeps the Comfort km rate above the Standard one', function () {
     actingAsAdmin(adminWithRole(AdminRole::SuperAdmin));
 
-    // The highest seat price is 12,000; a lowest of 15,000 would make every commute unpublishable.
-    changeSetting('commute.min_price_piastres', '15000')->assertHasErrors('value');
+    // Standard ships at 7.50 EGP a km; a Comfort rate under it would make the badge a discount.
+    changeSetting('pricing.km_rate_comfort_piastres', '700')->assertHasErrors('value');
 
-    expect(PlatformSetting::find('commute.min_price_piastres'))->toBeNull();
+    expect(PlatformSetting::find('pricing.km_rate_comfort_piastres'))->toBeNull();
 });
 
 /**
@@ -147,16 +147,18 @@ it('will not change a locked setting', function (string $key) {
 )));
 
 /**
- * Decided 2026-10-06: the fee is deducted from the driver at 3% and staff may change it. A booking
- * freezes its own split when it is approved, so the new figure only reaches bookings made after.
+ * PAY-41: the commission moves from 10% in the beta to 15% at launch, from this page. The quote reads
+ * the live setting; days already generated keep the figures they were priced with (PAY-44), which
+ * ScheduledTripGenerationTest proves.
  */
-it('lets staff change the platform fee, and only new bookings use it', function () {
+it('lets staff change the commission, and the next quote uses it', function () {
     actingAsAdmin(adminWithRole(AdminRole::SuperAdmin));
 
-    changeSetting('booking.platform_fee_percent', '5')->assertHasNoErrors();
+    expect(PricingSettings::commissionRatePercent())->toBe(10);
 
-    expect(FeeSplit::forSeats(10_000, 1))
-        ->toBe(['price' => 10_000, 'platformFee' => 500, 'driverAmount' => 9_500]);
+    changeSetting('pricing.commission_rate_percent', '15')->assertHasNoErrors();
+
+    expect(PricingSettings::commissionRatePercent())->toBe(15);
 });
 
 it('will not write a key that is not in the catalogue', function () {

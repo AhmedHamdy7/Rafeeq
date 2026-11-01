@@ -2,6 +2,7 @@
 
 namespace App\Http\Requests\Commute;
 
+use App\Domains\Commute\Support\RouteSettings;
 use Illuminate\Foundation\Http\FormRequest;
 
 /**
@@ -42,16 +43,16 @@ final class SaveCommuteRouteRequest extends FormRequest
             'destination.address' => ['nullable', 'string', 'max:255'],
             'destination.placeId' => ['nullable', 'string', 'size:26', 'exists:places,id'],
 
-            // Meeting points along the way, in the order you would reach them.
-            // Each must be within your stated detour tolerance.
-            'pickups' => ['sometimes', 'array', 'max:'.config('rafeeq.commute.max_pickup_points')],
+            // Suggested meeting points along the way, in the order you would reach them (at most
+            // 3). Each must add no more than the platform's detour limit (10 minutes).
+            'pickups' => ['sometimes', 'array', 'max:'.RouteSettings::maxPickupStops()],
             'pickups.*.lat' => ['required', 'numeric', 'between:-90,90'],
             'pickups.*.lng' => ['required', 'numeric', 'between:-180,180'],
             'pickups.*.address' => ['nullable', 'string', 'max:255'],
             'pickups.*.placeId' => ['nullable', 'string', 'size:26', 'exists:places,id'],
 
             // Points where passengers may get out before the destination.
-            'dropoffs' => ['sometimes', 'array', 'max:'.config('rafeeq.commute.max_dropoff_points')],
+            'dropoffs' => ['sometimes', 'array', 'max:'.RouteSettings::maxDropoffStops()],
             'dropoffs.*.lat' => ['required', 'numeric', 'between:-90,90'],
             'dropoffs.*.lng' => ['required', 'numeric', 'between:-180,180'],
             'dropoffs.*.address' => ['nullable', 'string', 'max:255'],

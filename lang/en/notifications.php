@@ -91,6 +91,10 @@ return [
      * and naming the real cause would tell her passengers something about her documents that is
      * none of their business. "Has been paused" is true however it happened.
      */
+    'commute_deleted_seat_cancelled' => [
+        'title' => 'Your commute was cancelled',
+        'body' => ':name has deleted this commute, so :days booked day(s) were cancelled. Search for another commute on your route.',
+    ],
     'commute_paused_seat_cancelled' => [
         'title' => 'Your commute was paused',
         'body' => ':name’s commute has been paused, so :days booked day(s) were cancelled. You are back on the waiting list.',
@@ -119,6 +123,10 @@ return [
     'change_proposal_revised' => [
         'title' => 'The proposed change was updated',
         'body' => ':name changed what she is proposing, so any answer you gave no longer counts. Please review it again.',
+    ],
+    'departure_time_changed' => [
+        'title' => 'Your departure time changed',
+        'body' => 'Riders changed on :date, so leave at :time to arrive on time.',
     ],
     'change_proposal_applied' => [
         'title' => 'The change is now in effect',

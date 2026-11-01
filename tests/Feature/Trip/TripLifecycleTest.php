@@ -38,9 +38,39 @@ function startRun(string $token, string $tripId)
     return test()->withToken($token)->postJson("/api/v1/trips/{$tripId}/start");
 }
 
-function advanceRun(string $token, string $tripId, string $status)
+function advanceRun(string $token, string $tripId, string $status, array $extra = [])
 {
-    return test()->withToken($token)->postJson("/api/v1/trips/{$tripId}/status", ['status' => $status]);
+    return test()->withToken($token)->postJson("/api/v1/trips/{$tripId}/status", ['status' => $status, ...$extra]);
+}
+
+/**
+ * A passenger booked on the run, and the AT_PICKUP payload that says the car is at her pickup
+ * (TRIP-10: "I've arrived" names the passenger and is checked by GPS).
+ *
+ * @return array{bookingId: string, lat: float, lng: float}
+ */
+function arrivalFor(string $driverToken, string $commuteId, string $tripId, string $phone): array
+{
+    $paxToken = verifiedPassenger($phone, device: 'pax-'.$phone);
+
+    $bookingId = approveSeat($driverToken, requestSeat($paxToken, $commuteId, [
+        'scheduledTripId' => $tripId,
+    ])->assertStatus(201)->json('data.id'));
+
+    test()->flushHeaders();
+
+    return ['bookingId' => $bookingId, ...atPickupOf($bookingId)];
+}
+
+/**
+ * The shape AT_PICKUP needs to pass validation, for the tests where the state machine refuses it
+ * before any passenger is looked up.
+ *
+ * @return array{bookingId: string, lat: float, lng: float}
+ */
+function anyArrival(): array
+{
+    return ['bookingId' => str_repeat('0', 26), 'lat' => 30.0594, 'lng' => 31.4913];
 }
 
 /*
@@ -203,13 +233,15 @@ it('never lets a passenger start the run they are riding on', function () {
 */
 
 it('walks the run through the states the chapter sets out', function () {
+    $arrival = arrivalFor($this->driverToken, $this->commuteId, $this->tripId, '01112223344');
+
     runLeavingIn($this->tripId, 10);
     startRun($this->driverToken, $this->tripId)->assertStatus(201);
 
     expect(advanceRun($this->driverToken, $this->tripId, 'EN_ROUTE')->assertOk()->json('data.status'))
         ->toBe('EN_ROUTE');
 
-    expect(advanceRun($this->driverToken, $this->tripId, 'AT_PICKUP')->assertOk()->json('data.status'))
+    expect(advanceRun($this->driverToken, $this->tripId, 'AT_PICKUP', $arrival)->assertOk()->json('data.status'))
         ->toBe('AT_PICKUP');
 
     $moving = advanceRun($this->driverToken, $this->tripId, 'IN_PROGRESS')->assertOk()->json('data');
@@ -230,17 +262,20 @@ it('walks the run through the states the chapter sets out', function () {
  * multi-pickup morning, and allowing the way back would make "in progress" mean nothing.
  */
 it('records the departure when the run finally sets off, not at the first pickup', function () {
+    $first = arrivalFor($this->driverToken, $this->commuteId, $this->tripId, '01112223344');
+    $second = arrivalFor($this->driverToken, $this->commuteId, $this->tripId, '01112225566');
+
     runLeavingIn($this->tripId, 10);
     startRun($this->driverToken, $this->tripId)->assertStatus(201);
 
     advanceRun($this->driverToken, $this->tripId, 'EN_ROUTE')->assertOk();
-    advanceRun($this->driverToken, $this->tripId, 'AT_PICKUP')->assertOk();
+    advanceRun($this->driverToken, $this->tripId, 'AT_PICKUP', $first)->assertOk();
 
     // Standing at the first gate is not a departure.
     expect(TripSession::sole()->departed_at)->toBeNull();
 
     advanceRun($this->driverToken, $this->tripId, 'EN_ROUTE')->assertOk();
-    advanceRun($this->driverToken, $this->tripId, 'AT_PICKUP')->assertOk();
+    advanceRun($this->driverToken, $this->tripId, 'AT_PICKUP', $second)->assertOk();
 
     expect(TripSession::sole()->departed_at)->toBeNull();
 
@@ -252,7 +287,7 @@ it('records the departure when the run finally sets off, not at the first pickup
         ->toBeLessThan(5);
 
     // And once it has set off, it cannot go back to a pickup.
-    advanceRun($this->driverToken, $this->tripId, 'AT_PICKUP')
+    advanceRun($this->driverToken, $this->tripId, 'AT_PICKUP', anyArrival())
         ->assertStatus(409)
         ->assertJsonPath('error.code', 'TRIP_INVALID_TRANSITION');
 });
@@ -266,7 +301,7 @@ it('refuses a step that is not possible, and says what is', function () {
     runLeavingIn($this->tripId, 10);
     startRun($this->driverToken, $this->tripId)->assertStatus(201);
 
-    $error = advanceRun($this->driverToken, $this->tripId, 'AT_PICKUP')
+    $error = advanceRun($this->driverToken, $this->tripId, 'AT_PICKUP', anyArrival())
         ->assertStatus(409)
         ->assertJsonPath('error.code', 'TRIP_INVALID_TRANSITION')
         ->json('error.fields');

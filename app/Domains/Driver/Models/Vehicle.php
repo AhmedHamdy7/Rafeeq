@@ -3,6 +3,7 @@
 namespace App\Domains\Driver\Models;
 
 use App\Domains\Driver\Enums\FuelType;
+use App\Domains\Driver\Enums\VehicleTier;
 use App\Domains\Driver\Enums\VehicleVerificationStatus;
 use Database\Factories\VehicleFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
@@ -26,6 +27,15 @@ class Vehicle extends Model
         return [
             'year' => 'integer',
             'seats' => 'integer',
+            /*
+             * 🔒 The admin's car review (F2-6, PROF-26, PROF-28), deliberately NOT fillable: the
+             * driver's vehicle form must never reach them. `approved_seats` limits every commute on
+             * this car and divides its seat price; `tier` picks the km rate. Null approved seats
+             * means the car has not been reviewed, and it cannot carry a published commute.
+             */
+            'approved_seats' => 'integer',
+            'tier' => VehicleTier::class,
+            'has_ac' => 'boolean',
             'is_active' => 'boolean',
             'fuel_type' => FuelType::class,
             'verification_status' => VehicleVerificationStatus::class,
@@ -59,6 +69,15 @@ class Vehicle extends Model
     public function documents(): HasMany
     {
         return $this->hasMany(VehicleDocument::class);
+    }
+
+    /**
+     * The tier, defaulting to Standard on an instance that has been created but not reloaded — the
+     * column's default lives in the database, not in the model.
+     */
+    public function tierOrDefault(): VehicleTier
+    {
+        return $this->tier ?? VehicleTier::Standard;
     }
 
     public function isApproved(): bool

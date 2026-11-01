@@ -19,6 +19,8 @@ use Illuminate\Validation\Rule;
  *   generation time.
  * - A one-time commute ignores `daysMask` and `endDate`: the Action derives both
  *   from the single date, so every consumer sees the same shape.
+ * - `perDay.*.pricePerSeatPiastres` is `prohibited` (P-1, D-0016): the price is
+ *   automatic and the same every day.
  */
 final class SaveCommuteScheduleRequest extends FormRequest
 {
@@ -32,9 +34,16 @@ final class SaveCommuteScheduleRequest extends FormRequest
              */
             'daysMask' => ['required_unless:commuteType,one_time', 'integer', 'min:0', 'max:127'],
 
-            // Departure time on your own clock, 24-hour. Not UTC — send the time
-            // you would read off a wall.
-            'departureTime' => ['required', 'string', 'date_format:H:i:s'],
+            /*
+             * 🔴 Leave this out and send `promisedArrivalTime` instead (C-2, COM-15): you say when
+             * you have to arrive and RAFEEQ works out when you leave, from the route and the
+             * morning's traffic, and moves it as riders join — telling you each time — until 16
+             * hours before the day, when it freezes.
+             *
+             * Still accepted, on your own clock (24-hour, not UTC), for a day you want to keep a
+             * fixed departure; a day that has one is never recomputed.
+             */
+            'departureTime' => ['required_without:promisedArrivalTime', 'nullable', 'string', 'date_format:H:i:s'],
 
             // IANA timezone the departure time is read in.
             'timezone' => ['sometimes', 'string', Rule::in(['Africa/Cairo'])],
@@ -60,8 +69,8 @@ final class SaveCommuteScheduleRequest extends FormRequest
              * sets Sunday only. Everything you leave out follows the values above, and a day you
              * do not mention runs exactly like the rest of the week.
              *
-             * Use it when one day genuinely differs — an early Sunday, a cheaper Thursday, one
-             * fewer seat on the day you take your own child.
+             * Use it when one day genuinely differs — an early Sunday, one fewer seat on the day
+             * you take your own child. The price is the same every day: RAFEEQ sets it.
              */
             'perDay' => ['sometimes', 'array'],
 
@@ -70,11 +79,22 @@ final class SaveCommuteScheduleRequest extends FormRequest
 
             'perDay.*.promisedArrivalTime' => ['sometimes', 'nullable', 'string', 'date_format:H:i:s'],
 
-            // What a seat costs on this day, in piastres. Omit to charge your usual price.
-            'perDay.*.pricePerSeatPiastres' => ['sometimes', 'integer', 'min:0'],
+            // Do not send. RAFEEQ sets the seat price; a per-day price is refused.
+            'perDay.*.pricePerSeatPiastres' => ['prohibited'],
 
-            // How many seats you offer on this day. Omit to offer your usual number.
+            // How many seats you offer on this day. Omit to offer your usual number. Cannot
+            // exceed the seats approved on your car.
             'perDay.*.seatsTotal' => ['sometimes', 'integer', 'min:1', 'max:7'],
+        ];
+    }
+
+    /**
+     * @return array<string, string>
+     */
+    public function messages(): array
+    {
+        return [
+            'perDay.*.pricePerSeatPiastres.prohibited' => __('commute.price.set_by_rafeeq'),
         ];
     }
 }

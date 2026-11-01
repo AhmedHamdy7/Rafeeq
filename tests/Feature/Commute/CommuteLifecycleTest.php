@@ -99,7 +99,7 @@ it('refuses to resume while the vehicle is still unusable', function () {
 /**
  * Chapter 4: "archived commutes cannot be booked".
  */
-it('archives and cancels the future days nobody has taken', function () {
+it('archives and cancels every future day', function () {
     $this->withToken($this->token)->deleteJson("/api/v1/commutes/{$this->commuteId}")
         ->assertOk()
         ->assertJsonPath('data.status', 'ARCHIVED');
@@ -114,17 +114,15 @@ it('archives and cancels the future days nobody has taken', function () {
 });
 
 /**
- * A day with passengers on it is a commitment. Voiding it silently would leave
- * people expecting a lift that will not come, so it needs the deliberate
- * cancellation — with refunds and notifications — that later phases own.
+ * Feature 03 C-8 (COM-35): a booked day is cancelled too — see DeleteCancelsBookingsTest.
  */
-it('leaves a booked day alone when archiving', function () {
+it('cancels a day with seats taken when archiving, too', function () {
     $booked = ScheduledTrip::orderBy('trip_date')->first();
     $booked->forceFill(['seats_taken' => 1])->save();
 
     $this->withToken($this->token)->deleteJson("/api/v1/commutes/{$this->commuteId}")->assertOk();
 
-    expect($booked->refresh()->status)->toBe(ScheduledTripStatus::Scheduled);
+    expect($booked->refresh()->status)->toBe(ScheduledTripStatus::Cancelled);
 });
 
 it('allows nothing once archived', function () {
@@ -133,7 +131,7 @@ it('allows nothing once archived', function () {
     $this->withToken($this->token)->postJson("/api/v1/commutes/{$this->commuteId}/pause")->assertStatus(409);
     $this->withToken($this->token)->postJson("/api/v1/commutes/{$this->commuteId}/resume")->assertStatus(409);
     $this->withToken($this->token)->patchJson("/api/v1/commutes/{$this->commuteId}", [
-        'pricePerSeatPiastres' => 9000,
+        'audience' => 'any_verified',
     ])->assertStatus(409);
 });
 

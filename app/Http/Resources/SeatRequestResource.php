@@ -2,7 +2,9 @@
 
 namespace App\Http\Resources;
 
+use App\Domains\Booking\Enums\SeatRequestKind;
 use App\Domains\Booking\Models\SeatRequest;
+use App\Domains\Booking\Support\OtherConfirmedCommutes;
 use App\Domains\Booking\Support\StandbyAvailability;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
@@ -19,6 +21,22 @@ use Illuminate\Http\Resources\Json\JsonResource;
  */
 final class SeatRequestResource extends JsonResource
 {
+    /**
+     * Set by the driver's inbox, which works it out once for the page — see
+     * {@see OtherConfirmedCommutes}. Null everywhere else, and then the field is absent.
+     */
+    private ?bool $hasOtherConfirmedCommute = null;
+
+    /**
+     * The passenger's state, for the driver deciding on her request (Feature 03 R-2).
+     */
+    public function withPassengerState(bool $hasOtherConfirmedCommute): self
+    {
+        $this->hasOtherConfirmedCommute = $hasOtherConfirmedCommute;
+
+        return $this;
+    }
+
     public function toArray(Request $request): array
     {
         return [
@@ -27,6 +45,26 @@ final class SeatRequestResource extends JsonResource
             'tripId' => $this->scheduled_trip_id,
             'status' => strtoupper($this->status->value),
             'commitment' => $this->commitment->value,
+
+            /*
+             * 🔴 What she is asking for (Feature 03 R-1/R-2, BOOK-18, BOOK-34): `seat_request`, or
+             * `waitlist_application` — the day is full, or she already rides with somebody else
+             * at that time. On an application the driver's yes is
+             * `POST /driver/seat-requests/{id}/waitlist`: it puts her on his list. It can change
+             * from `seat_request` to `waitlist_application` while it waits (another driver
+             * confirmed her, or the day filled up), never back.
+             */
+            'kind' => ($this->kind ?? SeatRequestKind::SeatRequest)->value,
+
+            /*
+             * Whether she already holds a confirmed future seat on ANOTHER commute (BOOK-34).
+             * Only in the driver's inbox (`GET /driver/seat-requests`); a bare boolean, never
+             * which commute or which driver.
+             */
+            'hasOtherConfirmedCommute' => $this->when(
+                $this->hasOtherConfirmedCommute !== null,
+                fn (): bool => (bool) $this->hasOtherConfirmedCommute,
+            ),
 
             /*
              * 🔴 She asked to join a run that was already moving (Feature 03 v5 §416). Published so
@@ -91,8 +129,8 @@ final class SeatRequestResource extends JsonResource
             'availableToday' => StandbyAvailability::isAvailableToday($this->resource),
             'responseNote' => $this->response_note,
             'respondedAt' => $this->responded_at?->toIso8601String(),
-            // A request nobody answers expires, so it stops holding your one open
-            // request for this commute.
+            // Only a request to join a run that is already moving has a deadline (three
+            // minutes). Every other request is null here: it stays open until answered.
             'expiresAt' => $this->expires_at?->toIso8601String(),
             'createdAt' => $this->created_at->toIso8601String(),
 

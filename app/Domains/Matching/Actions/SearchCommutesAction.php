@@ -6,6 +6,7 @@ use App\Domains\Commute\Enums\CommuteLocationType;
 use App\Domains\Commute\Models\CommuteLocation;
 use App\Domains\Commute\Models\CommuteOffer;
 use App\Domains\Commute\Models\ScheduledTrip;
+use App\Domains\Commute\Support\RouteSettings;
 use App\Domains\Geo\Contracts\GeoQueryEngine;
 use App\Domains\Geo\Support\Haversine;
 use App\Domains\Geo\Support\Polyline;
@@ -207,9 +208,9 @@ final readonly class SearchCommutesAction
 
             $detour = $this->geo->detourMinutes($offerRoute, $criteria->origin);
 
-            // The driver's own tolerance, applied as a filter: a detour they never
-            // agreed to is not something to rank lower, it is not on offer.
-            if ($detour > $offer->max_detour_minutes) {
+            // The platform's whole-trip cap (C-1, COM-31), applied as a filter: a detour
+            // beyond it is not something to rank lower, it is not on offer.
+            if ($detour > RouteSettings::maxTripDetourMinutes()) {
                 continue;
             }
 
@@ -366,7 +367,6 @@ final readonly class SearchCommutesAction
                 detour: $row->detour_score,
                 audience: $row->audience_score,
                 comfort: $row->comfort_score,
-                price: $row->price_score,
                 reliability: $row->reliability_score,
                 walkMinutes: (float) $row->walk_minutes,
                 detourMinutes: (float) $row->detour_minutes,

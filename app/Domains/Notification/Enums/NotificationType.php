@@ -180,6 +180,13 @@ enum NotificationType: string
     case CommutePausedSeatCancelled = 'commute_paused_seat_cancelled';
 
     /**
+     * Her confirmed seats were cancelled because the driver deleted the commute (Feature 03 C-8,
+     * COM-35). Every upcoming day goes, and unlike a pause she is NOT on a waiting list — there is
+     * no commute left — so the wording points her to look for another one.
+     */
+    case CommuteDeletedSeatCancelled = 'commute_deleted_seat_cancelled';
+
+    /**
      * The driver picked her off the waiting list and offered her seats (Feature 03 v5's explicit
      * exception to the automatic fan-out, used when a commute resumes).
      *
@@ -282,6 +289,13 @@ enum NotificationType: string
      */
     case DrivingSuspendedForDebt = 'driving_suspended_for_debt';
 
+    /**
+     * To the driver: RAFEEQ moved his departure for one day because a rider joined or left
+     * (C-2, COM-15) — "Leave at 07:10 on 2026-11-03". Only on days where he gave an arrival time
+     * and not a fixed departure, and never inside the 16-hour lock.
+     */
+    case DepartureTimeChanged = 'departure_time_changed';
+
     public function category(): NotificationCategory
     {
         return match ($this) {
@@ -306,6 +320,7 @@ enum NotificationType: string
             self::BookingCancelled,
             self::SeatOffered,
             self::CommutePausedSeatCancelled,
+            self::CommuteDeletedSeatCancelled,
             self::VehicleReplacedSeatCancelled,
             self::SeatsOfferedByDriver,
             self::SeatCounteroffered,
@@ -316,6 +331,7 @@ enum NotificationType: string
             self::ChangeProposalRejected,
             self::WaitlistClearedByChange,
             self::TripDayCancelled,
+            self::DepartureTimeChanged,
             self::MatchFound => NotificationCategory::Booking,
 
             self::TripStarted,

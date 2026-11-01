@@ -26,9 +26,9 @@ use Illuminate\Database\Eloquent\Builder;
  *
  * 🔴 The cost of the stop is computed here and never accepted from the request —
  * see {@see PickupDetour}. It is then checked against the driver's own
- * `max_detour_minutes` before the request is created at all: a proposal beyond the
- * limit they already set is not a decision to hand them, it is one they made when
- * they published.
+ * whole-trip detour cap before the request is created at all (C-1, COM-31: RAFEEQ's
+ * limit, no longer the driver's): a proposal beyond it is not a decision to hand
+ * the driver, it is one the platform has already made.
  *
  * `effective_from` is recorded as `next_trip` only. The ERD lists a second value,
  * `specific_date`, but there is no column to hold WHICH date — so accepting it
@@ -114,7 +114,7 @@ final readonly class RequestPickupPointAction
         $proposed = new Coordinate((float) $input['lat'], (float) $input['lng']);
 
         $detour = PickupDetour::measure($this->geo, $offer, $proposed);
-        $detour->assertWithin($offer->max_detour_minutes);
+        $detour->assertWithin();
 
         $pickup = new PickupPointRequest;
 

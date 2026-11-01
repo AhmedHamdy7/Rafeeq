@@ -16,11 +16,10 @@ use Illuminate\Support\Facades\Storage;
  * 🔴 Stage one of the search: everything a passenger may not see, removed in SQL
  * before a single score is computed.
  *
- * These are the most important tests in the phase. Pitfall #15 is a hard
- * restriction implemented as a score penalty — a man appearing in a women-only
- * group's results with six points out of ten instead of ten. That is a security
- * breach, not a ranking quirk, and every case here asserts EXCLUSION rather than
- * a lower position.
+ * Every case here asserts EXCLUSION rather than a lower position: a hard condition
+ * implemented as a score penalty is a breach, not a ranking quirk. Women-only is no
+ * longer one of them (Feature 03 C-11): those commutes are shown to everybody, and
+ * only a woman may ask for a seat.
  */
 beforeEach(function () {
     Storage::fake('documents');
@@ -47,32 +46,38 @@ it('finds a published commute that matches', function () {
 });
 
 /**
- * 🔴 Pitfall #15, the single most important assertion in the phase.
+ * 🔴 Feature 03 C-11 (BOOK-31, decision C1): women-only commutes are shown to EVERYBODY, flagged —
+ * and only a woman may ask for a seat. This used to be the opposite (hidden from non-women), and
+ * the assertion that replaces it is the request one in SeatRequestFlowTest.
  */
-it('excludes men entirely from a women-only commute, not merely ranks them lower', function () {
+it('shows a women-only commute to a man, flagged as women-only', function () {
     $token = passenger('01112223344', gender: 'man');
 
-    $response = search($token)->assertOk();
+    $results = search($token)->assertOk()->json('data');
 
-    // Excluded, not present with a lower score. A result with ANY score would
-    // mean a man can see a women-only group.
-    expect($response->json('data'))->toBe([])
-        ->and($response->json('meta.matched'))->toBe(0)
-        ->and($response->getContent())->not->toContain($this->commuteId);
+    expect($results)->toHaveCount(1)
+        ->and($results[0]['commuteId'])->toBe($this->commuteId)
+        ->and($results[0]['womenOnly'])->toBeTrue();
 });
 
-it('also excludes someone who preferred not to state a gender', function () {
-    $token = passenger('01112223344', gender: 'prefer_not_to_say');
+it('flags a commute open to everybody as not women-only', function () {
+    CommuteOffer::sole()->forceFill(['audience' => 'any_verified'])->save();
 
-    expect(search($token)->assertOk()->json('data'))->toBe([]);
+    expect(search(passenger('01112223344'))->assertOk()->json('data.0.womenOnly'))->toBeFalse();
 });
 
-it('cannot be tricked into eligibility by what the request claims', function () {
-    $token = passenger('01112223344', gender: 'man');
+/**
+ * The Women-only FILTER (BOOK-02): she asked for women-only commutes, so nothing else comes back.
+ */
+it('returns only women-only commutes when the women-only filter is on', function () {
+    $token = passenger('01112223344');
 
-    // Eligibility is read from the account, never from the request: a filter that
-    // trusted a submitted value would be no filter at all.
-    expect(search($token, ['audiencePreference' => 'women_only'])->assertOk()->json('data'))->toBe([]);
+    expect(search($token, ['womenOnly' => true])->assertOk()->json('data'))->toHaveCount(1);
+
+    CommuteOffer::sole()->forceFill(['audience' => 'any_verified'])->save();
+
+    expect(search($token, ['womenOnly' => true])->assertOk()->json('data'))->toBe([])
+        ->and(search($token)->assertOk()->json('data'))->toHaveCount(1);
 });
 
 it('shows a commute open to any verified member to everyone', function () {

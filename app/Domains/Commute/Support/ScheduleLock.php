@@ -33,7 +33,7 @@ use Carbon\CarbonImmutable;
  *    people already on board were promised.
  *
  * ⚠️ Rule 2 applies INSIDE the window only, and that is deliberate rather than lax. Before the
- * lock, nothing is frozen — the driver's own `max_detour_minutes` is what protects her, and
+ * lock, nothing is frozen — RAFEEQ's whole-trip detour cap (C-1) is what protects her, and
  * refusing a booking three weeks out because a straight-line estimate said two minutes late would
  * turn an estimate into a promise. The lock is the moment estimates become commitments.
  */
@@ -42,12 +42,13 @@ final readonly class ScheduleLock
     /**
      * How many hours before departure the day stops changing.
      *
-     * Configurable because it is a policy number, not a technical one (standard #11): sixteen hours
-     * is a choice about how much notice a woman needs to rearrange her morning, and it may move.
+     * An admin setting because it is a policy number, not a technical one (standard #11, COM-16):
+     * sixteen hours is a choice about how much notice a woman needs to rearrange her morning, and it
+     * may move.
      */
     public static function hours(): int
     {
-        return (int) config('rafeeq.commute.schedule_lock_hours');
+        return RouteSettings::scheduleLockHours();
     }
 
     /**

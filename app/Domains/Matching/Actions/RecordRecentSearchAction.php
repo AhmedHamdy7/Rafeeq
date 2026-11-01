@@ -54,7 +54,7 @@ final readonly class RecordRecentSearchAction
         /*
          * The same notion of "the same search" the result cache uses, rather than a second one
          * invented here. Two definitions of sameness in one feature drift, and the symptom would be
-         * a list showing one route twice because the two hashes disagreed about her budget.
+         * a list showing one route twice because the two hashes disagreed about one of her filters.
          */
         $signature = $criteria->signature($user->id);
 

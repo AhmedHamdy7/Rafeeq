@@ -2,6 +2,7 @@
 
 namespace App\Http\Resources;
 
+use App\Domains\Commute\Enums\CommuteAudience;
 use App\Domains\Matching\Support\MatchResult;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
@@ -51,8 +52,17 @@ final class MatchResultResource extends JsonResource
             'departureAt' => $this->trip->departure_at->toIso8601String(),
             'departureLocal' => $this->trip->departure_local->format('Y-m-d H:i:s'),
             'seatsAvailable' => (int) max(0, $this->trip->seats_total - $this->trip->seats_taken),
-            'pricePerSeatPiastres' => $this->trip->price_snapshot_piastres,
+            // The seat price RAFEEQ computed for that day (P-1). The only money figure a
+            // passenger is sent (P-3): never the driver's share, never the commission.
+            'seatPricePiastres' => (int) $this->trip->seat_price_piastres,
             'audience' => $offer->audience->value,
+
+            /*
+             * 🔴 Shown to everybody (Feature 03 C-11, BOOK-31). Only an account whose gender is
+             * `woman` can request a seat on it; anybody else is refused with
+             * `403 SEAT_REQUEST_WOMEN_ONLY`, so the app shows the card without the request button.
+             */
+            'womenOnly' => $offer->audience === CommuteAudience::WomenOnly,
 
             /*
              * What members are meant to see, and all of it — see PersonSummary.
@@ -71,6 +81,10 @@ final class MatchResultResource extends JsonResource
                 'make' => $offer->vehicle?->make,
                 'model' => $offer->vehicle?->model,
                 'colour' => $offer->vehicle?->colour,
+                // `comfort` shows the Comfort badge (S-1, PROF-26): a higher-rated car, priced at
+                // a higher km rate. Filter on it with `tier=comfort`.
+                'tier' => $offer->vehicle?->tierOrDefault()->value,
+                'hasAc' => (bool) $offer->vehicle?->has_ac,
             ],
 
             'meetingPoint' => [
@@ -93,7 +107,6 @@ final class MatchResultResource extends JsonResource
                 'detour' => $this->score->detour,
                 'audience' => $this->score->audience,
                 'comfort' => $this->score->comfort,
-                'price' => $this->score->price,
                 'reliability' => $this->score->reliability,
             ],
 

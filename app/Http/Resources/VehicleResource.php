@@ -40,8 +40,21 @@ final class VehicleResource extends JsonResource
             'year' => $this->year,
             'colour' => $this->colour,
             'plateNumber' => $this->plate_number,
-            // Total seats including the driver's; bookable seats are one fewer.
+            // What you entered on the form: total seats including yours. It does NOT
+            // limit a commute — `approvedSeats` does.
             'seats' => $this->seats,
+            /*
+             * Set by RAFEEQ at the car review (F2-6, PROF-28): the seats with working
+             * belts you may sell, at least 3. No commute or weekday may offer more, and
+             * the seat price is divided by it. Null until the car has been reviewed —
+             * a car without it cannot publish (`VEHICLE_SEATS_NOT_APPROVED`).
+             */
+            'approvedSeats' => $this->approved_seats,
+            // `standard` or `comfort`, set at the review (PROF-26). Comfort is priced at
+            // a higher km rate and shown as a badge to passengers.
+            'tier' => $this->tierOrDefault()->value,
+            // Air conditioning, as checked by the reviewer.
+            'hasAc' => (bool) $this->has_ac,
             'transmission' => $this->transmission,
             'fuelType' => $this->fuel_type?->value,
             'isActive' => $this->is_active,

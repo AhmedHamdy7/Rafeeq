@@ -31,7 +31,9 @@ final class UpdatePreferencesRequest extends FormRequest
         return [
             /*
              * Which home to open on this account's next launch: `passenger` or `driver`. A
-             * preference, not a permission — it grants nothing on its own.
+             * preference, not a permission — it grants nothing on its own. Switch freely both
+             * ways, no OTP. The answer carries `publishedCommutesCount`: on a switch to `passenger`,
+             * remind the driver that his published commutes keep running until he pauses them.
              */
             'activeMode' => ['sometimes', 'string', Rule::enum(Capability::class)],
 

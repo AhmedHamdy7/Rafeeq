@@ -295,7 +295,7 @@ it('states the privacy rules a client author would otherwise guess wrong', funct
         'publicFirstName' => 'that a public first name is the only name returned about others',
         'fuzzed' => 'that a meeting point is fuzzed until the booking is confirmed',
         'plateNumber' => 'that the plate number is withheld until confirmation',
-        'monthly ceiling' => 'that the budget is monthly, not per seat',
+        'The budget is gone' => 'that there is no budget any more, since the price is RAFEEQ\'s',
     ];
 
     foreach ($rules as $needle => $what) {

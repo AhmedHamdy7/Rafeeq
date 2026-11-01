@@ -63,6 +63,10 @@ function outboxWaiter(string $phone, string $device, string $commuteId, string $
     $id = requestSeat($token, $commuteId, ['scheduledTripId' => $tripId])
         ->assertStatus(201)->json('data.id');
 
+    // A full day: an application to the list, approved by the driver (Feature 03 R-1).
+    test()->withToken(test()->driverToken)
+        ->postJson("/api/v1/driver/seat-requests/{$id}/waitlist")->assertOk();
+
     return [
         'token' => $token,
         'id' => $id,

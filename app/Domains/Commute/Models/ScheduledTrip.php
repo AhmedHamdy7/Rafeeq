@@ -4,6 +4,7 @@ namespace App\Domains\Commute\Models;
 
 use App\Domains\Booking\Models\Booking;
 use App\Domains\Commute\Enums\ScheduledTripStatus;
+use App\Domains\Driver\Enums\VehicleTier;
 use App\Domains\Trip\Models\NavigationStop;
 use App\Domains\Trip\Models\TripSession;
 use Database\Factories\ScheduledTripFactory;
@@ -23,8 +24,7 @@ use Illuminate\Database\Eloquent\Relations\HasOne;
  */
 #[Fillable([
     'commute_offer_id', 'commute_schedule_id', 'trip_date', 'departure_at',
-    'departure_local', 'promised_arrival_at', 'seats_total', 'price_snapshot_piastres',
-    'booking_deadline_at',
+    'departure_local', 'promised_arrival_at', 'seats_total', 'booking_deadline_at',
 ])]
 class ScheduledTrip extends Model
 {
@@ -42,7 +42,22 @@ class ScheduledTrip extends Model
             'promised_arrival_at' => 'datetime',
             'seats_total' => 'integer',
             'seats_taken' => 'integer',
-            'price_snapshot_piastres' => 'integer',
+            /*
+             * 🔒 The automatic seat price and everything it was computed from, frozen when the day
+             * was generated (PAY-44). Not fillable: only `SeatPriceQuote::toTripColumns()` writes
+             * them, so no request can price a day. `seat = share + commission` is a CHECK.
+             */
+            'seat_price_piastres' => 'integer',
+            'driver_share_piastres' => 'integer',
+            'commission_piastres' => 'integer',
+            'pricing_route_distance_meters' => 'integer',
+            'pricing_vehicle_tier' => VehicleTier::class,
+            'pricing_km_rate_piastres' => 'integer',
+            'pricing_approved_seats' => 'integer',
+            'pricing_seat_divisor' => 'integer',
+            'pricing_commission_rate_percent' => 'integer',
+            'pricing_min_commission_piastres' => 'integer',
+            'pricing_rounding_step_piastres' => 'integer',
             'status' => ScheduledTripStatus::class,
             'booking_deadline_at' => 'datetime',
 

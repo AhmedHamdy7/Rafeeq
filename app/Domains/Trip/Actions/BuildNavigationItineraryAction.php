@@ -5,6 +5,7 @@ namespace App\Domains\Trip\Actions;
 use App\Domains\Booking\Enums\BookingStatus;
 use App\Domains\Booking\Models\Booking;
 use App\Domains\Commute\Enums\CommuteLocationType;
+use App\Domains\Commute\Jobs\RecomputeTripDeparture;
 use App\Domains\Commute\Models\CommuteOffer;
 use App\Domains\Commute\Models\ScheduledTrip;
 use App\Domains\Geo\Contracts\GeoQueryEngine;
@@ -55,6 +56,13 @@ final readonly class BuildNavigationItineraryAction
     public function bump(string $scheduledTripId): void
     {
         ScheduledTrip::query()->whereKey($scheduledTripId)->increment('itinerary_version');
+
+        /*
+         * C-2: the riders on this day changed, so the departure an arrival-only day was timed for
+         * may have moved. After commit, like the rebuild: a provider call never runs under the seat
+         * lock, and a rolled-back confirmation never moves anybody's morning.
+         */
+        RecomputeTripDeparture::dispatch($scheduledTripId)->afterCommit();
     }
 
     /**

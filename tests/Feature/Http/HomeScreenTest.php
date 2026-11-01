@@ -234,7 +234,9 @@ it('picks the soonest journey rather than the newest booking', function () {
 
     $earlyTrip = ScheduledTrip::query()->where('commute_offer_id', $this->commuteId)
         ->orderBy('departure_at')->first();
+    // A later DAY too: the same morning would overlap the seat she already holds (R-3).
     $lateTrip = ScheduledTrip::query()->where('commute_offer_id', $laterCommute)
+        ->whereDate('trip_date', '!=', $earlyTrip->trip_date)
         ->orderBy('departure_at')->first();
 
     approveSeat($this->driverToken, requestSeat($paxToken, $this->commuteId, [
@@ -346,7 +348,7 @@ it('names the commute a match points at, not just that one was found', function 
         ->and($card['destinationLabel'])->toBe('Smart Village B6')
         ->and($card['departureTimeLocal'])->toStartWith('07:05')
         ->and($card['timezone'])->toBe('Africa/Cairo')
-        ->and($card['pricePerSeatPiastres'])->toBe(8000);
+        ->and($card['seatPricePiastres'])->toBe(CommuteOffer::query()->whereKey($this->commuteId)->value('seat_price_piastres'));
 });
 
 it('shows the saved corridors without running every saved search', function () {
@@ -524,9 +526,10 @@ it('keeps reporting the money the bookings were approved at', function () {
     $before = test()->withToken($this->driverToken)->getJson('/api/v1/driver/home')
         ->assertOk()->json('data.nextRun.collectPiastres');
 
-    test()->withToken($this->driverToken)
-        ->patchJson("/api/v1/commutes/{$this->commuteId}", ['pricePerSeatPiastres' => 11000])
-        ->assertOk();
+    // The day is repriced afterwards (an admin moved a rate and the day was regenerated).
+    ScheduledTrip::query()->whereKey($this->tripId)->update([
+        'seat_price_piastres' => 99500, 'driver_share_piastres' => 90000, 'commission_piastres' => 9500,
+    ]);
 
     expect(test()->withToken($this->driverToken)->getJson('/api/v1/driver/home')
         ->assertOk()->json('data.nextRun.collectPiastres'))->toBe($before);

@@ -66,7 +66,8 @@ function onTheRoad(string $driverToken, string $tripId, string $bookingId): void
     underway($driverToken, $tripId);
 
     test()->flushHeaders()->withToken($driverToken)
-        ->postJson("/api/v1/trips/{$tripId}/status", ['status' => 'AT_PICKUP'])->assertOk();
+        ->postJson("/api/v1/trips/{$tripId}/status", ['status' => 'AT_PICKUP', 'bookingId' => $bookingId, ...atPickupOf($bookingId)])
+        ->assertOk();
 
     checkIn($driverToken, $tripId, ['bookingId' => $bookingId, ...position()])->assertOk();
 

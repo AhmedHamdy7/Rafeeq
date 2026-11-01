@@ -155,7 +155,7 @@ final readonly class ManageVehicleAction
             $moving = $this->commutesOn($profile, $outgoing);
 
             foreach ($moving as $offer) {
-                CreateCommuteOfferAction::assertSeatsFitVehicle($vehicle, (int) $offer->seats_total);
+                CreateCommuteOfferAction::assertCommuteFitsVehicle($offer, $vehicle);
             }
 
             /*
