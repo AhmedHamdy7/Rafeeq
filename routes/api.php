@@ -358,6 +358,8 @@ Route::prefix('v1')->group(function (): void {
         Route::delete('safety/live-shares/{share}', [SafetyController::class, 'revokeLiveShare']);
 
         Route::get('safety/blocked-users', [SafetyController::class, 'blocked']);
+        // What a block would cancel and cost, shown before the confirm (Feature 03 files X-4).
+        Route::get('safety/blocked-users/preview', [SafetyController::class, 'blockPreview']);
         Route::post('safety/blocked-users', [SafetyController::class, 'block']);
         Route::delete('safety/blocked-users/{user}', [SafetyController::class, 'unblock']);
 

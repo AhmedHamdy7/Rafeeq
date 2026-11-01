@@ -3,6 +3,7 @@
 namespace App\Domains\Notification\Enums;
 
 use App\Domains\Notification\Support\Notifier;
+use App\Domains\Trip\Support\DriverArrivalNotice;
 
 /**
  * Everything the platform tells a member on its own initiative (Chapter 11).
@@ -294,6 +295,60 @@ enum NotificationType: string
      * cancelled, booking blocked until she pays (PAY-17, PAY-46). Safety, like the driver's.
      */
     case RidingSuspendedForDebt = 'riding_suspended_for_debt';
+    /*
+     * ---- The pushes Feature 03 files §8 found missing ----------------------------------------
+     */
+
+    /**
+     * About an hour before the day's departure, to the driver and every confirmed passenger.
+     *
+     * One message for both sides, worded so it is true for both: the departure time is the day's,
+     * and each of them has somewhere to be at it. Sent once, stamped on the day.
+     */
+    case TripStartsInHour = 'trip_starts_in_hour';
+
+    /** The same, ten minutes out — the "put your shoes on" one. */
+    case TripStartsSoon = 'trip_starts_soon';
+
+    /**
+     * The driver just finished the pickup before hers in route order — collected that passenger,
+     * or recorded her as a no-show — so this passenger is next (Feature 03 files T-3).
+     *
+     * 🔴 Never to the first pickup: she is told the run started ({@see self::TripStarted}), and a
+     * second message saying the same thing a second later is how notifications get ignored.
+     */
+    case DriverHeadingToYou = 'driver_heading_to_you';
+
+    /**
+     * The driver says she is at this passenger's meeting point, and the grace has started.
+     *
+     * Sent from one method, {@see DriverArrivalNotice}, when the driver's GPS-checked arrival at her
+     * pickup starts her grace (TRIP-10).
+     */
+    case DriverArrived = 'driver_arrived';
+
+    /**
+     * The second "your driver has not set off" — at the +10 rung, after
+     * {@see self::CommuteNotStartedWarning} at +5 (Feature 03 files §8: "late +5 / +10 min").
+     *
+     * Carries the number of minutes so the wording follows the setting rather than promising "10".
+     */
+    case CommuteStillNotStarted = 'commute_still_not_started';
+
+    /**
+     * Her driver application was approved. Filed under safety with the account notices: whether she
+     * may drive is a change to her access, and that must reach her whatever she switched off.
+     */
+    case DriverDocumentsApproved = 'driver_documents_approved';
+
+    /**
+     * Her driver application was sent back. 🔒 Without the reviewer's reason in the body — that is
+     * on the application screen she is sent to; a lock screen is not the place for it.
+     */
+    case DriverDocumentsRejected = 'driver_documents_rejected';
+
+    /** Her driving licence expires inside the warning window (PROF-15's "Expiring"). Once per expiry date. */
+    case LicenceExpiring = 'licence_expiring';
 
     /**
      * To the driver: RAFEEQ moved his departure for one day because a rider joined or left
@@ -311,7 +366,10 @@ enum NotificationType: string
             self::AccountOnHold,
             self::AccountReinstated,
             self::DrivingSuspendedForDebt,
-            self::RidingSuspendedForDebt => NotificationCategory::Safety,
+            self::RidingSuspendedForDebt,
+            self::DriverDocumentsApproved,
+            self::DriverDocumentsRejected,
+            self::LicenceExpiring => NotificationCategory::Safety,
 
             self::DebtDueTomorrow,
             self::DebtOverdue,
@@ -356,7 +414,12 @@ enum NotificationType: string
             self::ChatMessage,
             self::RatingDue,
             self::RatingDueRiders,
-            self::RatingReminder => NotificationCategory::Trip,
+            self::RatingReminder,
+            self::TripStartsInHour,
+            self::TripStartsSoon,
+            self::DriverHeadingToYou,
+            self::DriverArrived,
+            self::CommuteStillNotStarted => NotificationCategory::Trip,
         };
     }
 }

@@ -5,6 +5,7 @@ namespace App\Domains\Notification\Jobs;
 use App\Domains\Identity\Models\Device;
 use App\Domains\Notification\Contracts\PushSender;
 use App\Domains\Notification\Models\Notification;
+use App\Domains\Notification\Support\PushTokenRejected;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Queue\Queueable;
 use Illuminate\Support\Str;
@@ -52,6 +53,16 @@ final class DeliverPushNotification implements ShouldQueue
 
         try {
             $sender->send($device->push_token, $push->title, $push->body, $push->data ?? []);
+        } catch (PushTokenRejected $e) {
+            /*
+             * The phone service says the token is dead (uninstalled, rotated). Retrying cannot
+             * help, so the job ends here — and the device forgets the token, so the next message
+             * does not try it again. The app sends a fresh one the next time it opens.
+             */
+            $device->forceFill(['push_token' => null])->save();
+            $push->forceFill(['failed_reason' => 'token_rejected'])->save();
+
+            return;
         } catch (Throwable $e) {
             // 🔒 The exception's class and code, NOT its message: a provider error can echo the
             // request back, and the request carried the device's token.

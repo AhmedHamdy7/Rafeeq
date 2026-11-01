@@ -29,6 +29,19 @@ return [
     ],
 
     /*
+     * Firebase Cloud Messaging, HTTP v1 (D-0023). Read only when RAFEEQ_PUSH_DRIVER=fcm.
+     *
+     * `credentials` is the PATH to the Firebase service-account JSON — never its contents, and
+     * never committed. The project id is read from that file when not given here.
+     * iPhone delivery additionally needs the APNs auth key (.p8) uploaded into the Firebase
+     * project (Project settings → Cloud Messaging → Apple app configuration); see DEPLOYMENT.md.
+     */
+    'fcm' => [
+        'credentials' => env('FIREBASE_CREDENTIALS'),
+        'project_id' => env('FIREBASE_PROJECT_ID'),
+    ],
+
+    /*
      * Google Maps Platform — the Routes API behind `RAFEEQ_GEO_ENGINE=google`
      * (`GoogleRoutesGeoEngine`). Restrict the key to the Routes API and to the server's IPs:
      * it is billed per call.

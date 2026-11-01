@@ -105,6 +105,12 @@ it('registers every scheduled command the platform depends on', function (string
      * it a driver's active-ride sheet shows a question that has already timed out — and she taps it.
      */
     'requests:expire',
+
+    // The 1-hour and 10-minute trip reminders (Feature 03 files §8). Without them nobody is reminded.
+    'trips:send-reminders',
+
+    // "Your licence expires soon" (§8). Without it nothing reaches her phone before it lapses.
+    'licences:warn-expiring',
 ]);
 
 /**
