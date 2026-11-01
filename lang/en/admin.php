@@ -90,6 +90,8 @@ return [
         'reject' => 'Reject',
         'confirm_reject' => 'Confirm rejection',
         'approved' => 'Approved :name as a driver.',
+        // F2-2: the ID or selfie is still waiting in the verification queue.
+        'identity_not_approved' => 'Approve the ID and the selfie in the verification queue first (missing: :items).',
         'rejected' => 'Rejected :name.',
 
         // The car review (F2-7): what the reviewer decides about each car before approving.
@@ -154,6 +156,7 @@ return [
             'dropped_early' => 'Dropped before her stop',
             'women_only_misuse' => 'Women-only misuse',
             'abusive_review' => 'Abusive review',
+            'safety_concern' => 'Safety concern',
         ],
         'reported_by' => 'From :reporter · about :reported',
         'nobody_named' => 'nobody named',
@@ -169,7 +172,10 @@ return [
             'escalated' => 'Escalated',
             'resolved' => 'Resolved',
             'closed' => 'Closed',
+            'appealed' => 'Appealed',
         ],
+        'appeal_round' => 'Appeal :round of 2',
+        'appeal_against' => 'against: :decision',
         'due' => 'Respond by',
         'handled_by' => 'Handled by',
         'unassigned' => 'Nobody yet',

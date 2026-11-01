@@ -8,11 +8,10 @@ use App\Domains\Geo\Contracts\GeoQueryEngine;
 use App\Domains\Shared\Exceptions\DomainException;
 use App\Domains\Shared\Support\ErrorCode;
 use App\Domains\Shared\ValueObjects\Coordinate;
-use App\Domains\Trip\Enums\NavigationStopKind;
 use App\Domains\Trip\Enums\TripSessionStatus;
-use App\Domains\Trip\Models\NavigationStop;
 use App\Domains\Trip\Models\TripSession;
 use App\Domains\Trip\Models\TripWaitTimer;
+use App\Domains\Trip\Support\PickupTime;
 use App\Domains\Trip\Support\TripSettings;
 use Carbon\CarbonImmutable;
 use Illuminate\Support\Facades\DB;
@@ -74,7 +73,8 @@ final readonly class ArriveAtPickupAction
         }
 
         $arrivedAt = CarbonImmutable::now();
-        $pickupAt = $this->pickupTimeOf($booking);
+        // The time she was told to be ready — see PickupTime on why it is counted from the departure.
+        $pickupAt = PickupTime::for($booking);
 
         $graceStartsAt = $pickupAt !== null && $pickupAt->greaterThan($arrivedAt) ? $pickupAt : $arrivedAt;
 
@@ -125,40 +125,5 @@ final readonly class ArriveAtPickupAction
         }
 
         return new Coordinate((float) $origin->lat, (float) $origin->lng);
-    }
-
-    /**
-     * The time she was told to be ready: the run's departure plus the driving time to her pickup
-     * along this run's itinerary (the legs up to and including hers), or the departure itself when
-     * no itinerary was built.
-     *
-     * 🔴 Counted from `departure_at` rather than read from the stored `eta_at`, because the departure
-     * moves (C-2: recomputed as riders join or leave, until the 16 h lock) and an ETA written before
-     * the move would start her grace at a time nobody told her any more.
-     */
-    private function pickupTimeOf(Booking $booking): ?CarbonImmutable
-    {
-        $departure = $booking->scheduledTrip->departure_at;
-
-        if ($departure === null) {
-            return null;
-        }
-
-        $stops = NavigationStop::query()
-            ->where('scheduled_trip_id', $booking->scheduled_trip_id)
-            ->orderBy('sequence')
-            ->get(['booking_id', 'kind', 'sequence', 'leg_duration_seconds']);
-
-        $offset = 0;
-
-        foreach ($stops as $stop) {
-            $offset += (int) $stop->leg_duration_seconds;
-
-            if ($stop->booking_id === $booking->id && $stop->kind === NavigationStopKind::PassengerPickup) {
-                return CarbonImmutable::instance($departure)->addSeconds($offset);
-            }
-        }
-
-        return CarbonImmutable::instance($departure);
     }
 }

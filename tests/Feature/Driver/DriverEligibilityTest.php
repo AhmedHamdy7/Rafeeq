@@ -25,16 +25,16 @@ function eligibility(string $token): array
 }
 
 it('reports every unmet requirement at once, not just the first', function () {
-    // Fresh account: no profile, so no date of birth, and no verified identity.
+    // No date of birth, and no verified phone. (An unverified ID is not a blocker any more — F2-1.)
     completeBasicProfile($this->token);
-    User::sole()->forceFill(['date_of_birth' => null])->save();
+    User::sole()->forceFill(['date_of_birth' => null, 'phone_verified_at' => null])->save();
 
     $reasons = array_column(eligibility($this->token)['blockers'], 'reason');
 
     // Someone missing two things should learn that once, not discover the
     // second after fixing the first.
     expect($reasons)->toContain('date_of_birth_missing')
-        ->and($reasons)->toContain('identity_not_verified')
+        ->and($reasons)->toContain('phone_not_verified')
         ->and(eligibility($this->token)['eligible'])->toBeFalse();
 });
 
@@ -49,10 +49,12 @@ it('offers a next step and a readable message for every blocker', function () {
     }
 });
 
-it('says a person is eligible once identity and profile are done', function () {
+/**
+ * F2-1: the five driver items go in any order, so an ID nobody has reviewed yet does not stop her
+ * starting the application. Approval is where the ID must be approved (F2-2).
+ */
+it('says a person is eligible once the profile is done, before any ID is reviewed', function () {
     completeBasicProfile($this->token);
-    submitGovernmentId($this->token);
-    approveVerification(VerificationType::GovernmentId);
 
     expect(eligibility($this->token)['eligible'])->toBeTrue()
         ->and(eligibility($this->token)['blockers'])->toBe([]);
@@ -125,16 +127,15 @@ it('tells a suspended driver to contact support', function () {
 });
 
 /**
- * The verification gate built in Phase 3, doing its job on its first real
- * route: an unverified identity may not apply to carry passengers.
+ * 🔴 F2-1: the application and the car are drafts in any order, so none of these asks for a
+ * verified identity any more — none answers VERIFICATION_REQUIRED. Approval is where the ID and the
+ * selfie must be approved (F2-2), and publishing a commute keeps its own gate.
  */
-it('blocks every driver route behind a verified identity', function (string $method, string $uri) {
+it('lets an unverified identity reach every application and vehicle route', function (string $method, string $uri) {
     completeBasicProfile($this->token);
 
-    $this->withToken($this->token)->json($method, $uri)
-        ->assertStatus(403)
-        ->assertJsonPath('error.code', 'VERIFICATION_REQUIRED')
-        ->assertJsonPath('error.fields.verification', ['government_id']);
+    expect($this->withToken($this->token)->json($method, $uri)->json('error.code'))
+        ->not->toBe('VERIFICATION_REQUIRED');
 })->with([
     ['GET', '/api/v1/driver/application'],
     ['POST', '/api/v1/driver/application'],
@@ -143,6 +144,14 @@ it('blocks every driver route behind a verified identity', function (string $met
     ['GET', '/api/v1/driver/vehicles'],
     ['POST', '/api/v1/driver/vehicles'],
 ]);
+
+it('still blocks publishing a commute behind a verified identity', function () {
+    completeBasicProfile($this->token);
+
+    $this->withToken($this->token)->postJson('/api/v1/commutes', [])
+        ->assertStatus(403)
+        ->assertJsonPath('error.code', 'VERIFICATION_REQUIRED');
+});
 
 /**
  * But not the endpoint whose whole purpose is to explain what is missing —

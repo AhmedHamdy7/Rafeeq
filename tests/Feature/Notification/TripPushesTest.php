@@ -165,7 +165,7 @@ it('tells her once that the driver has arrived', function () {
 */
 
 it('tells a driver her application was approved', function () {
-    expect(typed($this->driver, 'driver_documents_approved'))->toBe(1);
+    expect(typed($this->driver, 'driver_verified'))->toBe(1);
 });
 
 it('tells an applicant her application was sent back, without the reason on the lock screen', function () {
@@ -200,13 +200,13 @@ it('warns about an expiring licence once per expiry date', function () {
 
     expect($warn())->toBe(1)
         ->and($warn())->toBe(0)
-        ->and(typed($this->driver, 'licence_expiring'))->toBe(1);
+        ->and(typed($this->driver, 'driver_item_expiring'))->toBe(1);
 
     // Renewed to a date still inside the window: that one is a new expiry, warned about once.
     $licence->forceFill(['expires_at' => now()->addDays(20)])->save();
 
     expect($warn())->toBe(1)
-        ->and(typed($this->driver, 'licence_expiring'))->toBe(2);
+        ->and(typed($this->driver, 'driver_item_expiring'))->toBe(2);
 
     // Far off: nothing.
     $licence->forceFill(['expires_at' => now()->addDays(200)])->save();

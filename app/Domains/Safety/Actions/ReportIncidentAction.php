@@ -63,6 +63,13 @@ final readonly class ReportIncidentAction
         IncidentCategory::WomenOnlyMisuse->value => SafetySeverity::High,
         IncidentCategory::FalseArrival->value => SafetySeverity::Medium,
         IncidentCategory::AbusiveReview->value => SafetySeverity::Low,
+        /*
+         * HISTORY-9. High, with unsafe driving, and not critical: "safety concern" is the form's
+         * general safety reason, and the reports that page somebody within the hour are the named
+         * ones (harassment, the wrong person in the car). Critical for a catch-all would make the
+         * one-hour queue the place every vague worry goes, and then it stops being one hour.
+         */
+        IncidentCategory::SafetyConcern->value => SafetySeverity::High,
     ];
 
     /**
@@ -78,6 +85,15 @@ final readonly class ReportIncidentAction
         SafetySeverity::Medium->value => 24,
         SafetySeverity::Low->value => 72,
     ];
+
+    /**
+     * The response deadline for a severity, in hours. Public because an appeal starts a fresh one
+     * on the same scale (HISTORY-10) — a second look at a harassment case is not a 72-hour job.
+     */
+    public static function slaHoursFor(SafetySeverity $severity): int
+    {
+        return self::SLA_HOURS[$severity->value];
+    }
 
     /**
      * @param  array<string, mixed>  $attributes
@@ -113,7 +129,7 @@ final readonly class ReportIncidentAction
             // Not fillable: neither the severity nor the deadline is the reporter's to set.
             $incident->severity = $severity->value;
             $incident->status = IncidentStatus::Open->value;
-            $incident->sla_due_at = now()->addHours(self::SLA_HOURS[$severity->value]);
+            $incident->sla_due_at = now()->addHours(self::slaHoursFor($severity));
 
             $incident->save();
 

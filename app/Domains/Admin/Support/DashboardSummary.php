@@ -92,7 +92,7 @@ final class DashboardSummary
             // The prototype's sub-line ("1 critical, unassigned") — the number that should
             // make somebody stand up.
             'criticalUnassigned' => Incident::query()
-                ->whereIn('status', [IncidentStatus::Open->value, IncidentStatus::UnderReview->value, IncidentStatus::Escalated->value])
+                ->whereIn('status', IncidentStatus::openValues())
                 ->where('severity', SafetySeverity::Critical->value)
                 ->whereNull('assigned_admin_id')
                 ->count(),

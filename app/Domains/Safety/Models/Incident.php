@@ -64,8 +64,16 @@ class Incident extends Model
         return $this->hasMany(IncidentEvidence::class);
     }
 
+    /**
+     * The reporter's appeals against the decision, first one first (HISTORY-10).
+     */
+    public function appeals(): HasMany
+    {
+        return $this->hasMany(IncidentAppeal::class)->orderBy('round');
+    }
+
     public function isOpen(): bool
     {
-        return in_array($this->status, [IncidentStatus::Open, IncidentStatus::UnderReview, IncidentStatus::Escalated], true);
+        return in_array($this->status, IncidentStatus::open(), true);
     }
 }

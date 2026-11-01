@@ -14,8 +14,12 @@ enum SecurityEventType: string
     case OtpVerified = 'otp_verified';
     case OtpFailed = 'otp_failed';
     case OtpRateLimited = 'otp_rate_limited';
+    // F1-1: the store-review number was given its fixed code.
+    case ReviewOtpIssued = 'review_otp_issued';
     case LoginSuccess = 'login_success';
     case AccountCreated = 'account_created';
+    // F1-4: she deleted her account. The last event that names her.
+    case AccountDeleted = 'account_deleted';
     case SessionRefreshed = 'session_refreshed';
     case TokenReuse = 'token_reuse';
     case Logout = 'logout';
@@ -63,6 +67,8 @@ enum SecurityEventType: string
             self::TokenReuse => SecurityRiskLevel::High,
 
             self::OtpRateLimited,
+            // A fixed code in production, however narrow, is worth seeing in the medium list.
+            self::ReviewOtpIssued,
             self::DeviceRevoked,
             self::SuspendedAccessAttempt,
             // A refused upload is either a mistake or a probe, and the two are

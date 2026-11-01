@@ -59,7 +59,7 @@ final class SafetyCaseQueue
     public static function openReports(int $perPage): LengthAwarePaginator
     {
         return self::openReportQuery()
-            ->with(['reporter', 'reportedUser', 'assignedAdmin', 'evidence'])
+            ->with(['reporter', 'reportedUser', 'assignedAdmin', 'evidence', 'appeals'])
             ->withCount('evidence')
             ->orderBy('sla_due_at')
             ->orderBy('id')
@@ -104,10 +104,7 @@ final class SafetyCaseQueue
      */
     private static function openReportQuery(): Builder
     {
-        return Incident::query()->whereIn('status', [
-            IncidentStatus::Open->value,
-            IncidentStatus::UnderReview->value,
-            IncidentStatus::Escalated->value,
-        ]);
+        // Appealed reports included: somebody is waiting on a second look (HISTORY-10).
+        return Incident::query()->whereIn('status', IncidentStatus::openValues());
     }
 }

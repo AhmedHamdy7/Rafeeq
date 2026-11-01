@@ -62,8 +62,12 @@ final readonly class WarnExpiringLicencesAction
                         continue;
                     }
 
-                    Notifier::send($licence->user, NotificationType::LicenceExpiring, params: [
+                    Notifier::send($licence->user, NotificationType::DriverItemExpiring, params: [
                         'date' => $licence->expires_at->toDateString(),
+                    ], data: [
+                        // F2-14: the item the app opens, and when it lapses.
+                        'itemKey' => 'driving_licence',
+                        'expiresAt' => $licence->expires_at->toIso8601String(),
                     ]);
 
                     $sent++;

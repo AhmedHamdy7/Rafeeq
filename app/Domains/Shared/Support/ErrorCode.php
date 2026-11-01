@@ -302,6 +302,12 @@ enum ErrorCode: string
     // The early-drop question was not asked on this booking, or she already answered (TRIP-20).
     case EarlyDropNotAsked = 'EARLY_DROP_NOT_ASKED';
 
+    // ---- Account deletion (F1-4, PROF-31) ------------------------------
+    // She owes money on either side; `error.fields.debtPiastres` is how much.
+    case AccountHasDebt = 'ACCOUNT_HAS_DEBT';
+    // A trip she rides or drives is inside the fee window; `error.fields.bookingIds` are the seats.
+    case AccountHasTripInFeeWindow = 'ACCOUNT_HAS_TRIP_IN_FEE_WINDOW';
+
     // ---- Admin dashboard (Chapter 12) ----------------------------------
     case AdminCredentialsInvalid = 'ADMIN_CREDENTIALS_INVALID';
     case AdminMfaNotEnrolled = 'ADMIN_MFA_NOT_ENROLLED';
@@ -387,6 +393,11 @@ enum ErrorCode: string
             self::DriverCommissionOverdue => 403,
             // 403: suspended for debt (PAY-46). `error.fields.amountOwedPiastres` is what lifts it.
             self::RidingSuspendedForDebt => 403,
+
+            // 409: a well-formed request her current standing refuses. Paying, or waiting for the
+            // trip to pass, is what lifts it — nothing in the request to correct.
+            self::AccountHasDebt,
+            self::AccountHasTripInFeeWindow => 409,
 
             self::DriverApplicationLocked,
             self::DriverDuplicateDetected,

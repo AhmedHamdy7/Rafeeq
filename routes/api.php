@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\Api\V1\Account\AccountDeletionController;
 use App\Http\Controllers\Api\V1\Account\AvatarController;
 use App\Http\Controllers\Api\V1\Account\ComfortPreferenceController;
 use App\Http\Controllers\Api\V1\Account\ConsentController;
@@ -36,6 +37,7 @@ use App\Http\Controllers\Api\V1\PlaceController;
 use App\Http\Controllers\Api\V1\Rating\RatingController;
 use App\Http\Controllers\Api\V1\Safety\SafetyController;
 use App\Http\Controllers\Api\V1\Search\CommuteDemandController;
+use App\Http\Controllers\Api\V1\Search\MatchOpenedController;
 use App\Http\Controllers\Api\V1\Search\RecentSearchController;
 use App\Http\Controllers\Api\V1\Search\SavedSearchController;
 use App\Http\Controllers\Api\V1\Search\SearchController;
@@ -90,6 +92,18 @@ Route::prefix('v1')->group(function (): void {
         Route::get('devices', [DeviceController::class, 'index']);
         Route::delete('devices/{device}/session', [DeviceController::class, 'destroySession']);
         Route::patch('devices/current/security', [DeviceController::class, 'updateSecurity']);
+
+        /*
+         * Deleting the account (F1-4, PROF-31). Outside the `active` group for the same reason as
+         * the devices above: nobody may be trapped in an account, suspended or not. The debt rule
+         * still holds — a suspension does not excuse what she owes.
+         */
+        Route::get('deletion', [AccountDeletionController::class, 'show']);
+    });
+
+    Route::delete('account', [AccountDeletionController::class, 'destroy'])->middleware('auth:sanctum');
+
+    Route::prefix('account')->middleware('auth:sanctum')->group(function (): void {
 
         Route::get('consents', [ConsentController::class, 'index']);
         Route::post('consents', [ConsentController::class, 'store']);
@@ -246,19 +260,25 @@ Route::prefix('v1')->group(function (): void {
              */
             Route::get('verification', [DriverApplicationController::class, 'verification']);
 
-            Route::middleware('verified:government_id')->group(function (): void {
-                Route::get('application', [DriverApplicationController::class, 'show']);
-                Route::post('application', [DriverApplicationController::class, 'store']);
-                Route::put('application/licence', [DriverApplicationController::class, 'updateLicence']);
-                Route::post('application/submit', [DriverApplicationController::class, 'submit']);
-                Route::delete('application', [DriverApplicationController::class, 'withdraw']);
+            /*
+             * 🔴 No `verified:government_id` here any more (F2-1, PROF-13, E1): the five driver
+             * items go in ANY order, as drafts, before a reviewer has looked at anything. Licence,
+             * application and car used to wait for an approved ID, so a driver uploaded one thing,
+             * waited a day, and came back for the rest. Nothing here grants anything: submit needs
+             * all five uploaded, and approval needs the ID and the selfie APPROVED (F2-2). Publishing
+             * keeps its own `verified:government_id` gate below.
+             */
+            Route::get('application', [DriverApplicationController::class, 'show']);
+            Route::post('application', [DriverApplicationController::class, 'store']);
+            Route::put('application/licence', [DriverApplicationController::class, 'updateLicence']);
+            Route::post('application/submit', [DriverApplicationController::class, 'submit']);
+            Route::delete('application', [DriverApplicationController::class, 'withdraw']);
 
-                Route::get('vehicles', [VehicleController::class, 'index']);
-                Route::post('vehicles', [VehicleController::class, 'store']);
-                Route::patch('vehicles/{vehicle}', [VehicleController::class, 'update']);
-                Route::post('vehicles/{vehicle}/activate', [VehicleController::class, 'activate']);
-                Route::post('vehicles/{vehicle}/documents', [VehicleController::class, 'storeDocument']);
-            });
+            Route::get('vehicles', [VehicleController::class, 'index']);
+            Route::post('vehicles', [VehicleController::class, 'store']);
+            Route::patch('vehicles/{vehicle}', [VehicleController::class, 'update']);
+            Route::post('vehicles/{vehicle}/activate', [VehicleController::class, 'activate']);
+            Route::post('vehicles/{vehicle}/documents', [VehicleController::class, 'storeDocument']);
         });
 
     /*
@@ -422,6 +442,9 @@ Route::prefix('v1')->group(function (): void {
         Route::get('incidents/{incident}', [SafetyController::class, 'showIncident']);
         Route::post('incidents', [SafetyController::class, 'reportIncident'])
             ->middleware('throttle:safety-reports');
+        // HISTORY-10: appeal the decision on your own report. Same limiter as filing one.
+        Route::post('incidents/{incident}/appeal', [SafetyController::class, 'appealIncident'])
+            ->middleware('throttle:safety-reports');
 
         /*
          * Evidence on a report.
@@ -477,6 +500,9 @@ Route::prefix('v1')->group(function (): void {
         Route::delete('commute-demands/{demand}', [CommuteDemandController::class, 'destroy']);
 
         Route::get('matches', [CommuteDemandController::class, 'matches']);
+        // She tapped one: what turns "N new commutes match your demand" on Home into a count of
+        // matches she has not seen, rather than of every match there ever was (HOME-8).
+        Route::post('matches/{match}/opened', MatchOpenedController::class);
 
         Route::get('saved-searches', [SavedSearchController::class, 'index']);
         Route::post('saved-searches', [SavedSearchController::class, 'store']);

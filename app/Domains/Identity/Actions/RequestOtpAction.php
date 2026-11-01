@@ -63,7 +63,9 @@ final readonly class RequestOtpAction
             ->where('status', OtpStatus::Pending->value)
             ->update(['status' => OtpStatus::Expired->value]);
 
-        $code = $this->generateCode();
+        $review = $this->reviewCodeFor($phone);
+
+        $code = $review ?? $this->generateCode();
 
         $challenge = OtpChallenge::create([
             'phone_e164' => $phone->e164,
@@ -82,7 +84,15 @@ final readonly class RequestOtpAction
         // the cap would never be reached.
         $challenge->forceFill(['resend_count' => ($previous?->resend_count ?? -1) + 1])->save();
 
-        $this->deliver($phone, $code, $purpose, $challenge);
+        // The review number is not a real person's phone: an SMS to it would only cost money and
+        // hand the code to whoever owns that number later.
+        if ($review === null) {
+            $this->deliver($phone, $code, $purpose, $challenge);
+        } else {
+            SecurityLog::record(SecurityEventType::ReviewOtpIssued, metadata: [
+                'phone' => SecurityLog::maskPhone($phone),
+            ]);
+        }
 
         SecurityLog::record(SecurityEventType::OtpRequested, metadata: [
             'purpose' => $purpose->value,
@@ -220,6 +230,46 @@ final readonly class RequestOtpAction
         }
 
         return str_pad((string) random_int(0, 10 ** $length - 1), $length, '0', STR_PAD_LEFT);
+    }
+
+    /**
+     * The store-review sign-in (F1-1): the one configured number always gets the one configured
+     * code, so an Apple or Google reviewer can sign into the production app.
+     *
+     * 🔴 Allowed in production on purpose — that is where reviewers are — and kept safe by being
+     * as narrow as it can be: one exact number, compared after normalisation so `010…` and
+     * `+2010…` are the same; the rate limits and the resend cooldown above have already run; the
+     * attempt cap on verify is untouched; and every use is a warning plus a security event, so an
+     * operator reading either cannot miss that it is on.
+     */
+    private function reviewCodeFor(PhoneNumber $phone): ?string
+    {
+        $reviewPhone = (string) config('rafeeq.auth.otp.review_phone');
+        $reviewCode = (string) config('rafeeq.auth.otp.review_code');
+
+        if ($reviewPhone === '' || $reviewCode === '') {
+            return null;
+        }
+
+        if (! $phone->equals(PhoneNumber::fromRaw($reviewPhone))) {
+            return null;
+        }
+
+        $length = AuthSettings::otpLength();
+
+        // Same reason as the dev code: a wrong length is issued and then refused at verify, with
+        // nothing anywhere saying why the reviewer cannot get in.
+        if (! preg_match('/^\d{'.$length.'}$/', $reviewCode)) {
+            throw new RuntimeException(
+                "rafeeq.auth.otp.review_code must be exactly {$length} digits to match auth.otp.length."
+            );
+        }
+
+        Log::warning('[review] store-review OTP issued for the review number', [
+            'phone' => SecurityLog::maskPhone($phone),
+        ]);
+
+        return $reviewCode;
     }
 
     /**

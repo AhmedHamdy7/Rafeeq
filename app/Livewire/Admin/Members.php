@@ -219,7 +219,7 @@ class Members extends Component
             'opened' => $opened,
             'openReports' => $opened === null ? collect() : Incident::query()
                 ->where('reported_user_id', $opened->id)
-                ->whereIn('status', [IncidentStatus::Open->value, IncidentStatus::UnderReview->value, IncidentStatus::Escalated->value])
+                ->whereIn('status', IncidentStatus::openValues())
                 ->orderBy('sla_due_at')
                 ->orderBy('id')
                 ->get(),

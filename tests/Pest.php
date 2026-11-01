@@ -178,6 +178,18 @@ function submitGovernmentId(string $accessToken): void
 }
 
 /**
+ * The selfie — the fifth driver item, and since F2-2 one driver approval cannot do without.
+ */
+function submitSelfie(string $accessToken): void
+{
+    uploadVerificationDocument($accessToken, 'selfie', 'selfie')->assertStatus(201);
+
+    test()->withToken($accessToken)
+        ->postJson('/api/v1/account/verifications/selfie/submit')
+        ->assertOk();
+}
+
+/**
  * A reviewer's decision. The HTTP surface for this belongs to the admin
  * dashboard (Phase 13), so tests drive the Action the way that dashboard will.
  *
@@ -229,6 +241,9 @@ function readyDriverApplicant(string $phone = '01012345678', string $devicePubli
     completeBasicProfile($token);
     submitGovernmentId($token);
     approveVerification(VerificationType::GovernmentId);
+    // F2-1 / F2-2: the selfie is one of the five items, sent before submit and approved before approval.
+    submitSelfie($token);
+    approveVerification(VerificationType::Selfie);
 
     test()->withToken($token)->postJson('/api/v1/driver/application')->assertStatus(201);
 

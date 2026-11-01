@@ -121,10 +121,6 @@ final class MemberDirectory
 
     private static function open(Builder $reports): void
     {
-        $reports->whereIn('status', [
-            IncidentStatus::Open->value,
-            IncidentStatus::UnderReview->value,
-            IncidentStatus::Escalated->value,
-        ]);
+        $reports->whereIn('status', IncidentStatus::openValues());
     }
 }

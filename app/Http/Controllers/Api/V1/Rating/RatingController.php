@@ -17,6 +17,7 @@ use App\Http\Controllers\Controller;
 use App\Http\OpenApi\ApiErrors;
 use App\Http\Requests\Rating\ReportReviewRequest;
 use App\Http\Requests\Rating\SubmitRatingRequest;
+use App\Http\Requests\Rating\UpdateRatingRequest;
 use App\Http\Resources\PersonSummary;
 use App\Http\Resources\PublicReviewResource;
 use App\Http\Resources\RatingResource;
@@ -127,13 +128,14 @@ final class RatingController extends Controller
      * legitimate API calls — see `SubmitRatingAction`.
      */
     #[ApiErrors(ErrorCode::RatingNotEditable, ErrorCode::NotFound)]
-    public function update(SubmitRatingRequest $request, string $rating, SubmitRatingAction $action): JsonResponse
+    public function update(UpdateRatingRequest $request, string $rating, SubmitRatingAction $action): JsonResponse
     {
         $own = Rating::query()->whereKey($rating)->first()
             ?? throw DomainException::of(ErrorCode::NotFound);
 
+        // Only the fields sent: left out keeps, `null` clears (HISTORY-5).
         return ApiResponse::success(new RatingResource(
-            $action->update($request->user(), $own, $request->rating())->load('tags')
+            $action->update($request->user(), $own, $request->changes())->load('tags')
         ));
     }
 

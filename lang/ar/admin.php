@@ -88,6 +88,8 @@ return [
         'reject' => 'رفض',
         'confirm_reject' => 'تأكيد الرفض',
         'approved' => 'اتعمد :name كسائق.',
+        // F2-2: the ID or selfie is still waiting in the verification queue.
+        'identity_not_approved' => 'وافق على البطاقة والسيلفي من طابور التوثيق الأول (ناقص: :items).',
         'rejected' => 'اترفض :name.',
 
         // مراجعة العربية (F2-7): اللي المراجع بيقرره عن كل عربية قبل الاعتماد.
@@ -151,6 +153,7 @@ return [
             'dropped_early' => 'نزّلها قبل محطتها',
             'women_only_misuse' => 'إساءة استخدام رحلة السيدات',
             'abusive_review' => 'تقييم مسيء',
+            'safety_concern' => 'قلق على السلامة',
         ],
         'reported_by' => 'من :reporter · عن :reported',
         'nobody_named' => 'محدش متسمّي',
@@ -166,7 +169,10 @@ return [
             'escalated' => 'متصعّد',
             'resolved' => 'اتحل',
             'closed' => 'اتقفل',
+            'appealed' => 'متستأنف',
         ],
+        'appeal_round' => 'استئناف :round من 2',
+        'appeal_against' => 'على القرار: :decision',
         'due' => 'الرد قبل',
         'handled_by' => 'مع مين',
         'unassigned' => 'لسه مع حد',

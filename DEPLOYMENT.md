@@ -98,8 +98,19 @@ php artisan demo:refresh             # بيئة تجربة بس: يحط حساب
 
 | الإعداد | لو مش مضبوط | السؤال المفتوح |
 |---|---|---|
-| `RAFEEQ_OTP_DRIVER` | **المصادقة كلها متوقفة** | مزوّد SMS لسه ما اتحددش (الخطة §19 سؤال 2) |
+| `RAFEEQ_OTP_DRIVER` | **المصادقة كلها متوقفة** | مزوّد SMS لسه ما اتحددش (الخطة §19 سؤال 2). الكلاس جاهز (F1-6): `RAFEEQ_OTP_DRIVER=http` + `RAFEEQ_SMS_URL` + `RAFEEQ_SMS_API_KEY` + `RAFEEQ_SMS_SENDER` (اسم المرسل المسجّل عند الشبكات). لو المزوّد بيسمّي الحقول بأسامي تانية: `RAFEEQ_SMS_FIELD_TO` / `_MESSAGE` / `_SENDER` / `_API_KEY`، ولو المفتاح بيتبعت في الـ body مش header: `RAFEEQ_SMS_AUTH=field` |
 | `RAFEEQ_VIRUS_SCANNER` | **رفع أي مستند متوقف** | محرك فحص لسه ما اتحددش |
+
+### 🍎 دخول مراجعة المتاجر (F1-1)
+
+Apple وGoogle بيراجعوا نسخة production ومش بيستقبلوا SMS بتاعتنا. رقم واحد بكود ثابت واحد، **شغّال في production عن قصد**:
+
+| الإعداد | القيمة |
+|---|---|
+| `RAFEEQ_REVIEW_PHONE` | رقم مش بتاع حد حقيقي (مثلًا `01099990000`) |
+| `RAFEEQ_REVIEW_OTP` | ٦ أرقام بالظبط |
+
+بعدها مرة واحدة (وآمن يتكرر): `php artisan rafeeq:review-accounts` — بيعمل حساب المراجعة (راكبة موثّقة + سواقة معتمدة بعربية متراجعة ورحلة منشورة + كرسي محجوز) وسواقة تانية برحلة على نفس الـ corridor عشان البحث يلاقي نتيجة. الرقم ده **مابيتبعتلوش SMS**، وكل استخدام بيتسجّل warning في اللوج و`review_otp_issued` في security events. حدود الطلب والـ cooldown والمحاولات زي أي رقم. الرقم والكود بيتكتبوا في App Store Connect / Play Console (Review notes).
 
 ### ⚠️ حاجة بتشتغل **بجودة أقل** (قرار واعي)
 
