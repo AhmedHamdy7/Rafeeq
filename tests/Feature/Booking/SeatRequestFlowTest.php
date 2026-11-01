@@ -6,7 +6,6 @@ use App\Domains\Booking\Enums\SeatRequestStatus;
 use App\Domains\Booking\Models\Booking;
 use App\Domains\Booking\Models\BookingEvent;
 use App\Domains\Booking\Models\SeatRequest;
-use App\Domains\Commute\Models\CommuteOffer;
 use App\Domains\Commute\Models\ScheduledTrip;
 use App\Domains\Driver\Models\Vehicle;
 use App\Domains\Group\Enums\GroupMemberRole;
