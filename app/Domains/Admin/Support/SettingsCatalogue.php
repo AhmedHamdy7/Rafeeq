@@ -72,8 +72,6 @@ final class SettingsCatalogue
         'commute.schedule_lock_hours' => ['group' => 'commute', 'min' => 1, 'max' => 48, 'unit' => 'hours'],
 
         // ---- Money -------------------------------------------------------
-        'payment.collection_delay_minutes' => ['group' => 'booking', 'min' => 30, 'max' => 1_440, 'unit' => 'minutes'],
-        'payment.max_driver_debt_piastres' => ['group' => 'booking', 'min' => 5_000, 'max' => 200_000, 'unit' => 'piastres'],
 
         // ---- The trip itself (Chapter 8) ---------------------------------
         'trip.start_window_minutes' => ['group' => 'trip', 'min' => 15, 'max' => 240, 'unit' => 'minutes'],
@@ -130,11 +128,20 @@ final class SettingsCatalogue
         'chat.max_hours_after_departure' => ['group' => 'chat', 'min' => 2, 'max' => 48, 'unit' => 'hours'],
         'chat.messages_per_minute' => ['group' => 'chat', 'min' => 5, 'max' => 120, 'unit' => 'per_minute'],
 
+        // ---- Debt and weekly settlement (PAY-08 → PAY-19, PAY-34) ---------
+        // No cap on a driver's debt (PAY-15): the Friday deadline is what stops her.
+        'debt.late_fee_percent' => ['group' => 'debt', 'min' => 0, 'max' => 50, 'unit' => 'percent'],
+        'debt.weeks_before_suspension' => ['group' => 'debt', 'min' => 2, 'max' => 8, 'unit' => 'weeks'],
+        'debt.passenger_suspension_days' => ['group' => 'debt', 'min' => 3, 'max' => 60, 'unit' => 'days'],
+        'debt.passenger_suspension_limit_piastres' => ['group' => 'debt', 'min' => 2_000, 'max' => 200_000, 'unit' => 'piastres'],
+        'debt.coupon_percent' => ['group' => 'debt', 'min' => 0, 'max' => 100, 'unit' => 'percent'],
+        'debt.reminder_hour' => ['group' => 'debt', 'min' => 6, 'max' => 22, 'unit' => 'hour_of_day'],
+
         // ---- Operations (Chapter 12) -------------------------------------
         'admin.suspension_review_hours' => ['group' => 'admin', 'min' => 1, 'max' => 168, 'unit' => 'hours'],
     ];
 
-    public const array GROUPS = ['auth', 'profile', 'commute', 'booking', 'trip', 'rating', 'reliability', 'safety', 'chat', 'admin'];
+    public const array GROUPS = ['auth', 'profile', 'commute', 'booking', 'debt', 'trip', 'rating', 'reliability', 'safety', 'chat', 'admin'];
 
     /**
      * @return array{group: string, min: int, max: int, unit: string, locked?: string}|null

@@ -23,6 +23,7 @@ use App\Domains\Commute\Support\ScheduleLock;
 use App\Domains\Group\Actions\AddMemberToGroupAction;
 use App\Domains\Outbox\Enums\OutboxEventType;
 use App\Domains\Outbox\Support\Outbox;
+use App\Domains\Payment\Support\PassengerDebt;
 use App\Domains\Reliability\Enums\ReliabilityEventKind;
 use App\Domains\Reliability\Support\ReliabilityLedger;
 use App\Domains\Shared\Exceptions\DomainException;
@@ -81,6 +82,10 @@ final readonly class AcceptSeatOfferAction
          * the lock below is to be held briefly. {@see ScheduleLock} documents the race that buys.
          */
         $this->assertKeepsTheFrozenPromise($offer);
+
+        // PAY-46: suspended for debt, she may not take a seat until she pays.
+        $offer->loadMissing('seatRequest');
+        PassengerDebt::assertMayBook($offer->seatRequest->passenger_user_id);
 
         /*
          * The other days she is giving up, worked out BEFORE the transaction so they can be locked

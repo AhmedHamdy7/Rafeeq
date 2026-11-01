@@ -154,7 +154,7 @@ final class CommuteController extends Controller
         ErrorCode::CommuteSeatsExceedApproved,
         ErrorCode::VehicleSeatsNotApproved,
         ErrorCode::DriverNotEligible,
-        ErrorCode::DriverDebtLimitReached,
+        ErrorCode::DriverCommissionOverdue,
         ErrorCode::LicenceExpired,
         ErrorCode::NotFound,
     )]
@@ -199,7 +199,7 @@ final class CommuteController extends Controller
         ErrorCode::CommuteSeatsExceedApproved,
         ErrorCode::VehicleSeatsNotApproved,
         ErrorCode::DriverNotEligible,
-        ErrorCode::DriverDebtLimitReached,
+        ErrorCode::DriverCommissionOverdue,
         ErrorCode::LicenceExpired,
         ErrorCode::NotFound,
     )]

@@ -12,6 +12,7 @@ use App\Livewire\Admin\Escort;
 use App\Livewire\Admin\LiveTrips;
 use App\Livewire\Admin\Login;
 use App\Livewire\Admin\Members;
+use App\Livewire\Admin\Payments;
 use App\Livewire\Admin\SafetyCases;
 use App\Livewire\Admin\Settings;
 use App\Livewire\Admin\VerificationQueue;
@@ -78,6 +79,7 @@ Route::prefix('admin')->name('admin.')->group(function (): void {
         Route::get('verifications', VerificationQueue::class)->name('verifications');
         Route::get('drivers', DriverApplications::class)->name('drivers');
         Route::get('members', Members::class)->name('members');
+        Route::get('payments', Payments::class)->name('payments');
         Route::get('audit', AuditLog::class)->name('audit');
         Route::get('settings', Settings::class)->name('settings');
 

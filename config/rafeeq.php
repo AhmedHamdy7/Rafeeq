@@ -167,21 +167,40 @@ return [
      */
     'rate_limits_enabled' => env('RAFEEQ_RATE_LIMITS', 'on') !== 'off',
 
-    'payment' => [
-        /*
-         * How long after the driver confirms somebody travelled before the money is recorded as
-         * collected (Master Plan §15.6: "two hours before any money moves"). Long enough for a
-         * driver who tapped the wrong name to notice and for a passenger to object first.
-         */
-        'collection_delay_minutes' => 120,
+    /*
+     * The debt-only ledger and the weekly settlement (PAY-08 → PAY-19, PAY-34, PAY-45, PAY-46;
+     * decisions D-0004 → D-0007, D-0009, D-0017, D-0018). Every number here is an admin setting
+     * (ADM-06) — see `DebtSettings`.
+     *
+     * Gone with this block: `payment.collection_delay_minutes` (a seat is PAID the moment she is
+     * dropped off, PAY-07, not two hours later) and `payment.max_driver_debt_piastres` (there is no
+     * cap on driver debt, PAY-15 / D-0006 — the weekly deadline replaced it).
+     */
+    'debt' => [
+        // Paying a week's commission after its Friday adds this much, once (PAY-13: 180 → 198).
+        'late_fee_percent' => 10,
 
         /*
-         * The most a driver may owe the platform in uncollected fees from cash trips before they
-         * may not publish (Bible §8.1: `payment.max_driver_debt_piastres = 20000`, 200 EGP; open
-         * question #6 in MASTER_PLAN §19 — the documented figure until decided otherwise).
-         * Existing bookings continue; only publishing stops.
+         * How many Friday deadlines a week's debt may miss before the driver is suspended from
+         * driving (PAY-45: "still unpaid at the end of week 2"). The first missed Friday blocks
+         * publishing and new riders (PAY-12); this one cancels everything.
          */
-        'max_driver_debt_piastres' => 20_000,
+        'weeks_before_suspension' => 2,
+
+        // A passenger's fee unpaid this many days without riding suspends her (PAY-17).
+        'passenger_suspension_days' => 14,
+
+        // …or her debt going OVER this (PAY-17: 200 EGP).
+        'passenger_suspension_limit_piastres' => 20_000,
+
+        // A coupon is this share of the fee actually collected from the other side (PAY-34).
+        'coupon_percent' => 50,
+
+        /*
+         * The Cairo hour the day's debt reminder goes out — the Thursday "due tomorrow", the daily
+         * "overdue" after Friday, and the warning before suspension (Feature 03 backend file §8).
+         */
+        'reminder_hour' => 18,
     ],
 
     'booking' => [

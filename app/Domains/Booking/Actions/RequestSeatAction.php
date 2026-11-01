@@ -18,6 +18,7 @@ use App\Domains\Identity\Models\User;
 use App\Domains\Matching\Support\HardFilters;
 use App\Domains\Notification\Enums\NotificationType;
 use App\Domains\Notification\Support\Notifier;
+use App\Domains\Payment\Support\PassengerDebt;
 use App\Domains\Shared\Exceptions\DomainException;
 use App\Domains\Shared\Support\ErrorCode;
 use App\Domains\Trip\Support\PickupReachability;
@@ -74,6 +75,8 @@ final readonly class RequestSeatAction
         $commitment = SeatRequestCommitment::from($input['commitment']);
         $trip = $this->tripFor($offer, $input, $commitment);
 
+        // PAY-46: suspended for debt, booking is blocked until she pays.
+        PassengerDebt::assertMayBook($passenger);
         $this->assertPassengerMayRide($passenger, $offer);
         $this->assertNoOpenRequest($passenger, $offer);
         $this->assertDaysAreOffered($offer, $input);

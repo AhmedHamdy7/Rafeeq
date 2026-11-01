@@ -11,12 +11,14 @@ use App\Domains\Booking\Support\SameTimeBookings;
 use App\Domains\Booking\Support\SeatApproval;
 use App\Domains\Booking\Support\SeatAvailabilityChecker;
 use App\Domains\Commute\Enums\ScheduledTripStatus;
+use App\Domains\Commute\Models\CommuteOffer;
 use App\Domains\Commute\Models\ScheduledTrip;
 use App\Domains\Commute\Support\ScheduleLock;
 use App\Domains\Group\Actions\AddMemberToGroupAction;
 use App\Domains\Identity\Models\User;
 use App\Domains\Notification\Enums\NotificationType;
 use App\Domains\Notification\Support\Notifier;
+use App\Domains\Payment\Support\DriverCommission;
 use App\Domains\Shared\Exceptions\DomainException;
 use App\Domains\Shared\Support\ErrorCode;
 use App\Domains\Shared\ValueObjects\Coordinate;
@@ -83,11 +85,26 @@ final readonly class ApproveSeatRequestAction
         private BuildNavigationItineraryAction $itinerary,
     ) {}
 
-    public function execute(SeatRequest $request, User $approver): SeatApproval
+    /**
+     * @param  bool  $driverDecides  false when the driver's yes was given earlier — a passenger
+     *                               accepting a counteroffer — so the Friday deadline is judged
+     *                               when the driver made the offer, and a passenger is never shown
+     *                               the driver's debt as the reason she has no seat
+     */
+    public function execute(SeatRequest $request, User $approver, bool $driverDecides = true): SeatApproval
     {
         if ($request->status !== SeatRequestStatus::Pending
             && $request->status !== SeatRequestStatus::Waitlisted) {
             throw DomainException::of(ErrorCode::SeatRequestNotPending);
+        }
+
+        /*
+         * 🔴 A driver whose commission is unpaid past its Friday takes no NEW riders (PAY-12).
+         * Checked against the commute's driver rather than the approver, so the rule follows the
+         * money whoever presses the button.
+         */
+        if ($driverDecides) {
+            DriverCommission::assertNotOverdue((string) CommuteOffer::query()->whereKey($request->commute_offer_id)->value('driver_profile_id'));
         }
 
         /*

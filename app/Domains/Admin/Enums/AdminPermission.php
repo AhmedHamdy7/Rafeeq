@@ -63,6 +63,8 @@ enum AdminPermission: string
     case PaymentView = 'payment.view';
     case PayoutApprove = 'payout.approve';
     case RefundIssue = 'refund.issue';
+    // Confirming or refusing an InstaPay payment, issuing a coupon or a credit (PAY-09, PAY-34, ADM-03).
+    case DebtManage = 'debt.manage';
 
     // ---- Support -------------------------------------------------------
     case TicketView = 'ticket.view';

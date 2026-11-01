@@ -11,7 +11,7 @@ use App\Domains\Geo\Contracts\GeoQueryEngine;
 use App\Domains\Geo\Models\Corridor;
 use App\Domains\Geo\ValueObjects\Route;
 use App\Domains\Matching\Jobs\NotifyMatchingDemands;
-use App\Domains\Payment\Support\DriverDebt;
+use App\Domains\Payment\Support\DriverCommission;
 use App\Domains\Shared\Exceptions\DomainException;
 use App\Domains\Shared\Support\ErrorCode;
 use App\Domains\Shared\ValueObjects\Coordinate;
@@ -59,7 +59,7 @@ final readonly class PublishCommuteOfferAction
         // Re-checked at publish, not only at creation: a draft can sit for weeks,
         // and a licence or a vehicle approval can lapse in between.
         CreateCommuteOfferAction::assertDriverMayPublish($offer->driverProfile);
-        DriverDebt::assertMayPublish($offer->driverProfile);
+        DriverCommission::assertNotOverdue($offer->driver_profile_id);
         CreateCommuteOfferAction::usableVehicle($offer->driverProfile, $offer->vehicle_id);
         // C-3: a car without approved seats cannot publish, and no day may offer more than them.
         CreateCommuteOfferAction::assertCommuteFitsVehicle($offer, $offer->vehicle);

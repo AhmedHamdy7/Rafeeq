@@ -241,6 +241,42 @@ return [
         'title' => 'Your appeal was reviewed',
         'body' => 'After review, the record from :date still stands. Contact support if you would like to discuss it.',
     ],
+    'debt_due_tomorrow' => [
+        'title' => 'EGP :amount due tomorrow',
+        'body' => 'Your commission for this week is due by Friday 23:59. Pay with InstaPay from the Payments screen.',
+    ],
+    'debt_overdue' => [
+        'title' => 'EGP :amount is overdue',
+        'body' => 'Pay with InstaPay to publish commutes and accept new riders again. Your booked rides continue.',
+    ],
+    'debt_late_fee_added' => [
+        'title' => 'Commission overdue: EGP :fee late fee added',
+        'body' => 'You now owe EGP :amount. Until it is paid you cannot publish commutes or accept new riders.',
+    ],
+    'debt_suspension_warning' => [
+        'title' => 'Pay EGP :amount by Friday to keep driving',
+        'body' => 'If it is still unpaid after Friday 23:59, your upcoming trips will be cancelled and driving suspended.',
+    ],
+    'debt_payment_confirmed' => [
+        'title' => 'Payment received',
+        'body' => 'EGP :amount has been taken off what you owe. Thank you.',
+    ],
+    'debt_payment_rejected' => [
+        'title' => 'We could not find your payment',
+        'body' => 'Check the InstaPay reference and send it again, or contact support.',
+    ],
+    'coupon_issued' => [
+        'title' => 'You have a coupon',
+        'body' => 'EGP :amount off what you owe next, for a ride that did not go as it should.',
+    ],
+    'driving_suspended_for_debt' => [
+        'title' => 'Driving suspended',
+        'body' => 'Your commission was not paid by the second Friday, so your upcoming trips were cancelled. Pay EGP :amount to drive again. You can still ride as a passenger.',
+    ],
+    'riding_suspended_for_debt' => [
+        'title' => 'Riding suspended',
+        'body' => 'A fee has stayed unpaid, so your upcoming trips were cancelled and booking is paused. Pay EGP :amount to ride again, or appeal from the app.',
+    ],
 
     /*
      * Feature 03 files §8 — the pushes that were missing (W6). Each deep-links through `data`.

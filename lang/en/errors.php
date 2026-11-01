@@ -46,7 +46,7 @@ return [
 
     // Driver application. The duplicate message is deliberately vague about
     // WHICH detail matched — see the note on the error code.
-    'DRIVER_DEBT_LIMIT_REACHED' => 'You owe Rafeeq more in fees from cash trips than the limit allows, so you cannot publish right now. Your existing rides continue. Settle the balance to publish again.',
+    'DRIVER_COMMISSION_OVERDUE' => 'Your commission for a past week is still unpaid, so you cannot publish a commute or accept new riders until it is paid. Your booked rides continue. Pay through InstaPay from the Payments screen.',
     'DRIVER_NOT_ELIGIBLE' => 'You cannot apply to drive yet.',
     'DRIVER_APPLICATION_LOCKED' => 'Your application is being reviewed and cannot be changed. Withdraw it first if you need to make a correction.',
     'DRIVER_APPLICATION_INCOMPLETE' => 'Some required details or documents are still missing.',
@@ -167,4 +167,10 @@ return [
     'ESCORT_ALREADY_ARMED' => 'Escort mode is already on for this corridor.',
     'ESCORT_NOT_ACTIVE' => 'Escort mode is not running on this corridor any more. Reload before acting.',
     'PICKUP_UNREACHABLE' => 'The driver can no longer reach your pickup point on this journey.',
+
+    // Debt and settlement.
+    'RIDING_SUSPENDED_FOR_DEBT' => 'Booking is paused because a fee is still unpaid. Pay it from the Payments screen, or appeal, to book again.',
+    'DEBT_NOTHING_OWED' => 'You do not owe anything right now, so there is nothing to pay.',
+    'DEBT_PAYMENT_NOT_PENDING' => 'This payment has already been confirmed or rejected.',
+    'COUPON_NOT_ALLOWED' => 'A coupon needs a fee that was actually collected from the other person on the ride, and only one coupon per fee.',
 ];

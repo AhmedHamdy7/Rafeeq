@@ -7,8 +7,6 @@ use App\Domains\Booking\Models\Booking;
 use App\Domains\Commute\Models\CommuteOffer;
 use App\Domains\Driver\Enums\DriverProfileStatus;
 use App\Domains\Identity\Models\User;
-use App\Domains\Payment\Models\DriverBalance;
-use App\Domains\Payment\Models\DriverFeeLedger;
 use App\Domains\Payment\Models\Payout;
 use Database\Factories\DriverProfileFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
@@ -108,16 +106,6 @@ class DriverProfile extends Model
     public function bookings(): HasMany
     {
         return $this->hasMany(Booking::class, 'driver_profile_id', 'user_id');
-    }
-
-    public function feeLedgerEntries(): HasMany
-    {
-        return $this->hasMany(DriverFeeLedger::class, 'driver_profile_id', 'user_id');
-    }
-
-    public function balance(): HasOne
-    {
-        return $this->hasOne(DriverBalance::class, 'driver_profile_id', 'user_id');
     }
 
     public function payouts(): HasMany

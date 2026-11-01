@@ -9,6 +9,7 @@ use App\Domains\Booking\Models\Booking;
 use App\Domains\Booking\Support\BookingEventLog;
 use App\Domains\Notification\Enums\NotificationType;
 use App\Domains\Notification\Support\Notifier;
+use App\Domains\Payment\Actions\SettleBookingAction;
 use App\Domains\Safety\Models\LiveShare;
 use App\Domains\Shared\Exceptions\DomainException;
 use App\Domains\Shared\Support\ErrorCode;
@@ -46,6 +47,8 @@ use Illuminate\Support\Facades\DB;
  */
 final readonly class EndBookingEarlyAction
 {
+    public function __construct(private SettleBookingAction $settle) {}
+
     /**
      * @param  string|null  $reason  optional, and offered rather than demanded — see the class note
      */
@@ -86,10 +89,17 @@ final readonly class EndBookingEarlyAction
                  */
                 'cancelled_at' => now(),
                 'cancelled_reason' => $reason,
-                // No fee. She was carried; this is not a cancellation, whatever the column is
-                // called, and charging her for leaving a car she wanted out of is unthinkable.
+                // No cancellation fee: this is not a cancellation, whatever the column is called.
                 'cancellation_fee_piastres' => 0,
             ])->save();
+
+            /*
+             * 🔴 But the fare IS due, and settled now (PAY-27, decision B3: "Drop me here" is a full
+             * fare — she was carried, by her own choice, and the seat was hers all the way). PAID
+             * like any drop-off (PAY-07). A safety reason goes through SOS and a report instead,
+             * and an upheld report gives the fare back as a credit (PAY-10).
+             */
+            $this->settle->execute($booking);
 
             BookingEventLog::record(
                 $booking,

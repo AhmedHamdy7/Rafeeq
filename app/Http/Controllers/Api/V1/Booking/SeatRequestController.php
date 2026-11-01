@@ -48,6 +48,8 @@ final class SeatRequestController extends Controller
         ErrorCode::RecurringDaysNotOffered,
         // P-4: `paymentType: online` while the beta is cash only.
         ErrorCode::PaymentTypeNotAvailable,
+        // PAY-46: she is suspended for debt; `error.fields.amountOwedPiastres` is what she owes.
+        ErrorCode::RidingSuspendedForDebt,
         /*
          * Asking a car that is already moving (Feature 03 v5 §148). `error.fields.reachability`
          * says which: the car has passed her, the detour no longer fits before the promised
@@ -154,6 +156,8 @@ final class SeatRequestController extends Controller
          * lock only when compatible with frozen commitments").
          */
         ErrorCode::BookingBreaksFrozenPromise,
+        // Last week's commission is unpaid past its Friday: no new riders until it is (PAY-12).
+        ErrorCode::DriverCommissionOverdue,
         ErrorCode::NotFound,
     )]
     public function approve(Request $request, string $seatRequest, ApproveSeatRequestAction $action): JsonResponse
@@ -215,6 +219,7 @@ final class SeatRequestController extends Controller
         ErrorCode::SeatRequestSuggestionUnknown,
         ErrorCode::PickupDetourTooLong,
         ErrorCode::PickupNotOnCommute,
+        ErrorCode::DriverCommissionOverdue,
         ErrorCode::NotFound,
     )]
     public function counteroffer(

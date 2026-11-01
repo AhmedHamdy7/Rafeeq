@@ -29,6 +29,7 @@ use App\Http\Controllers\Api\V1\Group\GroupController;
 use App\Http\Controllers\Api\V1\HomeController;
 use App\Http\Controllers\Api\V1\Notification\ChatController;
 use App\Http\Controllers\Api\V1\Notification\NotificationController;
+use App\Http\Controllers\Api\V1\Payment\DebtController;
 use App\Http\Controllers\Api\V1\Payment\MoneyController;
 use App\Http\Controllers\Api\V1\PlaceController;
 use App\Http\Controllers\Api\V1\Rating\RatingController;
@@ -659,18 +660,19 @@ Route::prefix('v1')->group(function (): void {
         Route::post('change-proposals/{proposal}/respond', [ChangeProposalController::class, 'respond']);
 
         /*
-         * The money, as the two people in the car see it (Phase 8, Bible §8).
+         * The money (PAY-08 → PAY-17, PAY-34 → PAY-37).
          *
-         * 🔴 Nothing here MOVES money. No payment method, no capture, no payout, no refund —
-         * those need a provider that has not been chosen, and a half-built capture path is
-         * worse than none. These two read what the cash path has already recorded.
+         * 🔒 Her debt is hers alone: there is no endpoint at any access level that reads another
+         * member's debt. The group statement shows a passenger only her own rows.
          *
-         * 🔒 `driver/balance` is hers alone: there is no endpoint at any access level that
-         * reads another driver's income or debt. The group statement shows a passenger only her
-         * own rows — what her fellow passengers pay is not her business, and they may be on
-         * different prices after a change.
+         * `account/debt` replaced `driver/balance`: one person has up to two debts (driver side:
+         * weekly commission; passenger side: fees), and the screen shows both. Paying is "I paid"
+         * with an InstaPay reference; staff confirm it before anything comes off. The upload shares
+         * the reports' rate limiter rather than running unthrottled.
          */
-        Route::get('driver/balance', [MoneyController::class, 'driverBalance']);
+        Route::get('account/debt', [DebtController::class, 'show']);
+        Route::get('account/debt/statements', [DebtController::class, 'statement']);
+        Route::post('account/debt/payments', [DebtController::class, 'storePayment'])->middleware('throttle:safety-reports');
         Route::get('groups/{group}/statement', [MoneyController::class, 'groupStatement']);
 
         /*
