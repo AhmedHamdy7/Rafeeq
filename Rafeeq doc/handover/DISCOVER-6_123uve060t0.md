@@ -1,7 +1,7 @@
 <!-- task: 123uve060t0 · assign: ahmed Ibrahim (66109718) · status: backend answered - check -->
 ## ✅ Backend done: DISCOVER-6 Overlap with her own booking
 
-Branch `claude/backend-discover-d822cb`, commit `70bd6b8`. **Merged to `main`** in `257cd97`. Guide 2026-11-01 (186 endpoints). Tests: `tests/Feature/Search/DiscoverGapsTest.php`.
+Branch `claude/backend-discover-d822cb`, commit `70bd6b8`. **Merged to `main`** in `8bf31f5`. Guide 2026-11-01 (186 endpoints). Tests: `tests/Feature/Search/DiscoverGapsTest.php`.
 
 On every result **and every `otherDays[]` item** (per date), and on the detail's `upcomingTrips[]`:
 

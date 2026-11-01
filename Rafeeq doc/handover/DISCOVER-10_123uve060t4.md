@@ -1,7 +1,7 @@
 <!-- task: 123uve060t4 · assign: ahmed Ibrahim (66109718) · status: backend answered - check -->
 ## ✅ Backend done: DISCOVER-10 Match count per demand
 
-Branch `claude/backend-discover-d822cb`, commit `70bd6b8`. **Merged to `main`** in `257cd97`. Guide 2026-11-01 (186 endpoints). Tests: `tests/Feature/Search/DiscoverGapsTest.php`.
+Branch `claude/backend-discover-d822cb`, commit `70bd6b8`. **Merged to `main`** in `8bf31f5`. Guide 2026-11-01 (186 endpoints). Tests: `tests/Feature/Search/DiscoverGapsTest.php`.
 
 `matchCount` on every demand (`GET` / `POST` / `PATCH /commute-demands`):
 

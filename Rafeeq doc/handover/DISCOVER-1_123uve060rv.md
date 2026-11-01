@@ -1,7 +1,7 @@
 <!-- task: 123uve060rv · assign: ahmed Ibrahim (66109718) · status: backend answered - check -->
 ## ✅ Backend done: DISCOVER-1 Commute detail a passenger can read
 
-Branch `claude/backend-discover-d822cb`, commit `70bd6b8`. **Merged to `main`** in `257cd97`. Guide 2026-11-01 (186 endpoints). Tests: `tests/Feature/Search/DiscoverGapsTest.php`.
+Branch `claude/backend-discover-d822cb`, commit `70bd6b8`. **Merged to `main`** in `8bf31f5`. Guide 2026-11-01 (186 endpoints). Tests: `tests/Feature/Search/DiscoverGapsTest.php`.
 
 New: **`GET /commutes/{commute}/public`** (active, profile complete; no verification). Same eligibility as search; not published or not hers to see → `404`. Guide §4.6.
 

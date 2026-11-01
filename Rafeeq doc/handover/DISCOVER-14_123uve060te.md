@@ -1,7 +1,7 @@
 <!-- task: 123uve060te · assign: ahmed Ibrahim (66109718) · status: backend answered - check -->
 ## ✅ Backend done: DISCOVER-14 Estimated pickup time on pickup-preview + booking
 
-Branch `claude/backend-discover-d822cb`, commit `70bd6b8`. **Merged to `main`** in `257cd97`. Guide 2026-11-01 (186 endpoints). Tests: `tests/Feature/Search/DiscoverGapsTest.php`.
+Branch `claude/backend-discover-d822cb`, commit `70bd6b8`. **Merged to `main`** in `8bf31f5`. Guide 2026-11-01 (186 endpoints). Tests: `tests/Feature/Search/DiscoverGapsTest.php`.
 
 - `POST /commutes/{commute}/pickup-preview` takes an optional `scheduledTripId` (default: the next bookable day) and returns `tripId`, `estimatedPickupAt`, `estimatedPickupLocal`: the departure plus the point's share of the route duration.
 - Every booking (`GET /bookings/{id}`, `/my-bookings`, `/driver/bookings`) returns `pickupEta` / `pickupEtaLocal`. Once the day's itinerary is built it is **the same time the wait grace starts from** (departure + legs up to her stop), frozen with the itinerary at the 16 h lock; before that, the route estimate.
