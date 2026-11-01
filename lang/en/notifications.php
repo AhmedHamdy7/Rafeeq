@@ -120,6 +120,10 @@ return [
         'title' => 'The proposed change was updated',
         'body' => ':name changed what she is proposing, so any answer you gave no longer counts. Please review it again.',
     ],
+    'departure_time_changed' => [
+        'title' => 'Your departure time changed',
+        'body' => 'Riders changed on :date, so leave at :time to arrive on time.',
+    ],
     'change_proposal_applied' => [
         'title' => 'The change is now in effect',
         'body' => 'Everyone affected agreed, so your commute has been updated. Check your next journey.',

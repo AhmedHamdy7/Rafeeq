@@ -251,6 +251,13 @@ enum NotificationType: string
      */
     case VehicleReplacedSeatCancelled = 'vehicle_replaced_seat_cancelled';
 
+    /**
+     * To the driver: RAFEEQ moved his departure for one day because a rider joined or left
+     * (C-2, COM-15) — "Leave at 07:10 on 2026-11-03". Only on days where he gave an arrival time
+     * and not a fixed departure, and never inside the 16-hour lock.
+     */
+    case DepartureTimeChanged = 'departure_time_changed';
+
     public function category(): NotificationCategory
     {
         return match ($this) {
@@ -276,6 +283,7 @@ enum NotificationType: string
             self::ChangeProposalRejected,
             self::WaitlistClearedByChange,
             self::TripDayCancelled,
+            self::DepartureTimeChanged,
             self::MatchFound => NotificationCategory::Booking,
 
             self::TripStarted,

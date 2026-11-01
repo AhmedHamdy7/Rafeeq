@@ -31,6 +31,7 @@ class CommuteWeekdaySchedule extends Model
             'weekday_bit' => 'integer',
             'price_per_seat_piastres' => 'integer',
             'seats_total' => 'integer',
+            'departure_is_computed' => 'boolean',
         ];
     }
 

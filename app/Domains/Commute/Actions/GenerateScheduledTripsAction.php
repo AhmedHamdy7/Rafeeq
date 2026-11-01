@@ -6,6 +6,7 @@ use App\Domains\Commute\Enums\CommuteOfferStatus;
 use App\Domains\Commute\Models\CommuteOffer;
 use App\Domains\Commute\Models\CommuteSchedule;
 use App\Domains\Commute\Models\ScheduledTrip;
+use App\Domains\Commute\Support\ComputedDeparture;
 use App\Domains\Commute\Support\DepartureTimeCalculator;
 use App\Domains\Shared\ValueObjects\DaysMask;
 use Carbon\CarbonImmutable;
@@ -40,6 +41,8 @@ final readonly class GenerateScheduledTripsAction
     /**
      * @return int how many trips were created
      */
+    public function __construct(private ComputedDeparture $departure) {}
+
     public function execute(CommuteOffer $offer, ?CarbonImmutable $horizonEnd = null): int
     {
         $schedule = $offer->schedule;
@@ -49,7 +52,7 @@ final readonly class GenerateScheduledTripsAction
          * and strict mode would turn a lazy load there into an exception — or, worse in production,
          * into one query per generated day.
          */
-        $offer->loadMissing('weekdaySchedules');
+        $offer->loadMissing(['weekdaySchedules', 'locations']);
 
         if ($schedule === null || $offer->status !== CommuteOfferStatus::Published) {
             // Only a published offer produces bookable days. A paused one keeps
@@ -157,6 +160,24 @@ final readonly class GenerateScheduledTripsAction
             $departureTime,
             $schedule->timezone,
         );
+
+        /*
+         * C-2 (COM-15): on a day where the driver gave only the arrival, the departure is RAFEEQ's,
+         * worked out for that date's arrival through the route as published. Riders' points join it
+         * as they are confirmed ({@see \App\Domains\Commute\Actions\RecomputeDepartureAction}).
+         */
+        if ($weekday?->departure_is_computed && $weekday->promised_arrival_time !== null) {
+            $computed = $this->departure->arrivingBy($offer, DepartureTimeCalculator::toUtc(
+                $date->toDateString(),
+                $weekday->promised_arrival_time,
+                $schedule->timezone,
+            ));
+
+            if ($computed !== null) {
+                $departureAt = $computed;
+                $departureTime = $computed->setTimezone($schedule->timezone)->format('H:i:s');
+            }
+        }
 
         $trip = new ScheduledTrip;
 

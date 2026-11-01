@@ -1504,8 +1504,17 @@ now on, never to a day somebody already booked.** Route and schedule lock once p
 
 #### `PUT /commutes/{commute}/schedule` — verified
 
-**Request:** `daysMask`, `departureTime` (`HH:MM:SS`, **local wall clock**), `timezone`,
-`startDate`, `endDate` (**mandatory** — there are no infinite commutes).
+**Request:** `daysMask`, `promisedArrivalTime` **or** `departureTime` (`HH:MM:SS`, **local wall
+clock**), `timezone`, `startDate`, `endDate` (**mandatory** — there are no infinite commutes).
+
+🔴 **New (C-2, COM-15): send the arrival, not the departure.** Leave `departureTime` out and send
+`promisedArrivalTime`: RAFEEQ works out when the driver leaves from the route and that morning's
+traffic, for every day. Each time a rider is confirmed or leaves a day, the departure for that day is
+timed again and, if it moved, the driver gets a `departure_time_changed` notification
+(`data.scheduledTripId`, `data.commuteId`; the body says the new time). **Sixteen hours before a day
+it freezes.** Read each day's time from `departureLocal` on the trip, never from the form. A day sent
+with a `departureTime` keeps it exactly and is never moved — that is the old behaviour, still
+accepted. Neither field → `422` on `departureTime`.
 
 **New: each weekday can differ.** Two optional fields, and **sending neither behaves exactly as
 before** — one time, one price, one seat count for the whole week.
@@ -3534,7 +3543,7 @@ hold must still be able to read the notice that says so.
 
 | Response field | Meaning |
 |---|---|
-| `type` | What happened — route on this. Today: `seat_requested` (driver) · `seat_approved` · `seat_declined` · `booking_cancelled` (to the other side) · `commute_paused_seat_cancelled` (the commute was paused, her booked days are cancelled and she is back on the waiting list; `data.commuteId`, `data.bookingId`) · `vehicle_replaced_seat_cancelled` (the same news for a replaced car; same `data`) · `seats_offered_by_driver` (a driver picked her off the waiting list and offered her seats — `data.commuteId`, `data.seatRequestId`; the first acceptance of each day still wins) · `trip_day_cancelled` (the driver called off a day — `data.tripId`, `data.bookingId`) · `match_found` (a saved request matched — `data.commuteId`) · `trip_started` · `chat_message` · `rating_due` (passenger, `data.bookingId`) · `rating_due_riders` (driver, once per run, `data.tripId`) · `rating_reminder` (last day of the window, once) · `sos_picked_up` · `report_resolved` · `report_closed` · `account_on_hold` · `account_reinstated`. **Expect new values**; show an unknown one as a plain message. |
+| `type` | What happened — route on this. Today: `seat_requested` (driver) · `seat_approved` · `seat_declined` · `booking_cancelled` (to the other side) · `commute_paused_seat_cancelled` (the commute was paused, her booked days are cancelled and she is back on the waiting list; `data.commuteId`, `data.bookingId`) · `vehicle_replaced_seat_cancelled` (the same news for a replaced car; same `data`) · `seats_offered_by_driver` (a driver picked her off the waiting list and offered her seats — `data.commuteId`, `data.seatRequestId`; the first acceptance of each day still wins) · `trip_day_cancelled` (the driver called off a day — `data.tripId`, `data.bookingId`) · `departure_time_changed` (driver: RAFEEQ moved his departure for one day — `data.scheduledTripId`, `data.commuteId`) · `match_found` (a saved request matched — `data.commuteId`) · `trip_started` · `chat_message` · `rating_due` (passenger, `data.bookingId`) · `rating_due_riders` (driver, once per run, `data.tripId`) · `rating_reminder` (last day of the window, once) · `sos_picked_up` · `report_resolved` · `report_closed` · `account_on_hold` · `account_reinstated`. **Expect new values**; show an unknown one as a plain message. |
 | `category` | `booking` · `payment` · `trip` · `safety` · `marketing`. |
 | `title` / `body` | **Already in the member's language** — rendered when the message was sent, and stored as written. Show them as they are. They never contain a phone number, an address or a full name: a push body appears on a lock screen. |
 | `data` | Ids for the screen to open: `seatRequestId`, `commuteId`, `tripId`, `sosId`, `incidentId`. Never names. |
