@@ -162,6 +162,19 @@ class User extends Authenticatable
         return $this->hasOne(AccountSuspension::class)->whereNull('lifted_at')->latestOfMany('suspended_at');
     }
 
+    /**
+     * 🔒 A permanent ban, the only hold that keeps the Account restricted screen (AUTH-19,
+     * follow-up F1-3). A suspension — conduct or otherwise — stays in the app.
+     *
+     * An account suspended before holds were recorded has no row to say either way, and is
+     * treated as a suspension: the narrower reading, since the banner still blocks every write.
+     */
+    public function isBanned(): bool
+    {
+        return $this->account_status === AccountStatus::Suspended
+            && $this->activeSuspension?->is_permanent === true;
+    }
+
     public function driverProfile(): HasOne
     {
         return $this->hasOne(DriverProfile::class, 'user_id');

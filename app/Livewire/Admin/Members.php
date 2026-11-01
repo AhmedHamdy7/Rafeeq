@@ -2,11 +2,13 @@
 
 namespace App\Livewire\Admin;
 
+use App\Domains\Admin\Actions\ResolveSuspensionAppealAction;
 use App\Domains\Admin\Actions\SuspendMemberAction;
 use App\Domains\Admin\Enums\AdminPermission;
 use App\Domains\Admin\Models\AdminUser;
 use App\Domains\Admin\Support\MemberDirectory;
 use App\Domains\Identity\Enums\SuspensionReason;
+use App\Domains\Identity\Models\SuspensionAppeal;
 use App\Domains\Identity\Models\User;
 use App\Domains\Safety\Enums\IncidentStatus;
 use App\Domains\Safety\Models\Incident;
@@ -26,9 +28,9 @@ use Livewire\WithPagination;
  * reason — a Livewire action is a POST the browser can make whatever the page rendered.
  *
  * The suspend form shows, before the button, how many booked days a hold on a driver
- * leaves stranded. The hold does not cancel them (see SuspendMemberAction), and a decision
- * whose biggest consequence is invisible at the moment it is taken is not a decision the
- * person taking it actually made.
+ * cancels (ADM-08). The hold cancels them (see SuspendMemberAction), and a decision whose
+ * biggest consequence is invisible at the moment it is taken is not a decision the person
+ * taking it actually made.
  */
 #[Layout('components.layouts.admin')]
 class Members extends Component
@@ -53,6 +55,9 @@ class Members extends Component
     public string $note = '';
 
     public string $incidentId = '';
+
+    /** A permanent ban rather than a suspension (AUTH-19, F1-3). */
+    public bool $permanent = false;
 
     public function mount(): void
     {
@@ -85,7 +90,7 @@ class Members extends Component
         $this->authorizeTo(AdminPermission::MemberSuspend);
 
         $this->closeForm();
-        $this->mode = in_array($mode, ['suspend', 'reinstate'], true) ? $mode : '';
+        $this->mode = in_array($mode, ['suspend', 'reinstate', 'appeal'], true) ? $mode : '';
     }
 
     public function suspend(SuspendMemberAction $action): void
@@ -108,7 +113,7 @@ class Members extends Component
             : Incident::query()->whereKey($this->incidentId)->first() ?? abort(404);
 
         try {
-            $suspension = $action->suspend($member, $this->admin(), SuspensionReason::from($this->reasonCode), $this->note, $incident);
+            $suspension = $action->suspend($member, $this->admin(), SuspensionReason::from($this->reasonCode), $this->note, $incident, $this->permanent);
         } catch (DomainException $e) {
             $this->addError('note', __('errors.'.$e->errorCode->value));
 
@@ -146,10 +151,40 @@ class Members extends Component
         session()->flash('status', __('admin.members.reinstated', ['name' => $member->full_name]));
     }
 
+    /**
+     * Deciding her appeal against the hold (F1-3). Overturning lifts it; upholding opens her
+     * second-appeal window. The note is required either way and goes to the audit log.
+     */
+    public function decideAppeal(string $appealId, bool $overturn, ResolveSuspensionAppealAction $action): void
+    {
+        $this->authorizeTo(AdminPermission::MemberSuspend);
+
+        $this->validate([
+            'note' => ['required', 'string', 'min:10', 'max:255'],
+        ], attributes: ['note' => __('admin.members.note')]);
+
+        $appeal = SuspensionAppeal::query()
+            ->whereKey($appealId)
+            ->where('user_id', $this->member()->id)
+            ->first() ?? abort(404);
+
+        try {
+            $action->execute($appeal, $this->admin(), $overturn, $this->note);
+        } catch (DomainException $e) {
+            $this->addError('note', __('errors.'.$e->errorCode->value));
+
+            return;
+        }
+
+        $this->closeForm();
+
+        session()->flash('status', __($overturn ? 'admin.members.appeal_overturned' : 'admin.members.appeal_upheld'));
+    }
+
     private function closeForm(): void
     {
         $this->resetValidation();
-        $this->reset('mode', 'reasonCode', 'note', 'incidentId');
+        $this->reset('mode', 'reasonCode', 'note', 'incidentId', 'permanent');
     }
 
     private function member(): User
@@ -174,7 +209,7 @@ class Members extends Component
             ->with([
                 'driverProfile',
                 'stats',
-                'activeSuspension',
+                'activeSuspension.appeals',
                 'suspensions' => fn ($query) => $query->with('suspendedBy', 'liftedBy')->latest('suspended_at'),
             ])
             ->first();

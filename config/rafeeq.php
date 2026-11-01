@@ -373,6 +373,13 @@ return [
          * make visible.
          */
         'suspension_review_hours' => 24,
+
+        /*
+         * AUTH-19 (follow-up F1-3): a suspended member appeals within this many hours of the
+         * hold, and a second time — with new evidence — within this many hours of the first
+         * appeal being turned down. The same 48 hours as every other appeal in the product.
+         */
+        'suspension_appeal_hours' => 48,
     ],
 
     'group' => [

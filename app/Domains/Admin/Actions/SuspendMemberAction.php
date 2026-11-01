@@ -5,6 +5,14 @@ namespace App\Domains\Admin\Actions;
 use App\Domains\Admin\Models\AdminUser;
 use App\Domains\Admin\Models\PlatformSetting;
 use App\Domains\Admin\Support\AdminActionLog;
+use App\Domains\Booking\Actions\CancelBookingAction;
+use App\Domains\Booking\Enums\BookingStatus;
+use App\Domains\Booking\Models\Booking;
+use App\Domains\Commute\Actions\ChangeCommuteStatusAction;
+use App\Domains\Commute\Enums\CommutePausedReason;
+use App\Domains\Commute\Enums\ScheduledTripStatus;
+use App\Domains\Commute\Models\ScheduledTrip;
+use App\Domains\Driver\Models\DriverProfile;
 use App\Domains\Identity\Enums\AccountStatus;
 use App\Domains\Identity\Enums\SuspensionReason;
 use App\Domains\Identity\Models\AccountSuspension;
@@ -25,30 +33,41 @@ use Illuminate\Support\Facades\DB;
  * this adds is the act itself, and the two things screen 35 promises the member: a reference
  * to quote, and when somebody will look again.
  *
- * What it deliberately does NOT do:
+ * 🔴 Two kinds of hold since AUTH-19 (D-0018, follow-up F1-3), and `$permanent` is the switch:
  *
- * - **Sign them out.** The restricted screen is shown TO a signed-in person ("your current
- *   group can still see your attendance"); revoking the session would hide the reason and
- *   bounce them to the phone screen, which is the very thing the middleware was written to
- *   avoid.
- * - **Cancel a suspended driver's booked days.** Who is refunded, and whether it counts
- *   against anyone, is the open single-day-cancellation decision. The dashboard shows staff
- *   how many booked days a hold strands before they confirm it, so the consequence is never
- *   a surprise — but the cancelling waits for that decision.
+ * - **A suspension** — she stays in the app: `nextStep` is `HOME`, a banner with Appeal, her
+ *   trips readable and nothing writable (`account.active` lets reads through).
+ * - **A permanent ban** — the full Account restricted screen (`RESTRICTED_ACCOUNT`), everything
+ *   behind `account.active` refused, no appeal in the app.
+ *
+ * Either way **every upcoming seat is cancelled, inside the 16-hour lock too, with no fee for
+ * anybody** (D-0018 Q-027, PAY-46): her seats as a passenger go to the waiting list, and as a
+ * driver every published commute is paused, which cancels its days and puts its riders back on
+ * the waiting list. Lifting the hold gives none of it back — the seats went to other people.
+ *
+ * What it deliberately does NOT do is **sign them out.** The banner and the restricted screen
+ * are shown TO a signed-in person; revoking the session would hide the reason and bounce them to
+ * the phone screen, which is the very thing the middleware was written to avoid.
  *
  * Both steps refuse rather than repeat: a second "suspend" would mint a second case number
  * for the same hold, and the member would be quoting one the team cannot find.
  */
 final readonly class SuspendMemberAction
 {
+    public function __construct(
+        private ChangeCommuteStatusAction $commutes,
+        private CancelBookingAction $cancel,
+    ) {}
+
     public function suspend(
         User $member,
         AdminUser $admin,
         SuspensionReason $reason,
         string $note,
         ?Incident $incident = null,
+        bool $permanent = false,
     ): AccountSuspension {
-        return DB::transaction(function () use ($member, $admin, $reason, $note, $incident): AccountSuspension {
+        return DB::transaction(function () use ($member, $admin, $reason, $note, $incident, $permanent): AccountSuspension {
             $member = $this->locked($member);
 
             if ($member->account_status !== AccountStatus::Active) {
@@ -64,6 +83,7 @@ final readonly class SuspendMemberAction
             $suspension->user_id = $member->id;
             $suspension->case_number = self::newCaseNumber();
             $suspension->reason_code = $reason;
+            $suspension->is_permanent = $permanent;
             $suspension->note = $note;
             $suspension->incident_id = $incident?->id;
             $suspension->suspended_by_admin_id = $admin->id;
@@ -76,6 +96,8 @@ final readonly class SuspendMemberAction
             $member->suspension_reason = $reason->value;
             $member->save();
 
+            $cancelled = $this->cancelUpcomingSeats($member);
+
             AdminActionLog::record(
                 $admin,
                 'account.suspend',
@@ -86,6 +108,9 @@ final readonly class SuspendMemberAction
                     'case_number' => $suspension->case_number,
                     'reason_code' => $reason->value,
                     'incident_id' => $incident?->id,
+                    'permanent' => $permanent,
+                    'seats_cancelled' => $cancelled['seats'],
+                    'commutes_paused' => $cancelled['commutes'],
                 ],
                 reason: $note,
             );
@@ -165,6 +190,43 @@ final readonly class SuspendMemberAction
             'admin.suspension_review_hours',
             config('rafeeq.admin.suspension_review_hours'),
         ));
+    }
+
+    /**
+     * D-0018 Q-027, PAY-46: every upcoming seat, inside the 16-hour lock too, with no fee.
+     *
+     * As a passenger, each confirmed seat on a day that has not set off is cancelled by the
+     * system — nothing on her reliability record, the seat to the waiting list. As a driver,
+     * pausing is what cancels: every day of every published commute, each rider back on that
+     * commute's waiting list, and `AccountSuspended` is a reason the fee rules leave alone. A
+     * run already under way is left to finish: the people in the car are not set down by a
+     * decision taken at a desk.
+     *
+     * @return array{seats: int, commutes: int}
+     */
+    private function cancelUpcomingSeats(User $member): array
+    {
+        $seats = Booking::query()
+            ->where('passenger_user_id', $member->id)
+            ->where('status', BookingStatus::Confirmed->value)
+            ->whereIn('scheduled_trip_id', ScheduledTrip::query()
+                ->where('status', ScheduledTripStatus::Scheduled->value)
+                ->where('departure_at', '>', now())
+                ->select('id'))
+            ->orderBy('id')
+            ->get();
+
+        foreach ($seats as $booking) {
+            $this->cancel->bySuspension($booking, 'account_suspended');
+        }
+
+        $profile = DriverProfile::query()->find($member->id);
+
+        $commutes = $profile === null
+            ? 0
+            : $this->commutes->pauseUnpublishableOffers($profile, CommutePausedReason::AccountSuspended);
+
+        return ['seats' => $seats->count(), 'commutes' => $commutes];
     }
 
     private function locked(User $member): User

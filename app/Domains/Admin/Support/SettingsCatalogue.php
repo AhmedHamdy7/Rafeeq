@@ -165,6 +165,7 @@ final class SettingsCatalogue
 
         // ---- Operations (Chapter 12) -------------------------------------
         'admin.suspension_review_hours' => ['group' => 'admin', 'min' => 1, 'max' => 168, 'unit' => 'hours'],
+        'admin.suspension_appeal_hours' => ['group' => 'admin', 'min' => 1, 'max' => 336, 'unit' => 'hours'],
     ];
 
     public const array GROUPS = ['auth', 'profile', 'commute', 'booking', 'debt', 'fees', 'trip', 'rating', 'reliability', 'safety', 'chat', 'admin'];

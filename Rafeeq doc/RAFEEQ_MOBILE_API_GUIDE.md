@@ -14,7 +14,7 @@
 >
 > **Base URL:** `{host}/api/v1` · **Auth:** bearer token · **Format:** JSON only.
 
-**Last updated:** 2026-11-01 · **179 endpoints live** · Phases 0–7, 9 and 11 complete · 10, 12 and 13 all but a decision each
+**Last updated:** 2026-11-01 · **180 endpoints live** · Phases 0–7, 9 and 11 complete · 10, 12 and 13 all but a decision each
 
 ---
 
@@ -22,7 +22,7 @@
 
 ### What is ready
 
-**179 endpoints live** and tested, across the 47 designed screens:
+**180 endpoints live** and tested, across the 47 designed screens:
 
 | | Count | Covers |
 |---|---|---|
@@ -301,7 +301,7 @@ order of precedence:
 | `nextStep` | Show | Why it outranks what follows |
 |---|---|---|
 | `PHONE_OTP` | Screen 5 | No usable session. Returned by refresh when the token is dead, so you have one vocabulary for "go back to the phone screen" rather than inferring it from a 401. |
-| `RESTRICTED_ACCOUNT` | Screen 35 | A restricted account must never be routed home, whatever else is true. 🔴 This is the **whole account**. A **driver-only** restriction does NOT return this — that person goes `HOME` with full passenger access, and you detect it from `GET /driver/eligibility`, which returns the `driver_suspended` blocker with a message and `nextStep: CONTACT_SUPPORT`. Her commutes also stop appearing in search, and publishing answers `403`. |
+| `RESTRICTED_ACCOUNT` | Screen 35 | A **permanently banned** account must never be routed home, whatever else is true. 🔴 **Only a ban** (AUTH-19, F1-3): a **suspension** routes like any other account — normally `HOME` — and you show the suspension banner from `user.suspension` (`permanent: false`) with **Appeal**; her trips are readable and every write answers `403 ACCOUNT_SUSPENDED`. A **driver-only** restriction does NOT return this — that person goes `HOME` with full passenger access, and you detect it from `GET /driver/eligibility`, which returns the `driver_suspended` blocker with a message and `nextStep: CONTACT_SUPPORT`. Her commutes also stop appearing in search, and publishing answers `403`. |
 | `BASIC_PROFILE` | Screen 7, then 8 | The profile is unfinished **or no role has been chosen yet**, so it is resumed — never skipped. See the warning below: this is the answer even when the profile looks complete. |
 | `ROLE_SELECTION` | Screen 8 | Passenger / Driver / Both. 🔴 Returned by `PUT /account/profile/basic` **and by nothing else** — see below. |
 | `HOME` | Screen 9 | Nothing is outstanding. Read `user.capabilities` and `activeMode` to pick which home. |
@@ -696,6 +696,7 @@ fails if this list and the running routes ever disagree in either direction.
 | `GET /account/stats` | 4.2 Account, devices, consents |
 | `GET /account/reliability` | 4.2 Account, devices, consents |
 | `POST /account/reliability/events/{event}/appeal` | 4.2 Account, devices, consents |
+| `POST /account/suspension/appeal` | 4.2 Account, devices, consents |
 | `GET /account/warnings` | 4.2 Account, devices, consents |
 | `POST /account/warnings/{warning}/dispute` | 4.2 Account, devices, consents |
 | `GET /users/{user}/public-profile` | 4.2 Account, devices, consents |
@@ -1246,6 +1247,31 @@ It is gone rather than computed: a single rate conflates a driver calling off a 
 passenger not turning up, which is the exact conflation the two scores above keep apart. This
 endpoint is the measure that exists.
 
+#### `POST /account/suspension/appeal` — signed-in, while suspended
+
+🔴 **The Appeal button on the suspension banner (AUTH-19, D-0018, F1-3).** A suspension now keeps
+her in the app: `nextStep` is `HOME`, `user.suspension.permanent` is `false`, her trips are
+**read-only** (every `GET` works, every write answers `403 ACCOUNT_SUSPENDED`) and **every upcoming
+seat was cancelled** when staff suspended her — inside the 16-hour lock too, no fee for anybody.
+As a driver, every published commute was paused (`pausedReason: account_suspended`); lifting the
+hold gives none of it back, she resumes herself. Only a **permanent ban** keeps the full Account
+restricted screen (`RESTRICTED_ACCOUNT`, `permanent: true`), with every endpoint behind
+`account.active` closed, reads included.
+
+**Request:** `message` (required, 10–1000 characters, her side of it) and `evidence` (optional,
+≤ 2000 — a description, a reference number). **Answer `201`:**
+
+```json
+{ "success": true, "data": { "id": "01J…", "attempt": 1, "status": "pending",
+  "createdAt": "2026-11-01T18:00:00+00:00", "resolvedAt": null } }
+```
+
+| | |
+|---|---|
+| The rule | **One appeal within 48 hours** of the hold. If it is turned down (`upheld`), **one more, only with new `evidence`**, within 48 hours of that answer. Read `user.suspension.appeal` rather than counting yourself: `canAppeal`, `appealBy`, `needsNewEvidence`, `appeals[]`. |
+| Refusals | `422` with `error.fields.appeal`: `APPEAL_PENDING` (one is waiting) · `EVIDENCE_REQUIRED` (second appeal without evidence) · `ALREADY_APPEALED` (both used) · `APPEAL_WINDOW_CLOSED` · `PERMANENT_BAN`. `404` when she is not suspended. |
+| The answer | Staff decide on the Members page. `overturned` lifts the hold (she gets `account_reinstated`); `upheld` keeps it and opens the second window. |
+
 #### `GET /account/warnings` · `POST /account/warnings/{warning}/dispute` — signed-in
 
 The escalating warnings, their fees, and her appeal against one (PAY-20 → PAY-22, SAFE-11). **This
@@ -1309,7 +1335,7 @@ second attempt answers `422` with `error.fields.dispute: ["ALREADY_DISPUTED"]`; 
 | `dateOfBirth`, `email` | Own only. |
 | `accountStatus` | `ACTIVE` · `SUSPENDED` · `PENDING_DELETION` · `DELETED`. `PENDING_DELETION` is reserved for the 30-day grace after a deletion request (not built yet); treat any value you do not know as "not active". |
 | `suspensionReason` | Present only while suspended: **one sentence, already in the request's language**, saying why in general terms (e.g. "A safety report is under review, so new bookings are paused."). Show it as written. It is a category, never the note staff wrote, and never names anybody. |
-| `suspension` | Present only while suspended: `caseNumber` (the reference the member quotes, e.g. `RF-482913`), `reasonCode` (`safety_report` · `identity_check` · `payment_issue` · `policy_breach` — for an icon or analytics, not for wording), `suspendedAt`, `reviewDueAt` (the promised "expected update" time — show it as a time, and keep showing it if it has passed rather than hiding it). `caseNumber` can be `null` only for an account suspended before holds were recorded. |
+| `suspension` | Present only while suspended: `caseNumber` (the reference the member quotes, e.g. `RF-482913`), `reasonCode` (`safety_report` · `identity_check` · `payment_issue` · `policy_breach` — for an icon or analytics, not for wording), `suspendedAt`, `reviewDueAt` (the promised "expected update" time — show it as a time, and keep showing it if it has passed rather than hiding it). `caseNumber` can be `null` only for an account suspended before holds were recorded. 🔴 **New (F1-3):** `permanent` — `false` for a suspension (stay in the app, show the banner with Appeal), `true` for a ban (`RESTRICTED_ACCOUNT`) — and `appeal`: `{canAppeal, appealBy, needsNewEvidence, appeals: [{id, attempt, status, createdAt, resolvedAt}]}`, see `POST /account/suspension/appeal`. |
 | `profileStatus` | `NOT_STARTED` (signed in with a phone, basic profile not filled yet) · `BASIC_COMPLETE` (after `PUT /account/profile/basic` succeeds). **Until `BASIC_COMPLETE` the `active` tier refuses most endpoints** with `403 ACCOUNT_PROFILE_INCOMPLETE` — send the person to screen 7. *(An earlier version of this file said `PHONE_ONLY`; the API has always returned `NOT_STARTED`.)* |
 | `capabilities[]` | 🔴 **What this account may actually do:** `["PASSENGER"]`, `["DRIVER"]`, both, or empty before the role step. **Drive your UI from this, not from `registeredRole`.** |
 | `initialRoleSelected` | Whether the role step is done. Do not infer it from `capabilities` being empty — this is the field `nextStep` is derived from. |
@@ -1734,7 +1760,7 @@ Archives. Nothing is deleted: history stays, and only future days nobody has tak
 | `audience`, `minTrustLevel` | Who may join. |
 | `allowsCustomPickup` | **Defaults to false.** |
 | `routePolyline`, `routeDistanceMeters`, `routeDurationSeconds` | Computed at publish; `null` on a draft. **Only ever returned to the commute's own driver.** |
-| `publishedAt`, `pausedAt`, `pausedReason`, `archivedAt` | `pausedReason` is `by_driver` · `vehicle_suspended` · `licence_expired` · `commission_unpaid` — the last three are automatic, so show the right copy. `commission_unpaid` means a week's commission missed two Fridays (PAY-45): show the debt screen; after paying she resumes the commute herself. |
+| `publishedAt`, `pausedAt`, `pausedReason`, `archivedAt` | `pausedReason` is `by_driver` · `vehicle_suspended` · `licence_expired` · `commission_unpaid` · `account_suspended` — the last four are automatic, so show the right copy. `account_suspended` means staff suspended her account (F1-3); once it is lifted she resumes the commute herself. `commission_unpaid` means a week's commission missed two Fridays (PAY-45): show the debt screen; after paying she resumes the commute herself. |
 | `missing[]` | What still has to be done before it can be published. Drive the wizard from this. |
 | `locations[]` | `{id, type, lat, lng, address, placeId, sequence}`; type is `origin` · `pickup` · `dropoff` · `destination`. |
 | `schedule` | `{daysMask, departureTime, timezone, startDate, endDate, generatedUntil}`. `generatedUntil` is **how far ahead bookable days currently exist**, rolled forward daily — not the end of the commute. |
@@ -4130,6 +4156,7 @@ exist, and every live endpoint must be named here.
 
 | Date | Change |
 |---|---|
+| 2026-11-01 | ⛔ **A suspension stays in the app; only a ban is restricted (F1-3, AUTH-19, D-0018).** New **`POST /account/suspension/appeal`** — one appeal within 48 h, a second only with new `evidence` within 48 h of the first being turned down. A suspended account now gets `nextStep: HOME` (not `RESTRICTED_ACCOUNT`), its reads work and its writes answer `403 ACCOUNT_SUSPENDED`; `user.suspension` gains `permanent` and `appeal`. `RESTRICTED_ACCOUNT` is now only for a **permanent ban**. Suspending (either kind) **cancels every upcoming seat, inside the 16 h lock too, with no fee**, and pauses a driver's commutes (`pausedReason: account_suspended`). |
 | 2026-11-01 | 🚻 **Gender is `woman` / `man` only (F1-2, AUTH-10).** `PUT /account/profile/basic` now refuses `prefer_not_to_say` with `422`. Existing rows keep it: they cannot ask for a women-only seat, and that refusal (`403 SEAT_REQUEST_WOMEN_ONLY`) now carries `error.fields.reason: ["GENDER_NOT_SET"]` so the app can ask Woman / Man and save it with the same endpoint. |
 | 2026-11-01 | 🔒 **OTP lock (F1-5, AUTH-07, AUTH-08).** A code now lives **300 s** (was 120) and takes **3** wrong tries (was 5). The third wrong code locks the number for **5 minutes**: `/auth/otp/request` and `/auth/otp/verify` answer **`429 AUTH_OTP_LOCKED`** with `Retry-After` and `error.fields.lockedUntil`. A new code no longer resets the guessing. All three are admin settings (`auth.otp.lock_seconds` is new). `AUTH_OTP_MAX_ATTEMPTS` is now only the per-minute rate limit. |
 | 2026-11-01 | ❓ **"Did you ask to get off here?" (TRIP-20, PAY-28)** — new `POST /bookings/{booking}/early-drop` and the `early_drop_check` notification; bookings now return `feeLinePiastres`, `feeLineReason` and `earlyDrop`. A `false_arrival` report puts her no-show on that booking under review (TRIP-17). Staff now settle the money of payment disputes (PAY-31, PAY-32) and women-only misuse (PAY-47, the man is suspended until he pays) from the safety desk. |

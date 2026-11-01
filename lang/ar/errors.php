@@ -170,6 +170,7 @@ return [
     // Debt and settlement.
     'RIDING_SUSPENDED_FOR_DEBT' => 'الحجز متوقف عشان فيه رسوم لسه ما اتدفعتش. ادفعها من شاشة المدفوعات، أو قدّم تظلّم، عشان تحجز تاني.',
     'FEE_APPEAL_NOT_OPEN' => 'الاعتراض ده اتحسم قبل كده.',
+    'SUSPENSION_APPEAL_NOT_OPEN' => 'التظلّم ده اتحسم قبل كده.',
     'EARLY_DROP_NOT_ASKED' => 'مفيش سؤال تجاوب عليه عن النزول ده.',
     'DEBT_NOTHING_OWED' => 'مفيش عليك أي مبلغ دلوقتي، فمفيش حاجة تتدفع.',
     'DEBT_PAYMENT_NOT_PENDING' => 'الدفعة دي اتأكدت أو اترفضت قبل كده.',

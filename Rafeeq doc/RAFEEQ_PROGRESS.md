@@ -652,7 +652,9 @@ tests/Support/FakeOtpSender.php
 
 ## سجل التقدّم (الأحدث فوق)
 
-- **2026-11-01** — **قفل الـ OTP والنوع ست/راجل بس (F1-5، F1-2).**
+- **2026-11-01** — **قفل الـ OTP، والنوع ست/راجل بس، والإيقاف بقى جوّه الأبلكيشن بتظلّم (F1-5، F1-2، F1-3).**
+
+  **الإيقاف (F1-3، AUTH-19، D-0018):** الإيقاف بسبب السلوك بقى مش بيطلّع العضو من الأبلكيشن: `nextStep` بيبقى `HOME` والبانر من `user.suspension` (فيه `permanent: false` و`appeal`)، والقراية كلها شغّالة (الـ middleware `account.active` بقى بيعدّي الـ GET) وأي كتابة `403 ACCOUNT_SUSPENDED`. **الحظر النهائي بس** هو اللي بيرجّع `RESTRICTED_ACCOUNT` (عمود `is_permanent` على `account_suspensions`، و checkbox في صفحة Members). وسؤال التاسك "بيلغي الرحلات الجاية؟" — **آه** (D-0018 Q-027، PAY-46): أي إيقاف بيلغي كل كراسيها الجاية حتى جوّه الـ 16 ساعة من غير رسوم لحد (الكرسي لقايمة الانتظار)، وكسواقة بيوقف كل الـ commutes المنشورة بسبب `account_suspended`؛ ورفع الإيقاف مابيرجّعش حاجة. **التظلّم:** `POST /account/suspension/appeal` — واحد خلال 48 ساعة من الإيقاف، وتاني بس بدليل جديد خلال 48 ساعة من رفض الأول (`admin.suspension_appeal_hours`). جدول `suspension_appeals`، والأدمن بيقبل (بيرفع الإيقاف عن طريق `reinstate`) أو يرفض من صفحة Members. **180 endpoint.**
 
   **النوع (F1-2، AUTH-10، E5):** `PUT /account/profile/basic` بقى بيقبل `woman` أو `man` بس، و`prefer_not_to_say` بقت `422`. الحسابات القديمة اللي فيها القيمة دي فاضلة زي ما هي (الـ enum case لسه موجودة عشان الصفوف تتقري) ومحدش بيحوّلها لست أو راجل بالتخمين — بس مش بتعتبر ست في قاعدة women-only، ورفض الطلب على رحلة women-only بقى بيرجع `error.fields.reason: ["GENDER_NOT_SET"]` عشان الأبلكيشن يسألها ويحفظ بنفس الـ endpoint.
 

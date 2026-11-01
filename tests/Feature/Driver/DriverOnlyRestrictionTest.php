@@ -127,14 +127,16 @@ it('takes her commutes out of what passengers can find', function () {
  * And the other half of §8, for contrast: an ACCOUNT restriction does take everything, and says so
  * with a case number the person can quote.
  */
-it('closes everything for an account-wide restriction, with a reference to quote', function () {
+it('closes everything for a permanent ban, with a reference to quote', function () {
     $token = approvedDriver();
 
+    // A ban — a suspension stays in the app with its reads open (AUTH-19, F1-3).
     $hold = app(SuspendMemberAction::class)->suspend(
         User::sole(),
         adminWithRole(AdminRole::Operations),
         SuspensionReason::SafetyReport,
         'Two reports this week, holding for review.',
+        permanent: true,
     );
 
     expect(User::sole()->account_status)->toBe(AccountStatus::Suspended);

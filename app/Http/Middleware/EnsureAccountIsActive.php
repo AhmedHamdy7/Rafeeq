@@ -17,7 +17,8 @@ use Symfony\Component\HttpFoundation\Response;
  * about the session itself stops it. This is what stops it.
  *
  * Applied to everything a suspended person must not do — bookings, publishing
- * a commute, editing a profile — and deliberately NOT to the handful of
+ * a commute, editing a profile (reads pass unless the hold is a permanent ban,
+ * see below) — and deliberately NOT to the handful of
  * routes they still need: reading their own status (to see the suspension),
  * signing out, and revoking a device. Blocking those would trap someone
  * outside any route to appeal, which the chapter explicitly rules out.
@@ -31,7 +32,13 @@ final class EnsureAccountIsActive
     {
         $user = $request->user();
 
-        if ($user !== null && $user->account_status === AccountStatus::Suspended) {
+        /*
+         * 🔴 AUTH-19 (follow-up F1-3): a suspended member stays in the app with her trips
+         * READ-ONLY, so a read passes and a write does not. A permanent ban refuses both — that
+         * account sees the Account restricted screen and nothing behind it.
+         */
+        if ($user !== null && $user->account_status === AccountStatus::Suspended
+            && ($user->isBanned() || ! $request->isMethodSafe())) {
             SecurityLog::record(SecurityEventType::SuspendedAccessAttempt, $user, metadata: [
                 'path' => $request->path(),
             ]);

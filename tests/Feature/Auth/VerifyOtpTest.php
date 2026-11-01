@@ -2,6 +2,7 @@
 
 use App\Domains\Identity\Enums\AccountStatus;
 use App\Domains\Identity\Enums\OtpStatus;
+use App\Domains\Identity\Models\AccountSuspension;
 use App\Domains\Identity\Models\AuthSession;
 use App\Domains\Identity\Models\Device;
 use App\Domains\Identity\Models\OtpChallenge;
@@ -277,13 +278,14 @@ it('refuses an OTP requested for the purpose that no longer exists', function ()
  * Scenario H — a suspended account signs in successfully and is routed away
  * from Home, rather than being locked out of its own appeal.
  */
-it('signs a suspended account in but never routes it Home', function () {
+it('signs a banned account in but never routes it Home', function () {
     signIn(devicePublicId: 'dev-1');
 
     User::sole()->forceFill([
         'account_status' => AccountStatus::Suspended->value,
         'suspension_reason' => 'under_review',
     ])->save();
+    AccountSuspension::factory()->create(['user_id' => User::sole()->id, 'is_permanent' => true]);
 
     fakeOtpSender();
     $result = signIn(devicePublicId: 'dev-1');
@@ -291,6 +293,24 @@ it('signs a suspended account in but never routes it Home', function () {
     expect($result['nextStep'])->toBe('RESTRICTED_ACCOUNT')
         ->and($result['user']['accountStatus'])->toBe('SUSPENDED')
         ->and($result['session']['accessToken'])->not->toBeEmpty();
+});
+
+/**
+ * AUTH-19 (F1-3): a suspension is not a ban. She is routed like anybody else — the banner comes
+ * from `user.suspension`.
+ */
+it('routes a suspended, not banned, account like any other', function () {
+    $token = signIn(devicePublicId: 'dev-1')['session']['accessToken'];
+    completeBasicProfile($token);
+
+    User::sole()->forceFill(['account_status' => AccountStatus::Suspended->value])->save();
+    AccountSuspension::factory()->create(['user_id' => User::sole()->id]);
+
+    fakeOtpSender();
+    $result = signIn(devicePublicId: 'dev-1');
+
+    expect($result['nextStep'])->toBe('HOME')
+        ->and($result['user']['suspension']['permanent'])->toBeFalse();
 });
 
 it('never exposes gender, and the whole payload is free of it', function () {

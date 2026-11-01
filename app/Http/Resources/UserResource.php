@@ -52,7 +52,7 @@ final class UserResource extends JsonResource
              */
             'suspension' => $this->when(
                 $this->account_status === AccountStatus::Suspended,
-                fn () => SuspensionSummary::for($this->resource),
+                fn () => SuspensionSummary::forMember($this->resource),
             ),
             'profileStatus' => strtoupper($this->profile_status->value),
             /*

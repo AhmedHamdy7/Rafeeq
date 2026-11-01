@@ -4,6 +4,7 @@ use App\Domains\Identity\Enums\AccountStatus;
 use App\Domains\Identity\Enums\Capability;
 use App\Domains\Identity\Enums\CapabilityStatus;
 use App\Domains\Identity\Enums\ProfileStatus;
+use App\Domains\Identity\Models\AccountSuspension;
 use App\Domains\Identity\Models\User;
 use App\Domains\Identity\Models\UserCapability;
 use App\Domains\Identity\Models\UserPreference;
@@ -177,6 +178,8 @@ it('reports where a brand-new account should start', function () {
 it('tells a restricted account that it is restricted rather than refusing to answer', function () {
     $signIn = signIn();
     User::sole()->forceFill(['account_status' => AccountStatus::Suspended->value])->save();
+    // Restricted means a permanent ban since AUTH-19 (F1-3); a suspension routes like any account.
+    AccountSuspension::factory()->create(['user_id' => User::sole()->id, 'is_permanent' => true]);
 
     $this->withToken($signIn['session']['accessToken'])->getJson('/api/v1/account/onboarding-state')
         ->assertOk()->assertJsonPath('data.nextStep', 'RESTRICTED_ACCOUNT');

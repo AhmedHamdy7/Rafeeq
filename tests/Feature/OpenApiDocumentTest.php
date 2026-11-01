@@ -131,6 +131,7 @@ it('generates a document describing every /v1 route', function () {
          */
         'GET /v1/account/reliability',
         'POST /v1/account/reliability/events/{event}/appeal',
+        'POST /v1/account/suspension/appeal',
         'GET /v1/account/warnings',
         'POST /v1/account/warnings/{warning}/dispute',
         'GET /v1/users/{user}/public-profile',
