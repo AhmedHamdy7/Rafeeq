@@ -36,6 +36,7 @@ use App\Http\Controllers\Api\V1\PlaceController;
 use App\Http\Controllers\Api\V1\Rating\RatingController;
 use App\Http\Controllers\Api\V1\Safety\SafetyController;
 use App\Http\Controllers\Api\V1\Search\CommuteDemandController;
+use App\Http\Controllers\Api\V1\Search\MatchOpenedController;
 use App\Http\Controllers\Api\V1\Search\RecentSearchController;
 use App\Http\Controllers\Api\V1\Search\SavedSearchController;
 use App\Http\Controllers\Api\V1\Search\SearchController;
@@ -433,6 +434,9 @@ Route::prefix('v1')->group(function (): void {
         Route::get('incidents/{incident}', [SafetyController::class, 'showIncident']);
         Route::post('incidents', [SafetyController::class, 'reportIncident'])
             ->middleware('throttle:safety-reports');
+        // HISTORY-10: appeal the decision on your own report. Same limiter as filing one.
+        Route::post('incidents/{incident}/appeal', [SafetyController::class, 'appealIncident'])
+            ->middleware('throttle:safety-reports');
 
         /*
          * Evidence on a report.
@@ -488,6 +492,9 @@ Route::prefix('v1')->group(function (): void {
         Route::delete('commute-demands/{demand}', [CommuteDemandController::class, 'destroy']);
 
         Route::get('matches', [CommuteDemandController::class, 'matches']);
+        // She tapped one: what turns "N new commutes match your demand" on Home into a count of
+        // matches she has not seen, rather than of every match there ever was (HOME-8).
+        Route::post('matches/{match}/opened', MatchOpenedController::class);
 
         Route::get('saved-searches', [SavedSearchController::class, 'index']);
         Route::post('saved-searches', [SavedSearchController::class, 'store']);

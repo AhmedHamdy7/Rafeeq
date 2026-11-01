@@ -6,6 +6,7 @@ use App\Domains\Identity\Models\User;
 use App\Domains\Safety\Enums\EvidenceKind;
 use App\Domains\Safety\Models\Incident;
 use App\Domains\Safety\Models\IncidentEvidence;
+use App\Domains\Safety\Support\IncidentAppeals;
 use App\Domains\Safety\Support\SafetySettings;
 use App\Domains\Shared\Exceptions\DomainException;
 use App\Domains\Shared\Support\ErrorCode;
@@ -49,7 +50,9 @@ final readonly class AttachIncidentEvidenceAction
 
     public function execute(User $reporter, Incident $incident, UploadedFile $file, EvidenceKind $kind): IncidentEvidence
     {
-        if (! $incident->isOpen()) {
+        // A decided report still takes evidence while it can be appealed: a second appeal needs
+        // new evidence, so refusing the file would make that rule impossible to meet (HISTORY-10).
+        if (! $incident->isOpen() && ! IncidentAppeals::acceptsEvidence($incident)) {
             throw DomainException::of(ErrorCode::IncidentClosed);
         }
 

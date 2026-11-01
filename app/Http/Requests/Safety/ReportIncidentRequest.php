@@ -30,7 +30,7 @@ final class ReportIncidentRequest extends FormRequest
              * What happened: `harassment`, `unsafe_driving`, `identity_mismatch`, `payment`,
              * `no_show`, `lost_item`, `other`, `false_arrival` (the driver said she arrived and was
              * not there), `dropped_early` (put out before the drop-off), `women_only_misuse`,
-             * `abusive_review`.
+             * `abusive_review`, `safety_concern` (the form's "Safety concern"; ranked high).
              */
             'category' => ['required', 'string', Rule::enum(IncidentCategory::class)],
 

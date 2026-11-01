@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Api\V1\Safety;
 
+use App\Domains\Safety\Actions\AppealIncidentAction;
 use App\Domains\Safety\Actions\AttachIncidentEvidenceAction;
 use App\Domains\Safety\Actions\BlockUserAction;
 use App\Domains\Safety\Actions\ManageEmergencyContactsAction;
@@ -19,9 +20,11 @@ use App\Domains\Shared\ValueObjects\Coordinate;
 use App\Domains\Trip\Models\TripSession;
 use App\Http\Controllers\Controller;
 use App\Http\OpenApi\ApiErrors;
+use App\Http\Requests\Safety\AppealIncidentRequest;
 use App\Http\Requests\Safety\AttachIncidentEvidenceRequest;
 use App\Http\Requests\Safety\BlockPreviewRequest;
 use App\Http\Requests\Safety\BlockUserRequest;
+use App\Http\Requests\Safety\ListIncidentsRequest;
 use App\Http\Requests\Safety\ReportIncidentRequest;
 use App\Http\Requests\Safety\ShareLiveTripRequest;
 use App\Http\Requests\Safety\StoreEmergencyContactRequest;
@@ -166,12 +169,18 @@ final class SafetyController extends Controller
 
     /**
      * GET /v1/incidents — the caller's own reports, newest first.
+     *
+     * `?bookingId=` narrows it to one journey (HISTORY-8) — the past trip's "My reports". Applied
+     * on top of the own-reports rule, never instead of it.
      */
-    public function incidents(Request $request): JsonResponse
+    public function incidents(ListIncidentsRequest $request): JsonResponse
     {
         $incidents = Incident::query()
             ->where('reporter_user_id', $request->user()->id)
+            ->when($request->bookingId(), fn ($query, string $bookingId) => $query->where('booking_id', $bookingId))
             ->withCount('evidence')
+            // Whether Appeal can be offered is answered on each row (HISTORY-10).
+            ->with('appeals')
             ->latest('created_at')
             ->orderByDesc('id')
             ->paginate(ApiResponse::perPage($request));
@@ -191,7 +200,27 @@ final class SafetyController extends Controller
     {
         $own = $this->ownIncident($request, $incident);
 
-        return ApiResponse::success(new IncidentResource($own->load('evidence')));
+        return ApiResponse::success(new IncidentResource($own->load('evidence', 'appeals')->loadCount('evidence')));
+    }
+
+    /**
+     * POST /v1/incidents/{incident}/appeal — "I don't accept this decision" (HISTORY-10).
+     *
+     * One appeal, a second only with new evidence, each within 48 hours of the decision (D-0021). A
+     * refusal is `422 VALIDATION_FAILED` with `error.fields.appeal`: `NOT_DECIDED` ·
+     * `NO_APPEALS_LEFT` · `APPEAL_WINDOW_CLOSED` · `NEW_EVIDENCE_REQUIRED`. The report comes back
+     * `APPEALED`, back in the safety team's queue.
+     */
+    #[ApiErrors(ErrorCode::ValidationFailed, ErrorCode::NotFound)]
+    public function appealIncident(AppealIncidentRequest $request, string $incident, AppealIncidentAction $action): JsonResponse
+    {
+        $appealed = $action->execute(
+            $request->user(),
+            $this->ownIncident($request, $incident),
+            $request->string('reason')->value(),
+        );
+
+        return ApiResponse::success(new IncidentResource($appealed), status: 201);
     }
 
     /**

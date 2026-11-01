@@ -165,6 +165,17 @@
                 <p style="margin:12px 0 0;font-size:13.5px;white-space:pre-line" dir="auto">{{ $report->description }}</p>
             @endif
 
+            {{-- HISTORY-10: the decision she is appealing, and why, so the second look starts from both. --}}
+            @foreach ($report->appeals as $appeal)
+                <p class="rq-note" style="margin:10px 0 0;white-space:pre-line" dir="auto">
+                    <strong>{{ __('admin.safety.appeal_round', ['round' => $appeal->round]) }}</strong>
+                    @if ($loop->last && $report->resolution)
+                        · {{ __('admin.safety.appeal_against', ['decision' => $report->resolution]) }}
+                    @endif
+                    <br>{{ $appeal->reason }}
+                </p>
+            @endforeach
+
             <dl class="rq-facts">
                 <div>
                     <dt>{{ __('admin.safety.due') }}</dt>
