@@ -105,13 +105,16 @@ it('scores nothing for timing half an hour out', function () {
  * commute was hopelessly over budget rather than comfortably under it.
  */
 it('loses price points when the commute costs more than the budget', function () {
-    $within = search($this->paxToken, ['budgetMonthlyPiastres' => 200000])
+    // The price is RAFEEQ's now (P-1), so the budgets are stated as multiples of it.
+    $seat = search($this->paxToken)->assertOk()->json('data.0.seatPricePiastres');
+
+    $within = search($this->paxToken, ['budgetMonthlyPiastres' => (int) ($seat * 25)])
         ->assertOk()->json('data.0.score.price');
 
-    $over = search($this->paxToken, ['budgetMonthlyPiastres' => 130000])
+    $over = search($this->paxToken, ['budgetMonthlyPiastres' => (int) ($seat * 16.25)])
         ->assertOk()->json('data.0.score.price');
 
-    $wayOver = search($this->paxToken, ['budgetMonthlyPiastres' => 87000])
+    $wayOver = search($this->paxToken, ['budgetMonthlyPiastres' => (int) ($seat * 10.875)])
         ->assertOk()->json('data.0.score.price');
 
     expect($within)->toBe(5)
@@ -129,8 +132,10 @@ it('loses price points when the commute costs more than the budget', function ()
  * it and the five points for price were full marks for everybody, whatever they cost.
  */
 it('does not hand out full price marks to a commute nobody could afford', function () {
-    // 900 EGP a month over five days is about 41 a ride. The commute costs 80.
-    $score = search($this->paxToken, ['budgetMonthlyPiastres' => 90000])
+    // A month's budget of about half a seat per ride, against the real seat price.
+    $seat = search($this->paxToken)->assertOk()->json('data.0.seatPricePiastres');
+
+    $score = search($this->paxToken, ['budgetMonthlyPiastres' => (int) ($seat * 11.25)])
         ->assertOk()->json('data.0.score.price');
 
     expect($score)->toBeLessThan(5);

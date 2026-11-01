@@ -42,16 +42,48 @@ it('cannot be told it is already published by the request that creates it', func
 });
 
 /**
- * Chapter 4 §5: seats offered cannot exceed vehicle capacity. `vehicles.seats`
- * counts the driver, so what can be offered is one fewer.
+ * C-3, PROF-28: seats offered can never exceed the seats the admin APPROVED on the car — not the
+ * seats the driver typed on the vehicle form.
  */
-it('refuses more seats than the vehicle has, not counting the driver', function () {
-    // The test vehicle seats 5, so 4 is the most that can be offered.
-    createCommute($this->token, $this->vehicleId, ['seatsTotal' => 5])
+it('refuses more seats than were approved on the car', function () {
+    // The test car was typed in as 5 seats and approved for 3.
+    createCommute($this->token, $this->vehicleId, ['seatsTotal' => 4])
         ->assertStatus(422)
-        ->assertJsonStructure(['error' => ['fields' => ['seatsTotal']]]);
+        ->assertJsonPath('error.code', 'COMMUTE_SEATS_EXCEED_APPROVED')
+        // So the seat stepper can stop at the right number.
+        ->assertJsonPath('error.fields.approvedSeats.0', '3');
 
-    createCommute($this->token, $this->vehicleId, ['seatsTotal' => 4])->assertStatus(201);
+    createCommute($this->token, $this->vehicleId, ['seatsTotal' => 3])->assertStatus(201);
+});
+
+it('refuses a weekday that offers more seats than were approved', function () {
+    $id = createCommute($this->token, $this->vehicleId)->assertStatus(201)->json('data.id');
+    saveRoute($this->token, $id)->assertOk();
+
+    saveSchedule($this->token, $id, ['perDay' => [
+        (string) DaysMask::SUNDAY => ['seatsTotal' => 4],
+    ]])->assertStatus(422)
+        ->assertJsonPath('error.code', 'COMMUTE_SEATS_EXCEED_APPROVED');
+});
+
+it('refuses to publish on a car nobody has reviewed', function () {
+    $id = readyCommute($this->token, $this->vehicleId);
+
+    Vehicle::sole()->forceFill(['approved_seats' => null])->save();
+
+    $this->withToken($this->token)->postJson("/api/v1/commutes/{$id}/publish")
+        ->assertStatus(409)
+        ->assertJsonPath('error.code', 'VEHICLE_SEATS_NOT_APPROVED');
+
+    expect(CommuteOffer::sole()->status)->toBe(CommuteOfferStatus::Draft);
+});
+
+it('refuses to lower the approved seats under a weekday through a revision either', function () {
+    $id = readyCommute($this->token, $this->vehicleId);
+
+    $this->withToken($this->token)->patchJson("/api/v1/commutes/{$id}", ['seatsTotal' => 4])
+        ->assertStatus(422)
+        ->assertJsonPath('error.code', 'COMMUTE_SEATS_EXCEED_APPROVED');
 });
 
 /**
@@ -310,27 +342,11 @@ it('locks the route and schedule once published, but still allows the terms to c
         ->assertJsonPath('error.code', 'COMMUTE_NOT_EDITABLE');
     saveSchedule($this->token, $id)->assertStatus(409);
 
-    // Price and preferences are fair game: they apply to future days only.
+    // Preferences are fair game: they apply to future days only. (The price is not the driver's.)
     $this->withToken($this->token)->patchJson("/api/v1/commutes/{$id}", [
-        'pricePerSeatPiastres' => 9000,
         'rules' => ['nonsmoking' => true, 'quiet' => true],
     ])->assertOk()
-        ->assertJsonPath('data.pricePerSeatPiastres', 9000)
         ->assertJsonPath('data.rules.nonsmoking', true);
-});
-
-it('keeps the price a booked day was generated with', function () {
-    $id = readyCommute($this->token, $this->vehicleId);
-
-    $this->withToken($this->token)->postJson("/api/v1/commutes/{$id}/publish")->assertOk();
-
-    $before = ScheduledTrip::orderBy('trip_date')->first()->price_snapshot_piastres;
-
-    $this->withToken($this->token)->patchJson("/api/v1/commutes/{$id}", [
-        'pricePerSeatPiastres' => 11000,
-    ])->assertOk();
-
-    expect(ScheduledTrip::orderBy('trip_date')->first()->price_snapshot_piastres)->toBe($before);
 });
 
 it('answers 404 for another driver commute', function () {

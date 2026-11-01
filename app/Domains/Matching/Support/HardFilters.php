@@ -45,6 +45,8 @@ final class HardFilters
                 self::intersectBoundingBox($offer, $criteria);
 
                 self::requireMinimumRating($offer, $criteria);
+
+                self::requireTier($offer, $criteria);
             })
             // Only days that can still be booked. A trip whose deadline has
             // passed is not a match, it is a disappointment with a nice score.
@@ -211,6 +213,25 @@ final class HardFilters
                 ->whereNotNull('user_stats.avg_rating_as_driver')
                 ->where('user_stats.avg_rating_as_driver', '<', $criteria->minRating);
         });
+    }
+
+    /**
+     * The Comfort filter (S-1, BOOK-02). A hard filter, because Comfort is a different price (a
+     * higher km rate, PAY-42): a passenger who asks for it is choosing what she pays for, and a
+     * Standard car ranked lower would still be a car she said she did not want.
+     *
+     * Read from the car on the commute TODAY, not from the day's price snapshot: the badge is
+     * about the car that will turn up.
+     *
+     * @param  Builder<CommuteOffer>  $offer
+     */
+    private static function requireTier(Builder $offer, SearchCriteria $criteria): void
+    {
+        if ($criteria->tier === null) {
+            return;
+        }
+
+        $offer->whereHas('vehicle', fn (Builder $vehicle) => $vehicle->where('tier', $criteria->tier->value));
     }
 
     /**

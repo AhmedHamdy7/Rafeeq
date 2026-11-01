@@ -23,7 +23,7 @@ use App\Domains\Shared\ValueObjects\Distance;
  *
  * The two numbers this produces, `added_minutes` and `added_km`, are the ones the
  * migration marks "computed by us, never claimed by the requester" — and the ones
- * the driver's `max_detour_minutes` is checked against. A passenger who could
+ * whole-trip detour cap (C-1, COM-31) is checked against. A passenger who could
  * supply them would be deciding how far out of their way the driver goes.
  *
  * The comparison is against the commute's route **as published**, including the

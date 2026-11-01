@@ -29,7 +29,18 @@ final class CommuteOfferResource extends JsonResource
             'direction' => $this->direction->value,
             'vehicleId' => $this->vehicle_id,
             'seatsTotal' => $this->seats_total,
-            'pricePerSeatPiastres' => $this->price_per_seat_piastres,
+            /*
+             * The seat price RAFEEQ computed from your route and your car (P-1, PAY-42), and what
+             * you keep of it. Read-only, and null on a draft: there is no route length to price
+             * until it is published. Each day carries its own frozen price — see `upcomingTrips`.
+             */
+            'seatPricePiastres' => $this->seat_price_piastres,
+            // 🔒 Only to the commute's own driver: this shape is also embedded in a group, which
+            // passengers read (P-3, PAY-39).
+            'driverSharePiastres' => $this->when(
+                SeatPriceView::viewerDrives($request, $this->driver_profile_id),
+                fn (): ?int => $this->driver_share_piastres,
+            ),
             'currency' => $this->currency,
             // RAFEEQ's limits for every commute, not the driver's (C-1, COM-31). Read-only.
             'maxDetourMinutes' => RouteSettings::maxTripDetourMinutes(),

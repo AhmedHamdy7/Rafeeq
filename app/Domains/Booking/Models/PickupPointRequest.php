@@ -21,7 +21,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
  * is the same one the migration states: they are computed by us from the driver's
  * own route, never claimed by the person asking. A requester who could set them
  * would be deciding how far out of their way the driver is going — and the
- * driver's `max_detour_minutes` is checked against exactly these two numbers.
+ * whole-trip detour cap (C-1, COM-31) is checked against exactly these two numbers.
  *
  * `status` and `alternative_place_id` are the DRIVER's answer, so they are not
  * fillable either: an approved request must not be creatable by asking for one.

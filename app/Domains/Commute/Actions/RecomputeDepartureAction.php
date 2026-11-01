@@ -3,6 +3,7 @@
 namespace App\Domains\Commute\Actions;
 
 use App\Domains\Commute\Enums\ScheduledTripStatus;
+use App\Domains\Commute\Jobs\RecomputeTripDeparture;
 use App\Domains\Commute\Models\ScheduledTrip;
 use App\Domains\Commute\Support\ComputedDeparture;
 use App\Domains\Commute\Support\ScheduleLock;
@@ -18,7 +19,7 @@ use Illuminate\Support\Facades\DB;
  * Each time a rider's pickup or drop-off joins or leaves the day, RAFEEQ times the route again for
  * the promised arrival and, if the driver has to leave at a different minute, moves the day and
  * tells him — "Leave at 07:10 tomorrow". It never runs inside the transaction that confirms the
- * seat (it calls a routing provider): {@see \App\Domains\Commute\Jobs\RecomputeTripDeparture}
+ * seat (it calls a routing provider): {@see RecomputeTripDeparture}
  * runs it after that commit.
  *
  * 🔒 Three things leave a day alone:

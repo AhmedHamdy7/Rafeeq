@@ -300,3 +300,61 @@ it('does not quietly reactivate a capability somebody withdrew', function () {
         ->and(UserCapability::sole()->status)->toBe(CapabilityStatus::Withdrawn)
         ->and($response->json('data.user.capabilities'))->toBe([]);
 });
+
+/*
+ * F1-7, F2-10 (PROF-04, PROF-06, decision E6): "Become a driver" later, on the same account.
+ */
+it('adds the driver capability to a passenger account without touching her sign-up role or mode', function () {
+    $signIn = signIn();
+    $token = $signIn['session']['accessToken'];
+    completeProfileWithoutRole($token)->assertOk();
+    chooseRole($token, 'passenger')->assertOk();
+
+    $response = test()->withToken($token)
+        ->postJson('/api/v1/account/capabilities/driver')
+        ->assertOk();
+
+    $user = User::sole();
+
+    expect($response->json('data.user.capabilities'))->toEqualCanonicalizing(['PASSENGER', 'DRIVER'])
+        ->and($user->registered_role->value)->toBe('passenger')
+        ->and(UserPreference::forUser($user)->last_active_mode)->toBe(Capability::Passenger);
+});
+
+it('is safe to send twice', function () {
+    $signIn = signIn();
+    $token = $signIn['session']['accessToken'];
+    completeProfileWithoutRole($token)->assertOk();
+    chooseRole($token, 'passenger')->assertOk();
+
+    test()->withToken($token)->postJson('/api/v1/account/capabilities/driver')->assertOk();
+    test()->withToken($token)->postJson('/api/v1/account/capabilities/driver')->assertOk();
+
+    expect(UserCapability::where('capability', Capability::Driver->value)->count())->toBe(1);
+});
+
+it('records the role choice when the account never chose one', function () {
+    $signIn = signIn();
+    $token = $signIn['session']['accessToken'];
+    completeProfileWithoutRole($token)->assertOk();
+
+    test()->withToken($token)->postJson('/api/v1/account/capabilities/driver')->assertOk();
+
+    expect(User::sole()->initial_role_selected_at)->not->toBeNull()
+        ->and(User::sole()->registered_role->value)->toBe('driver');
+});
+
+it('switches mode both ways and reminds a driver of his published commutes', function () {
+    $signIn = signIn();
+    $token = $signIn['session']['accessToken'];
+    completeProfileWithoutRole($token)->assertOk();
+    chooseRole($token, 'both')->assertOk();
+
+    test()->withToken($token)->patchJson('/api/v1/account/preferences', ['activeMode' => 'driver'])
+        ->assertOk()
+        ->assertJsonPath('data.activeMode', 'driver');
+
+    test()->withToken($token)->patchJson('/api/v1/account/preferences', ['activeMode' => 'passenger'])
+        ->assertOk()
+        ->assertJsonPath('data.publishedCommutesCount', 0);
+});

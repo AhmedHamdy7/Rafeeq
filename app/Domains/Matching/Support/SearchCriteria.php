@@ -3,6 +3,7 @@
 namespace App\Domains\Matching\Support;
 
 use App\Domains\Commute\Enums\CommuteAudience;
+use App\Domains\Driver\Enums\VehicleTier;
 use App\Domains\Shared\ValueObjects\Coordinate;
 use App\Domains\Shared\ValueObjects\DaysMask;
 use App\Domains\Shared\ValueObjects\WalkTime;
@@ -64,6 +65,11 @@ final readonly class SearchCriteria
          * HardFilters::requireMinimumRating.
          */
         public ?float $minRating = null,
+        /**
+         * The Comfort filter (S-1): only cars of this tier. Null = any car. A HARD filter — see
+         * HardFilters::requireTier.
+         */
+        public ?VehicleTier $tier = null,
     ) {}
 
     /**
@@ -117,6 +123,7 @@ final readonly class SearchCriteria
             wantsReturnTrip: (bool) ($input['wantsReturnTrip'] ?? false),
             requiredRules: $input['rules'] ?? [],
             minRating: isset($input['minRating']) ? (float) $input['minRating'] : null,
+            tier: isset($input['tier']) ? VehicleTier::from($input['tier']) : null,
         );
     }
 
@@ -152,6 +159,7 @@ final readonly class SearchCriteria
             'wantsReturnTrip' => $this->wantsReturnTrip,
             'rules' => $this->requiredRules,
             'minRating' => $this->minRating,
+            'tier' => $this->tier?->value,
         ], fn (mixed $value): bool => $value !== null && $value !== []);
     }
 
@@ -190,6 +198,7 @@ final readonly class SearchCriteria
             // Part of the key: two passengers with identical criteria and different minimums are
             // asking different questions, and sharing a cache row would answer one of them wrong.
             $this->minRating ?? 'any',
+            $this->tier?->value ?? 'any-tier',
         ]));
     }
 }

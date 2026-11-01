@@ -39,7 +39,7 @@ final class SeatOfferResource extends JsonResource
                 'date' => $this->scheduledTrip->trip_date?->toDateString(),
                 'departureAt' => $this->scheduledTrip->departure_at?->toIso8601String(),
                 'departureLocal' => $this->scheduledTrip->departure_local?->toDateTimeString(),
-                'pricePiastres' => (int) $this->scheduledTrip->price_snapshot_piastres,
+                'pricePiastres' => (int) $this->scheduledTrip->seat_price_piastres,
             ]),
         ];
     }

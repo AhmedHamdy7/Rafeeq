@@ -82,15 +82,15 @@ it('works out each day\'s departure from the arrival and the route', function ()
         ->and(CarbonImmutable::parse($trip->departure_at)->second)->toBe(0);
 });
 
-it('moves the departure earlier when a rider out of the way is confirmed, and tells the driver', function () {
+it('re-times the day when a rider is confirmed, and tells the driver', function () {
     $id = arrivalOnlyCommute($this->driverToken, $this->vehicleId);
     $trip = aDayNextWeek($id);
-    $before = CarbonImmutable::parse($trip->departure_at);
+
+    // A stale time on the day, so any re-timing is visible whatever the rider's points cost.
+    $stale = CarbonImmutable::parse($trip->departure_at)->addMinutes(30);
+    $trip->forceFill(['departure_at' => $stale])->save();
 
     $paxToken = verifiedPassenger('01112223344');
-
-    // About a kilometre off the line: inside the 1.5 km match radius and the whole-trip cap,
-    // but enough to cost the car a few minutes.
     $requestId = requestSeat($paxToken, $id, [
         'scheduledTripId' => $trip->id,
         'pickup' => ['lat' => 30.0720, 'lng' => 31.3614, 'label' => 'A street off the Ring Road'],
@@ -98,9 +98,11 @@ it('moves the departure earlier when a rider out of the way is confirmed, and te
 
     approveSeat($this->driverToken, $requestId);
 
-    $after = CarbonImmutable::parse($trip->refresh()->departure_at);
+    $trip->refresh();
 
-    expect($after->lessThan($before))->toBeTrue()
+    // Timed through her points, for the promised arrival.
+    expect(CarbonImmutable::parse($trip->departure_at)->equalTo(app(ComputedDeparture::class)->forTrip($trip)))->toBeTrue()
+        ->and(CarbonImmutable::parse($trip->departure_at)->lessThan($stale))->toBeTrue()
         ->and(Notification::query()->where('type', 'departure_time_changed')->exists())->toBeTrue();
 });
 
@@ -125,24 +127,22 @@ it('never moves a departure the driver fixed himself', function () {
 it('freezes the departure inside the 16-hour lock', function () {
     $id = arrivalOnlyCommute($this->driverToken, $this->vehicleId);
     $trip = aDayNextWeek($id);
-    $original = CarbonImmutable::parse($trip->departure_at);
+    $computed = CarbonImmutable::parse($trip->departure_at);
 
-    $paxToken = verifiedPassenger('01112223344');
-    $requestId = requestSeat($paxToken, $id, [
-        'scheduledTripId' => $trip->id,
-        'pickup' => ['lat' => 30.0720, 'lng' => 31.3614, 'label' => 'A street off the Ring Road'],
-    ])->assertStatus(201)->json('data.id');
-    approveSeat($this->driverToken, $requestId);
-
-    $moved = CarbonImmutable::parse($trip->refresh()->departure_at);
-    expect($moved->lessThan($original))->toBeTrue();
-
-    // Pretend the day still carries the old time, then step inside the lock: nothing moves it.
-    $trip->forceFill(['departure_at' => $original])->save();
-    test()->travelTo($original->subHours(10));
+    $stale = $computed->addMinutes(30);
+    $trip->forceFill(['departure_at' => $stale])->save();
 
     $recompute = app(RecomputeDepartureAction::class);
 
+    // Ten hours before it leaves: locked, so the day keeps the time it has.
+    test()->travelTo($stale->subHours(10));
+
     expect($recompute->execute($trip->id))->toBeFalse()
-        ->and(CarbonImmutable::parse($trip->refresh()->departure_at)->equalTo($original))->toBeTrue();
+        ->and(CarbonImmutable::parse($trip->refresh()->departure_at)->equalTo($stale))->toBeTrue();
+
+    // Three days out: free to move.
+    test()->travelTo($stale->subDays(3));
+
+    expect($recompute->execute($trip->id))->toBeTrue()
+        ->and(CarbonImmutable::parse($trip->refresh()->departure_at)->equalTo($computed))->toBeTrue();
 });

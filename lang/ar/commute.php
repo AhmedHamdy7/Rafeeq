@@ -18,8 +18,13 @@ return [
         'too_far_ahead' => 'الرحلة تقدر تستمر :months شهر كحد أقصى.',
     ],
 
+    // P-1: the price is automatic, so a request that sends one is refused.
+    'price' => [
+        'set_by_rafeeq' => 'رفيق بيحدّد سعر المقعد من مسارك وعربيتك. مش ممكن يتبعت أو يتغيّر.',
+    ],
+
     'seats' => [
-        'exceeds_vehicle' => 'عربيتك بتشيل :seats بما فيهم إنت، فمش ممكن تعرض أكتر من :bookable مقعد.',
+        'exceeds_approved' => 'أقصى عدد مقاعد تقدر تعرضه :approved: ده عدد المقاعد اللي فيها حزام أمان شغّال واتعتمدت على عربيتك.',
     ],
 
     /*

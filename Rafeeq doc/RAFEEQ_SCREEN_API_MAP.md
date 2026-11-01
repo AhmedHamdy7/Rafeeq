@@ -89,7 +89,7 @@
 | # | الشاشة | الـ endpoints | الحالة |
 |---|---|---|---|
 | 23 | **DRIVER HOME** | **`GET /v1/driver/home`** (تجميعة) · `GET /v1/commutes` · `GET /v1/driver/seat-requests` | ⚠️ التجميعة بقت موجودة: `nextRun` (المسار + `departsInMinutes` + `isToday` + `attendance` + `seatsOpen` + **`collectPiastres` و`keepPiastres`** + الركاب المعتمدين بنقطة كل واحد وحالة حضوره) + `pendingRequests` (العدد الكامل + أول ٥) + `stats` (`onTimeRate` · `completedTrips` · `avgDetourMinutes`). راكب مش سائق بياخد تجميعة فاضية مش 404، عشان زرار تبديل الدور نفسه على الشاشة دي. **زرار Start trip بقى موجود** (`POST /v1/trips/{trip}/start`). و**عدّاد الانتظار** بقى موجود (`POST /v1/trips/{trip}/wait-timers`). و**Cancel today** بقى موجود (`POST /v1/trips/{trip}/cancel` — القسم 8.6) |
-| 24 | PUBLISH ROUTE | `POST /v1/commutes` · `PUT .../route` · `PUT .../schedule` · `GET /v1/commutes/{commute}/price-suggestion` | ⚠️ السعر المقترح بقى موجود: الرد فيه `suggestedPiastres` + `min`/`max` للـ slider + `runCostPiastres` و`assumedOccupancy` عشان الشاشة تبيّن السبب. **الحدود اتصححت لـ 5,000–12,000 قرش** (50–120 ج.م) زي الـ slider والـ ERD. الباقي: **تعارض فلوس خطير**، القسم 8 تحت |
+| 24 | PUBLISH ROUTE | `POST /v1/commutes` · `PUT .../route` · `PUT .../schedule` · `GET /v1/commutes/{commute}/price` | ✅ السعر بقى أوتوماتيك (P-1، D-0016): السواق مش بيدخل سعر خالص. `GET .../price` بيرجّع `seatPricePiastres` و`driverSharePiastres` («المقعد 110 ج.م · ليك 100»)، read-only. **شيلوا الـ slider والـ tiers.** عدد المقاعد ≤ `approvedSeats` بتاع العربية |
 | 25 | PUBLISH REVIEW | `GET /v1/commutes/{commute}` · `POST .../publish` | ✅ |
 | 31 | VEHICLE CAPTURE | `POST /v1/driver/vehicles` · `POST .../documents` | ⚠️ الناقص: **صورتين للعربية** (الجدول فيه `photo_path` واحد) · **`Seat belts (all seats)` مش متمودل في أي مكان** · **`Air conditioning`** متمودلة على مستوى الرحلة (`CommuteRuleKey::Ac`) مش العربية — الشاشة حاطتها على العربية |
 
@@ -315,7 +315,7 @@
 | — | `POST /v1/driver/seat-requests/{id}/waitlist` | 28 | ✅ |
 | — | سبب الرفض كنص + نسبة الإنجاز + زمن المراجعة المتوقع | 15 | ✅ |
 | — | `flexibility` + `wantsReturnTrip` + تصحيح الميزانية لشهرية | 18 | ✅ |
-| — | `GET /v1/commutes/{commute}/price-suggestion` (§23.3) + تصحيح حدود السعر لـ 50–120 ج.م | 24 | ✅ |
+| — | ~~price-suggestion~~ (اتبدل بـ `GET /v1/commutes/{commute}/price` في 2026-10-31) (§23.3) + تصحيح حدود السعر لـ 50–120 ج.م | 24 | ✅ |
 | — | `GET /v1/home` و`GET /v1/driver/home` — تجميعتين | 9 · 23 | ✅ |
 
 **الترقيع خلص.** الباقي محتاج مرحلة جديدة مش ترقيع: `check-in` و`Start trip` والـ wait timer (Phase 9) · التقييمات والمراجعات (Phase 10) · تفصيل السعر في شاشة 12 (محجوز بتعارض الفلوس 8.1).
