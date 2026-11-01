@@ -160,7 +160,6 @@ it('needs every seated passenger inside the window, not just the first to answer
      */
     ScheduledTrip::query()->whereKey($this->trip->id)->update([
         'departure_at' => now()->addHours(48),
-        'booking_deadline_at' => now()->addHours(36),
     ]);
 
     $second = verifiedPassenger('01222220007', device: 'pax-7');

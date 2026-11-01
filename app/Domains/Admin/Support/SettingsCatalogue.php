@@ -71,7 +71,9 @@ final class SettingsCatalogue
         'commute.max_dropoff_points' => ['group' => 'commute', 'min' => 1, 'max' => 6, 'unit' => 'stops'],
         'commute.schedule_lock_hours' => ['group' => 'commute', 'min' => 1, 'max' => 48, 'unit' => 'hours'],
 
-        // ---- Money -------------------------------------------------------
+        // ---- Booking and the waiting list (Feature 03 R-1, BOOK-18) --------
+        // How many people may wait on one commute; past it `BOOKING_WAITLIST_FULL`.
+        'booking.max_waitlist_size' => ['group' => 'booking', 'min' => 1, 'max' => 50, 'unit' => 'passengers'],
 
         // ---- The trip itself (Chapter 8) ---------------------------------
         'trip.start_window_minutes' => ['group' => 'trip', 'min' => 15, 'max' => 240, 'unit' => 'minutes'],

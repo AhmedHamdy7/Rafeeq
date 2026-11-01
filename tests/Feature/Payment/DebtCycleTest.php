@@ -21,6 +21,7 @@ use App\Domains\Payment\Models\DebtPayment;
 use App\Domains\Payment\Support\DebtLedger;
 use App\Domains\Payment\Support\SettlementWeek;
 use App\Domains\Shared\Exceptions\DomainException;
+use Carbon\CarbonImmutable;
 use Illuminate\Support\Facades\Storage;
 
 /**
@@ -238,4 +239,64 @@ it('gives the harmed side a coupon of half a fee that was collected, never more 
     // One coupon per fee.
     expect(fn () => app(ManageDebtAction::class)->issueCoupon($fee, $admin, 'Again.'))
         ->toThrow(DomainException::class);
+
+    // And she is told (follow-up A6), with the amount and nothing else.
+    expect(noticesOf($this->driver, 'coupon_issued'))->toHaveCount(1);
+});
+
+/*
+|--------------------------------------------------------------------------
+| Follow-up A6: every money notice the app has to route
+|--------------------------------------------------------------------------
+*/
+
+function noticesOf(User $user, string $type)
+{
+    return Notification::query()->where('user_id', $user->id)->where('type', $type)->where('channel', 'in_app')->get();
+}
+
+it('reminds her on Thursday evening that this week’s commission is due tomorrow', function () {
+    owe($this->driver->id, 1_800, weeksAgo: 0);
+
+    // Thursday before the reminder hour: nothing yet.
+    $this->travelTo(CarbonImmutable::parse('2026-10-01 12:00:00', 'Africa/Cairo'));
+    $this->artisan('payments:sweep-debts')->assertSuccessful();
+    expect(noticesOf($this->driver, 'debt_due_tomorrow'))->toHaveCount(0);
+
+    $this->travelTo(CarbonImmutable::parse('2026-10-01 19:00:00', 'Africa/Cairo'));
+    $this->artisan('payments:sweep-debts')->assertSuccessful();
+    $this->artisan('payments:sweep-debts')->assertSuccessful();
+
+    // Once a day, however often the sweep runs.
+    expect(noticesOf($this->driver, 'debt_due_tomorrow'))->toHaveCount(1);
+});
+
+it('tells her she is overdue after the Friday, and warns her the Thursday before suspension', function () {
+    owe($this->driver->id, 1_800, weeksAgo: 1);
+    $this->artisan('payments:sweep-debts')->assertSuccessful(); // adds the late fee
+
+    $this->travelTo(CarbonImmutable::parse('2026-09-27 19:00:00', 'Africa/Cairo'));
+    $this->artisan('payments:sweep-debts')->assertSuccessful();
+
+    expect(noticesOf($this->driver, 'debt_overdue'))->toHaveCount(1);
+
+    $this->travelTo(CarbonImmutable::parse('2026-10-01 19:00:00', 'Africa/Cairo'));
+    $this->artisan('payments:sweep-debts')->assertSuccessful();
+
+    expect(noticesOf($this->driver, 'debt_suspension_warning'))->toHaveCount(1)
+        ->and(DebtAccount::query()->where('user_id', $this->driver->id)->where('side', 'driver')->sole()->suspended_at)->toBeNull();
+});
+
+it('tells her when staff confirm or reject an "I paid"', function () {
+    $admin = AdminUser::factory()->create();
+    owe($this->driver->id, 1_800, weeksAgo: 0);
+
+    $found = DebtPayment::factory()->create(['user_id' => $this->driver->id, 'side' => DebtSide::Driver, 'amount_piastres' => 1_800]);
+    app(ManageDebtAction::class)->confirmPayment($found, $admin);
+
+    $missing = DebtPayment::factory()->create(['user_id' => $this->driver->id, 'side' => DebtSide::Driver, 'amount_piastres' => 500]);
+    app(ManageDebtAction::class)->rejectPayment($missing, $admin, 'Not in the account.');
+
+    expect(noticesOf($this->driver, 'debt_payment_confirmed'))->toHaveCount(1)
+        ->and(noticesOf($this->driver, 'debt_payment_rejected'))->toHaveCount(1);
 });

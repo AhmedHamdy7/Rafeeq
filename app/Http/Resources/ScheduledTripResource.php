@@ -44,7 +44,6 @@ final class ScheduledTripResource extends JsonResource
                 SeatPriceView::viewerDrivesCommute($request, $this->commute_offer_id),
                 fn (): int => (int) $this->driver_share_piastres,
             ),
-            'bookingDeadlineAt' => $this->booking_deadline_at?->toIso8601String(),
 
             /*
              * 🔒 `receives_requests_during_ride` is deliberately NOT here, although it is a column

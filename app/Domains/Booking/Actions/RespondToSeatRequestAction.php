@@ -2,6 +2,7 @@
 
 namespace App\Domains\Booking\Actions;
 
+use App\Domains\Admin\Models\PlatformSetting;
 use App\Domains\Booking\Enums\SeatRequestCommitment;
 use App\Domains\Booking\Enums\SeatRequestStatus;
 use App\Domains\Booking\Models\SeatRequest;
@@ -118,7 +119,10 @@ final readonly class RespondToSeatRequestAction
             ->where('commute_offer_id', $request->commute_offer_id)
             ->where('status', SeatRequestStatus::Waitlisted->value);
 
-        if ($waiting->clone()->count() >= (int) config('rafeeq.booking.max_waitlist_size')) {
+        // An admin setting (Feature 03 R-1 follow-up): 10 unless operations decide otherwise.
+        $cap = (int) PlatformSetting::value('booking.max_waitlist_size', config('rafeeq.booking.max_waitlist_size'));
+
+        if ($waiting->clone()->count() >= $cap) {
             throw DomainException::of(ErrorCode::WaitlistFull);
         }
 

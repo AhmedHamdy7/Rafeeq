@@ -52,13 +52,11 @@ final class HardFilters
                 }
                 self::requireTier($offer, $criteria);
             })
-            // Only days that can still be booked. A trip whose deadline has
-            // passed is not a match, it is a disappointment with a nice score.
+            // Only days that can still be booked — up to the departure itself, since there is
+            // no earlier cut-off (R-5). A day that has left is not a match, it is a
+            // disappointment with a nice score.
             ->where('status', ScheduledTripStatus::Scheduled->value)
             ->where('departure_at', '>', now())
-            ->where(fn (Builder $trip) => $trip
-                ->whereNull('booking_deadline_at')
-                ->orWhere('booking_deadline_at', '>', now()))
             // Seats the passenger actually needs, compared column to column so
             // the database does the arithmetic and the index still applies.
             ->whereRaw('(seats_total - seats_taken) >= ?', [$criteria->seatsNeeded])

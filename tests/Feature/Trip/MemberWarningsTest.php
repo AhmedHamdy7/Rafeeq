@@ -387,7 +387,6 @@ it('says nothing about a cancellation made in good time', function () {
      */
     ScheduledTrip::query()->whereKey($this->tripId)->update([
         'departure_at' => now()->addDays(5),
-        'booking_deadline_at' => now()->addDays(4),
     ]);
 
     test()->flushHeaders()->withToken($this->paxToken)

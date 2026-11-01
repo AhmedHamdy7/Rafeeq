@@ -301,7 +301,8 @@ return [
         'during_ride_request_expiry_minutes' => 3,
 
         // How many people may wait for a seat on one commute. Beyond this the
-        // queue is long enough that joining it is a false hope.
+        // queue is long enough that joining it is a false hope. The shipped
+        // default; operations change it from the settings page.
         'max_waitlist_size' => 10,
 
         /*
@@ -512,12 +513,6 @@ return [
          * the horizon forward instead.
          */
         'generation_horizon_days' => 30,
-
-        /*
-         * Local hour the night before after which a trip stops taking bookings,
-         * so a driver knows their passenger list before they sleep.
-         */
-        'booking_deadline_hour' => 21,
 
         // Chapter 4 §4: "no infinite commutes" — an end date is mandatory, and
         // this bounds how far out it may be.

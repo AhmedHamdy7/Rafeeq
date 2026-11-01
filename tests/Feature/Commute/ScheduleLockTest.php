@@ -50,7 +50,6 @@ function departingInHours(string $tripId, float $hours): ScheduledTrip
         'promised_arrival_at' => $departure->copy()->addMinutes(55),
         // Otherwise the ordinary booking deadline refuses first and this would pass for the wrong
         // reason.
-        'booking_deadline_at' => $departure->copy()->addMinute(),
     ])->save();
 
     return $trip->refresh();

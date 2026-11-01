@@ -81,6 +81,24 @@ it('tells the driver about a new seat request, by the passenger first name only'
         ->and($note->data)->toEqual(['seatRequestId' => $requestId, 'kind' => 'seat_request']);
 });
 
+/**
+ * Feature 03 R-1 (BOOK-18), follow-up A6: a request on a full day is an application to his waiting list,
+ * and the lock screen says so rather than promising a seat.
+ */
+it('tells the driver about a waiting-list application in its own words', function () {
+    ScheduledTrip::query()->whereKey($this->tripId)->update(['seats_taken' => 3]);
+
+    $requestId = requestSeat($this->paxToken, $this->commuteId, ['scheduledTripId' => $this->tripId])
+        ->assertStatus(201)->json('data.id');
+
+    $note = inboxOf($this->driver)->sole();
+
+    expect($note->type)->toBe('waitlist_application_received')
+        ->and($note->category->value)->toBe('booking')
+        ->and($note->body)->toContain('waiting list')
+        ->and($note->data)->toEqual(['seatRequestId' => $requestId, 'kind' => 'waitlist_application']);
+});
+
 it('tells the passenger when the driver says yes', function () {
     approveSeat($this->driverToken, requestSeat($this->paxToken, $this->commuteId, ['scheduledTripId' => $this->tripId])->json('data.id'));
 

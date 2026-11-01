@@ -204,10 +204,22 @@ it('excludes a commute whose driver requires a higher trust level', function () 
     expect(search($token)->assertOk()->json('data'))->toBe([]);
 });
 
-it('excludes days whose booking deadline has passed', function () {
+/**
+ * 🔴 Feature 03 R-5 (follow-up N2): there is no booking deadline. Tomorrow's 07:05 is still a match at
+ * 23:30 tonight — it used to vanish at 21:00 — and stops being one only once it has left.
+ */
+it('still shows tomorrow morning late the night before', function () {
+    $this->travelTo(CarbonImmutable::parse('2026-09-26 23:30:00', 'Africa/Cairo'));
+
     $token = passenger('01112223344');
 
-    ScheduledTrip::query()->update(['booking_deadline_at' => CarbonImmutable::now()->subHour()]);
+    expect(search($token)->assertOk()->json('data'))->toHaveCount(1);
+});
+
+it('excludes days that have already left', function () {
+    $token = passenger('01112223344');
+
+    ScheduledTrip::query()->update(['departure_at' => CarbonImmutable::now()->subHour()]);
 
     expect(search($token)->assertOk()->json('data'))->toBe([]);
 });

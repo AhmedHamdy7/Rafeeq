@@ -409,8 +409,10 @@ custom meeting point, and so your screen can grey out a point the driver would r
 
 🔴 **`agreedToRules` must be true and the refusals here are the ones to render properly**, not as a
 generic error: `SEAT_UNAVAILABLE` (409 — taken while they were deciding), `BOOKING_DEADLINE_PASSED`
-(409), `BOOKING_ALREADY_REQUESTED` (409), `VERIFICATION_REQUIRED` (403 — send them to step 4 and
-bring them back).
+(422 — that day has already left; there is **no** earlier cut-off), `BOOKING_ALREADY_REQUESTED` (409),
+`SEAT_REQUEST_WOMEN_ONLY` (403), `VERIFICATION_REQUIRED` (403 — send them to step 4 and bring them
+back). A request on a **full** day is not refused: it comes back `201` with `kind: waitlist_application`
+(4.7).
 
 #### C. Driver: answering it
 
@@ -1702,7 +1704,13 @@ lives under `/commutes`, so these do too.
 
 #### `DELETE /commutes/{commute}` — verified
 
-Archives. Nothing is deleted: history stays, and only future days nobody has taken are cancelled.
+Archives. Nothing is deleted: history stays. 🔴 **Every upcoming day is cancelled, booked ones
+included** (Feature 03 C-8, COM-35): each confirmed seat becomes `CANCELLED_BY_DRIVER`, each
+passenger gets one `commute_deleted_seat_cancelled` (4.14), and every open request and waiting-list
+place on it closes as `COMMUTE_ARCHIVED` — nobody is put on a waiting list for a commute that no
+longer exists. A run already under way is left alone. The driver pays the cancel fee by notice per
+confirmed seat (16h+: 0 · 10–16h: 10 % · < 10h: 25 %) — **show it first** with
+`GET /commutes/{commute}/cancel-preview?action=delete`.
 
 ---
 
@@ -1916,9 +1924,13 @@ has not seen before.
 > it will be recorded as `custom_map`, which is the truth.
 
 `agreedToRules` is mandatory and the moment is stored, not a flag — in a dispute what matters is
-when they agreed. Expected refusals: `SEAT_UNAVAILABLE`, `BOOKING_DEADLINE_PASSED` (bookings close
-at 21:00 the night before), `BOOKING_ALREADY_REQUESTED` (one open request per commute),
-`BOOKING_OWN_COMMUTE`, `BOOKING_RECURRING_DAYS_NOT_OFFERED`, and four about the two points:
+when they agreed. Expected refusals: `SEAT_UNAVAILABLE`, `BOOKING_DEADLINE_PASSED` (422 — **only**
+once that day's departure has passed: the old 21:00-the-night-before cut-off is gone, R-5, so a day
+takes requests right up to when it leaves), `BOOKING_ALREADY_REQUESTED` (one open request per
+commute), `BOOKING_OWN_COMMUTE`, `BOOKING_RECURRING_DAYS_NOT_OFFERED`,
+**`SEAT_REQUEST_WOMEN_ONLY` (403)** — a women-only commute is **shown to everybody** in search
+(`womenOnly: true`, C-11, BOOK-31), and only a woman may ask; hide or disable the button for anybody
+else rather than letting them hit this — and four about the two points:
 
 | Code | Means |
 |---|---|
@@ -1930,6 +1942,26 @@ at 21:00 the night before), `BOOKING_ALREADY_REQUESTED` (one open request per co
 > 🔴 The detour is measured **by us**, for both points at once, against the route as published —
 > never accepted from the request. Use `POST /commutes/{commute}/pickup-preview` to show the cost
 > beside the pin while she is still choosing.
+
+##### A full day, or a time she already rides: a waiting-list application (R-1, R-3, BOOK-18, BOOK-34)
+
+🔴 **Not a refusal.** If the day she asks for is full — or, for a recurring request, **every** upcoming
+day she asked for is full — or she already holds a confirmed seat that overlaps it in time on another
+commute, the call still answers **`201`** with the request **`status: PENDING`** and
+**`kind: waitlist_application`**. It is the driver's turn either way: his yes puts her on his waiting
+list (`POST /driver/seat-requests/{seatRequest}/waitlist`), it does not seat her. Say so on her screen
+("Asked to join the waiting list"), not "Seat requested". The driver is told with
+`waitlist_application_received` instead of `seat_requested` (4.14).
+
+A `seat_request` can **turn into** a `waitlist_application` while it waits — the day filled up, or
+another driver confirmed her for the same time — never back. Re-read `kind` rather than caching it.
+
+**One seat per passenger per time slot** (R-3, BOOK-17). She can hold a 07:05 to work and a 17:00
+home on the same date, but never two seats whose times overlap, on any commutes. That is enforced
+wherever a seat is given (approval, accepting a waiting-list offer, the nightly recurring
+extension): the refusal is `409 BOOKING_ALREADY_BOOKED` with `error.fields.overlapsBookingId` —
+**her own** booking, so you may name it to her. A switch is the exception: the old seat is given up
+in the same call.
 
 ##### Asking a car that is already moving (v5 §148, §416)
 
@@ -1984,8 +2016,18 @@ Withdraws it, freeing the one-open-request slot.
 
 #### `GET /driver/seat-requests` — active, profile complete, paginated
 
-The driver's inbox, **oldest first** — the person who has waited longest is the one whose answer
-is most overdue, and a request expires after 48 hours. Each carries a `passenger` (5.1).
+The driver's inbox, **newest first**. Each carries a `passenger` (5.1) and two fields only this
+list has meaning for:
+
+| Field | Meaning |
+|---|---|
+| `kind` | `seat_request` → his buttons are **Approve** (`/approve`), **Waitlist** (`/waitlist`) and **Decline** (`/reject`). `waitlist_application` → the day has no seat for her, so his yes is **Add to waiting list** (`/waitlist`) and his no is **Decline**; do not offer Approve. |
+| `hasOtherConfirmedCommute` | A bare boolean: she already holds a confirmed future seat on **another** commute. Show it as a hint ("Already rides with someone") — nothing is blocked on it, and nothing more is published. |
+
+🔴 **Requests never expire** (R-4, BOOK-36). There is no 48-hour clock any more: a request stays
+until he answers, she withdraws, or — for a one-day request — its day passes (then
+`CLOSED_DATE_PASSED`). The one countdown left is a request on a car **already moving**
+(`expiresAt` three minutes out, above). Do not draw a timer on any other card.
 
 #### `POST /driver/seat-requests/{seatRequest}/approve` — active, profile complete
 
@@ -1999,13 +2041,25 @@ One call handles both a trial and a recurring membership.
 | `seatedDays` | How many days were successfully booked. |
 | `skippedDays` | Days that could not be booked because they were already full. **Show these** — a member who thinks they have five days and has four will find out on the wrong morning. |
 
+Refusals to handle: `SEAT_UNAVAILABLE` (the day filled — offer **Waitlist** instead),
+`SEAT_REQUEST_NOT_PENDING`, **`BOOKING_ALREADY_BOOKED`** (409 — she already holds a seat at an
+overlapping time; `error.fields.overlapsBookingId` is hers and is **not** shown to the driver, so
+just say she is no longer free then), `BOOKING_DEADLINE_PASSED` (the day has left),
+`BOOKING_BREAKS_FROZEN_PROMISE`, `DRIVER_COMMISSION_OVERDUE`.
+
 #### `POST /driver/seat-requests/{seatRequest}/reject` — active, profile complete
 
 **Request:** `responseNote` (optional).
 
 #### `POST /driver/seat-requests/{seatRequest}/waitlist` — active, profile complete
 
-Moves the request to the waitlist and sets `waitlistPosition`.
+Moves the request to the waitlist and sets `waitlistPosition`. **This is the approve call for a
+`waitlist_application`** (BOOK-18): the driver accepting her onto his list. The place never expires
+(`expiresAt: null`).
+
+**`409 BOOKING_WAITLIST_FULL`** once **10** people are already waiting on that commute. The 10 is an
+**admin setting** (`booking.max_waitlist_size`, Settings → Booking and waiting list), so never
+hard-code it — show the refusal as "Your waiting list is full" and let him decline instead.
 
 🔴 **This changed, and your screen 20 was right all along.** It used to promote **one** person into
 the driver's inbox as a fresh decision. Now, when a seat frees, it is **offered to everybody
@@ -2114,7 +2168,7 @@ POST /driver/seat-requests/{seatRequest}/counteroffer
 |---|---|
 | **Nothing is committed** | The request becomes `COUNTEROFFERED`. The agreed points do **not** move, no booking is created, and no seat is taken. Only the end she actually moved is recorded — counter the drop-off and `counteroffer.pickup` stays null, so the passenger is shown one decision instead of being asked to re-agree to her own choice. |
 | **It is still her one open request** | She cannot file another on this commute while the conversation is live. |
-| **It expires** | On the usual request window, restarted from the counteroffer. A proposal nobody answers closes. |
+| **It does not expire** | Like every request (R-4). It stays open until she accepts or declines it, or withdraws. |
 | **Pending only** | A waitlisted request answers `409 SEAT_REQUEST_NOT_PENDING`: she is on a list because there was no seat, and countering her meeting point would answer a question nobody asked. |
 
 The proposed pair is judged by the same rules as a passenger's own — `SEAT_REQUEST_POINTS_SAME`,
@@ -2449,7 +2503,9 @@ attendance decision acceptable, and it is the passenger's only move.
 | Field | Meaning |
 |---|---|
 | `id`, `commuteId`, `tripId` | `tripId` is set for a trial request. |
-| `status` | `PENDING` · `APPROVED` · `REJECTED` · `WAITLISTED` · `WITHDRAWN` · `EXPIRED` · `ENDED`. `ENDED` means the approval outlived the membership it created — it frees the slot so the person can ask to rejoin. |
+| `status` | `PENDING` · `APPROVED` · `REJECTED` · `WAITLISTED` · `WITHDRAWN` · `EXPIRED` · `CLOSED_DATE_PASSED` · `COMMUTE_ARCHIVED` · `COUNTEROFFERED` · `COUNTEROFFER_DECLINED` · `TERMS_CHANGED` · `ENDED`. `ENDED` means the approval outlived the membership it created — it frees the slot so the person can ask to rejoin. `EXPIRED` is now only an unanswered request on a moving car (3 minutes) or a day the driver called off; `CLOSED_DATE_PASSED` is a one-day request whose day went by; `COMMUTE_ARCHIVED` is a deleted commute. |
+| `kind` | 🔴 `seat_request` · `waitlist_application` — what she is asking for (see "A full day" above). Branch on it in both apps. |
+| `hasOtherConfirmedCommute` | Only on `GET /driver/seat-requests`; absent elsewhere. |
 | `commitment` | `trial` · `recurring`. |
 | `requestedDaysMask` | For recurring. |
 | `seats` | 1–4. |
@@ -2459,7 +2515,7 @@ attendance decision acceptable, and it is the passenger's only move.
 | `agreedToRulesAt` | **A moment, not a flag** — in a dispute what matters is when they agreed. |
 | `waitlistPosition` | Only while waiting for a seat. |
 | `responseNote` / `respondedAt` | The driver's answer. |
-| `expiresAt` | A request nobody answers expires after 48 hours, so it stops holding the one open request. |
+| `expiresAt` | `null` — requests never expire (R-4). Set only on a request to a car already moving, three minutes out. |
 | `passenger` | A `person` (5.1), on the driver's inbox. |
 
 #### The scheduled-trip and booking shapes
@@ -2474,7 +2530,9 @@ attendance decision acceptable, and it is the passenger's only move.
 | `status` | `SCHEDULED` · `PREPARING` · `EN_ROUTE` · `IN_PROGRESS` · `COMPLETED` · `CANCELLED` · **`EXPIRED`** (new — the morning was never driven, see 4.9). |
 | `seatsTotal` / `seatsTaken` / `seatsAvailable` | Snapshotted when the day was generated — a later change to the commute does not retroactively move them. |
 | `pricePerSeatPiastres` | Snapshotted the same way. |
-| `bookingDeadlineAt` | **21:00 the night before.** After this, requests are refused with `BOOKING_DEADLINE_PASSED`. |
+
+🛑 **`bookingDeadlineAt` is gone** (R-5): there is no booking cut-off, so a day takes requests until its
+`departureAt`. Stop reading the field and remove any "book before 9 pm" copy.
 
 **Booking** — one seat on one day.
 
@@ -2490,7 +2548,7 @@ attendance decision acceptable, and it is the passenger's only move.
 | `paymentType` | `cash`. `online` is refused with `422 PAYMENT_TYPE_NOT_AVAILABLE` until a payment provider exists (P-4). |
 | `paymentStatus` | `NOT_DUE` (nothing recorded yet) · `PENDING` · `PAID` · `FAILED` · `REFUNDED` · `DISPUTED`. **Cash:** the passenger pays in the car; the booking turns `PAID` about **two hours after the driver confirms they travelled** (the delay lets a wrong tap be noticed). A no-show stays `NOT_DUE`. `DISPUTED` as soon as the passenger contests the attendance record, until staff decide. |
 | `meetingPoint` | `{lat, lng, isExact}`, or **`null` for the standard point** — which is the run's origin. |
-| `cancelledAt`, `cancelledReason`, `cancellationFeePiastres` | The fee is always `0` today. |
+| `cancelledAt`, `cancelledReason`, `cancellationFeePiastres` | `cancellationFeePiastres` stays `0`: the real fees are charged to the debt ledger, not here — show `feeLinePiastres` / `feeLineReason` on the booking and the debt screen (4.16). |
 | `otherPartyUserId` | 🔒 **The other person's user id — the driver's to the passenger, the passenger's to the driver — only once the journey is over** (`COMPLETED` · `ENDED_EARLY` · `NO_SHOW` · `EXITED_DUE_TO_DRIVER_DELAY`); `null` before. It is what the trip summary's **Block** sends (`POST /safety/blocked-users`). Before the trip there is no reason for either of you to hold a handle on the other, so don't cache it from anywhere else. |
 | `trip` | The scheduled trip above, when loaded. |
 
@@ -3421,7 +3479,8 @@ are frightened of must not thereby inform them of it. Your UI must not leak it e
 🔴 **Blocking cancels every upcoming booking the two of you share** (Feature 03 X-4, 2026-10-31) — every
 `CONFIRMED` seat on a day that has not set off, whichever of you is the driver. Each is cancelled **as
 the blocker**, through the ordinary cancellation, so the normal rules apply: her reliability record
-takes the usual mark and whatever fee the rules charge is charged (**0 today**). A run already under
+takes the usual mark and the ordinary fee is charged — **real money since 2026-11-01** (as the driver,
+the cancel fee by notice per seat; as a passenger, a late cancel inside 12 hours). A run already under
 way is not touched. 🔒 The blocked person gets the ordinary `booking_cancelled` notification and
 **nothing else** — no reason is written on the booking (`cancelledReason` is `null`), because both
 sides can read it. Completed history is untouched.
@@ -3436,8 +3495,8 @@ happens.
 | Response field | Meaning |
 |---|---|
 | `bookingsToCancel` | `[{ bookingId, tripId, departureAt, role }]`, soonest first. `role` is **her** side of that booking (`passenger` · `driver`). Empty when there is nothing to cancel — then skip straight to the plain confirm. |
-| `feePiastres` | What the normal cancellation rules would charge her for them. **Always `0` today** (the fee ladders are not built yet); show it when it is not `0`. |
-| `reason` | Which rule the fee comes from, once there is one. `null` today. |
+| `feePiastres` | What the normal cancellation rules will charge her for them — **the real amount**, computed by the same rules the block then applies (X-4, D5). As the driver: per confirmed seat by notice (16h+: 0 · 10–16h: 10 % · < 10h: 25 %). As a passenger: the late-cancel fee on her own counter for each seat inside 12 hours of departure — dropped later if the seat is refilled, so this is the most it can cost. `0` when nothing is that close. **Show it on the confirm sheet whenever it is not `0`.** |
+| `reason` | Which rule the fee comes from, to word it: `driver_cancel` · `late_cancel`, or `null` when `feePiastres` is `0`. |
 
 Same refusals as the block, so the preview is no better a way to test whether an id exists:
 `CANNOT_BLOCK_SELF` (403) · `404` for an id that is nobody.
@@ -3718,13 +3777,63 @@ hold must still be able to read the notice that says so.
 
 | Response field | Meaning |
 |---|---|
-| `type` | What happened — route on this. Today: `seat_requested` (driver) · `seat_approved` · `seat_declined` · `booking_cancelled` (to the other side) · `commute_paused_seat_cancelled` (the commute was paused, her booked days are cancelled and she is back on the waiting list; `data.commuteId`, `data.bookingId`) · `vehicle_replaced_seat_cancelled` (the same news for a replaced car; same `data`) · `seats_offered_by_driver` (a driver picked her off the waiting list and offered her seats — `data.commuteId`, `data.seatRequestId`; the first acceptance of each day still wins) · `trip_day_cancelled` (the driver called off a day — `data.tripId`, `data.bookingId`) · `departure_time_changed` (driver: RAFEEQ moved his departure for one day — `data.scheduledTripId`, `data.commuteId`) · `match_found` (a saved request matched — `data.commuteId`) · `trip_started` · `chat_message` · `rating_due` (passenger, `data.bookingId`) · `rating_due_riders` (driver, once per run, `data.tripId`) · `rating_reminder` (last day of the window, once) · `sos_picked_up` · `report_resolved` · `report_closed` · `account_on_hold` · `account_reinstated` · **since 2026-10-31 (Feature 03 §8):** `trip_starts_in_hour` and `trip_starts_soon` (to the driver and every confirmed passenger, an hour and ten minutes before departure; `data.tripId`, plus `data.bookingId` for a passenger or `data.commuteId` for the driver) · `driver_heading_to_you` (the driver just finished the pickup before hers; `data.bookingId`, `data.tripId`) · `driver_arrived` (`data.bookingId`, `data.tripId`) · `commute_still_not_started` (the +10 minutes "not set off", after `commute_not_started_warning` at +5) · `driver_documents_approved` · `driver_documents_rejected` (`data.driverProfileId`; the reason is on the application, never in the push) · `licence_expiring` (once per expiry date, when the card turns "Expiring"). **Expect new values**; show an unknown one as a plain message. |
+| `type` | What happened — **route on this**. Every value is in the table below. **Expect new values**; show an unknown one as a plain message. |
 | `category` | `booking` · `payment` · `trip` · `safety` · `marketing`. |
 | `title` / `body` | **Already in the member's language** — rendered when the message was sent, and stored as written. Show them as they are. They never contain a phone number, an address or a full name: a push body appears on a lock screen. |
 | `data` | Ids for the screen to open: `seatRequestId`, `commuteId`, `tripId`, `sosId`, `incidentId`. Never names. |
 | `isRead` / `readAt` / `createdAt` | |
 
 `meta.unreadCount` is the badge, counted over the whole inbox, not the page.
+
+##### Every `type`, by who receives it
+
+`data` holds ids only, all strings. Where a row says *no ids*, the amounts are already in `title` /
+`body`: open the screen named. ⭐ marks types added or confirmed on 2026-11-01 (follow-up A6).
+
+| `type` | To | Open | `data` |
+|---|---|---|---|
+| `seat_requested` | driver | the request card | `seatRequestId`, `kind` (`seat_request`) |
+| ⭐ `waitlist_application_received` | driver | the request card, as a waiting-list application (4.7) | `seatRequestId`, `kind` (`waitlist_application`) |
+| `seat_approved` · `seat_declined` | passenger | her request / booking | `seatRequestId` (+ `commuteId` on approval) |
+| `seat_counteroffered` · `seat_counteroffer_declined` | the other side | the request | `seatRequestId` (+ `commuteId`) |
+| `seat_offered` | passenger on a waiting list | the offer (`GET /seat-offers`) | `offerId`, `tripId`, `commuteId` |
+| `seats_offered_by_driver` | passenger on a waiting list | her offers | `commuteId`, `seatRequestId` |
+| `booking_cancelled` | the other side | the booking | `bookingId` |
+| `trip_day_cancelled` | passenger | the booking | `tripId`, `bookingId` |
+| `commute_paused_seat_cancelled` · `vehicle_replaced_seat_cancelled` | passenger (back on the waiting list) | the commute | `commuteId`, `bookingId` |
+| `commute_deleted_seat_cancelled` | passenger (**not** on any list) | her bookings | `commuteId`, `bookingId` |
+| `change_proposal_received` · `_revised` · `_applied` · `_rejected` | passenger / driver | the proposal (4.7) | `changeProposalId` (+ `bookingId` / `commuteId`) |
+| `waitlist_cleared_by_change` | passenger | the commute | `commuteId` |
+| `departure_time_changed` | driver | that day | `scheduledTripId`, `commuteId` |
+| `match_found` | passenger | the match | `commuteId`, `demandId` |
+| `trip_starts_in_hour` · `trip_starts_soon` | driver and each confirmed passenger | the trip | `tripId` + `bookingId` (passenger) or `commuteId` (driver) |
+| `trip_started` · `driver_heading_to_you` · `driver_arrived` | passenger | the live trip | `tripId` (+ `bookingId`) |
+| `commute_not_started_reminder` | driver, departure **+1 min** | Start | `tripId`, `commuteId` |
+| ⭐ `commute_not_started_warning` | each passenger, **+5 min** — "driver late" | her booking (`driverDelay`) | `bookingId`, `tripId` |
+| ⭐ `commute_still_not_started` | each passenger, **+10 min** | her booking | `bookingId` |
+| `commute_day_expired` | each passenger, +20 min | her booking | `bookingId`, `tripId` |
+| `passenger_ended_early` · `passenger_exited_driver_delay` | driver | the trip | `bookingId`, `tripId` |
+| `active_trip_cancelled` · `active_trip_cancelled_aboard` | passenger | alternatives (4.9) | `bookingId`, `tripId` |
+| `early_drop_check` | passenger | "Did you ask to get off here?" (4.9) | `bookingId` |
+| `late_boarding_warning` · `missed_commitment_warning` | passenger | warnings (4.2) | `warningId`, `bookingId` |
+| `no_show_fee` · `late_boarding_fee` · `late_cancel_fee` · `late_cancel_fee_charged` · `late_cancel_fee_waived` | passenger | warnings (4.2), with the 48-hour appeal | `warningId`, `bookingId` |
+| `driver_cancel_fee` · `driver_ended_trip_fee` · `driver_no_show_fee` · `driver_late_fee` | driver, one per act | the debt screen (4.16), with the 48-hour appeal | *no ids* |
+| `appeal_approved` · `appeal_declined` | the one who appealed | the debt screen / reliability | as relevant (`reliabilityEventId`) |
+| ⭐ `debt_due_tomorrow` | driver, **Thursday** from the reminder hour, when this week's commission is unpaid — "commission due tomorrow" | the debt screen (4.16) | *no ids* |
+| ⭐ `debt_overdue` | driver, once a day after the Friday while anything is late — "commission overdue" | the debt screen | *no ids* |
+| `debt_late_fee_added` | driver, the day the +10 % is added | the debt screen | *no ids* |
+| ⭐ `debt_suspension_warning` | driver, the Thursday before suspension | the debt screen | *no ids* |
+| ⭐ `debt_payment_confirmed` · ⭐ `debt_payment_rejected` | whoever sent "I paid" — "commission payment confirmed / rejected" | the debt screen | *no ids* |
+| ⭐ `coupon_issued` | the harmed side, when staff give a coupon | the debt screen (coupons) | *no ids* |
+| `driving_suspended_for_debt` · `riding_suspended_for_debt` | the suspended person (**safety** — cannot be switched off) | the debt screen | *no ids* |
+| `chat_message` | the other side | the thread | as the thread (4.15) |
+| `rating_due` · `rating_due_riders` · `rating_reminder` | passenger / driver | rate (4.13) | `bookingId` or `tripId` |
+| `sos_picked_up` · `report_resolved` · `report_closed` | the reporter | the SOS / report | `sosId` / `incidentId` |
+| `account_on_hold` · `account_reinstated` | the member (safety) | — | *no ids* |
+| `driver_documents_approved` · `driver_documents_rejected` · `licence_expiring` | driver (safety) | the application / licence | `driverProfileId` (documents) |
+
+🔴 The debt reminders fire **once a day at most**, from `debt.reminder_hour` (an admin setting, 18:00
+Cairo shipped), and never for somebody who owes nothing.
 
 #### `PATCH /notifications/read`
 
@@ -4116,6 +4225,7 @@ exist, and every live endpoint must be named here.
 
 | Date | Change |
 |---|---|
+| 2026-11-01 | 🕘 **No booking deadline, and the waiting-list flow written down (follow-ups 1.1–1.5, 2, 3, 6).** 🛑 **The 21:00-the-night-before cut-off is gone** (R-5): a day takes requests until it leaves, `bookingDeadlineAt` is **removed** from the scheduled-trip shape, and `BOOKING_DEADLINE_PASSED` now only means the day has departed. **New notification `waitlist_application_received`** to the driver when a request lands on a full day (it used to be `seat_requested`). The waiting-list cap (10, `BOOKING_WAITLIST_FULL`) is now an **admin setting**. 4.7 now documents what was already built: `kind` (`seat_request` / `waitlist_application`) and `hasOtherConfirmedCommute` on the driver's inbox, `/waitlist` as the yes to an application, **requests never expire**, one seat per passenger per time slot (`BOOKING_ALREADY_BOOKED` + `overlapsBookingId`), women-only commutes visible to everybody with `403 SEAT_REQUEST_WOMEN_ONLY`, and the new seat-request statuses. 4.5: deleting a commute cancels **every** upcoming day, booked ones too. 4.12: the block preview's `feePiastres` / `reason` are **real** (they said "always 0"). 4.14: one table of every notification type, including the commission, coupon and +5/+10 "driver late" ones. No new endpoints. |
 | 2026-11-01 | ❓ **"Did you ask to get off here?" (TRIP-20, PAY-28)** — new `POST /bookings/{booking}/early-drop` and the `early_drop_check` notification; bookings now return `feeLinePiastres`, `feeLineReason` and `earlyDrop`. A `false_arrival` report puts her no-show on that booking under review (TRIP-17). Staff now settle the money of payment disputes (PAY-31, PAY-32) and women-only misuse (PAY-47, the man is suspended until he pays) from the safety desk. |
 | 2026-11-01 | 🚗 **Driver fees (PAY-23 → PAY-29, C-5 → C-10).** New: `POST /driver/bookings/{booking}/cancel` (remove one passenger), `GET /trips/{trip}/cancel-preview` and `GET /commutes/{commute}/cancel-preview` (the fee before he confirms), `POST /account/debt/entries/{entry}/appeal` (48h). Cancelling seats costs the driver by notice (16h+: 0 · 10–16h: 10 % · < 10h: 25 %) on one passenger, Cancel today, pause, delete, a new car and a block; ending a run that set off 100 %; never coming 50 %; a passenger leaving because he was late 25 %. After a breakdown, accident or emergency a passenger aboard pays the share of her route past 25 %; otherwise nothing — her booking's `paymentStatus` is the new `WAIVED`. `PATCH /bookings/{booking}/cancel` now applies the fees. End early is the full fare. |
 | 2026-11-01 | 💸 **Passenger fees (PAY-20 → PAY-22, TRIP-26, SAFE-11).** Three counters — `NO_SHOW`, `LATE_CANCEL`, `LATE_BOARDING` — each with its ladder and a 90-day reset; `MISSED_COMMITMENT` is history only. Warnings now carry `feePiastres`, `feeStatus`, `appealBy`. A late cancel's fee waits for departure and is dropped if the seat is refilled. Appeals close after 48 hours (`APPEAL_WINDOW_CLOSED`). `away` on the group attendance cancels that day. |

@@ -50,17 +50,15 @@ pest()->extend(TestCase::class)
          * 🔴 Every test starts at the same moment, and this is not tidiness — the suite
          * was failing after 9pm.
          *
-         * A commute stops taking bookings at 21:00 the night before
-         * (`commute.booking_deadline_hour`), so a test that books a seat on the soonest
-         * generated day passed all afternoon and began returning
-         * BOOKING_DEADLINE_PASSED the moment the wall clock crossed nine. Roughly a
-         * hundred tests book a seat; all of them were quietly time-of-day dependent, and
-         * the failures name a deadline rather than a clock, so the evening it first
-         * happened would have been spent looking for a bug in the booking rules.
+         * Commutes used to stop taking bookings at 21:00 the night before, so a test that
+         * booked a seat on the soonest generated day passed all afternoon and began
+         * returning BOOKING_DEADLINE_PASSED the moment the wall clock crossed nine. That
+         * deadline is gone (R-5), but plenty still depends on the clock — the 16-hour
+         * lock, the fee ladders by notice, the Friday sweep — so the moment stays fixed.
          *
          * A Saturday at 08:00 Cairo, chosen because it is what the suite has been
          * passing under: the reference commute runs Sunday to Thursday, so the soonest
-         * generated day is tomorrow with its deadline still ahead. Tests that need a
+         * generated day is tomorrow. Tests that need a
          * different moment move the clock themselves with `travelTo`, which still works
          * relative to this one.
          */

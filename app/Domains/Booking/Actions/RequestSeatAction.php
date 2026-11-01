@@ -191,9 +191,15 @@ final readonly class RequestSeatAction
              * Always the driver's turn now, whichever she asked for (Feature 03 R-1, BOOK-18): a
              * request on a full day used to go straight onto the waiting list without him ever
              * seeing it, and BOOK-18 says he approves or rejects an application like any other.
-             * The `kind` travels in the data so his app can open the right card.
+             * An application gets its own message (`waitlist_application_received`) so the
+             * lock screen does not promise a seat; the `kind` travels in the data either way so
+             * his app can open the right card.
              */
-            Notifier::send($offer->driverProfile->user, NotificationType::SeatRequested,
+            $type = $kind === SeatRequestKind::WaitlistApplication
+                ? NotificationType::WaitlistApplicationReceived
+                : NotificationType::SeatRequested;
+
+            Notifier::send($offer->driverProfile->user, $type,
                 ['name' => $passenger->public_first_name],
                 ['seatRequestId' => $request->id, 'kind' => $kind->value],
             );

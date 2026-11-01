@@ -1,5 +1,6 @@
 <?php
 
+use App\Domains\Admin\Models\PlatformSetting;
 use App\Domains\Booking\Actions\AcceptSeatOfferAction;
 use App\Domains\Booking\Actions\OfferSeatToWaitlistAction;
 use App\Domains\Booking\Enums\BookingStatus;
@@ -487,6 +488,35 @@ it('refuses to park a request on somebody else commute', function () {
 
 it('refuses to park anybody once the queue is full', function () {
     config(['rafeeq.booking.max_waitlist_size' => 1]);
+
+    joinWaitlist('01222220001', 'pax-2', $this->commuteId, $this->trip->id);
+
+    $this->trip->forceFill(['seats_taken' => 0])->save();
+
+    $token = verifiedPassenger('01222220009', device: 'pax-9');
+
+    $requestId = requestSeat($token, $this->commuteId, ['scheduledTripId' => $this->trip->id])
+        ->assertStatus(201)->json('data.id');
+
+    test()->withToken($this->driverToken)
+        ->postJson("/api/v1/driver/seat-requests/{$requestId}/waitlist")
+        ->assertStatus(409)
+        ->assertJsonPath('error.code', 'BOOKING_WAITLIST_FULL');
+});
+
+/**
+ * The cap is the admin's (Feature 03 R-1 follow-up): 10 shipped, `booking.max_waitlist_size` on the
+ * settings page — and the page's value wins over the shipped one.
+ */
+it('takes the waiting-list cap from the admin setting', function () {
+    expect(config('rafeeq.booking.max_waitlist_size'))->toBe(10);
+
+    PlatformSetting::query()->create([
+        'setting_key' => 'booking.max_waitlist_size',
+        'setting_value' => 1,
+        'value_type' => 'integer',
+        'description' => 'One at a time',
+    ]);
 
     joinWaitlist('01222220001', 'pax-2', $this->commuteId, $this->trip->id);
 

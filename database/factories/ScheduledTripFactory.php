@@ -40,7 +40,6 @@ class ScheduledTripFactory extends Factory
             // Priced exactly as the generator prices a day, so a factory day and a real one agree.
             ...SeatPricing::quote((int) $offer->route_distance_meters, $offer->vehicle)->toTripColumns(),
             'status' => ScheduledTripStatus::Scheduled,
-            'booking_deadline_at' => now()->subDay()->setTime(21, 0),
         ];
     }
 

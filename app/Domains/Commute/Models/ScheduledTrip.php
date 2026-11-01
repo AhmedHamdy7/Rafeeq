@@ -24,7 +24,7 @@ use Illuminate\Database\Eloquent\Relations\HasOne;
  */
 #[Fillable([
     'commute_offer_id', 'commute_schedule_id', 'trip_date', 'departure_at',
-    'departure_local', 'promised_arrival_at', 'seats_total', 'booking_deadline_at',
+    'departure_local', 'promised_arrival_at', 'seats_total',
 ])]
 class ScheduledTrip extends Model
 {
@@ -59,7 +59,6 @@ class ScheduledTrip extends Model
             'pricing_min_commission_piastres' => 'integer',
             'pricing_rounding_step_piastres' => 'integer',
             'status' => ScheduledTripStatus::class,
-            'booking_deadline_at' => 'datetime',
 
             /*
              * Whether she is willing to be asked for a seat mid-journey (Feature 03 v5 §8's
