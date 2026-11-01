@@ -303,7 +303,8 @@ return [
          * leaving — and calling it an absence would keep a seat nominally held by
          * someone who is not coming back this term.
          */
-        'max_absence_days' => 60,
+        // One month (R-7, BOOK-32); longer than that is a pause with no end date.
+        'max_absence_days' => 31,
     ],
 
     'matching' => [

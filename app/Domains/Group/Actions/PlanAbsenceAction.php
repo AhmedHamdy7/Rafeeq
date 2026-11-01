@@ -4,7 +4,10 @@ namespace App\Domains\Group\Actions;
 
 use App\Domains\Booking\Actions\CancelBookingAction;
 use App\Domains\Booking\Enums\BookingStatus;
+use App\Domains\Booking\Enums\SeatRequestStatus;
 use App\Domains\Booking\Models\Booking;
+use App\Domains\Booking\Models\SeatRequest;
+use App\Domains\Booking\Support\WaitlistPositions;
 use App\Domains\Commute\Models\ScheduledTrip;
 use App\Domains\Group\Models\GroupAbsence;
 use App\Domains\Group\Models\GroupMember;
@@ -14,7 +17,13 @@ use Carbon\CarbonImmutable;
 use Illuminate\Support\Facades\DB;
 
 /**
- * "I'm away from the 20th to the 27th."
+ * "I'm away from the 20th to the 27th" — or "I'm stepping away, I don't know until when".
+ *
+ * 🔴 **Since 2026-10-31 this is the passenger PAUSE (Feature 03 R-7, BOOK-32, decision C5).** Up to
+ * a month, or with no end date at all; her seat ALWAYS goes back to the waiting list; and she joins
+ * that waiting list herself, with no guaranteed return — she is offered a seat again like everybody
+ * else once her pause is over. It is fair to the driver: he does not hold an empty seat for a month.
+ * The paragraphs below describe the absence as it was before; `releasesSeat` is now always true.
  *
  * A planned absence is how a committed member says they will not be there without
  * leaving the group — travelling, exams, a fortnight at their mother's. It is the
@@ -40,7 +49,8 @@ final readonly class PlanAbsenceAction
     public function execute(GroupMember $member, array $input): GroupAbsence
     {
         $from = CarbonImmutable::parse($input['fromDate'])->startOfDay();
-        $to = CarbonImmutable::parse($input['toDate'])->startOfDay();
+        // Null = no end date (R-7).
+        $to = isset($input['toDate']) ? CarbonImmutable::parse($input['toDate'])->startOfDay() : null;
 
         $this->assertLengthIsSane($from, $to);
         $this->assertNoOverlap($member, $from, $to);
@@ -52,16 +62,16 @@ final readonly class PlanAbsenceAction
                 'commute_group_id' => $member->commute_group_id,
                 'user_id' => $member->user_id,
                 'from_date' => $from->toDateString(),
-                'to_date' => $to->toDateString(),
+                'to_date' => $to?->toDateString(),
                 'reason' => $input['reason'] ?? null,
-                'releases_seat' => (bool) ($input['releasesSeat'] ?? false),
+                // Always (R-7): a paused passenger's seat goes to the waiting list.
+                'releases_seat' => true,
             ]);
 
             $absence->save();
 
-            if ($absence->releases_seat) {
-                $this->releaseSeats($member, $from, $to, $input['reason'] ?? null);
-            }
+            $this->releaseSeats($member, $from, $to, $input['reason'] ?? null);
+            $this->joinTheWaitingList($member, $to);
 
             return $absence;
         });
@@ -76,7 +86,54 @@ final readonly class PlanAbsenceAction
      */
     public function cancel(GroupAbsence $absence): void
     {
-        $absence->delete();
+        $absence->loadMissing('commuteGroup');
+
+        DB::transaction(function () use ($absence): void {
+            // Back in the queue as an ordinary waiting member — her old seat is not returned.
+            SeatRequest::query()
+                ->where('passenger_user_id', $absence->user_id)
+                ->where('commute_offer_id', $absence->commuteGroup->commute_offer_id)
+                ->whereNotNull('paused_at')
+                ->update(['paused_at' => null, 'paused_until' => null]);
+
+            $absence->delete();
+        });
+    }
+
+    /**
+     * R-7: she joins this commute's waiting list, at the back, paused until her pause ends — so
+     * nothing is offered to her while she is away, and when she is back she is offered a seat like
+     * everybody else waiting. No expiry: a waiting place never expires (R-4).
+     */
+    private function joinTheWaitingList(GroupMember $member, ?CarbonImmutable $to): void
+    {
+        $offerId = $member->commuteGroup->commute_offer_id;
+
+        $request = SeatRequest::query()
+            ->where('passenger_user_id', $member->user_id)
+            ->where('commute_offer_id', $offerId)
+            ->where('status', SeatRequestStatus::Approved->value)
+            ->latest('created_at')
+            ->first();
+
+        if ($request === null) {
+            return;
+        }
+
+        $back = (int) SeatRequest::query()
+            ->where('commute_offer_id', $offerId)
+            ->where('status', SeatRequestStatus::Waitlisted->value)
+            ->max('waitlist_position');
+
+        $request->forceFill([
+            'status' => SeatRequestStatus::Waitlisted->value,
+            'waitlist_position' => $back + 1,
+            'expires_at' => null,
+            'paused_at' => now(),
+            'paused_until' => $to?->toDateString(),
+        ])->save();
+
+        WaitlistPositions::renumber($offerId);
     }
 
     /**
@@ -88,14 +145,15 @@ final readonly class PlanAbsenceAction
      * atomically, writes the audit event, and offers the seat to the waiting list.
      * A shortcut would have to reimplement all four, and would get the lock wrong.
      */
-    private function releaseSeats(GroupMember $member, CarbonImmutable $from, CarbonImmutable $to, ?string $reason): void
+    private function releaseSeats(GroupMember $member, CarbonImmutable $from, ?CarbonImmutable $to, ?string $reason): void
     {
         $bookings = Booking::query()
             ->where('passenger_user_id', $member->user_id)
             ->where('status', BookingStatus::Confirmed->value)
             ->whereIn('scheduled_trip_id', ScheduledTrip::query()
                 ->where('commute_offer_id', $member->commuteGroup->commute_offer_id)
-                ->whereBetween('trip_date', [$from->toDateString(), $to->toDateString()])
+                ->where('trip_date', '>=', $from->toDateString())
+                ->when($to !== null, fn ($query) => $query->where('trip_date', '<=', $to->toDateString()))
                 // A day already travelled is not one anybody can be absent from.
                 ->where('departure_at', '>', now())
                 ->select('id'))
@@ -106,8 +164,13 @@ final readonly class PlanAbsenceAction
         }
     }
 
-    private function assertLengthIsSane(CarbonImmutable $from, CarbonImmutable $to): void
+    private function assertLengthIsSane(CarbonImmutable $from, ?CarbonImmutable $to): void
     {
+        // No end date is allowed (R-7): nothing to measure.
+        if ($to === null) {
+            return;
+        }
+
         // The order is also a CHECK constraint on the table; this gives the caller
         // an explanation instead of a constraint violation.
         if ($to->lessThan($from)) {
@@ -130,14 +193,16 @@ final readonly class PlanAbsenceAction
      * twice — and with `releases_seat` involved, the second one would try to cancel
      * bookings the first one already cancelled.
      */
-    private function assertNoOverlap(GroupMember $member, CarbonImmutable $from, CarbonImmutable $to): void
+    private function assertNoOverlap(GroupMember $member, CarbonImmutable $from, ?CarbonImmutable $to): void
     {
         $overlaps = GroupAbsence::query()
             ->where('commute_group_id', $member->commute_group_id)
             ->where('user_id', $member->user_id)
-            // Two ranges overlap unless one ends before the other starts.
-            ->where('from_date', '<=', $to->toDateString())
-            ->where('to_date', '>=', $from->toDateString())
+            // Two ranges overlap unless one ends before the other starts; a null end runs for ever.
+            ->when($to !== null, fn ($query) => $query->where('from_date', '<=', $to->toDateString()))
+            ->where(fn ($query) => $query
+                ->whereNull('to_date')
+                ->orWhere('to_date', '>=', $from->toDateString()))
             ->exists();
 
         if ($overlaps) {

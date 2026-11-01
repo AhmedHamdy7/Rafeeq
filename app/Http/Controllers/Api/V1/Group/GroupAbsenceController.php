@@ -41,7 +41,7 @@ final class GroupAbsenceController extends Controller
         $absences = GroupAbsence::query()
             ->where('commute_group_id', $group)
             // Past absences are history nobody is planning around.
-            ->where('to_date', '>=', now()->toDateString())
+            ->where(fn ($query) => $query->whereNull('to_date')->orWhere('to_date', '>=', now()->toDateString()))
             ->with('user')
             ->orderBy('from_date')
             ->orderBy('id')

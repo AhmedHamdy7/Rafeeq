@@ -6,6 +6,7 @@ use App\Domains\Booking\Enums\SeatRequestStatus;
 use App\Domains\Booking\Models\Booking;
 use App\Domains\Booking\Models\SeatOffer;
 use App\Domains\Booking\Models\SeatRequest;
+use App\Domains\Booking\Support\WaitlistEligibility;
 use App\Domains\Commute\Models\ScheduledTrip;
 use App\Domains\Driver\Models\Vehicle;
 use App\Domains\Group\Models\CommuteGroup;
@@ -16,13 +17,8 @@ use Carbon\CarbonImmutable;
 use Illuminate\Support\Facades\Storage;
 
 /**
- * Planned absences: "I'm away from the 20th to the 27th."
- *
- * 🔴 `releases_seat` is the column with teeth. Set, the seat genuinely goes back on
- * offer — the bookings are cancelled and the waiting list is offered them. Left unset,
- * the seat stays the member's and the car travels with it empty. These tests assert
- * that asymmetry, because a client that showed the two the same way would be hiding
- * the only part of the decision that costs anybody anything.
+ * Planned absences, now the passenger PAUSE (Feature 03 R-7, BOOK-32): "I'm away from the 20th to
+ * the 27th", or with no end date. The seat always goes back to the waiting list.
  */
 beforeEach(function () {
     Storage::fake('documents');
@@ -56,17 +52,52 @@ function planAbsence(string $token, string $groupId, array $overrides = [])
     ], $overrides));
 }
 
-it('records an absence without touching the seat by default', function () {
-    $before = Booking::query()->where('status', BookingStatus::Confirmed->value)->count();
-
+/*
+ * R-7 (BOOK-32, decision C5): a pause ALWAYS gives the seat to the waiting list, and puts her on that
+ * list herself — paused until it ends, with no guaranteed return.
+ */
+it('gives the seat back and puts her on the waiting list, paused', function () {
     planAbsence($this->paxToken, $this->groupId)
         ->assertStatus(201)
-        ->assertJsonPath('data.releasesSeat', false)
+        ->assertJsonPath('data.releasesSeat', true)
         ->assertJsonPath('data.reason', 'إجازة');
 
-    // The seat stays theirs: the field defaults to false precisely because releasing
-    // one gives it away, possibly for good.
-    expect(Booking::query()->where('status', BookingStatus::Confirmed->value)->count())->toBe($before);
+    $request = SeatRequest::query()->where('commute_offer_id', $this->commuteId)->sole();
+
+    expect($request->status)->toBe(SeatRequestStatus::Waitlisted)
+        ->and($request->paused_at)->not->toBeNull()
+        ->and($request->paused_until->toDateString())->toBe(CarbonImmutable::tomorrow()->addDays(6)->toDateString())
+        ->and($request->expires_at)->toBeNull();
+});
+
+it('takes a pause with no end date, and gives back every seat she holds', function () {
+    planAbsence($this->paxToken, $this->groupId, ['toDate' => null])
+        ->assertStatus(201)
+        ->assertJsonPath('data.toDate', null);
+
+    expect(Booking::query()
+        ->where('status', BookingStatus::Confirmed->value)
+        ->whereHas('scheduledTrip', fn ($q) => $q->where('departure_at', '>', now()))
+        ->count())->toBe(0)
+        ->and(SeatRequest::query()->where('commute_offer_id', $this->commuteId)->sole()->paused_until)->toBeNull();
+});
+
+it('offers nothing to a paused passenger, and offers again once the pause is over', function () {
+    planAbsence($this->paxToken, $this->groupId, [
+        'fromDate' => CarbonImmutable::tomorrow()->toDateString(),
+        'toDate' => CarbonImmutable::tomorrow()->addDays(2)->toDateString(),
+    ])->assertStatus(201);
+
+    $request = SeatRequest::query()->where('commute_offer_id', $this->commuteId)->sole();
+
+    $inside = ScheduledTrip::query()->where('commute_offer_id', $this->commuteId)
+        ->where('trip_date', '<=', $request->paused_until->toDateString())
+        ->where('departure_at', '>', now())->orderBy('trip_date')->firstOrFail();
+    $after = ScheduledTrip::query()->where('commute_offer_id', $this->commuteId)
+        ->where('trip_date', '>', $request->paused_until->toDateString())->orderBy('trip_date')->firstOrFail();
+
+    expect(WaitlistEligibility::requestsForTrip($inside, 1)->pluck('id')->all())->not->toContain($request->id)
+        ->and(WaitlistEligibility::requestsForTrip($after, 1)->pluck('id')->all())->toContain($request->id);
 });
 
 /**

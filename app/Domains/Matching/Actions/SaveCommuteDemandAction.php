@@ -30,8 +30,72 @@ final readonly class SaveCommuteDemandAction
     {
         $demand = new CommuteDemand;
 
+        $demand->fill(['passenger_user_id' => $passenger->id]);
+        $this->fillCriteria($demand, $criteria, $labels);
+
+        // Not fillable: a request must not be able to set its own status, and the
+        // expiry is a platform policy rather than the passenger's choice.
+        $demand->status = CommuteDemandStatus::Active->value;
+        $demand->expires_at = now()->addDays((int) config('rafeeq.matching.demand_expiry_days'));
+
+        $demand->save();
+
+        // Against the commutes already running — see MatchDemandToExistingCommutesAction.
+        DB::afterCommit(fn () => MatchNewDemand::dispatch($demand->id));
+
+        return $demand;
+    }
+
+    /**
+     * Edit or pause a saved request (S-4, BOOK-06, decision C12).
+     *
+     * A new set of criteria replaces the old one and is matched again against the commutes already
+     * running. Pausing keeps everything and stops notifications; resuming matches it again at once,
+     * because she paused it to stop being told, not to miss what was published meanwhile.
+     */
+    public function update(CommuteDemand $demand, ?SearchCriteria $criteria, ?array $labels, ?bool $paused): CommuteDemand
+    {
+        $rematch = false;
+
+        if ($criteria !== null) {
+            $this->fillCriteria($demand, $criteria, $labels);
+            $rematch = true;
+        }
+
+        if ($paused === true && $demand->status === CommuteDemandStatus::Active) {
+            $demand->status = CommuteDemandStatus::Paused->value;
+        }
+
+        if ($paused === false && $demand->status === CommuteDemandStatus::Paused) {
+            $demand->status = CommuteDemandStatus::Active->value;
+            $rematch = true;
+        }
+
+        $demand->save();
+
+        if ($rematch && $demand->status === CommuteDemandStatus::Active) {
+            DB::afterCommit(fn () => MatchNewDemand::dispatch($demand->id));
+        }
+
+        return $demand->refresh();
+    }
+
+    public function cancel(CommuteDemand $demand): CommuteDemand
+    {
+        $demand->status = CommuteDemandStatus::Cancelled->value;
+        $demand->save();
+
+        return $demand;
+    }
+
+    /**
+     * The criteria columns, shared by creating and editing so the two can never drift.
+     *
+     * @param  array{origin?: string|null, destination?: string|null}|null  $labels
+     */
+    private function fillCriteria(CommuteDemand $demand, SearchCriteria $criteria, ?array $labels): void
+    {
         $demand->fill([
-            'passenger_user_id' => $passenger->id,
             'origin_point' => $criteria->origin,
             'destination_point' => $criteria->destination,
             'origin_lat' => $criteria->origin->lat,
@@ -51,26 +115,6 @@ final readonly class SaveCommuteDemandAction
             'audience_preference' => ($criteria->audiencePreference?->value)
                 ?? CommuteAudience::AnyVerified->value,
         ]);
-
-        // Not fillable: a request must not be able to set its own status, and the
-        // expiry is a platform policy rather than the passenger's choice.
-        $demand->status = CommuteDemandStatus::Active->value;
-        $demand->expires_at = now()->addDays((int) config('rafeeq.matching.demand_expiry_days'));
-
-        $demand->save();
-
-        // Against the commutes already running — see MatchDemandToExistingCommutesAction.
-        DB::afterCommit(fn () => MatchNewDemand::dispatch($demand->id));
-
-        return $demand;
-    }
-
-    public function cancel(CommuteDemand $demand): CommuteDemand
-    {
-        $demand->status = CommuteDemandStatus::Cancelled->value;
-        $demand->save();
-
-        return $demand;
     }
 
     /**

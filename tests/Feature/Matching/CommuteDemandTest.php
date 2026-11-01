@@ -254,7 +254,7 @@ it('is the database that forbids a duplicate notification, not just the code', f
     ]))->toThrow(QueryException::class);
 });
 
-it('does not notify a cancelled or expired demand', function (string $status) {
+it('does not notify a cancelled, expired or paused demand', function (string $status) {
     saveDemand($this->paxToken)->assertStatus(201);
 
     CommuteDemand::sole()->forceFill(['status' => $status])->save();
@@ -264,7 +264,7 @@ it('does not notify a cancelled or expired demand', function (string $status) {
     test()->withToken($driverToken)->postJson("/api/v1/commutes/{$commuteId}/publish")->assertOk();
 
     expect(MatchNotification::count())->toBe(0);
-})->with(['cancelled', 'expired']);
+})->with(['cancelled', 'expired', 'paused']);
 
 /**
  * Chapter 5 lists "duplicate saved searches" as an edge case.
@@ -377,4 +377,56 @@ it('defaults the flexibility rather than leaving it null', function () {
 
 it('refuses a flexibility wider than an hour', function () {
     saveDemand($this->paxToken, ['flexibilityMinutes' => 300])->assertStatus(422);
+});
+
+/*
+|--------------------------------------------------------------------------
+| Edit and pause (Feature 03 S-4, BOOK-06, decision C12)
+|--------------------------------------------------------------------------
+*/
+
+it('pauses and resumes a saved request without touching what it asks for', function () {
+    $id = saveDemand($this->paxToken)->assertStatus(201)->json('data.id');
+
+    test()->withToken($this->paxToken)->patchJson("/api/v1/commute-demands/{$id}", ['paused' => true])
+        ->assertOk()
+        ->assertJsonPath('data.status', 'PAUSED')
+        ->assertJsonPath('data.arrivalWindowStart', '06:45:00');
+
+    test()->withToken($this->paxToken)->patchJson("/api/v1/commute-demands/{$id}", ['paused' => false])
+        ->assertOk()
+        ->assertJsonPath('data.status', 'ACTIVE');
+});
+
+it('replaces a saved request with the new one', function () {
+    $id = saveDemand($this->paxToken)->assertStatus(201)->json('data.id');
+
+    test()->withToken($this->paxToken)->patchJson("/api/v1/commute-demands/{$id}", [
+        'origin' => ['lat' => 30.0594, 'lng' => 31.4913, 'label' => 'Rehab'],
+        'destination' => ['lat' => 30.0714, 'lng' => 30.9716, 'label' => 'Smart Village'],
+        'daysMask' => DaysMask::weekdaysSunToThu()->value,
+        'arrivalWindowStart' => '08:00:00',
+        'arrivalWindowEnd' => '09:00:00',
+        'maxWalkMinutes' => 10,
+        'maxDetourMinutes' => 10,
+    ])
+        ->assertOk()
+        ->assertJsonPath('data.arrivalWindowStart', '08:00:00')
+        ->assertJsonPath('data.origin.label', 'Rehab');
+
+    expect(CommuteDemand::count())->toBe(1);
+});
+
+it('answers 404 for a cancelled request or somebody else\'s', function () {
+    $id = saveDemand($this->paxToken)->assertStatus(201)->json('data.id');
+    test()->withToken($this->paxToken)->deleteJson("/api/v1/commute-demands/{$id}")->assertOk();
+
+    test()->withToken($this->paxToken)->patchJson("/api/v1/commute-demands/{$id}", ['paused' => true])
+        ->assertStatus(404);
+
+    $other = passenger('01223334455', device: 'pax-2');
+    $theirs = saveDemand($other)->assertStatus(201)->json('data.id');
+
+    test()->withToken($this->paxToken)->patchJson("/api/v1/commute-demands/{$theirs}", ['paused' => true])
+        ->assertStatus(404);
 });
