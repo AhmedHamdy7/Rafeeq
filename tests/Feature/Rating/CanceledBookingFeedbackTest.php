@@ -169,8 +169,7 @@ it('lets her correct what she wrote even though it is already visible', function
         ->postJson("/api/v1/bookings/{$this->bookingId}/rating", ['stars' => 2])
         ->assertStatus(201)->json('data.id');
 
-    // `stars` travels with every edit: the endpoint shares its FormRequest with submission, where
-    // stars are mandatory. Not a quirk of this kind of feedback.
+    // Since HISTORY-5 an edit sends only what changes; stars are what changes here.
     test()->flushHeaders()->withToken($this->paxToken)
         ->patchJson("/api/v1/ratings/{$ratingId}", ['stars' => 3])
         ->assertOk()

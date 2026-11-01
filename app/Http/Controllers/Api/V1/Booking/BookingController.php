@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Api\V1\Booking;
 use App\Domains\Booking\Actions\CancelBookingAction;
 use App\Domains\Booking\Enums\BookingStatus;
 use App\Domains\Booking\Models\Booking;
+use App\Domains\Booking\Support\PassengerBookingScope;
 use App\Domains\Commute\Models\ScheduledTrip;
 use App\Domains\Identity\Enums\SecurityEventType;
 use App\Domains\Identity\Models\User;
@@ -23,6 +24,7 @@ use App\Http\Controllers\Controller;
 use App\Http\OpenApi\ApiErrors;
 use App\Http\Requests\Booking\AnswerEarlyDropRequest;
 use App\Http\Requests\Booking\CancelBookingAsDriverRequest;
+use App\Http\Requests\Booking\ListMyBookingsRequest;
 use App\Http\Resources\BookingResource;
 use App\Http\Resources\MatchResultResource;
 use App\Http\Responses\ApiResponse;
@@ -46,16 +48,26 @@ final class BookingController extends Controller
      * hundreds of rows within a term and thousands within a year — and the whole of it
      * arriving in one response on a phone is the failure that only shows up on the
      * people who have used the product longest.
+     *
+     * `?scope=past` is the Trips tab's History, `?scope=upcoming` what is still ahead
+     * (HISTORY-2) — filtered here so that a page, and `meta.hasMore`, describe the list the
+     * screen shows. See PassengerBookingScope.
      */
-    public function mine(Request $request): JsonResponse
+    public function mine(ListMyBookingsRequest $request): JsonResponse
     {
-        $bookings = Booking::query()
-            ->where('passenger_user_id', $request->user()->id)
-            // The route and the driver on every card (HISTORY-1).
-            ->with(['scheduledTrip', ...BookingResource::historyRelations()])
-            ->latest('created_at')
-            ->orderByDesc('id')
-            ->paginate(ApiResponse::perPage($request));
+        $query = Booking::query()
+            ->where('bookings.passenger_user_id', $request->user()->id)
+            // The route, the driver and her own rating on every card (HISTORY-1, HISTORY-4).
+            ->with(['scheduledTrip', ...BookingResource::historyRelations($request->user())]);
+
+        match ($request->scope()) {
+            ListMyBookingsRequest::PAST => PassengerBookingScope::past($query),
+            ListMyBookingsRequest::UPCOMING => PassengerBookingScope::upcoming($query),
+            // Unchanged for a client that sends no scope.
+            default => $query->latest('bookings.created_at')->orderByDesc('bookings.id'),
+        };
+
+        $bookings = $query->paginate(ApiResponse::perPage($request));
 
         return ApiResponse::paginated($bookings, BookingResource::collection($bookings->items()));
     }
@@ -85,7 +97,7 @@ final class BookingController extends Controller
     {
         return ApiResponse::success(
             // The same history fields as the list, so the past trip screen needs one call.
-            new BookingResource($this->visible($request, $booking)->load(['scheduledTrip', ...BookingResource::historyRelations()]))
+            new BookingResource($this->visible($request, $booking)->load(['scheduledTrip', ...BookingResource::historyRelations($request->user())]))
         );
     }
 

@@ -652,6 +652,12 @@ tests/Support/FakeOtpSender.php
 
 ## سجل التقدّم (الأحدث فوق)
 
+- **2026-11-01** — **سجل الرحلات: فلتر past/upcoming، وتقييمك على كل حجز، وتعديل التقييم بقى بيسيب اللي ماتبعتش (HISTORY-2، HISTORY-4 → HISTORY-7).**
+
+  **HISTORY-2:** `GET /my-bookings?scope=past` (الحالات السبعة المنتهية، الأحدث رحلةً الأول) و`?scope=upcoming` (`PENDING`/`CONFIRMED` على رحلات لسه ماخلصتش، الأقرب الأول). الترقيم و`meta.hasMore` على القايمة المفلترة، ومن غير `scope` زي ما كان. الترتيب بميعاد الرحلة مش بميعاد إنشاء الحجز (`PassengerBookingScope`). **HISTORY-4:** كل حجز بيرجع `myRating` — تقييمك **إنت بس** أو `null`؛ العلاقة بتتحمّل مقيّدة بالـ reviewer عشان تقييم الطرف التاني مايتقراش من الداتابيز أصلًا. وصلّحنا `editableUntil`: كان بيرجع ميعاد عدّى، وكان `null` على تقييم الإلغاء رغم إنه قابل للتعديل.
+
+  **HISTORY-5:** `PATCH /ratings/{rating}` بقى له `UpdateRatingRequest` لوحده: اللي ماتبعتش مابيتغيرش، و`"comment": null` بيمسح. **باج حقيقي اتكشف:** الـ PATCH كان شايل نفس request الإضافة، فـ`stars` كانت إجبارية والتعليق اللي ماتبعتش كان بيتمسح. **HISTORY-6/7 (أسئلة):** اتأكدنا واتثبتوا بـ `HistoryRatingRulesTest` — نجوم بس على `CANCELLED_BY_DRIVER` ← 201، وتعليق عليه ← 422 `VALIDATION_FAILED`. القابل للتقييم: `COMPLETED` و`ENDED_EARLY` وتقييم الإلغاء؛ الباقي ← 422 `TRIP_NOT_RATEABLE`. ⚠️ `ENDED_EARLY` لسه قابل للتقييم (عشان خروج الأمان) ومحتاج قرار من Omar لو عايزين نقفله.
+
 - **2026-11-01** — **سجل الرحلات: كل حجز بقى عارف راح فين ومين سايق، وبلاغ "قلق على السلامة" بقى له تصنيف (HISTORY-1، HISTORY-9 — الاتنين beta blockers).**
 
   **HISTORY-1:** كل حجز في `GET /my-bookings` و`GET /bookings/{booking}` بقى بيرجع `commuteId` و`originLabel` و`destinationLabel` و`driver` (شكل `person` — **الاسم الأول بس**، من غير اسم كامل ولا تليفون ولا user id). نقطة الركوب والنزول هما `meetingPoint`/`dropoffPoint` الموجودين، وبيفضلوا متقرّبين (~110م ومن غير label) لو الحجز مش مؤكد أو اتلغى. الحقول بتظهر بس لما الكنترولر يحمّل العلاقات (`BookingResource::historyRelations()`)، عشان باقي الـ endpoints اللي بترجع حجوزات ماتعملش query لكل صف.

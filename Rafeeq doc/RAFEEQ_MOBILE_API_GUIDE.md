@@ -2399,7 +2399,20 @@ four points can appear here while `navigation-route` still returns two.
 
 The caller's seats, newest first. See 4.7. Every item carries the History fields — `commuteId`,
 `originLabel`, `destinationLabel`, `driver` (first name only) and the pickup/drop-off as
-`meetingPoint`/`dropoffPoint` (HISTORY-1) — so a History card needs no second call.
+`meetingPoint`/`dropoffPoint` (HISTORY-1) — and `myRating` (HISTORY-4), so a History card needs no
+second call.
+
+**`?scope=`** (HISTORY-2) — filtered on the server, so a page and `meta.hasMore` describe the list
+you show:
+
+| Request | Returns | Order |
+|---|---|---|
+| `?scope=past` | Only `COMPLETED` · `CANCELLED_BY_PASSENGER` · `CANCELLED_BY_DRIVER` · `NO_SHOW` · `EXPIRED` · `ENDED_EARLY` · `EXITED_DUE_TO_DRIVER_DELAY` | **Newest journey first** (by departure, not by when the booking was made) |
+| `?scope=upcoming` | Only `PENDING` · `CONFIRMED` on journeys not yet departed, or departed and still on the road | **Soonest journey first** |
+| no `scope` | Everything, as before | Newest booking first |
+
+Unknown `scope` → `422 VALIDATION_FAILED`. A seat still `CONFIRMED` on a morning that has passed
+without the run starting is in **neither** list until the day's sweep settles it.
 
 #### `GET /driver/bookings` — active, profile complete, paginated
 
@@ -2498,6 +2511,7 @@ attendance decision acceptable, and it is the passenger's only move.
 | `dropoffPoint` | Her **drop-off**, same shape and same rule; `null` = the destination. |
 | `cancelledAt`, `cancelledReason`, `cancellationFeePiastres` | The fee is always `0` today. |
 | `otherPartyUserId` | 🔒 **The other person's user id — the driver's to the passenger, the passenger's to the driver — only once the journey is over** (`COMPLETED` · `ENDED_EARLY` · `NO_SHOW` · `EXITED_DUE_TO_DRIVER_DELAY`); `null` before. It is what the trip summary's **Block** sends (`POST /safety/blocked-users`). Before the trip there is no reason for either of you to hold a handle on the other, so don't cache it from anywhere else. |
+| `myRating` | **Your own** rating of this journey — the same shape `POST /bookings/{booking}/rating` answers with (`id`, `stars`, `comment`, `tags`, `kind`, `isVisible`, `editableUntil`, …) — or `null` if you have not rated (HISTORY-4). 🔒 Never the other person's, and `null` says nothing about whether they rated. Show **Edit** only while `editableUntil` is set. On `GET /my-bookings` and `GET /bookings/{booking}`. |
 | `trip` | The scheduled trip above, when loaded. |
 
 🔒 **All three money figures are frozen at approval and never recomputed.** A driver raising her
@@ -3585,8 +3599,14 @@ Answers `201` with **your own** rating, which is the one thing you may read befo
 | `stars`, `comment`, `tags` | What you wrote. |
 | `kind` | 🔴 **New.** `completed_ride` or `canceled_booking` — see below. It changes three behaviours, so branch on it. |
 | `isVisible` | Whether anybody else can see it yet. 🔴 **`false` says nothing about whether they have rated** — it is also false when nobody has. Always `true` immediately for `canceled_booking`. |
-| `editableUntil` | Until when you may change it, or `null` once you cannot. Null covers both reasons — the clock ran out, or it became visible — because your behaviour is the same either way and distinguishing them would hint at theirs. |
+| `editableUntil` | Until when you may change it, or `null` once you cannot. Null covers both reasons — the clock ran out, or it became visible — because your behaviour is the same either way and distinguishing them would hint at theirs. **Exactly the rule `PATCH` enforces** (2026-11-01): never a time already past, and **kept on `canceled_booking` feedback**, which stays editable while visible. |
 | `editedAt` | Set if it was changed. |
+
+**What is rateable** (pinned by `HistoryRatingRulesTest`, HISTORY-7): `COMPLETED`, and
+`ENDED_EARLY` (she was in the car for part of it — rated as `completed_ride`); plus, for the
+**passenger only**, stars-only feedback on `CANCELLED_BY_DRIVER`. Everything else — `NO_SHOW`,
+`EXPIRED`, `CANCELLED_BY_PASSENGER`, `EXITED_DUE_TO_DRIVER_DELAY`, `PENDING`, `CONFIRMED`, and the
+driver on a seat he cancelled — is refused with `422 TRIP_NOT_RATEABLE`.
 
 Errors: `TRIP_NOT_RATEABLE` (422 — the journey has not happened, or the cancellation was not the
 driver's; `error.fields.bookingStatus` says which) · `RATING_WINDOW_CLOSED` (409) ·
@@ -3619,8 +3639,21 @@ On a public profile this comes back as its own block, **separate from `reviews`*
 
 #### `PATCH /ratings/{rating}` · `GET /ratings/mine` — paginated
 
-The same body as submitting; every field optional. `404` for somebody else's rating — **not a 403**,
-because confirming that one exists would itself say they had rated.
+The same fields as submitting; **every field optional**, and a field **left out is unchanged**
+(HISTORY-5, 2026-11-01):
+
+| Body | Result |
+|---|---|
+| `"comment": null` (or `""`) | The comment is **cleared**. |
+| `comment` left out | Unchanged. |
+| `"comment": "text"` | Replaced, ≤ 1000 characters. |
+| `"tags": []` (or `null`) | Tags cleared. Left out: unchanged. |
+| `stars` left out | Unchanged. |
+
+On `canceled_booking` feedback a comment or tags are still refused (`422 VALIDATION_FAILED` on the
+field); clearing them is fine. `404` for somebody else's rating — **not a 403**, because confirming
+that one exists would itself say they had rated. **There is no delete** — a rating cannot be removed,
+only edited while `editableUntil` is set (B-3, owner decision 2026-11-01).
 
 `GET /ratings/mine` returns what the caller wrote, visible or not. No filter applies to your own: a
 person may always read what they said.
@@ -4128,6 +4161,8 @@ exist, and every live endpoint must be named here.
 
 | Date | Change |
 |---|---|
+| 2026-11-01 | ⭐ **Rating edits (HISTORY-5 → HISTORY-7).** `PATCH /ratings/{rating}` changes only the fields sent: `"comment": null` clears it, a left-out `comment`/`tags`/`stars` is unchanged (before, a left-out comment was wiped and `stars` was required). Confirmed and pinned: stars-only `canceled_booking` feedback → `201`, a comment or tags on it → `422 VALIDATION_FAILED` on the field; rateable = `COMPLETED`, `ENDED_EARLY`, and the passenger's feedback on `CANCELLED_BY_DRIVER` — every other status `422 TRIP_NOT_RATEABLE`. No delete endpoint (B-3). |
+| 2026-11-01 | 🧾 **Trips history (HISTORY-2, HISTORY-4).** `GET /my-bookings?scope=past` (finished, newest journey first) and `?scope=upcoming` (open, soonest first), paged on the filtered list; no `scope` is unchanged. Every booking on `/my-bookings` and `/bookings/{booking}` carries `myRating` — your own rating or `null`, never the other side's. A rating's `editableUntil` now matches what `PATCH` accepts: `null` once the deadline passed, and kept on visible `canceled_booking` feedback. |
 | 2026-11-01 | 🧾 **Trips history (HISTORY-1, HISTORY-9).** Every booking on `GET /my-bookings` and `GET /bookings/{booking}` now carries `commuteId`, `originLabel`, `destinationLabel` and `driver` (a `person`, first name only); the pickup and drop-off are the existing `meetingPoint`/`dropoffPoint`, fuzzed unless confirmed. New report category **`safety_concern`**, ranked **high**; `false_arrival` is live. |
 | 2026-11-01 | ❓ **"Did you ask to get off here?" (TRIP-20, PAY-28)** — new `POST /bookings/{booking}/early-drop` and the `early_drop_check` notification; bookings now return `feeLinePiastres`, `feeLineReason` and `earlyDrop`. A `false_arrival` report puts her no-show on that booking under review (TRIP-17). Staff now settle the money of payment disputes (PAY-31, PAY-32) and women-only misuse (PAY-47, the man is suspended until he pays) from the safety desk. |
 | 2026-11-01 | 🚗 **Driver fees (PAY-23 → PAY-29, C-5 → C-10).** New: `POST /driver/bookings/{booking}/cancel` (remove one passenger), `GET /trips/{trip}/cancel-preview` and `GET /commutes/{commute}/cancel-preview` (the fee before he confirms), `POST /account/debt/entries/{entry}/appeal` (48h). Cancelling seats costs the driver by notice (16h+: 0 · 10–16h: 10 % · < 10h: 25 %) on one passenger, Cancel today, pause, delete, a new car and a block; ending a run that set off 100 %; never coming 50 %; a passenger leaving because he was late 25 %. After a breakdown, accident or emergency a passenger aboard pays the share of her route past 25 %; otherwise nothing — her booking's `paymentStatus` is the new `WAIVED`. `PATCH /bookings/{booking}/cancel` now applies the fees. End early is the full fare. |

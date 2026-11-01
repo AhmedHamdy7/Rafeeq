@@ -4,6 +4,8 @@ namespace App\Http\Resources;
 
 use App\Domains\Booking\Enums\BookingStatus;
 use App\Domains\Booking\Models\Booking;
+use App\Domains\Identity\Models\User;
+use App\Domains\Rating\Models\Rating;
 use App\Domains\Safety\Support\OtherParty;
 use App\Domains\Trip\Support\DriverDelay;
 use Illuminate\Http\Request;
@@ -190,6 +192,19 @@ final class BookingResource extends JsonResource
                     : null,
             ),
 
+            /*
+             * HISTORY-4: what the CALLER wrote about this journey, in the shape
+             * `POST /bookings/{booking}/rating` answers with — or null when they have not rated.
+             *
+             * 🔒 Only ever the caller's own. Never the other person's, never whether one exists:
+             * double-blind is unchanged, and the relation is loaded constrained to the viewer (see
+             * `historyRelations()`), so the other rating is not even in memory here.
+             */
+            'myRating' => $this->when(
+                $this->resource->relationLoaded('ratings'),
+                fn (): ?array => $this->myRating($request),
+            ),
+
             'trip' => new ScheduledTripResource($this->whenLoaded('scheduledTrip')),
         ];
     }
@@ -199,15 +214,34 @@ final class BookingResource extends JsonResource
      * fields they feed, so a controller asking for them cannot forget the one the driver's badges
      * need and silently get a badge row that is always empty.
      *
-     * @return array<int, string>
+     * 🔒 `ratings` is loaded CONSTRAINED to the viewer's own (HISTORY-4). The other person's rating
+     * is not filtered out of the payload afterwards — it is never read from the database in the first
+     * place, so no later edit to this class can leak it before the reveal (pitfall #26).
+     *
+     * @return array<int|string, mixed>
      */
-    public static function historyRelations(): array
+    public static function historyRelations(User $viewer): array
     {
         return [
             'scheduledTrip.commuteOffer.locations',
             'driverProfile.user.stats',
             'driverProfile.user.verifications',
+            'ratings' => fn ($query) => $query->where('reviewer_user_id', $viewer->id)->with('tags'),
         ];
+    }
+
+    /**
+     * @return array<string, mixed>|null
+     */
+    private function myRating(Request $request): ?array
+    {
+        $viewerId = $request->user()?->id;
+
+        // Matched again on the reviewer, on top of the constrained load: a caller who loaded
+        // `ratings` unconstrained must still get nothing but their own.
+        $own = $this->ratings->first(fn (Rating $rating): bool => $rating->reviewer_user_id === $viewerId);
+
+        return $own === null ? null : (new RatingResource($own))->toArray($request);
     }
 
     private function routeLoaded(): bool
