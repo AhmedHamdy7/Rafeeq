@@ -233,6 +233,23 @@ it('keeps the number off the booking payload', function () {
         ->assertOk()
         ->json();
 
+    /*
+     * No number, and no FIELD that could carry one. Checked on the keys rather than the whole
+     * text: since the booking carries the other person's summary, `verifiedLevels: ["phone", …]`
+     * is in it — the name of a verification level, which says she verified a phone, not which.
+     */
+    $keys = [];
+    $walk = function (array $node) use (&$walk, &$keys): void {
+        foreach ($node as $key => $value) {
+            $keys[] = (string) $key;
+            if (is_array($value)) {
+                $walk($value);
+            }
+        }
+    };
+    $walk($booking);
+
     expect(json_encode($booking))->not->toContain('+201012345678')
-        ->and(json_encode($booking))->not->toContain('phone');
+        ->and(json_encode($booking))->not->toContain('01012345678')
+        ->and(array_filter($keys, fn (string $key) => stripos($key, 'phone') !== false))->toBe([]);
 });
