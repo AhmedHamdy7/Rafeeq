@@ -4,12 +4,14 @@ namespace App\Domains\Commute\Actions;
 
 use App\Domains\Commute\Enums\CommuteOfferStatus;
 use App\Domains\Commute\Models\CommuteOffer;
+use App\Domains\Commute\Support\RouteSettings;
 use App\Domains\Driver\Enums\DriverProfileStatus;
 use App\Domains\Driver\Enums\VehicleVerificationStatus;
 use App\Domains\Driver\Models\DriverProfile;
 use App\Domains\Driver\Models\Vehicle;
 use App\Domains\Shared\Exceptions\DomainException;
 use App\Domains\Shared\Support\ErrorCode;
+use App\Domains\Shared\ValueObjects\Distance;
 
 /**
  * Opens a commute as a draft (Chapter 4 steps 1, 2, 5, 6, 7).
@@ -41,8 +43,13 @@ final readonly class CreateCommuteOfferAction
             'direction' => $attributes['direction'],
             'seats_total' => $attributes['seatsTotal'],
             'price_per_seat_piastres' => $attributes['pricePerSeatPiastres'],
-            'max_detour_minutes' => $attributes['maxDetourMinutes'],
-            'max_walk_minutes' => $attributes['maxWalkMinutes'],
+            /*
+             * The platform's limits at the time, stored for history only (C-1, COM-31). Nothing
+             * reads these columns to decide anything: every check asks RouteSettings, so an admin
+             * moving a limit moves it for every commute at once.
+             */
+            'max_detour_minutes' => RouteSettings::maxTripDetourMinutes(),
+            'max_walk_minutes' => Distance::fromMetres(RouteSettings::matchRadiusMeters())->asWalkTime()->minutes,
             'audience' => $attributes['audience'],
             'min_trust_level' => $attributes['minTrustLevel'] ?? 0,
             'allows_custom_pickup' => $attributes['allowsCustomPickup'] ?? false,

@@ -7,6 +7,7 @@ use App\Domains\Booking\Models\PickupPointRequest;
 use App\Domains\Booking\Models\SeatRequest;
 use App\Domains\Commute\Enums\CommuteLocationType;
 use App\Domains\Commute\Models\CommuteOffer;
+use App\Domains\Commute\Support\RouteSettings;
 use App\Domains\Geo\Contracts\GeoQueryEngine;
 use App\Domains\Geo\Support\Polyline;
 use App\Domains\Geo\ValueObjects\Route;
@@ -49,6 +50,11 @@ final readonly class PickupDetour
          * you at +8 min total for the run."
          */
         public float $runTotalMinutes,
+        /**
+         * The same whole-run total in kilometres, because the cap is "10 minutes OR 5 km,
+         * whichever is less" (C-1, COM-31): both have to hold.
+         */
+        public float $runTotalKm = 0.0,
     ) {}
 
     public static function measure(GeoQueryEngine $geo, CommuteOffer $offer, Coordinate $proposed): self
@@ -103,10 +109,13 @@ final readonly class PickupDetour
          */
         $addedMinutes = round(max(0, $withStop->durationSeconds - $published->durationSeconds) / 60, 1);
 
+        $addedKm = round(max(0, $withStop->distance->metres - $published->distance->metres) / 1000, 2);
+
         return new self(
             addedMinutes: $addedMinutes,
-            addedKm: round(max(0, $withStop->distance->metres - $published->distance->metres) / 1000, 2),
+            addedKm: $addedKm,
             runTotalMinutes: round(self::runTotalFor($geo, $offer) + $addedMinutes, 1),
+            runTotalKm: round(self::runTotalKmFor($geo, $offer) + $addedKm, 2),
         );
     }
 
@@ -136,7 +145,25 @@ final readonly class PickupDetour
     }
 
     /**
-     * 🔴 The driver's stated limit, applied to the WHOLE RUN rather than to one request.
+     * {@see self::runTotalFor()} in kilometres: the driver's own stops plus every custom pickup
+     * already agreed to.
+     */
+    public static function runTotalKmFor(GeoQueryEngine $geo, CommuteOffer $offer): float
+    {
+        $published = self::publishedRoute($offer);
+
+        $direct = $geo->routeBetween(
+            self::pointOf($offer, CommuteLocationType::Origin),
+            self::pointOf($offer, CommuteLocationType::Destination),
+        );
+
+        $ownStops = max(0, $published->distance->metres - $direct->distance->metres) / 1000;
+
+        return round($ownStops + self::approvedCustomPickupKm($offer), 2);
+    }
+
+    /**
+     * 🔴 The platform's limit, applied to the WHOLE RUN rather than to one request.
      *
      * This used to compare only `addedMinutes`, which left a real hole: five separate
      * three-minute pickups each pass a ten-minute check on their own, and the driver ends
@@ -146,24 +173,29 @@ final readonly class PickupDetour
      * The screen's own wording is the total too: "Your limit is 10 min detour. This
      * request keeps you at +8 min total for the run — within your limit."
      *
-     * `max_detour_minutes` is the number the driver chose to say how far out of their way
-     * they will go, and it is used as a refusal everywhere else — the search drops
-     * commutes past it, saving a route refuses a stop beyond it.
+     * The limit used to be the driver's own `max_detour_minutes`. Since 2026-10-31 (C-1,
+     * COM-31) it is RAFEEQ's, the same for every commute: the whole trip may carry at most
+     * `commute.max_trip_detour_minutes` AND at most `commute.max_trip_detour_meters` — "10 minutes
+     * or 5 km, whichever is less". The detour is paid by the passengers already in the car, so it
+     * is not the driver's to choose.
      */
-    public function assertWithin(int $maxDetourMinutes): void
+    public function assertWithin(): void
     {
-        if ($this->runTotalMinutes > $maxDetourMinutes) {
+        if (! $this->isWithin()) {
             throw DomainException::of(ErrorCode::PickupDetourTooLong, fields: [
                 'addedMinutes' => [(string) $this->addedMinutes],
                 'runTotalMinutes' => [(string) $this->runTotalMinutes],
-                'maxDetourMinutes' => [(string) $maxDetourMinutes],
+                'maxDetourMinutes' => [(string) RouteSettings::maxTripDetourMinutes()],
+                'runTotalKm' => [(string) $this->runTotalKm],
+                'maxDetourMeters' => [(string) RouteSettings::maxTripDetourMeters()],
             ]);
         }
     }
 
-    public function isWithin(int $maxDetourMinutes): bool
+    public function isWithin(): bool
     {
-        return $this->runTotalMinutes <= $maxDetourMinutes;
+        return $this->runTotalMinutes <= RouteSettings::maxTripDetourMinutes()
+            && $this->runTotalKm * 1000 <= RouteSettings::maxTripDetourMeters();
     }
 
     /**
@@ -191,6 +223,27 @@ final readonly class PickupDetour
                 ->whereIn('seat_request_id', $seatRequests)
                 ->orWhereIn('group_member_id', $members))
             ->sum('added_minutes');
+    }
+
+    /** {@see self::approvedCustomPickupMinutes()}, in kilometres. */
+    private static function approvedCustomPickupKm(CommuteOffer $offer): float
+    {
+        $seatRequests = SeatRequest::query()
+            ->where('commute_offer_id', $offer->id)
+            ->select('id');
+
+        $members = GroupMember::query()
+            ->whereIn('commute_group_id', CommuteGroup::query()
+                ->where('commute_offer_id', $offer->id)
+                ->select('id'))
+            ->select('id');
+
+        return (float) PickupPointRequest::query()
+            ->where('status', PickupPointRequestStatus::Approved->value)
+            ->where(fn ($query) => $query
+                ->whereIn('seat_request_id', $seatRequests)
+                ->orWhereIn('group_member_id', $members))
+            ->sum('added_km');
     }
 
     /**

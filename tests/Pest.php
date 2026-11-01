@@ -302,8 +302,6 @@ function createCommute(string $token, string $vehicleId, array $overrides = [])
         'direction' => 'to_work',
         'seatsTotal' => 3,
         'pricePerSeatPiastres' => 8000,
-        'maxDetourMinutes' => 10,
-        'maxWalkMinutes' => 15,
         'audience' => 'women_only',
     ], $overrides));
 }

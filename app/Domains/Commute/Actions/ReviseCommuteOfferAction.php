@@ -112,8 +112,6 @@ final readonly class ReviseCommuteOfferAction
             'vehicleId' => 'vehicle_id',
             'seatsTotal' => 'seats_total',
             'pricePerSeatPiastres' => 'price_per_seat_piastres',
-            'maxDetourMinutes' => 'max_detour_minutes',
-            'maxWalkMinutes' => 'max_walk_minutes',
             'audience' => 'audience',
             'minTrustLevel' => 'min_trust_level',
             'allowsCustomPickup' => 'allows_custom_pickup',

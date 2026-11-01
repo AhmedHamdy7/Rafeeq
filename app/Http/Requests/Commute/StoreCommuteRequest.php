@@ -51,12 +51,13 @@ final class StoreCommuteRequest extends FormRequest
                 'max:'.config('rafeeq.commute.max_price_piastres'),
             ],
 
-            // How far out of your way you will go for a pickup. Also the
-            // tolerance used to check that pickup points are along your route.
-            'maxDetourMinutes' => ['required', 'integer', 'min:0', 'max:30'],
-
-            // How far you expect a passenger to walk to meet you.
-            'maxWalkMinutes' => ['required', 'integer', 'min:0', 'max:30'],
+            /*
+             * Not yours to send any more (C-1, COM-31): how far a passenger's point may be
+             * from your route, and how much detour the whole trip may carry, are RAFEEQ's
+             * limits for everybody (1.5 km; 10 minutes or 5 km). Sending either is refused.
+             */
+            'maxDetourMinutes' => ['prohibited'],
+            'maxWalkMinutes' => ['prohibited'],
 
             // `women_only` restricts this commute to women. It is applied as a
             // hard filter, so an ineligible passenger never sees it at all.

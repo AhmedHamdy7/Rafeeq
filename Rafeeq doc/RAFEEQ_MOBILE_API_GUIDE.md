@@ -391,7 +391,7 @@ quarter of an hour.
    → 200  a ranked list; each row has commuteId, score + its breakdown, driver summary, vehicle
 
 8  POST /commutes/{commute}/pickup-preview   { lat, lng }
-   → 200  { addedMinutes, runTotalMinutes, maxDetourMinutes, withinLimit }
+   → 200  { addedMinutes, runTotalMinutes, maxDetourMinutes, runTotalKm, maxDetourKm, withinLimit }
 ```
 
 Step 8 creates nothing. It exists so the passenger can see the detour **before** committing to a
@@ -1480,8 +1480,12 @@ The caller's own commutes. Full shape in 4.5.
 
 **Request:** `commuteType` (`recurring`/`one_time`), `vehicleId`, `direction`
 (`to_work`/`to_home`), `seatsTotal` (1–7), `pricePerSeatPiastres` (**5,000–12,000**),
-`maxDetourMinutes` (0–30), `maxWalkMinutes` (0–30), `audience` (`women_only`/`any_verified`),
+`audience` (`women_only`/`any_verified`),
 `minTrustLevel` (0–4), `allowsCustomPickup`.
+
+🔴 **No detour or walking limit from the driver any more** (C-1, COM-31). `maxDetourMinutes` and
+`maxWalkMinutes` are RAFEEQ's admin settings for every commute; sending either is refused with
+`422 VALIDATION_FAILED`. Remove both controls from the form.
 
 Creates a **draft**. Route and schedule arrive through their own endpoints because each is a whole
 thing that has to be validated together. `allowsCustomPickup` defaults to **false** — a commute
@@ -1631,7 +1635,7 @@ Archives. Nothing is deleted: history stays, and only future days nobody has tak
 | `direction` | `to_work` · `to_home`. |
 | `vehicleId`, `seatsTotal` | `seatsTotal` is bookable seats, already excluding the driver. |
 | `pricePerSeatPiastres`, `currency` | Always `EGP` today. |
-| `maxDetourMinutes` / `maxWalkMinutes` | The driver's limits. |
+| `maxDetourMinutes` / `maxWalkMinutes` | **RAFEEQ's** limits, the same on every commute (C-1, COM-31): the whole trip may carry at most 10 min **and** at most 5 km of detour, and a passenger's point must be within 1.5 km of the route. Read-only — sending either on `POST`/`PATCH /commutes` is refused with `422`. |
 | `audience`, `minTrustLevel` | Who may join. |
 | `allowsCustomPickup` | **Defaults to false.** |
 | `routePolyline`, `routeDistanceMeters`, `routeDurationSeconds` | Computed at publish; `null` on a draft. **Only ever returned to the commute's own driver.** |
@@ -1831,7 +1835,7 @@ at 21:00 the night before), `BOOKING_ALREADY_REQUESTED` (one open request per co
 | `SEAT_REQUEST_POINTS_SAME` | The two pins are within 200 m of each other. |
 | `SEAT_REQUEST_POINTS_OUT_OF_ORDER` | This commute reaches her drop-off before her pickup — they are the wrong way round. |
 | `SEAT_REQUEST_SUGGESTION_UNKNOWN` | That `suggestionId` is not one this commute advertises. |
-| `PICKUP_DETOUR_TOO_LONG` | The **pair together** takes the driver further out of her way than her `maxDetourMinutes`. `error.fields` carries `addedMinutes`, `runTotalMinutes` and `maxDetourMinutes`. |
+| `PICKUP_DETOUR_TOO_LONG` | The **pair together** takes the driver further out of her way than RAFEEQ's whole-trip cap (10 min **and** 5 km, admin settings). `error.fields` carries `runTotalKm`, `maxDetourMeters`, `addedMinutes`, `runTotalMinutes` and `maxDetourMinutes`. |
 
 > 🔴 The detour is measured **by us**, for both points at once, against the route as published —
 > never accepted from the request. Use `POST /commutes/{commute}/pickup-preview` to show the cost
@@ -1866,7 +1870,7 @@ your own timer to hide it, and do not treat a late tap as a network failure.
 |---|---|
 | `already_passed` | The car is further along the route than her stop. **Nothing she can do** — say so, and offer her the alternatives list rather than a retry. |
 | `would_break_promise` | The detour no longer fits before the arrival the people aboard were promised. |
-| `detour_too_long` | Past the driver's own `maxDetourMinutes`, on a day with no promised arrival. |
+| `detour_too_long` | Past RAFEEQ's whole-trip detour cap, on a day with no promised arrival. |
 | `position_unknown` · `route_unknown` | We cannot place the car, so the answer is no. **Retrying may work** once a position arrives. |
 
 🔴 **It is measured, never timed.** v5 forbids a fixed limit twice over, and the reason shows in both
@@ -2414,7 +2418,7 @@ the person commits.
 |---|---|
 | `addedMinutes` / `addedKm` | What THIS point adds. Computed by us from the route, never taken from the requester. |
 | `runTotalMinutes` | The detour for the **whole run** including every already-approved pickup. This is the figure the limit is checked against. |
-| `maxDetourMinutes` | The driver's own limit. |
+| `maxDetourMinutes` | RAFEEQ's whole-trip cap in minutes (C-1). |
 | `withinLimit` | Whether a request would be accepted. Show the consequence before they ask. |
 
 #### `POST /seat-requests/{seatRequest}/pickup-request` — active, profile complete

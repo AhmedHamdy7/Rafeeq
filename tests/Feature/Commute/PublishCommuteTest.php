@@ -1,5 +1,6 @@
 <?php
 
+use App\Domains\Admin\Models\PlatformSetting;
 use App\Domains\Commute\Enums\CommuteOfferStatus;
 use App\Domains\Commute\Models\CommuteOffer;
 use App\Domains\Commute\Models\ScheduledTrip;
@@ -104,9 +105,22 @@ it('stores the route with origin first and destination last', function () {
  * Chapter 4 §3: "each pickup must be on the route within tolerance" — and the
  * tolerance is the driver's own stated detour, not a fixed number.
  */
-it('refuses a pickup further out of the way than the driver allows', function () {
-    $id = createCommute($this->token, $this->vehicleId, ['maxDetourMinutes' => 5])
-        ->assertStatus(201)->json('data.id');
+/**
+ * An admin moving a route limit the way the dashboard does.
+ */
+function setRouteLimit(string $key, int $value): void
+{
+    PlatformSetting::query()->updateOrCreate(['setting_key' => $key], [
+        'setting_value' => $value,
+        'value_type' => 'integer',
+        'description' => 'Set by a test',
+    ]);
+}
+
+it('refuses a pickup further out of the way than the platform allows', function () {
+    setRouteLimit('commute.max_trip_detour_minutes', 5);
+
+    $id = createCommute($this->token, $this->vehicleId)->assertStatus(201)->json('data.id');
 
     saveRoute($this->token, $id, [
         'pickups' => [['lat' => 30.6000, 'lng' => 31.9000]],
@@ -115,26 +129,41 @@ it('refuses a pickup further out of the way than the driver allows', function ()
         ->assertJsonStructure(['error' => ['fields' => ['pickups.0']]]);
 });
 
-it('accepts the same pickup when the driver allows a longer detour', function () {
-    $tight = createCommute($this->token, $this->vehicleId, ['maxDetourMinutes' => 2])
-        ->assertStatus(201)->json('data.id');
+/*
+ * C-1 (COM-31): the tolerance is RAFEEQ's, the same for every commute, and an admin moves it
+ * without a deploy. The driver can no longer send his own.
+ */
+it('accepts the same pickup once the platform allows a longer detour', function () {
+    setRouteLimit('commute.max_trip_detour_minutes', 2);
+
+    $id = createCommute($this->token, $this->vehicleId)->assertStatus(201)->json('data.id');
 
     // ~10km north of the direct line, which is about a 7-minute detour: inside a
     // 30-minute tolerance and well outside a 2-minute one. A point nearer the
     // line would pass both and prove nothing.
     $pickup = ['pickups' => [['lat' => 30.1500, 'lng' => 31.2000]]];
 
-    saveRoute($this->token, $tight, $pickup)->assertStatus(422);
+    saveRoute($this->token, $id, $pickup)->assertStatus(422);
 
-    $this->withToken($this->token)->patchJson("/api/v1/commutes/{$tight}", ['maxDetourMinutes' => 30])
-        ->assertOk();
+    setRouteLimit('commute.max_trip_detour_minutes', 30);
 
-    saveRoute($this->token, $tight, $pickup)->assertOk();
+    saveRoute($this->token, $id, $pickup)->assertOk();
+});
+
+it('refuses a detour or walking limit sent by the driver', function () {
+    createCommute($this->token, $this->vehicleId, ['maxDetourMinutes' => 30])
+        ->assertStatus(422)
+        ->assertJsonStructure(['error' => ['fields' => ['maxDetourMinutes']]]);
+
+    $id = createCommute($this->token, $this->vehicleId)->assertStatus(201)->json('data.id');
+
+    $this->withToken($this->token)->patchJson("/api/v1/commutes/{$id}", ['maxWalkMinutes' => 5])
+        ->assertStatus(422)
+        ->assertJsonStructure(['error' => ['fields' => ['maxWalkMinutes']]]);
 });
 
 it('refuses more stops than a commute may have', function () {
-    $id = createCommute($this->token, $this->vehicleId, ['maxDetourMinutes' => 30])
-        ->assertStatus(201)->json('data.id');
+    $id = createCommute($this->token, $this->vehicleId)->assertStatus(201)->json('data.id');
 
     $tooMany = array_fill(
         0,

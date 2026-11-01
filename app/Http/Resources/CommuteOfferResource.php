@@ -4,6 +4,8 @@ namespace App\Http\Resources;
 
 use App\Domains\Commute\Models\CommuteOffer;
 use App\Domains\Commute\Support\CommuteChecklist;
+use App\Domains\Commute\Support\RouteSettings;
+use App\Domains\Shared\ValueObjects\Distance;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
 
@@ -29,8 +31,9 @@ final class CommuteOfferResource extends JsonResource
             'seatsTotal' => $this->seats_total,
             'pricePerSeatPiastres' => $this->price_per_seat_piastres,
             'currency' => $this->currency,
-            'maxDetourMinutes' => $this->max_detour_minutes,
-            'maxWalkMinutes' => $this->max_walk_minutes,
+            // RAFEEQ's limits for every commute, not the driver's (C-1, COM-31). Read-only.
+            'maxDetourMinutes' => RouteSettings::maxTripDetourMinutes(),
+            'maxWalkMinutes' => Distance::fromMetres(RouteSettings::matchRadiusMeters())->asWalkTime()->minutes,
             'audience' => $this->audience->value,
             'minTrustLevel' => $this->min_trust_level,
             'allowsCustomPickup' => $this->allows_custom_pickup,
