@@ -14,6 +14,7 @@ use App\Domains\Booking\Support\SeatAvailabilityChecker;
 use App\Domains\Commute\Models\CommuteOffer;
 use App\Domains\Commute\Models\ScheduledTrip;
 use App\Domains\Geo\Contracts\GeoQueryEngine;
+use App\Domains\Identity\Enums\Gender;
 use App\Domains\Identity\Models\User;
 use App\Domains\Matching\Support\HardFilters;
 use App\Domains\Notification\Enums\NotificationType;
@@ -255,7 +256,12 @@ final readonly class RequestSeatAction
          * no secret — and a clear answer beats a "not found" for something she is looking at.
          */
         if (! HardFilters::mayJoinAudience($passenger, $offer)) {
-            throw DomainException::of(ErrorCode::SeatRequestWomenOnly);
+            // F1-2: a legacy `prefer_not_to_say` account is told what would change the answer —
+            // the app asks Woman / Man and saves it with `PUT /account/profile/basic`.
+            throw DomainException::of(
+                ErrorCode::SeatRequestWomenOnly,
+                fields: $passenger->gender === Gender::PreferNotToSay ? ['reason' => ['GENDER_NOT_SET']] : null,
+            );
         }
     }
 
