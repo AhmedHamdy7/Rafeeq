@@ -3,6 +3,7 @@
 namespace App\Domains\Driver\Models;
 
 use App\Domains\Driver\Enums\FuelType;
+use App\Domains\Driver\Enums\Transmission;
 use App\Domains\Driver\Enums\VehicleTier;
 use App\Domains\Driver\Enums\VehicleVerificationStatus;
 use Database\Factories\VehicleFactory;
@@ -38,6 +39,7 @@ class Vehicle extends Model
             'has_ac' => 'boolean',
             'is_active' => 'boolean',
             'fuel_type' => FuelType::class,
+            'transmission' => Transmission::class,
             'verification_status' => VehicleVerificationStatus::class,
         ];
     }

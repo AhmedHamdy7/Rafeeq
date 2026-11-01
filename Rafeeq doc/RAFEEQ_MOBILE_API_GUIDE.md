@@ -1516,6 +1516,7 @@ missing, so gating it would leave them with a refusal and no explanation.
 
 | Field | Meaning |
 |---|---|
+| `transmission` | `manual` · `automatic` · `null` (F2-5). Optional; anything else is a `422`. Older free-text values were mapped where unambiguous and cleared otherwise. |
 | `plateNumber` | As entered. The normalised form we deduplicate on is internal and not returned. |
 | `seats` | What the driver entered: total including the driver. It does **not** limit a commute — `approvedSeats` does. |
 | `approvedSeats` | Set by RAFEEQ at the car review (F2-6, PROF-28): seats with working belts, at least 3. No commute or day may offer more, and the seat price is divided by it. `null` until reviewed — such a car cannot publish (`VEHICLE_SEATS_NOT_APPROVED`). |
@@ -4156,6 +4157,7 @@ exist, and every live endpoint must be named here.
 
 | Date | Change |
 |---|---|
+| 2026-11-01 | ⚙️ **`transmission` is an enum (F2-5):** `manual` · `automatic` · `null` on `POST /driver/vehicles`, `PATCH /driver/vehicles/{vehicle}` and the vehicle shape. Anything else is now `422` (it was free text). Existing values were mapped (`Auto`, `AT`, `أوتوماتيك` → `automatic` …) or cleared. |
 | 2026-11-01 | ⛔ **A suspension stays in the app; only a ban is restricted (F1-3, AUTH-19, D-0018).** New **`POST /account/suspension/appeal`** — one appeal within 48 h, a second only with new `evidence` within 48 h of the first being turned down. A suspended account now gets `nextStep: HOME` (not `RESTRICTED_ACCOUNT`), its reads work and its writes answer `403 ACCOUNT_SUSPENDED`; `user.suspension` gains `permanent` and `appeal`. `RESTRICTED_ACCOUNT` is now only for a **permanent ban**. Suspending (either kind) **cancels every upcoming seat, inside the 16 h lock too, with no fee**, and pauses a driver's commutes (`pausedReason: account_suspended`). |
 | 2026-11-01 | 🚻 **Gender is `woman` / `man` only (F1-2, AUTH-10).** `PUT /account/profile/basic` now refuses `prefer_not_to_say` with `422`. Existing rows keep it: they cannot ask for a women-only seat, and that refusal (`403 SEAT_REQUEST_WOMEN_ONLY`) now carries `error.fields.reason: ["GENDER_NOT_SET"]` so the app can ask Woman / Man and save it with the same endpoint. |
 | 2026-11-01 | 🔒 **OTP lock (F1-5, AUTH-07, AUTH-08).** A code now lives **300 s** (was 120) and takes **3** wrong tries (was 5). The third wrong code locks the number for **5 minutes**: `/auth/otp/request` and `/auth/otp/verify` answer **`429 AUTH_OTP_LOCKED`** with `Retry-After` and `error.fields.lockedUntil`. A new code no longer resets the guessing. All three are admin settings (`auth.otp.lock_seconds` is new). `AUTH_OTP_MAX_ATTEMPTS` is now only the per-minute rate limit. |
