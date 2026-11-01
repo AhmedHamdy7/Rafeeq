@@ -1636,7 +1636,7 @@ Archives. Nothing is deleted: history stays, and only future days nobody has tak
 | `audience`, `minTrustLevel` | Who may join. |
 | `allowsCustomPickup` | **Defaults to false.** |
 | `routePolyline`, `routeDistanceMeters`, `routeDurationSeconds` | Computed at publish; `null` on a draft. **Only ever returned to the commute's own driver.** |
-| `publishedAt`, `pausedAt`, `pausedReason`, `archivedAt` | `pausedReason` is `by_driver` · `vehicle_suspended` · `licence_expired` — the last two are automatic, so show the right copy. |
+| `publishedAt`, `pausedAt`, `pausedReason`, `archivedAt` | `pausedReason` is `by_driver` · `vehicle_suspended` · `licence_expired` · `commission_unpaid` — the last three are automatic, so show the right copy. `commission_unpaid` means a week's commission missed two Fridays (PAY-45): show the debt screen; after paying she resumes the commute herself. |
 | `missing[]` | What still has to be done before it can be published. Drive the wizard from this. |
 | `locations[]` | `{id, type, lat, lng, address, placeId, sequence}`; type is `origin` · `pickup` · `dropoff` · `destination`. |
 | `schedule` | `{daysMask, departureTime, timezone, startDate, endDate, generatedUntil}`. `generatedUntil` is **how far ahead bookable days currently exist**, rolled forward daily — not the end of the commute. |

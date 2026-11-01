@@ -1,5 +1,10 @@
 <?php
 
+use App\Domains\Payment\Enums\DebtEntryType;
+use App\Domains\Payment\Enums\DebtSide;
+use App\Domains\Payment\Models\DebtEntry;
+use App\Domains\Payment\Support\DebtLedger;
+use App\Domains\Payment\Support\SettlementWeek;
 use App\Domains\Admin\Actions\SyncAdminRolesAction;
 use App\Domains\Admin\Enums\AdminRole;
 use App\Domains\Admin\Models\AdminUser;
@@ -652,21 +657,22 @@ function setUserStat(string $userId, array $values): void
 }
 
 /**
- * Sets columns on a driver's `driver_balances` row, creating it if it is not there.
+ * Puts a debt on somebody through the real ledger, as of `$weeksAgo` settlement weeks back.
  *
- * 🔴 Through the query builder, for the same reason as `setUserStat`: `DriverBalance` has no
- * `$fillable` on purpose — it is a PROJECTION of `driver_fee_ledger`, written only by the
- * settlement and reconciliation jobs, never from user input. So `updateOrCreate()` throws
- * "Add fillable property", and the error reads as a bug in the balance endpoint rather than in the
- * test's setup.
- *
- * @param  array<string, mixed>  $values
+ * Through `DebtLedger::record()` rather than raw rows, so the projection (`debt_accounts`) moves
+ * with the line exactly as it does in production — a test that wrote one without the other would
+ * be testing a state the application can never be in. The week is set on the line, which is all
+ * the Friday cycle reads.
  */
-function setDriverBalance(string $driverUserId, array $values): void
+function owe(string $userId, int $piastres, int $weeksAgo = 0, DebtSide $side = DebtSide::Driver, DebtEntryType $type = DebtEntryType::Commission): DebtEntry
 {
-    DB::table('driver_balances')->updateOrInsert(
-        ['driver_profile_id' => $driverUserId],
-        $values + ['updated_at' => now()],
+    return DebtLedger::record(
+        $userId,
+        $side,
+        $type,
+        $piastres,
+        $type === DebtEntryType::Commission ? 'seat_commission' : 'test_fee',
+        weekOf: SettlementWeek::shift(SettlementWeek::current(), -$weeksAgo),
     );
 }
 

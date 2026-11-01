@@ -14,6 +14,7 @@ use App\Domains\Geo\Contracts\GeoQueryEngine;
 use App\Domains\Identity\Models\User;
 use App\Domains\Notification\Enums\NotificationType;
 use App\Domains\Notification\Support\Notifier;
+use App\Domains\Payment\Support\DriverCommission;
 use App\Domains\Shared\Exceptions\DomainException;
 use App\Domains\Shared\Support\ErrorCode;
 use App\Domains\Shared\ValueObjects\Coordinate;
@@ -72,6 +73,10 @@ final readonly class CounterofferAction
         if ($request->status !== SeatRequestStatus::Pending) {
             throw DomainException::of(ErrorCode::SeatRequestNotPending);
         }
+
+        // Offering a new rider a seat is taking a new rider (PAY-12), so the Friday deadline
+        // applies here as on a plain approval.
+        DriverCommission::assertNotOverdue($driver->getKey());
 
         $offer = $request->commuteOffer;
 
@@ -220,7 +225,7 @@ final readonly class CounterofferAction
              * the last one while this conversation was open, and the honest answer then is
              * `SEAT_UNAVAILABLE` rather than an eleventh booking in a ten-seat car.
              */
-            return $this->approve->execute($request->refresh(), $driver);
+            return $this->approve->execute($request->refresh(), $driver, driverDecides: false);
         });
     }
 

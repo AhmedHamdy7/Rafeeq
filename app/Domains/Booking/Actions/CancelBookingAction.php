@@ -113,6 +113,28 @@ final readonly class CancelBookingAction
     }
 
     /**
+     * Her account was suspended for debt or conduct, so every upcoming seat she holds goes — even
+     * inside the 16-hour lock (PAY-46, decision D-0018; Feature 03 backend file L-12).
+     *
+     * Recorded as cancelled on HER side, because her standing is why, but by the SYSTEM: she did
+     * not choose it, so it costs her no cancellation fee and puts nothing on her reliability record
+     * (the suspension is the consequence; a second one for the same thing would be double).
+     *
+     * 🔴 The freed seat IS offered to the waiting list, unlike a displacement: the commute is
+     * running, and the driver pays nothing for a seat he did not give up (PAY-46).
+     */
+    public function bySuspension(Booking $booking, string $reason = 'account_suspended'): Booking
+    {
+        return $this->cancel(
+            $booking,
+            BookingStatus::CancelledByPassenger,
+            BookingActorType::System,
+            null,
+            $reason,
+        );
+    }
+
+    /**
      * The other person on the booking hears about it; the one who cancelled does not need to.
      * The reason is not repeated — it may be personal, and the message shows on a lock screen.
      *
@@ -122,7 +144,8 @@ final readonly class CancelBookingAction
      */
     private function tellTheOtherSide(Booking $booking, ScheduledTrip $trip, BookingActorType $actorType): void
     {
-        $byPassenger = $actorType === BookingActorType::Passenger;
+        // A system cancellation on her side (a suspension) reads to the driver like hers.
+        $byPassenger = $actorType !== BookingActorType::Driver;
 
         $recipient = User::query()->find($byPassenger ? $booking->driver_profile_id : $booking->passenger_user_id);
         $actor = User::query()->find($byPassenger ? $booking->passenger_user_id : $booking->driver_profile_id);
@@ -160,7 +183,13 @@ final readonly class CancelBookingAction
         ScheduledTrip $trip,
         BookingStatus $to,
         ?string $reason,
+        BookingActorType $actorType,
     ): void {
+        // Nobody chose a system cancellation (a suspension), so it is on nobody's record.
+        if ($actorType === BookingActorType::System) {
+            return;
+        }
+
         if ($to === BookingStatus::CancelledByDriver) {
             $kind = $reason === DisplacementReason::CommutePaused->value
                 || $reason === DisplacementReason::VehicleReplaced->value
@@ -221,7 +250,7 @@ final readonly class CancelBookingAction
         Booking $booking,
         BookingStatus $to,
         BookingActorType $actorType,
-        string $actorId,
+        ?string $actorId,
         ?string $reason,
         bool $notify = true,
         bool $offerToWaitlist = true,
@@ -262,6 +291,7 @@ final readonly class CancelBookingAction
                  * only one that decided by configuration rather than by who was at fault.
                  */
                 'cancellation_fee_piastres' => $to === BookingStatus::CancelledByPassenger
+                    && $actorType === BookingActorType::Passenger
                     ? (int) config('rafeeq.booking.cancellation_fee_piastres')
                     : 0,
             ])->save();
@@ -309,7 +339,7 @@ final readonly class CancelBookingAction
              * Which record, and whether at all, depends on who cancelled and when — see
              * {@see recordAgainstReliability()}.
              */
-            $this->recordAgainstReliability($booking, $trip, $to, $reason);
+            $this->recordAgainstReliability($booking, $trip, $to, $reason, $actorType);
 
             /*
              * 🔴 Announced on the day's channel, in this transaction.

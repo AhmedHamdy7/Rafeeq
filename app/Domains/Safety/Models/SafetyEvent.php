@@ -20,7 +20,7 @@ use Illuminate\Database\Eloquent\Relations\HasOne;
  * 🔒 NEVER DELETE (Bible §4, group ⑫) — real evidence for a real
  * investigation. Updates ARE allowed (e.g. `reviewed_at`-style admin
  * follow-up) — unlike `verification_logs`/`booking_events`/
- * `driver_fee_ledger`, this table isn't documented as INSERT-only.
+ * `debt_entries`, this table isn't documented as INSERT-only.
  */
 #[Fillable(['type', 'user_id', 'trip_session_id', 'booking_id', 'severity', 'metadata', 'occurred_at'])]
 class SafetyEvent extends Model

@@ -251,6 +251,37 @@ enum NotificationType: string
      */
     case VehicleReplacedSeatCancelled = 'vehicle_replaced_seat_cancelled';
 
+    // ---- Debt and weekly settlement (PAY-08 → PAY-19, PAY-34) ------------------
+    // `:amount` is in EGP, written by `DebtNotices::egp()` — never piastres on a lock screen.
+
+    /** Thursday: "EGP X due tomorrow" (PAY-11). */
+    case DebtDueTomorrow = 'debt_due_tomorrow';
+
+    /** Every day after a missed Friday, until it is paid (PAY-12). */
+    case DebtOverdue = 'debt_overdue';
+
+    /** The Friday passed: +10 % once, and no new commutes or riders until paid (PAY-12, PAY-13). */
+    case DebtLateFeeAdded = 'debt_late_fee_added';
+
+    /** The last reminder before the week-2 suspension (PAY-45). */
+    case DebtSuspensionWarning = 'debt_suspension_warning';
+
+    /** Staff saw the InstaPay transfer arrive and took it off the debt (PAY-09, ADM-03). */
+    case DebtPaymentConfirmed = 'debt_payment_confirmed';
+
+    /** Staff could not find the transfer; nothing came off the debt. */
+    case DebtPaymentRejected = 'debt_payment_rejected';
+
+    /** A coupon from RAFEEQ, for a ride where the other side was at fault (PAY-34). */
+    case CouponIssued = 'coupon_issued';
+
+    /**
+     * Commission unpaid through a second Friday: suspended from DRIVING, every upcoming trip
+     * cancelled (PAY-45). Filed under safety, like an account hold: a change to what she may do is
+     * never something a member can switch off. She keeps Passenger mode.
+     */
+    case DrivingSuspendedForDebt = 'driving_suspended_for_debt';
+
     public function category(): NotificationCategory
     {
         return match ($this) {
@@ -258,7 +289,16 @@ enum NotificationType: string
             self::ReportResolved,
             self::ReportClosed,
             self::AccountOnHold,
-            self::AccountReinstated => NotificationCategory::Safety,
+            self::AccountReinstated,
+            self::DrivingSuspendedForDebt => NotificationCategory::Safety,
+
+            self::DebtDueTomorrow,
+            self::DebtOverdue,
+            self::DebtLateFeeAdded,
+            self::DebtSuspensionWarning,
+            self::DebtPaymentConfirmed,
+            self::DebtPaymentRejected,
+            self::CouponIssued => NotificationCategory::Payment,
 
             self::SeatRequested,
             self::SeatApproved,

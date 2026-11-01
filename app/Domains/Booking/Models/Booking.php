@@ -64,6 +64,9 @@ class Booking extends Model
             'dropoff_lng' => 'decimal:7',
             'cancelled_at' => 'datetime',
             'cancellation_fee_piastres' => 'integer',
+            // The passenger's debt riding on this ride, beside the fare (PAY-16). Not fillable:
+            // the ledger keeps it — see FeeLines.
+            'fee_line_piastres' => 'integer',
         ];
     }
 

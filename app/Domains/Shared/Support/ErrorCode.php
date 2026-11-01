@@ -54,7 +54,11 @@ enum ErrorCode: string
 
     // ---- Driver & vehicles (Phase 4, Chapter 3) ------------------------
     case DriverNotEligible = 'DRIVER_NOT_ELIGIBLE';
-    case DriverDebtLimitReached = 'DRIVER_DEBT_LIMIT_REACHED';
+    /*
+     * The week's commission was not paid by its Friday 23:59 (PAY-12). Replaces the 200 EGP
+     * `DRIVER_DEBT_LIMIT_REACHED`: there is no cap any more (PAY-15), only the deadline.
+     */
+    case DriverCommissionOverdue = 'DRIVER_COMMISSION_OVERDUE';
     case DriverApplicationLocked = 'DRIVER_APPLICATION_LOCKED';
     case DriverApplicationIncomplete = 'DRIVER_APPLICATION_INCOMPLETE';
     case LicenceExpired = 'DRIVER_LICENCE_EXPIRED';
@@ -239,6 +243,14 @@ enum ErrorCode: string
     case ChatNotOpen = 'CHAT_NOT_OPEN';
     case ChatContactInfoNotAllowed = 'CHAT_CONTACT_INFO_NOT_ALLOWED';
 
+    // ---- Debt and settlement (PAY-08 → PAY-19, PAY-34) ----------------
+    // A payment towards a debt when there is nothing to pay.
+    case DebtNothingOwed = 'DEBT_NOTHING_OWED';
+    // Dashboard only: the payment was already confirmed or rejected by somebody else.
+    case DebtPaymentNotPending = 'DEBT_PAYMENT_NOT_PENDING';
+    // Dashboard only: a coupon needs a fee that was actually collected, from the other side.
+    case CouponNotAllowed = 'COUPON_NOT_ALLOWED';
+
     // ---- Admin dashboard (Chapter 12) ----------------------------------
     case AdminCredentialsInvalid = 'ADMIN_CREDENTIALS_INVALID';
     case AdminMfaNotEnrolled = 'ADMIN_MFA_NOT_ENROLLED';
@@ -318,9 +330,9 @@ enum ErrorCode: string
             // 403: the account is fine, this person just may not do it yet.
             self::DriverNotEligible => 403,
 
-            // 403: the driver owes more in uncollected cash fees than the platform allows before
-            // a new commute may go up (Bible §8.1). Settling brings it back under the cap.
-            self::DriverDebtLimitReached => 403,
+            // 403: a week's commission is unpaid past its Friday (PAY-12). Paying (and staff
+            // confirming it) lifts the block; existing bookings run meanwhile.
+            self::DriverCommissionOverdue => 403,
 
             self::DriverApplicationLocked,
             self::DriverDuplicateDetected,
@@ -486,7 +498,12 @@ enum ErrorCode: string
             self::MemberNotSuspended,
             // The corridor is already watched, or the watch already ended.
             self::EscortAlreadyArmed,
-            self::EscortNotActive => 409,
+            self::EscortNotActive,
+            // The state of the money, not a permission: nothing owed, a payment already decided,
+            // a fee that cannot back a coupon.
+            self::DebtNothingOwed,
+            self::DebtPaymentNotPending,
+            self::CouponNotAllowed => 409,
         };
     }
 
