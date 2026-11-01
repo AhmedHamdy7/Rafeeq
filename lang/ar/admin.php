@@ -88,6 +88,8 @@ return [
         'reject' => 'رفض',
         'confirm_reject' => 'تأكيد الرفض',
         'approved' => 'اتعمد :name كسائق.',
+        // F2-2: the ID or selfie is still waiting in the verification queue.
+        'identity_not_approved' => 'وافق على البطاقة والسيلفي من طابور التوثيق الأول (ناقص: :items).',
         'rejected' => 'اترفض :name.',
 
         // مراجعة العربية (F2-7): اللي المراجع بيقرره عن كل عربية قبل الاعتماد.

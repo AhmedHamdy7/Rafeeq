@@ -251,19 +251,25 @@ Route::prefix('v1')->group(function (): void {
              */
             Route::get('verification', [DriverApplicationController::class, 'verification']);
 
-            Route::middleware('verified:government_id')->group(function (): void {
-                Route::get('application', [DriverApplicationController::class, 'show']);
-                Route::post('application', [DriverApplicationController::class, 'store']);
-                Route::put('application/licence', [DriverApplicationController::class, 'updateLicence']);
-                Route::post('application/submit', [DriverApplicationController::class, 'submit']);
-                Route::delete('application', [DriverApplicationController::class, 'withdraw']);
+            /*
+             * 🔴 No `verified:government_id` here any more (F2-1, PROF-13, E1): the five driver
+             * items go in ANY order, as drafts, before a reviewer has looked at anything. Licence,
+             * application and car used to wait for an approved ID, so a driver uploaded one thing,
+             * waited a day, and came back for the rest. Nothing here grants anything: submit needs
+             * all five uploaded, and approval needs the ID and the selfie APPROVED (F2-2). Publishing
+             * keeps its own `verified:government_id` gate below.
+             */
+            Route::get('application', [DriverApplicationController::class, 'show']);
+            Route::post('application', [DriverApplicationController::class, 'store']);
+            Route::put('application/licence', [DriverApplicationController::class, 'updateLicence']);
+            Route::post('application/submit', [DriverApplicationController::class, 'submit']);
+            Route::delete('application', [DriverApplicationController::class, 'withdraw']);
 
-                Route::get('vehicles', [VehicleController::class, 'index']);
-                Route::post('vehicles', [VehicleController::class, 'store']);
-                Route::patch('vehicles/{vehicle}', [VehicleController::class, 'update']);
-                Route::post('vehicles/{vehicle}/activate', [VehicleController::class, 'activate']);
-                Route::post('vehicles/{vehicle}/documents', [VehicleController::class, 'storeDocument']);
-            });
+            Route::get('vehicles', [VehicleController::class, 'index']);
+            Route::post('vehicles', [VehicleController::class, 'store']);
+            Route::patch('vehicles/{vehicle}', [VehicleController::class, 'update']);
+            Route::post('vehicles/{vehicle}/activate', [VehicleController::class, 'activate']);
+            Route::post('vehicles/{vehicle}/documents', [VehicleController::class, 'storeDocument']);
         });
 
     /*
