@@ -3,6 +3,7 @@
 use App\Domains\Identity\Enums\AccountStatus;
 use App\Domains\Identity\Enums\Gender;
 use App\Domains\Identity\Enums\ProfileStatus;
+use App\Domains\Identity\Models\AccountSuspension;
 use App\Domains\Identity\Models\User;
 use Illuminate\Database\QueryException;
 
@@ -102,6 +103,8 @@ it('blocks a suspended account from editing its profile but not from seeing its 
     $signIn = signIn();
 
     User::sole()->forceFill(['account_status' => AccountStatus::Suspended->value])->save();
+    // RESTRICTED_ACCOUNT is a permanent ban since AUTH-19 (F1-3).
+    AccountSuspension::factory()->create(['user_id' => User::sole()->id, 'is_permanent' => true]);
 
     completeProfile($signIn['session']['accessToken'])
         ->assertStatus(403)
