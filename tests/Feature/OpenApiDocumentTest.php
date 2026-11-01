@@ -264,10 +264,12 @@ it('generates a document describing every /v1 route', function () {
         'POST /v1/driver/seat-requests/{seatRequest}/reject',
         'GET /v1/driver/bookings',
         /*
-         * The money (Phase 8). Neither of these MOVES any — payment methods, capture, payouts and
-         * refunds all wait on a provider being chosen.
+         * The money. Her debt to RAFEEQ, its weekly statement and "I paid" (PAY-08 → PAY-17), and
+         * the group's week. Online capture, payouts and refunds still wait on a provider.
          */
-        'GET /v1/driver/balance',
+        'GET /v1/account/debt',
+        'GET /v1/account/debt/statements',
+        'POST /v1/account/debt/payments',
         'GET /v1/groups/{group}/statement',
 
         'POST /v1/commutes/{commute}/pickup-preview',

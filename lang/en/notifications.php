@@ -273,4 +273,8 @@ return [
         'title' => 'Driving suspended',
         'body' => 'Your commission was not paid by the second Friday, so your upcoming trips were cancelled. Pay EGP :amount to drive again. You can still ride as a passenger.',
     ],
+    'riding_suspended_for_debt' => [
+        'title' => 'Riding suspended',
+        'body' => 'A fee has stayed unpaid, so your upcoming trips were cancelled and booking is paused. Pay EGP :amount to ride again, or appeal from the app.',
+    ],
 ];

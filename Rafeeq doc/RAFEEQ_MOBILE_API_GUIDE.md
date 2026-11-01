@@ -14,7 +14,7 @@
 >
 > **Base URL:** `{host}/api/v1` · **Auth:** bearer token · **Format:** JSON only.
 
-**Last updated:** 2026-10-30 · **171 endpoints live** · Phases 0–7, 9 and 11 complete · 10, 12 and 13 all but a decision each
+**Last updated:** 2026-11-01 · **173 endpoints live** · Phases 0–7, 9 and 11 complete · 10, 12 and 13 all but a decision each
 
 ---
 
@@ -22,7 +22,7 @@
 
 ### What is ready
 
-**171 endpoints live** and tested, across the 47 designed screens:
+**173 endpoints live** and tested, across the 47 designed screens:
 
 | | Count | Covers |
 |---|---|---|
@@ -749,7 +749,9 @@ fails if this list and the running routes ever disagree in either direction.
 | `PATCH /bookings/{booking}/cancel` | 4.7 Seat requests and bookings |
 | `POST /bookings/{booking}/dispute` | 4.7 Seat requests and bookings |
 | `GET /driver/bookings` | 4.7 Seat requests and bookings |
-| `GET /driver/balance` | 4.16 Money |
+| `GET /account/debt` | 4.16 Money |
+| `GET /account/debt/statements` | 4.16 Money |
+| `POST /account/debt/payments` | 4.16 Money |
 | `GET /groups/{group}/statement` | 4.16 Money |
 | `GET /driver/seat-requests` | 4.7 Seat requests and bookings |
 | `POST /driver/seat-requests/{seatRequest}/approve` | 4.7 Seat requests and bookings |
@@ -3740,42 +3742,70 @@ safety team, quoting the message, and returns `{ "incidentId" }` — the report 
 most: it is the one place two people talk with no relationship approved between them. On a request
 report the incident simply carries no booking.
 
-## 4.16 Money (screen 34, the group's `payments` tab)
+## 4.16 Money (screen 34, the group's `payments` tab, the Payments screen)
 
-> A driver's fee balance and a group's weekly statement. Online payment is not built — see 7.
+> What a member owes RAFEEQ and paying it, and a group's weekly statement. Online payment is not
+> built — see 7.
 >
 > **Screens** 34 · **Shapes** —
 
-🔴 **The fee comes out of the DRIVER's share, at 3%, and the passenger pays the seat price.** That
-was settled on 2026-10-06 and it closes the contradiction this file carried for weeks: an 8000 seat
-means the passenger owes **8000** and the driver keeps **7760**. If you built anything against the
-other reading — a passenger paying 8800 for an 8000 seat — change it.
+🔴 **The passenger pays the seat price; RAFEEQ's commission is on top of the driver's share**
+(PAY-48), frozen on each booking. On a **cash** trip the driver collects the whole seat at the
+roadside, so the commission becomes a **debt she owes RAFEEQ** — written the moment the passenger is
+dropped off.
 
-🔴 **And the consequence your screens exist to make visible:** on a **cash** trip the driver collects
-the whole 8000 at the roadside, so the 240 is not withheld from her — it becomes a **debt she owes
-the platform.** It accrues trip by trip and eventually stops her publishing. A driver who is only
-ever shown "earnings" and then cannot publish has been told nothing.
+🔴 **One person has up to two debts, never mixed** (PAY-08 → PAY-17):
 
-> ⚠️ **Nothing here moves money.** No payment methods, no card capture, no payouts, no refunds —
-> those wait on a payment provider being chosen (section 7). These two endpoints read what the cash
-> path has already recorded.
+| Side | What | Due | If unpaid |
+|---|---|---|---|
+| `driver` | weekly commission (and late fees) | **Friday 23:59 Cairo**; the week runs Saturday → Friday | after Friday: **+10 % once** for that week, no publishing and no new riders (`DRIVER_COMMISSION_OVERDUE`), booked rides continue · still unpaid after the **second** Friday: **driving suspended**, every upcoming trip cancelled with no fee, Passenger mode still works |
+| `passenger` | fees (no-show, late cancellation…) | rides on her **next trip** as a separate line the driver collects | unpaid **14 days**, or over **200 EGP**: **booking suspended**, every upcoming seat cancelled (`RIDING_SUSPENDED_FOR_DEBT` on any new request or seat offer) |
 
-#### `GET /driver/balance`
+There is **no amount cap** on driver debt any more (PAY-15): the old `debtCapPiastres` and
+`isBlockedFromPublishing` are gone, and so is `GET /driver/balance`.
 
-| Response field | Meaning |
+Paying is **"I paid"**: she sends an InstaPay transfer, then tells us its reference. **Nothing comes
+off until staff see the money** and confirm it; she is notified either way. Paying more than she
+owes leaves a credit on the same side (never paid out). A suspension for debt lifts by itself once
+it is paid (driver: nothing overdue; passenger: nothing owed).
+
+#### `GET /account/debt`
+
+| Field | Meaning |
 |---|---|
-| `outstandingFeePiastres` | What she owes the platform — fees from cash trips she has already been paid for in full. |
-| `debtCapPiastres` | The limit. **Read it; do not hard-code it** — it is a runtime setting staff can move. |
-| `remainingBeforeBlockPiastres` | The headroom, so you can draw a bar without doing the arithmetic. |
-| `isBlockedFromPublishing` | 🔴 Computed from the **current** cap, not from a stored flag. The flag is a projection a nightly job maintains; the cap is a setting. |
-| `existingRunsContinue` | Always `true`, and **say it on the screen.** Being over the cap stops her publishing something NEW; every run already booked goes ahead, because the passengers on it did nothing wrong. "Account blocked" would be both frightening and untrue. |
-| `blockReason` | Staff's note, when there is one. |
-| `lifetimeEarningsPiastres` · `lastSettledAt` | Her side of the ledger. |
+| `driver` | Her driver side, or `null` for somebody who has never been a driver. |
+| `passenger` | Her passenger side. Always there. |
+| `payments[]` | Her last ten "I paid"s, newest first: `id`, `side`, `amountPiastres`, `instapayReference`, `status` (`pending_confirmation` · `confirmed` · `rejected`), `hasReceipt`, `decisionNote` (why staff refused it), `createdAt`, `decidedAt`. 🔒 The receipt itself is never returned. |
+| `coupons[]` | Her last ten coupons (PAY-34): `id`, `side`, `valuePiastres`, `bookingId`, `createdAt`. Already taken off her debt. |
 
-A driver who has never completed a cash trip has no balance row, and this answers **zeros rather
-than 404** — "no such driver" is the wrong answer to "what do I owe".
+Each side:
 
-🔒 Hers alone. There is no endpoint at any access level that reads another driver's income or debt.
+| Field | Meaning |
+|---|---|
+| `owedPiastres` | What she owes now, never below zero. **The number the screen is opened to find.** |
+| `balancePiastres` | Signed: negative is a credit she is discounted next time. |
+| `overduePiastres` | Driver: owed from weeks whose Friday has passed. `0` on the passenger side. |
+| `lateFeePiastres` | Late fees inside what she owes. |
+| `dueAt` | Driver: the Friday 23:59 that matters now — the one she missed, or this week's. `null` for a passenger. |
+| `blocked` | Driver: unpaid past its Friday — no publishing, no new riders. Booked rides continue: **say so**. |
+| `suspended` · `suspendedAt` | Suspended for this debt. Show the banner with the amount, **Pay** and **Appeal**. |
+| `oldestUnpaidAt` | When the oldest unpaid money was added. A passenger's 14 days run from here. |
+
+#### `GET /account/debt/statements` — optional `?side=driver|passenger` (default `driver`), `?weekOf=YYYY-MM-DD`
+
+One week (Saturday → Friday, Cairo) of one side, line by line: `side`, `weekOf` (its Saturday),
+`dueAt`, `addedPiastres`, `takenOffPiastres` and `lines[]` — `type` (`commission` · `fee` ·
+`late_fee` · `fee_line` add to it; `payment` · `credit` · `coupon` · `write_off` take it down;
+`adjustment` either way), signed `amountPiastres`, `balanceAfterPiastres`, `reasonCode` (a stable
+code to translate), `bookingId`, `createdAt`.
+
+#### `POST /account/debt/payments`
+
+`side`, `amountPiastres` (at least 100), `instapayReference`, optional `receiptImage` (JPEG, PNG or
+WebP; send `multipart/form-data`). Answers **201** with the payment `pending_confirmation`.
+`409 DEBT_NOTHING_OWED` when that side owes nothing. Rate-limited with the reports.
+
+🔒 Her own, always. There is no endpoint at any access level that reads another member's debt.
 
 #### `GET /groups/{group}/statement` — optional `?weekOf=YYYY-MM-DD`
 
@@ -3800,7 +3830,7 @@ it is not a passenger's business either.
 | `bookingId` · `tripDate` · `seats` | Which journey. |
 | `pricePiastres` | 🔴 What was **agreed**, read from the booking's snapshot — never recomputed from today's price. A driver who raises her price does not retroactively change what somebody already owed. |
 | `paymentType` | `cash` or `online`. |
-| `paymentStatus` | `NOT_DUE` · `PENDING` · `PAID` · `FAILED` · `REFUNDED` · `DISPUTED`. Cash becomes `PAID` two hours after attendance is confirmed. |
+| `paymentStatus` | `NOT_DUE` · `PENDING` · `PAID` · `FAILED` · `REFUNDED` · `DISPUTED`. Cash becomes `PAID` the moment she is dropped off. |
 | `wasNoShow` | Still owed — the seat was held and the car went (decision D18) — but flagged so you can show it differently from an ordinary ride. |
 
 `totals` carries `duePiastres`, `paidPiastres` and `outstandingPiastres` (stated, not left as
@@ -3946,6 +3976,7 @@ exist, and every live endpoint must be named here.
 
 | Date | Change |
 |---|---|
+| 2026-11-01 | 💳 **Debt and paying it (PAY-08 → PAY-17, PAY-34, PAY-45, PAY-46).** `GET /driver/balance` is gone; `GET /account/debt`, `GET /account/debt/statements` and `POST /account/debt/payments` replace it. Two sides per person (driver commission due Friday 23:59 Cairo; passenger fees on the next trip), no amount cap, +10 % once after the Friday, driving suspended after the second Friday, booking suspended after 14 days or over 200 EGP (`RIDING_SUSPENDED_FOR_DEBT`). Paying is "I paid" with an InstaPay reference that staff confirm. Section 4.16. |
 | 2026-10-31 | 📍 **"I've arrived" is checked by GPS, per passenger (TRIP-10, TRIP-11), the "+2 min" is gone (TRIP-11, B7), and Cancel Active Trip takes a reason category (TRIP-22).** `POST /trips/{trip}/status` with `AT_PICKUP` now needs `bookingId`, `lat`, `lng`, and so does `POST /trips/{trip}/wait-timers`: both are refused with **`409 NOT_AT_PICKUP`** (`error.fields.distanceMeters`) unless the car is within 150 m of that passenger's pickup, and both start her grace — which now runs from the **later** of the arrival and her pickup time (`graceStartsAt`, `arrivedAt`, `arrivalDistanceMeters` on the timer; `extendedSeconds` is gone). 🛑 **The `.../wait-timers/{timer}/extend` endpoint was removed** — every passenger gets the same grace. `POST /trips/{trip}/cancel-active` takes `reason` as `breakdown` · `accident` · `emergency` · `other`, plus an optional `note`; free text in `reason` is now a 422. |
 | 2026-10-30 | 🛑 **`POST /trips/{trip}/cancel-active` — the driver stops a run that has already set off (v5 §123–125), and `GET /bookings/{booking}/alternatives` — "find another commute" (§126–128, §441).** Until now there was no lawful way to end a journey that had gone wrong: "cancel today" refuses once the car has moved — correctly — so a driver whose car broke down on the Mehwar could drive it anyway or abandon people while the system insisted the trip was in progress. **`reason` is required** on the new endpoint, because it carries the heaviest weight in the reliability ledger and she can appeal it. 🔴 **The two groups of passengers are not the same and your screens must not treat them so:** whoever was **in the car** ends `ENDED_EARLY` **keeping her attendance** — the part she rode happened — while whoever was **never collected** ends `CANCELLED_BY_DRIVER`; `meta.endedEarly` and `meta.cancelled` give you the counts, and each group gets a different notification. Nobody is charged either way; freed seats are offered to **nobody**. 🔴 **The alternatives list books NOTHING** — v5 says so twice — and `meta.origin.kind` tells you where the server searched from (`WHERE_THE_CAR_STOPPED` · `LAST_STOP_REACHED` · `AGREED_PICKUP` · `AGREED_PICKUP_UNVERIFIED`), which decides your caption. It is readable **while her booking is still `CONFIRMED`**, so she can look before she gives up a seat on a driver who has not come (§241). ⚠️ **Do not build a "where are you?" step** — v5 §129 forbids a safe-stop picker. ⚠️ **And a hole that is now closed:** `POST /trips/{trip}/status` accepted `CANCELLED` and the state machine allowed it from `PREPARING` and `EN_ROUTE`, so one ordinary request marked a run cancelled while every booking on it still read `CONFIRMED`, seats still counted as taken, and no passenger was told. It now refuses with `TRIP_INVALID_TRANSITION` and `error.fields.use` naming the right endpoint. |
 | 2026-10-30 | 🚗 **A car that is already moving can be asked for a seat — v5's active-ride request.** **Same endpoint**: send `scheduledTripId` for a run that has set off and you get one, with **no flag you send** (the circumstances decide, not the client). Two differences, both for the separate sheet v5 draws on the driver's side: **`requestedDuringRide: true`** on the seat-request shape, and **`expiresAt` three minutes out** — v5 says this is the **only countdown left in the product**. The clock is real on the server: approval reads `expiresAt`, so a late tap answers `409 SEAT_REQUEST_NOT_PENDING` with `error.fields.expiredAt`. Two new refusals: `SEAT_UNAVAILABLE` + `duringRide: ["NOT_ACCEPTING"]` when the driver turned the toggle off for that morning, and **`PICKUP_UNREACHABLE`** + `error.fields.reachability` — `already_passed` (**nothing she can do**, offer alternatives rather than a retry) · `would_break_promise` · `detour_too_long` · `position_unknown`/`route_unknown` (**a retry may work**). 🔴 **Reachability is measured, never timed** — v5 forbids a fixed limit twice, because a clock would refuse her on a run crawling five minutes from her gate and accept her on one that had passed her street. ⚠️ And an existing waiting-list **offer** now behaves the same way: it stays open after the run sets off while she is still reachable, and closes **`INELIGIBLE`** once the car has passed — "she stopped qualifying", not "the seat stopped existing". |

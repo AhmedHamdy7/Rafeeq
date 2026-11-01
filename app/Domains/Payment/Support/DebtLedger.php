@@ -9,9 +9,9 @@ use App\Domains\Payment\Enums\DebtEntryType;
 use App\Domains\Payment\Enums\DebtSide;
 use App\Domains\Payment\Models\DebtAccount;
 use App\Domains\Payment\Models\DebtEntry;
-use InvalidArgumentException;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
+use InvalidArgumentException;
 
 /**
  * The only way anybody's debt to RAFEEQ changes (PAY-08, decision D-0005; Feature 03 backend
@@ -214,6 +214,11 @@ final class DebtLedger
                 if ($signedAmount > 0) {
                     DB::afterCommit(fn () => app(SuspendForDebtAction::class)->passengerIfDue($userId));
                 }
+            }
+
+            // Money off a debt may be what lifts a suspension for it (PAY-45, PAY-46).
+            if ($signedAmount < 0) {
+                DB::afterCommit(fn () => app(SuspendForDebtAction::class)->liftIfPaid($userId, $side));
             }
 
             return $entry;

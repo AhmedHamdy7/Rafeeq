@@ -1,10 +1,5 @@
 <?php
 
-use App\Domains\Payment\Enums\DebtEntryType;
-use App\Domains\Payment\Enums\DebtSide;
-use App\Domains\Payment\Models\DebtEntry;
-use App\Domains\Payment\Support\DebtLedger;
-use App\Domains\Payment\Support\SettlementWeek;
 use App\Domains\Admin\Actions\SyncAdminRolesAction;
 use App\Domains\Admin\Enums\AdminRole;
 use App\Domains\Admin\Models\AdminUser;
@@ -18,6 +13,11 @@ use App\Domains\Driver\Enums\VehicleTier;
 use App\Domains\Driver\Models\DriverProfile;
 use App\Domains\Driver\Models\Vehicle;
 use App\Domains\Identity\Contracts\OtpSender;
+use App\Domains\Payment\Enums\DebtEntryType;
+use App\Domains\Payment\Enums\DebtSide;
+use App\Domains\Payment\Models\DebtEntry;
+use App\Domains\Payment\Support\DebtLedger;
+use App\Domains\Payment\Support\SettlementWeek;
 use App\Domains\Shared\ValueObjects\DaysMask;
 use App\Domains\Verification\Actions\ReviewVerificationAction;
 use App\Domains\Verification\Enums\VerificationStatus;

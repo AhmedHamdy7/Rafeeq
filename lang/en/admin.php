@@ -5,6 +5,7 @@ return [
     'title' => 'Rafeeq Operations',
 
     'nav' => [
+        'payments' => 'Payments',
         'escort' => 'Night escort',
         'verifications' => 'Verification',
         'drivers' => 'Drivers',
@@ -479,6 +480,35 @@ return [
             'chat__max_hours_after_departure' => 'Chat closes after departure if the run never ends',
             'chat__messages_per_minute' => 'Chat messages per member per minute',
         ],
+    ],
+
+    'payments' => [
+        'title' => 'Payments',
+        'pending_count' => '{0} No transfer waiting|{1} :count transfer waiting|[2,*] :count transfers waiting',
+        'none_pending' => 'Nothing to confirm.',
+        'side' => 'Which debt',
+        'side_driver' => 'Commission (driver)',
+        'side_passenger' => 'Fees (passenger)',
+        'sent' => 'Says she sent EGP :amount',
+        'reference' => 'InstaPay reference',
+        'owes' => 'owes EGP :amount',
+        'has_receipt' => 'Receipt attached',
+        'confirm' => 'Money received',
+        'refuse' => 'Not found',
+        'confirmed' => 'Payment confirmed and taken off the debt.',
+        'refused' => 'Payment refused. She has been told why.',
+        'note' => 'Reason',
+        'note_placeholder' => 'Why — the member and the audit log will read this.',
+        'coupon_title' => 'Coupon for the harmed side',
+        'coupon_help' => 'From a fee that was collected: half of it, at most one seat, to the other person on that ride (PAY-34).',
+        'fee_line' => 'Fee line ID',
+        'issue_coupon' => 'Issue coupon',
+        'coupon_issued' => 'Coupon issued.',
+        'credit_title' => 'Credit by hand',
+        'member' => 'Member ID',
+        'amount' => 'Amount (piastres)',
+        'credit' => 'Add credit',
+        'credited' => 'Credit added.',
     ],
 
     'files' => [

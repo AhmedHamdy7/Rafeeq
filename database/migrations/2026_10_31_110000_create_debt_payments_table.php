@@ -22,6 +22,8 @@ return new class extends Migration
         Schema::create('debt_payments', function (Blueprint $table) {
             $table->ulid('id')->primary();
             $table->foreignUlid('user_id')->constrained('users');
+            // Which of her two debts it pays (DebtSide): a commission and a fee are settled apart.
+            $table->string('side', 10);
             $table->unsignedBigInteger('amount_piastres');
             // The reference InstaPay shows the sender. What staff search their bank statement for.
             $table->string('instapay_reference', 64);

@@ -289,6 +289,8 @@ enum ErrorCode: string
     case DebtPaymentNotPending = 'DEBT_PAYMENT_NOT_PENDING';
     // Dashboard only: a coupon needs a fee that was actually collected, from the other side.
     case CouponNotAllowed = 'COUPON_NOT_ALLOWED';
+    // A passenger suspended for debt may not book until she pays (PAY-17, PAY-46).
+    case RidingSuspendedForDebt = 'RIDING_SUSPENDED_FOR_DEBT';
 
     // ---- Admin dashboard (Chapter 12) ----------------------------------
     case AdminCredentialsInvalid = 'ADMIN_CREDENTIALS_INVALID';
@@ -372,6 +374,8 @@ enum ErrorCode: string
             // 403: a week's commission is unpaid past its Friday (PAY-12). Paying (and staff
             // confirming it) lifts the block; existing bookings run meanwhile.
             self::DriverCommissionOverdue => 403,
+            // 403: suspended for debt (PAY-46). `error.fields.amountOwedPiastres` is what lifts it.
+            self::RidingSuspendedForDebt => 403,
 
             self::DriverApplicationLocked,
             self::DriverDuplicateDetected,

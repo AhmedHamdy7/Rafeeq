@@ -177,6 +177,14 @@
                         @endif
                     </a>
                 @endcan
+
+                @can(AdminPermission::PaymentView->value)
+                    <a href="{{ route('admin.payments') }}" wire:navigate class="rq-nav"
+                       @if (request()->routeIs('admin.payments')) aria-current="page" @endif>
+                        <span class="rq-nav__tile" aria-hidden="true">£</span>
+                        <span class="rq-nav__label">{{ __('admin.nav.payments') }}</span>
+                    </a>
+                @endcan
             </nav>
 
             @if ($admin?->can(AdminPermission::AuditLogView->value) || $admin?->can(AdminPermission::SettingsManage->value))

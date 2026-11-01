@@ -5,6 +5,7 @@ namespace App\Domains\Payment\Models;
 use App\Domains\Admin\Models\AdminUser;
 use App\Domains\Identity\Models\User;
 use App\Domains\Payment\Enums\DebtPaymentStatus;
+use App\Domains\Payment\Enums\DebtSide;
 use Database\Factories\DebtPaymentFactory;
 use Illuminate\Database\Eloquent\Concerns\HasUlids;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
@@ -29,6 +30,7 @@ class DebtPayment extends Model
     protected function casts(): array
     {
         return [
+            'side' => DebtSide::class,
             'status' => DebtPaymentStatus::class,
             'amount_piastres' => 'integer',
             'decided_at' => 'datetime',

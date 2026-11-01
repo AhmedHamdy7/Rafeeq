@@ -74,6 +74,7 @@ enum AdminRole: string
                 AdminPermission::PaymentView,
                 AdminPermission::PayoutApprove,
                 AdminPermission::RefundIssue,
+                AdminPermission::DebtManage,
             ],
 
             self::Support => [

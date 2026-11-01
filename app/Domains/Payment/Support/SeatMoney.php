@@ -8,12 +8,10 @@ use App\Domains\Booking\Models\Booking;
  * What one booking leaves the driver owing RAFEEQ when the passenger is dropped off (PAY-07), and
  * what one seat costs.
  *
- * ⚠️ SEAM for the automatic price (Feature 03 backend file P-1 → P-5, workstream W1). Until the
- * per-day price snapshot exists, the commission is the booking's own frozen
- * `platform_fee_snapshot_piastres` — which is what the old 3 % fee was, and where the new
- * commission (10 %, at least 8 EGP, PAY-41/PAY-48) lands once the price engine writes it. Either
- * way it is read from the booking's snapshot, never recomputed from today's settings: a settings
- * change must never alter a ride already agreed (PAY-44).
+ * The commission is the booking's own frozen `platform_fee_snapshot_piastres`, which the booking
+ * copies from its trip day's automatic-price snapshot (PAY-44, PAY-48) times the seats. Read from
+ * the snapshot, never recomputed from today's settings: a settings change must never alter a ride
+ * already agreed.
  *
  * One place, so the price work changes one line rather than every settlement path.
  */

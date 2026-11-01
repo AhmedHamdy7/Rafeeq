@@ -290,6 +290,12 @@ enum NotificationType: string
     case DrivingSuspendedForDebt = 'driving_suspended_for_debt';
 
     /**
+     * A fee unpaid 14 days, or her debt over 200 EGP: riding suspended, every upcoming seat
+     * cancelled, booking blocked until she pays (PAY-17, PAY-46). Safety, like the driver's.
+     */
+    case RidingSuspendedForDebt = 'riding_suspended_for_debt';
+
+    /**
      * To the driver: RAFEEQ moved his departure for one day because a rider joined or left
      * (C-2, COM-15) — "Leave at 07:10 on 2026-11-03". Only on days where he gave an arrival time
      * and not a fixed departure, and never inside the 16-hour lock.
@@ -304,7 +310,8 @@ enum NotificationType: string
             self::ReportClosed,
             self::AccountOnHold,
             self::AccountReinstated,
-            self::DrivingSuspendedForDebt => NotificationCategory::Safety,
+            self::DrivingSuspendedForDebt,
+            self::RidingSuspendedForDebt => NotificationCategory::Safety,
 
             self::DebtDueTomorrow,
             self::DebtOverdue,

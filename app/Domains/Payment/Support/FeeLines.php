@@ -6,6 +6,7 @@ use App\Domains\Booking\Enums\BookingStatus;
 use App\Domains\Booking\Enums\PaymentStatus;
 use App\Domains\Booking\Models\Booking;
 use App\Domains\Commute\Enums\ScheduledTripStatus;
+use App\Domains\Payment\Actions\SettleBookingAction;
 use App\Domains\Payment\Enums\DebtEntryType;
 use App\Domains\Payment\Enums\DebtSide;
 use App\Domains\Payment\Models\DebtEntry;
@@ -18,7 +19,7 @@ use App\Domains\Payment\Models\DebtEntry;
  * not set off and is not yet paid — even a booking confirmed weeks ago as part of a recurring
  * membership. Every other unpaid booking of hers carries zero. So a cancelled ride drops the line
  * and it moves to the one after; a ride that happens moves it onto the ledger (see
- * {@see \App\Domains\Payment\Actions\SettleBookingAction}).
+ * {@see SettleBookingAction}).
  *
  * Called by the ledger after every passenger-side line, and after anything that changes which ride
  * is "next" (a booking confirmed or cancelled is picked up the next time her balance moves, and on
