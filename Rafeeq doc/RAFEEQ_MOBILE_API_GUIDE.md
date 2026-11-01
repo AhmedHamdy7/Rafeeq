@@ -14,7 +14,7 @@
 >
 > **Base URL:** `{host}/api/v1` · **Auth:** bearer token · **Format:** JSON only.
 
-**Last updated:** 2026-11-01 · **179 endpoints live** · Phases 0–7, 9 and 11 complete · 10, 12 and 13 all but a decision each
+**Last updated:** 2026-11-01 · **180 endpoints live** · Phases 0–7, 9 and 11 complete · 10, 12 and 13 all but a decision each
 
 ---
 
@@ -22,7 +22,7 @@
 
 ### What is ready
 
-**179 endpoints live** and tested, across the 47 designed screens:
+**180 endpoints live** and tested, across the 47 designed screens:
 
 | | Count | Covers |
 |---|---|---|
@@ -519,6 +519,7 @@ GET  /safety/emergency-contacts · POST · PATCH · DELETE
 POST /trips/{trip}/live-share          { contactId? }   → 201  { url, token } ONCE
 POST /incidents                        { category, description?, bookingId? }       → 201
 POST /incidents/{incident}/evidence    multipart: kind, file                        → 201
+POST /incidents/{incident}/appeal      { reason }                                   → 201
 GET  /safety/blocked-users/preview?userId=                                          → 200  { bookingsToCancel, feePiastres, reason }
 POST /safety/blocked-users             { userId, reason? }                          → 201
 ```
@@ -832,6 +833,7 @@ fails if this list and the running routes ever disagree in either direction.
 | `GET /incidents` | 4.12 Safety |
 | `POST /incidents` | 4.12 Safety |
 | `GET /incidents/{incident}` | 4.12 Safety |
+| `POST /incidents/{incident}/appeal` | 4.12 Safety |
 | `GET /incidents/{incident}/evidence` | 4.12 Safety |
 | `POST /incidents/{incident}/evidence` | 4.12 Safety |
 | `GET /safety/blocked-users` | 4.12 Safety |
@@ -3363,15 +3365,45 @@ and let the server have the last word.
 |---|---|
 | `category`, `description` | As filed. |
 | `severity` | The platform's judgement. See above. |
-| `status` | `OPEN` · `UNDER_REVIEW` · `ESCALATED` · `RESOLVED` · `CLOSED`. |
+| `id` · `createdAt` | ✅ On every report, in the `POST` answer and in the list (HISTORY-11): `id` is the 26-character report number, `createdAt` when it was filed. |
+| `status` | `OPEN` · `UNDER_REVIEW` · `ESCALATED` · `RESOLVED` · `CLOSED` · **`APPEALED`** (she appealed the decision and the team is looking again — show it as "under review"; HISTORY-10). |
 | `slaDueAt` | When the platform has undertaken to respond by, written when the report was filed. Fixed rather than recomputed — a deadline that can be recalculated is one that can be quietly moved. |
 | `resolution` / `resolvedAt` | Set when the safety team resolves or closes the report — `null` before that, including while it is `ESCALATED`. `resolution` is **free text written by a member of staff to the reporter** (up to 255 characters, in whatever language they wrote it), so render it as a message from Rafeeq, not as a status label, and with `dir="auto"`. The reason for an escalation is internal and never appears here. |
 | `bookingId` | The journey, when one was named. |
-| `evidenceCount` | How many files are attached. |
+| `evidenceCount` | How many files are attached — now correct on the list too (it was always `0` there before 2026-11-01). |
+| `appeal.count` | Appeals made, 0–2. |
+| `appeal.appealableUntil` | **Show Appeal until then**; `null` = not appealable now (not decided yet, being looked at again, both appeals used, or 48 hours passed). |
+| `appeal.needsNewEvidence` | The next appeal is the second: ask her to attach a new file first (`POST /incidents/{incident}/evidence` is open while the report can still be appealed). |
+
+**`?bookingId={booking}`** (HISTORY-8) — only her reports about that journey, for the past trip's "My reports". Same shape, same own-reports rule: a booking id that is not hers simply returns nothing. Not 26 characters → `422`.
+
+**Order:** newest first (`createdAt` descending, then `id`), on both the full and the filtered list (HISTORY-11).
 
 🔒 **Own reports only, and that includes the person a report is about.** Showing the subject what was
 said about them, in the reporter's own words, is how a report becomes a reason for a confrontation.
 The reviewer's identity and the reported person's id are not returned either.
+
+#### `POST /incidents/{incident}/appeal` — appeal the decision (HISTORY-10)
+
+**Request:** `reason` (required, 10–1000 characters).
+
+The rule is D-0021's: **one appeal, then a second only with new evidence, then final**, each within
+**48 hours of the decision** (`resolvedAt`). "New evidence" is checked by the server — more files
+attached than when the first appeal was made — so for a second appeal, upload first, then appeal.
+Answers `201` with the report, now **`APPEALED`**: back in the safety team's queue, unassigned, with a
+fresh `slaDueAt`. When they decide again it returns to `RESOLVED`/`CLOSED` with a new `resolution`
+and a new 48 hours.
+
+| Refused | `422 VALIDATION_FAILED`, `error.fields.appeal[0]` |
+|---|---|
+| Not decided yet (`OPEN` · `UNDER_REVIEW` · `ESCALATED` · `APPEALED`) | `NOT_DECIDED` |
+| Both appeals used | `NO_APPEALS_LEFT` |
+| More than 48 hours since the decision | `APPEAL_WINDOW_CLOSED` |
+| Second appeal with no new file | `NEW_EVIDENCE_REQUIRED` |
+
+`404` for somebody else's report. Show the button from `appeal.appealableUntil`, not from your own
+clock maths. The person a report is about never sees it, so they appeal what was done to them (a fee
+or warning) on those endpoints instead.
 
 #### `POST /incidents/{incident}/evidence` — attach a photograph
 
@@ -4161,6 +4193,7 @@ exist, and every live endpoint must be named here.
 
 | Date | Change |
 |---|---|
+| 2026-11-01 | 🧾 **My reports (HISTORY-8, HISTORY-10, HISTORY-11).** New **`POST /incidents/{incident}/appeal`** `{ reason }` — one appeal, a second only with a new file, 48 hours from the decision (D-0021); the report becomes **`APPEALED`** and goes back to the queue; refusals are `422` with `error.fields.appeal` (`NOT_DECIDED` · `NO_APPEALS_LEFT` · `APPEAL_WINDOW_CLOSED` · `NEW_EVIDENCE_REQUIRED`). Reports now carry `appeal { count, appealableUntil, needsNewEvidence }`, and evidence can be added to a decided report while it can still be appealed. `GET /incidents?bookingId=` filters to one journey. Confirmed: `id` and `createdAt` on every report, newest first, a late report is `409 REPORT_WINDOW_CLOSED`; `evidenceCount` on the list was always `0` and is fixed. 180 endpoints. |
 | 2026-11-01 | ⭐ **Rating edits (HISTORY-5 → HISTORY-7).** `PATCH /ratings/{rating}` changes only the fields sent: `"comment": null` clears it, a left-out `comment`/`tags`/`stars` is unchanged (before, a left-out comment was wiped and `stars` was required). Confirmed and pinned: stars-only `canceled_booking` feedback → `201`, a comment or tags on it → `422 VALIDATION_FAILED` on the field; rateable = `COMPLETED`, `ENDED_EARLY`, and the passenger's feedback on `CANCELLED_BY_DRIVER` — every other status `422 TRIP_NOT_RATEABLE`. No delete endpoint (B-3). |
 | 2026-11-01 | 🧾 **Trips history (HISTORY-2, HISTORY-4).** `GET /my-bookings?scope=past` (finished, newest journey first) and `?scope=upcoming` (open, soonest first), paged on the filtered list; no `scope` is unchanged. Every booking on `/my-bookings` and `/bookings/{booking}` carries `myRating` — your own rating or `null`, never the other side's. A rating's `editableUntil` now matches what `PATCH` accepts: `null` once the deadline passed, and kept on visible `canceled_booking` feedback. |
 | 2026-11-01 | 🧾 **Trips history (HISTORY-1, HISTORY-9).** Every booking on `GET /my-bookings` and `GET /bookings/{booking}` now carries `commuteId`, `originLabel`, `destinationLabel` and `driver` (a `person`, first name only); the pickup and drop-off are the existing `meetingPoint`/`dropoffPoint`, fuzzed unless confirmed. New report category **`safety_concern`**, ranked **high**; `false_arrival` is live. |

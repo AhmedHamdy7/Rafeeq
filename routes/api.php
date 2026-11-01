@@ -414,6 +414,9 @@ Route::prefix('v1')->group(function (): void {
         Route::get('incidents/{incident}', [SafetyController::class, 'showIncident']);
         Route::post('incidents', [SafetyController::class, 'reportIncident'])
             ->middleware('throttle:safety-reports');
+        // HISTORY-10: appeal the decision on your own report. Same limiter as filing one.
+        Route::post('incidents/{incident}/appeal', [SafetyController::class, 'appealIncident'])
+            ->middleware('throttle:safety-reports');
 
         /*
          * Evidence on a report.

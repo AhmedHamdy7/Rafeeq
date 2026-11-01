@@ -237,6 +237,8 @@ it('generates a document describing every /v1 route', function () {
         'POST /v1/incidents',
         'GET /v1/incidents/{incident}/evidence',
         'POST /v1/incidents/{incident}/evidence',
+        // HISTORY-10 — appealing the decision on a report.
+        'POST /v1/incidents/{incident}/appeal',
         'GET /v1/search/commutes',
         'GET /v1/commute-demands',
         'POST /v1/commute-demands',

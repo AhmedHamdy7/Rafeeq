@@ -87,6 +87,15 @@ final readonly class ReportIncidentAction
     ];
 
     /**
+     * The response deadline for a severity, in hours. Public because an appeal starts a fresh one
+     * on the same scale (HISTORY-10) — a second look at a harassment case is not a 72-hour job.
+     */
+    public static function slaHoursFor(SafetySeverity $severity): int
+    {
+        return self::SLA_HOURS[$severity->value];
+    }
+
+    /**
      * @param  array<string, mixed>  $attributes
      */
     public function execute(User $reporter, array $attributes): Incident
@@ -120,7 +129,7 @@ final readonly class ReportIncidentAction
             // Not fillable: neither the severity nor the deadline is the reporter's to set.
             $incident->severity = $severity->value;
             $incident->status = IncidentStatus::Open->value;
-            $incident->sla_due_at = now()->addHours(self::SLA_HOURS[$severity->value]);
+            $incident->sla_due_at = now()->addHours(self::slaHoursFor($severity));
 
             $incident->save();
 
