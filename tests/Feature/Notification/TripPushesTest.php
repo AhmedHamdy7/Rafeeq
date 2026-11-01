@@ -81,7 +81,7 @@ it('reminds both sides an hour before and again ten minutes before, once each', 
     $push = Notification::query()->where('user_id', $her['user']->id)->where('type', 'trip_starts_soon')
         ->where('channel', 'in_app')->sole();
 
-    expect($push->data)->toBe(['bookingId' => $her['bookingId'], 'tripId' => $this->tripId]);
+    expect($push->data)->toEqual(['bookingId' => $her['bookingId'], 'tripId' => $this->tripId]);
 });
 
 it('sends only the final reminder when both are due at once', function () {

@@ -2,6 +2,7 @@
 
 namespace App\Domains\Notification\Support;
 
+use App\Domains\Notification\Jobs\DeliverPushNotification;
 use RuntimeException;
 
 /**
@@ -10,6 +11,6 @@ use RuntimeException;
  *
  * A separate exception because the right response is different from every other failure: retrying
  * cannot help, and the token should be forgotten so the next message does not try it again.
- * {@see \App\Domains\Notification\Jobs\DeliverPushNotification} does both.
+ * {@see DeliverPushNotification} does both.
  */
 final class PushTokenRejected extends RuntimeException {}

@@ -79,11 +79,16 @@ it('signs in as the service account and sends one message to the project', funct
         ->and($payload['scope'])->toBe('https://www.googleapis.com/auth/firebase.messaging')
         ->and(openssl_verify("{$header}.{$claims}", $decode($signature), $this->publicKey, OPENSSL_ALGO_SHA256))->toBe(1);
 
-    Http::assertSent(fn (Request $request) => $request->url() === 'https://fcm.googleapis.com/v1/projects/rafeeq-test/messages:send'
-        && $request->hasHeader('Authorization', 'Bearer ya29.token')
-        && $request['message']['token'] === 'device-token'
-        && $request['message']['notification']['title'] === 'Omar is on the way to you'
-        && $request['message']['data']['bookingId'] === '01J');
+    // Read from the wire, as FCM reads it: the sender sends `data` as a JSON object.
+    Http::assertSent(function (Request $request): bool {
+        $body = json_decode($request->body(), true);
+
+        return $request->url() === 'https://fcm.googleapis.com/v1/projects/rafeeq-test/messages:send'
+            && $request->hasHeader('Authorization', 'Bearer ya29.token')
+            && $body['message']['token'] === 'device-token'
+            && $body['message']['notification']['title'] === 'Omar is on the way to you'
+            && $body['message']['data']['bookingId'] === '01J';
+    });
 });
 
 /**
