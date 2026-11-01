@@ -10,6 +10,7 @@ use App\Domains\Driver\Enums\DriverProfileStatus;
 use App\Domains\Driver\Models\DriverProfile;
 use App\Domains\Geo\Contracts\GeoQueryEngine;
 use App\Domains\Geo\Support\CachingGeoEngine;
+use App\Domains\Geo\Support\GoogleRoutesGeoEngine;
 use App\Domains\Geo\Support\StraightLineGeoEngine;
 use App\Domains\Identity\Contracts\OtpSender;
 use App\Domains\Identity\Support\LogOtpSender;
@@ -70,10 +71,19 @@ class AppServiceProvider extends ServiceProvider
          * change here and nowhere else. The caching decorator wraps whichever
          * engine is configured, because a provider is billed per call and the
          * same commute is looked up over and over.
+         *
+         * `straight_line` stays the default and the only engine tests use: it needs no key and no
+         * network. `google` falls back to it on any provider failure, so a Google outage degrades
+         * estimates rather than taking publishing or booking down.
          */
         $this->app->singleton(GeoQueryEngine::class, fn () => new CachingGeoEngine(
             match (config('rafeeq.geo.engine')) {
                 'straight_line' => new StraightLineGeoEngine,
+                'google' => new GoogleRoutesGeoEngine(
+                    apiKey: config('services.google_maps.key'),
+                    endpoint: (string) config('rafeeq.geo.google.endpoint'),
+                    timeoutSeconds: (int) config('rafeeq.geo.google.timeout_seconds'),
+                ),
                 default => throw new InvalidArgumentException(
                     'Unsupported geo engine ['.config('rafeeq.geo.engine').'].'
                 ),

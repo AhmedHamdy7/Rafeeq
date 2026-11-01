@@ -9,7 +9,8 @@ use Illuminate\Support\Facades\Storage;
 
 /**
  * Feature 03 v3: "Driver route fixed across recurring weekdays; **each weekday has independent
- * departure, promised arrival, price within route range, capacity and bookings**."
+ * departure, promised arrival, price within route range, capacity and bookings**." — minus the
+ * price since D-0016: it is automatic and the same every day (P-1, PAY-42).
  *
  * 🔴 The parent `commute_schedules.days_mask` and `departure_time` are now DERIVED from these rows
  * and maintained by `SaveCommuteScheduleAction`. Search compares the mask inside its query and must
@@ -41,21 +42,20 @@ it('writes one row per day in the mask', function () {
         // Every day gets the single time when no per-day override is sent, which is exactly how
         // this behaved before the table existed.
         ->and($rows->pluck('departure_time')->unique()->all())->toBe(['07:05:00'])
-        // Null means "follow the commute" — not a copy of its price, which would stop following it.
-        ->and($rows->pluck('price_per_seat_piastres')->unique()->all())->toBe([null]);
+        // Null means "follow the commute" — not a copy of its seats, which would stop following it.
+        ->and($rows->pluck('seats_total')->unique()->all())->toBe([null]);
 });
 
 /**
  * 🔴 The feature itself: one day genuinely different from the rest.
  */
-it('lets one day leave earlier, cost less and carry fewer people', function () {
+it('lets one day leave earlier and carry fewer people', function () {
     saveSchedule($this->token, $this->commuteId, [
         'daysMask' => DaysMask::weekdaysSunToThu()->value,
         'departureTime' => '07:05:00',
         'perDay' => [
             (string) DaysMask::SUNDAY => [
                 'departureTime' => '06:30:00',
-                'pricePerSeatPiastres' => 2500,
                 'seatsTotal' => 2,
             ],
         ],
@@ -65,25 +65,34 @@ it('lets one day leave earlier, cost less and carry fewer people', function () {
     $monday = CommuteWeekdaySchedule::query()->where('weekday_bit', DaysMask::MONDAY)->sole();
 
     expect($sunday->departure_time)->toBe('06:30:00')
-        ->and($sunday->price_per_seat_piastres)->toBe(2500)
         ->and($sunday->seats_total)->toBe(2)
         // And the other days are untouched.
         ->and($monday->departure_time)->toBe('07:05:00')
-        ->and($monday->price_per_seat_piastres)->toBeNull();
+        ->and($monday->seats_total)->toBeNull();
+});
+
+/**
+ * 🔒 P-1, D-0016: the driver cannot price a day. Refused rather than ignored, so an app still on
+ * the old contract finds out on its first try.
+ */
+it('refuses a per-day price', function () {
+    saveSchedule($this->token, $this->commuteId, [
+        'perDay' => [(string) DaysMask::SUNDAY => ['pricePerSeatPiastres' => 2500]],
+    ])->assertStatus(422)
+        ->assertJsonStructure(['error' => ['fields' => ['perDay.'.DaysMask::SUNDAY.'.pricePerSeatPiastres']]]);
 });
 
 /**
  * 🔴 Where the independence actually takes effect. Recording it is worthless if generation ignores
  * it, so this follows the values all the way into the occurrences a passenger books.
  */
-it('generates each day`s trip from that day`s own time, price and capacity', function () {
+it('generates each day`s trip from that day`s own time and capacity, at one automatic price', function () {
     saveSchedule($this->token, $this->commuteId, [
         'daysMask' => DaysMask::weekdaysSunToThu()->value,
         'departureTime' => '07:05:00',
         'perDay' => [
             (string) DaysMask::SUNDAY => [
                 'departureTime' => '06:30:00',
-                'pricePerSeatPiastres' => 2500,
                 'seatsTotal' => 2,
             ],
         ],
@@ -98,14 +107,13 @@ it('generates each day`s trip from that day`s own time, price and capacity', fun
 
     expect($sundays)->not->toBeEmpty()
         ->and($others)->not->toBeEmpty()
-        ->and($sundays->pluck('price_snapshot_piastres')->unique()->all())->toBe([2500])
         ->and($sundays->pluck('seats_total')->unique()->all())->toBe([2]);
 
-    // The rest of the week kept the commute's own price and capacity.
+    // Every day costs the same: the price comes from the route and the car (PAY-42).
     $offer = CommuteOffer::findOrFail($this->commuteId);
 
-    expect($others->pluck('price_snapshot_piastres')->unique()->all())
-        ->toBe([(int) $offer->price_per_seat_piastres]);
+    expect($trips->pluck('seat_price_piastres')->unique()->all())
+        ->toBe([(int) $offer->seat_price_piastres]);
 });
 
 it('stores a promised arrival on each day it was given for', function () {

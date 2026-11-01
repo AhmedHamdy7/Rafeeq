@@ -86,7 +86,9 @@ final readonly class ChangeCommuteStatusAction
         // suspended must not resume just because the driver asked.
         CreateCommuteOfferAction::assertDriverMayPublish($offer->driverProfile);
         DriverDebt::assertMayPublish($offer->driverProfile);
-        CreateCommuteOfferAction::usableVehicle($offer->driverProfile, $offer->vehicle_id);
+        $vehicle = CreateCommuteOfferAction::usableVehicle($offer->driverProfile, $offer->vehicle_id);
+        // C-3: the car's approved seats may have been lowered while the commute was paused.
+        CreateCommuteOfferAction::assertCommuteFitsVehicle($offer, $vehicle);
 
         return DB::transaction(function () use ($offer): CommuteOffer {
             $offer->forceFill([

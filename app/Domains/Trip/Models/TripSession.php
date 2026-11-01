@@ -4,6 +4,7 @@ namespace App\Domains\Trip\Models;
 
 use App\Domains\Commute\Models\ScheduledTrip;
 use App\Domains\Safety\Models\SafetyEvent;
+use App\Domains\Trip\Enums\ActiveTripCancelReason;
 use App\Domains\Trip\Enums\TripSessionStatus;
 use Database\Factories\TripSessionFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
@@ -35,6 +36,8 @@ class TripSession extends Model
             'auto_finish_check_at' => 'datetime',
             'still_driving_count' => 'integer',
             'current_status' => TripSessionStatus::class,
+            // Set only by Cancel Active Trip (TRIP-22): the category the fees read.
+            'cancel_reason' => ActiveTripCancelReason::class,
             'distance_travelled_meters' => 'integer',
             'duration_seconds' => 'integer',
             'deviation_detected_at' => 'datetime',

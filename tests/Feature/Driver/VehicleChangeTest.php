@@ -39,6 +39,8 @@ function secondVehicleFor(string $token, bool $approved): Vehicle
     if ($approved) {
         $vehicle->forceFill([
             'verification_status' => VehicleVerificationStatus::Approved->value,
+            // The car review (F2-6): the same 3 seats as the car it replaces.
+            'approved_seats' => 3,
         ])->save();
     }
 
@@ -179,7 +181,8 @@ it('refuses the whole swap when the replacement has too few seats for a live com
     $driverToken = approvedDriver();
     $vehicleId = test()->withToken($driverToken)->getJson('/api/v1/driver/vehicles')->json('data.0.id');
 
-    // Four bookable seats on the original car.
+    // Four approved seats on the original car, all offered.
+    Vehicle::findOrFail($vehicleId)->forceFill(['approved_seats' => 4])->save();
     $commuteId = readyCommute($driverToken, $vehicleId, ['seatsTotal' => 4]);
     test()->withToken($driverToken)->postJson("/api/v1/commutes/{$commuteId}/publish")->assertOk();
 
@@ -190,11 +193,14 @@ it('refuses the whole swap when the replacement has too few seats for a live com
     ])->assertStatus(201);
 
     $small = Vehicle::query()->where('plate_number', 'ط ح س 1122')->sole();
-    $small->forceFill(['verification_status' => VehicleVerificationStatus::Approved->value])->save();
+    $small->forceFill(['verification_status' => VehicleVerificationStatus::Approved->value, 'approved_seats' => 3])->save();
 
+    // C-3: the replacement's APPROVED seats are what the commute is checked against.
     test()->withToken($driverToken)
         ->postJson("/api/v1/driver/vehicles/{$small->getKey()}/activate")
-        ->assertStatus(422);
+        ->assertStatus(422)
+        ->assertJsonPath('error.code', 'COMMUTE_SEATS_EXCEED_APPROVED')
+        ->assertJsonPath('error.fields.approvedSeats.0', '3');
 
     /*
      * Nothing half-applied. The alternative to refusing is cancelling a booked seat, which the

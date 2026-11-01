@@ -346,7 +346,7 @@ it('names the commute a match points at, not just that one was found', function 
         ->and($card['destinationLabel'])->toBe('Smart Village B6')
         ->and($card['departureTimeLocal'])->toStartWith('07:05')
         ->and($card['timezone'])->toBe('Africa/Cairo')
-        ->and($card['pricePerSeatPiastres'])->toBe(8000);
+        ->and($card['seatPricePiastres'])->toBe(CommuteOffer::query()->whereKey($this->commuteId)->value('seat_price_piastres'));
 });
 
 it('shows the saved corridors without running every saved search', function () {
@@ -524,9 +524,10 @@ it('keeps reporting the money the bookings were approved at', function () {
     $before = test()->withToken($this->driverToken)->getJson('/api/v1/driver/home')
         ->assertOk()->json('data.nextRun.collectPiastres');
 
-    test()->withToken($this->driverToken)
-        ->patchJson("/api/v1/commutes/{$this->commuteId}", ['pricePerSeatPiastres' => 11000])
-        ->assertOk();
+    // The day is repriced afterwards (an admin moved a rate and the day was regenerated).
+    ScheduledTrip::query()->whereKey($this->tripId)->update([
+        'seat_price_piastres' => 99500, 'driver_share_piastres' => 90000, 'commission_piastres' => 9500,
+    ]);
 
     expect(test()->withToken($this->driverToken)->getJson('/api/v1/driver/home')
         ->assertOk()->json('data.nextRun.collectPiastres'))->toBe($before);

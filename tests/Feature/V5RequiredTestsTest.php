@@ -120,7 +120,7 @@ $concurrency = [
         'tests/Feature/Commute/ChangeProposalTest.php' => 'changes nothing while anybody has not answered',
     ],
     '11. Price edits preserve existing agreed booking prices' => [
-        'tests/Feature/Commute/ScheduledTripGenerationTest.php' => 'snapshots the seats and price so a later change cannot move a booked day',
+        'tests/Feature/Commute/ScheduledTripGenerationTest.php' => 'snapshots the seats and the automatic price so a later change cannot move a booked day',
     ],
     '12. Role suspension / document expiry blocks Publish and Start; passenger actions remain' => [
         'tests/Feature/Driver/DriverEligibilityTest.php' => null,

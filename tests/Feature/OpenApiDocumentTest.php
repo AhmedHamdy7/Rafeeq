@@ -116,6 +116,8 @@ it('generates a document describing every /v1 route', function () {
         'POST /v1/account/consents',
         'PUT /v1/account/profile/basic',
         'POST /v1/account/initial-role',
+        // Adding driving to a passenger account later (F1-7, F2-10).
+        'POST /v1/account/capabilities/driver',
         'GET /v1/account/onboarding-state',
         'PATCH /v1/account/preferences',
         'GET /v1/account/comfort-preferences',
@@ -168,7 +170,8 @@ it('generates a document describing every /v1 route', function () {
         'POST /v1/commutes/{commute}/resume',
         'POST /v1/commutes/{commute}/duplicate',
         'POST /v1/commutes/{commute}/return',
-        'GET /v1/commutes/{commute}/price-suggestion',
+        // The automatic seat price, read-only (P-1); it replaced `price-suggestion`.
+        'GET /v1/commutes/{commute}/price',
         'GET /v1/home',
         'GET /v1/driver/home',
         'GET /v1/trips/{trip}',
@@ -193,7 +196,6 @@ it('generates a document describing every /v1 route', function () {
         'PATCH /v1/trips/{trip}/receive-requests',
         'GET /v1/trips/{trip}/wait-timers',
         'POST /v1/trips/{trip}/wait-timers',
-        'POST /v1/trips/{trip}/wait-timers/{timer}/extend',
         'POST /v1/trips/{trip}/location',
         'GET /v1/trips/{trip}/location',
         'POST /v1/sos',

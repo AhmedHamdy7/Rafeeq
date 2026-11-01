@@ -2,6 +2,7 @@
 
 namespace App\Domains\Booking\Actions;
 
+use App\Domains\Booking\Enums\PaymentType;
 use App\Domains\Booking\Enums\SeatRequestCommitment;
 use App\Domains\Booking\Enums\SeatRequestKind;
 use App\Domains\Booking\Enums\SeatRequestStatus;
@@ -66,6 +67,9 @@ final readonly class RequestSeatAction
         if (empty($input['agreedToRules'])) {
             throw DomainException::of(ErrorCode::RulesNotAgreed);
         }
+
+        // P-4: cash only in the beta.
+        PaymentType::from($input['paymentType'])->assertAvailable();
 
         $commitment = SeatRequestCommitment::from($input['commitment']);
         $trip = $this->tripFor($offer, $input, $commitment);

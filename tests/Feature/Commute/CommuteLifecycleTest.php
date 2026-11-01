@@ -131,7 +131,7 @@ it('allows nothing once archived', function () {
     $this->withToken($this->token)->postJson("/api/v1/commutes/{$this->commuteId}/pause")->assertStatus(409);
     $this->withToken($this->token)->postJson("/api/v1/commutes/{$this->commuteId}/resume")->assertStatus(409);
     $this->withToken($this->token)->patchJson("/api/v1/commutes/{$this->commuteId}", [
-        'pricePerSeatPiastres' => 9000,
+        'audience' => 'any_verified',
     ])->assertStatus(409);
 });
 

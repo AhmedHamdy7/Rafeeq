@@ -3,6 +3,7 @@
 namespace App\Domains\Matching\Support;
 
 use App\Domains\Commute\Enums\CommuteAudience;
+use App\Domains\Driver\Enums\VehicleTier;
 use App\Domains\Shared\ValueObjects\Coordinate;
 use App\Domains\Shared\ValueObjects\DaysMask;
 use App\Domains\Shared\ValueObjects\WalkTime;
@@ -60,6 +61,11 @@ final readonly class SearchCriteria
          * ({@see HardFilters::mayJoinAudience()}).
          */
         public bool $womenOnly = false,
+        /**
+         * The Comfort filter (S-1): only cars of this tier. Null = any car. A HARD filter — see
+         * HardFilters::requireTier.
+         */
+        public ?VehicleTier $tier = null,
     ) {}
 
     /**
@@ -84,6 +90,7 @@ final readonly class SearchCriteria
             requiredRules: $input['rules'] ?? [],
             minRating: isset($input['minRating']) ? (float) $input['minRating'] : null,
             womenOnly: filter_var($input['womenOnly'] ?? false, FILTER_VALIDATE_BOOLEAN),
+            tier: isset($input['tier']) ? VehicleTier::from($input['tier']) : null,
         );
     }
 
@@ -120,6 +127,7 @@ final readonly class SearchCriteria
             'minRating' => $this->minRating,
             // Omitted when off, like every other optional field.
             'womenOnly' => $this->womenOnly ?: null,
+            'tier' => $this->tier?->value,
         ], fn (mixed $value): bool => $value !== null && $value !== []);
     }
 
@@ -158,6 +166,7 @@ final readonly class SearchCriteria
             // asking different questions, and sharing a cache row would answer one of them wrong.
             $this->minRating ?? 'any',
             $this->womenOnly ? 'women-only' : 'any-audience',
+            $this->tier?->value ?? 'any-tier',
         ]));
     }
 }

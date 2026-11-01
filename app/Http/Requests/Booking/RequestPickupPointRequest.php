@@ -14,7 +14,7 @@ use Illuminate\Foundation\Http\FormRequest;
  *
  * - 🔴 There is deliberately NO field for the detour. `added_minutes` and
  *   `added_km` are measured by us from the driver's published route, and the
- *   driver's `max_detour_minutes` is checked against that measurement. A requester
+ *   whole-trip detour cap (C-1, COM-31) is checked against that measurement. A requester
  *   who could supply them would be deciding how far out of their way the driver
  *   goes.
  * - There is no `effectiveFrom` field either: `next_trip` is the only value the

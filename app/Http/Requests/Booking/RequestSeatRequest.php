@@ -86,7 +86,8 @@ final class RequestSeatRequest extends FormRequest
             // A short note to the driver, so they know who is asking.
             'introMessage' => ['nullable', 'string', 'max:500'],
 
-            // How you intend to pay. Cash is settled in the car.
+            // How you intend to pay. Send `cash`: it is settled in the car. `online` is
+            // refused with `PAYMENT_TYPE_NOT_AVAILABLE` until online payment exists.
             'paymentType' => ['required', 'string', Rule::enum(PaymentType::class)],
 
             // You must accept the group's rules to request a seat. They are shown

@@ -4,6 +4,7 @@ namespace App\Http\Requests\Matching;
 
 use App\Domains\Commute\Enums\CommuteAudience;
 use App\Domains\Commute\Enums\CommuteRuleKey;
+use App\Domains\Driver\Enums\VehicleTier;
 use App\Domains\Matching\Support\SearchCriteria;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
@@ -87,6 +88,10 @@ final class SearchCommutesRequest extends FormRequest
              * you something untrue. Label the control accordingly.
              */
             'minRating' => ['nullable', 'numeric', 'between:1,5'],
+
+            // Send `comfort` to see only cars with the Comfort badge (a higher km rate, so a
+            // higher seat price). Leave it out for any car. A filter, not a preference.
+            'tier' => ['nullable', 'string', Rule::enum(VehicleTier::class)],
 
             // How much earlier or later than your window still works for you.
             'flexibilityMinutes' => ['nullable', 'integer', 'min:0', 'max:60'],
