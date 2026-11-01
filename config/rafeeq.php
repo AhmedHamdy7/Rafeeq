@@ -240,6 +240,16 @@ return [
 
         // PAY-29: per passenger who left or switched because he was late.
         'driver_late_percent' => 25,
+
+        // TRIP-20: a drop-off this far before her agreed point, without her asking, is checked.
+        'early_drop_meters' => 1000,
+
+        // PAY-31, PAY-32: a lie about paying, once staff establish it, costs this share.
+        'payment_lie_passenger_percent' => 150,
+        'payment_lie_driver_percent' => 50,
+
+        // PAY-47: a man confirmed to have booked a women-only commute owes this share of the seat.
+        'women_only_misuse_percent' => 100,
     ],
 
     'debt' => [

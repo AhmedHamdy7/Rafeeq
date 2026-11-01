@@ -97,6 +97,26 @@ final class FeeSettings
         return self::percent(self::get('fees.driver_late_percent'));
     }
 
+    public static function earlyDropMeters(): int
+    {
+        return max(100, (int) self::get('fees.early_drop_meters'));
+    }
+
+    public static function paymentLiePassengerPercent(): int
+    {
+        return self::percent(self::get('fees.payment_lie_passenger_percent'));
+    }
+
+    public static function paymentLieDriverPercent(): int
+    {
+        return self::percent(self::get('fees.payment_lie_driver_percent'));
+    }
+
+    public static function womenOnlyMisusePercent(): int
+    {
+        return self::percent(self::get('fees.women_only_misuse_percent'));
+    }
+
     private static function percent(mixed $value): int
     {
         return max(0, min(200, (int) $value));

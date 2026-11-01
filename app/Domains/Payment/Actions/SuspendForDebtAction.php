@@ -93,6 +93,21 @@ final readonly class SuspendForDebtAction
             return false;
         }
 
+        return $this->passengerNow($userId);
+    }
+
+    /**
+     * Suspends her now, whatever the amount (PAY-47: a man confirmed to have booked a women-only
+     * commute stays suspended until he pays). Lifted like any other once she owes nothing.
+     */
+    public function passengerNow(string $userId): bool
+    {
+        $standing = DebtStanding::of($userId, DebtSide::Passenger);
+
+        if ($standing->suspendedAt !== null) {
+            return false;
+        }
+
         DB::transaction(function () use ($userId): void {
             DebtLedger::lockedAccount($userId, DebtSide::Passenger)->forceFill(['suspended_at' => now()])->save();
 

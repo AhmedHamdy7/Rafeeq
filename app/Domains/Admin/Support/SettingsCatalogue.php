@@ -157,6 +157,10 @@ final class SettingsCatalogue
         'fees.pro_rata_free_percent' => ['group' => 'fees', 'min' => 0, 'max' => 100, 'unit' => 'percent'],
         'fees.driver_no_show_percent' => ['group' => 'fees', 'min' => 0, 'max' => 200, 'unit' => 'percent'],
         'fees.driver_late_percent' => ['group' => 'fees', 'min' => 0, 'max' => 200, 'unit' => 'percent'],
+        'fees.early_drop_meters' => ['group' => 'fees', 'min' => 200, 'max' => 5_000, 'unit' => 'meters'],
+        'fees.payment_lie_passenger_percent' => ['group' => 'fees', 'min' => 0, 'max' => 300, 'unit' => 'percent'],
+        'fees.payment_lie_driver_percent' => ['group' => 'fees', 'min' => 0, 'max' => 300, 'unit' => 'percent'],
+        'fees.women_only_misuse_percent' => ['group' => 'fees', 'min' => 0, 'max' => 300, 'unit' => 'percent'],
 
         // ---- Operations (Chapter 12) -------------------------------------
         'admin.suspension_review_hours' => ['group' => 'admin', 'min' => 1, 'max' => 168, 'unit' => 'hours'],

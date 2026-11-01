@@ -111,6 +111,26 @@ final class BookingResource extends JsonResource
             'cancelledAt' => $this->cancelled_at?->toIso8601String(),
             'cancelledReason' => $this->cancelled_reason,
             'cancellationFeePiastres' => $this->cancellation_fee_piastres,
+
+            /*
+             * PAY-16 (L-11): her unpaid fees ride on this ride as a separate line, on top of the
+             * fare. The driver collects it in cash and it becomes part of his debt; his screen shows
+             * it is not his. Negative is a credit she is discounted (a coupon, a refund). 0: none.
+             */
+            'feeLinePiastres' => (int) $this->fee_line_piastres,
+            // What it is for, as a stable code (`no_show`, `late_cancel`, `credit`, …), or null.
+            'feeLineReason' => $this->fee_line_reason,
+
+            /*
+             * TRIP-20: set down more than 1 km before her drop-off without asking → `askedAt` is
+             * set and she answers `POST /bookings/{booking}/early-drop`. `answer`: null, `yes`, `no`.
+             */
+            'earlyDrop' => [
+                'askedAt' => $this->early_drop_asked_at?->toIso8601String(),
+                'distanceMeters' => $this->early_drop_distance_meters === null ? null : (int) $this->early_drop_distance_meters,
+                'answer' => $this->early_drop_answer,
+            ],
+
             'createdAt' => $this->created_at->toIso8601String(),
 
             /*

@@ -14,7 +14,7 @@
 >
 > **Base URL:** `{host}/api/v1` · **Auth:** bearer token · **Format:** JSON only.
 
-**Last updated:** 2026-11-01 · **178 endpoints live** · Phases 0–7, 9 and 11 complete · 10, 12 and 13 all but a decision each
+**Last updated:** 2026-11-01 · **179 endpoints live** · Phases 0–7, 9 and 11 complete · 10, 12 and 13 all but a decision each
 
 ---
 
@@ -22,7 +22,7 @@
 
 ### What is ready
 
-**178 endpoints live** and tested, across the 47 designed screens:
+**179 endpoints live** and tested, across the 47 designed screens:
 
 | | Count | Covers |
 |---|---|---|
@@ -805,6 +805,7 @@ fails if this list and the running routes ever disagree in either direction.
 | `PATCH /trips/{trip}/receive-requests` | 4.9 Live trip |
 | `POST /bookings/{booking}/end-early` | 4.9 Live trip |
 | `POST /bookings/{booking}/exit-without-fee` | 4.9 Live trip |
+| `POST /bookings/{booking}/early-drop` | 4.9 Live trip |
 | `GET /bookings/{booking}/alternatives` | 4.9 Live trip |
 | `POST /trips/{trip}/start` | 4.9 Live trip |
 | `POST /trips/{trip}/status` | 4.9 Live trip |
@@ -2794,6 +2795,25 @@ Before she has been picked up this is the wrong call and answers
 "passenger pre-pickup cancel anytime; after pickup end early". The driver calling it gets `404`:
 putting somebody out of her car is Cancel Active Trip, with a reason and a safe stop.
 
+#### `POST /bookings/{booking}/early-drop` — active, profile complete, **passenger only**
+
+"Did you ask to get off here?" (TRIP-20, PAY-28). When the **driver** sets her down more than **1 km**
+before her agreed drop-off (measured from where the car is), her booking's `earlyDrop.askedAt` is set
+and she gets an `early_drop_check` notification with the distance. Ask her, then send
+`{ "askedToGetOff": true|false }` — once.
+
+- `true` → nothing changes: the full fare stands.
+- `false` → she pays nothing (the fare comes back as a **credit on her next ride**), the driver pays
+  her whole seat, and a `dropped_early` report opens for staff to check the GPS. He can appeal with
+  proof within 48 hours.
+
+`409 EARLY_DROP_NOT_ASKED` when there is no question on this booking or she already answered. If she
+never answers, nothing happens yet (that rule is still being decided).
+
+Every booking also carries `feeLinePiastres` / `feeLineReason` (PAY-16): her unpaid fees riding on
+this ride as a separate line the driver collects — or, negative, a credit she is discounted — and
+`earlyDrop { askedAt, distanceMeters, answer }`.
+
 #### `POST /bookings/{booking}/exit-without-fee` — active, profile complete, **passenger only**
 
 🔴 **The driver never came.** She gives up on the morning, and it costs her nothing.
@@ -4096,6 +4116,7 @@ exist, and every live endpoint must be named here.
 
 | Date | Change |
 |---|---|
+| 2026-11-01 | ❓ **"Did you ask to get off here?" (TRIP-20, PAY-28)** — new `POST /bookings/{booking}/early-drop` and the `early_drop_check` notification; bookings now return `feeLinePiastres`, `feeLineReason` and `earlyDrop`. A `false_arrival` report puts her no-show on that booking under review (TRIP-17). Staff now settle the money of payment disputes (PAY-31, PAY-32) and women-only misuse (PAY-47, the man is suspended until he pays) from the safety desk. |
 | 2026-11-01 | 🚗 **Driver fees (PAY-23 → PAY-29, C-5 → C-10).** New: `POST /driver/bookings/{booking}/cancel` (remove one passenger), `GET /trips/{trip}/cancel-preview` and `GET /commutes/{commute}/cancel-preview` (the fee before he confirms), `POST /account/debt/entries/{entry}/appeal` (48h). Cancelling seats costs the driver by notice (16h+: 0 · 10–16h: 10 % · < 10h: 25 %) on one passenger, Cancel today, pause, delete, a new car and a block; ending a run that set off 100 %; never coming 50 %; a passenger leaving because he was late 25 %. After a breakdown, accident or emergency a passenger aboard pays the share of her route past 25 %; otherwise nothing — her booking's `paymentStatus` is the new `WAIVED`. `PATCH /bookings/{booking}/cancel` now applies the fees. End early is the full fare. |
 | 2026-11-01 | 💸 **Passenger fees (PAY-20 → PAY-22, TRIP-26, SAFE-11).** Three counters — `NO_SHOW`, `LATE_CANCEL`, `LATE_BOARDING` — each with its ladder and a 90-day reset; `MISSED_COMMITMENT` is history only. Warnings now carry `feePiastres`, `feeStatus`, `appealBy`. A late cancel's fee waits for departure and is dropped if the seat is refilled. Appeals close after 48 hours (`APPEAL_WINDOW_CLOSED`). `away` on the group attendance cancels that day. |
 | 2026-11-01 | 💳 **Debt and paying it (PAY-08 → PAY-17, PAY-34, PAY-45, PAY-46).** the old `/driver/balance` is gone; `GET /account/debt`, `GET /account/debt/statements` and `POST /account/debt/payments` replace it. Two sides per person (driver commission due Friday 23:59 Cairo; passenger fees on the next trip), no amount cap, +10 % once after the Friday, driving suspended after the second Friday, booking suspended after 14 days or over 200 EGP (`RIDING_SUSPENDED_FOR_DEBT`). Paying is "I paid" with an InstaPay reference that staff confirm. Section 4.16. |

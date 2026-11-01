@@ -175,6 +175,9 @@ enum NotificationType: string
     /** A passenger left or switched because he was late (PAY-29). */
     case DriverLateFee = 'driver_late_fee';
 
+    /** "Did you ask to get off here?" — set down `:distance` km before her point (TRIP-20). */
+    case EarlyDropCheck = 'early_drop_check';
+
     /**
      * Her appeal against a reliability event was approved (Feature 03 v5 §115).
      *
@@ -450,6 +453,7 @@ enum NotificationType: string
             self::DriverEndedTripFee,
             self::DriverNoShowFee,
             self::DriverLateFee,
+            self::EarlyDropCheck,
             self::AppealApproved,
             self::AppealDeclined,
             self::ChatMessage,

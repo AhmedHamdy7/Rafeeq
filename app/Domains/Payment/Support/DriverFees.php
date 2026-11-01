@@ -21,7 +21,7 @@ use Illuminate\Support\Facades\DB;
  * | what                                        | fee per affected seat          | rule   |
  * |---------------------------------------------|--------------------------------|--------|
  * | cancels before the trip (one passenger, the day, pause, delete, replace vehicle, block) | ≥ 16h: 0 · 10–16h: 10 % · < 10h: 25 % | PAY-23 |
- * | ends a run that set off (any reason), or drops her early without asking | 100 % | PAY-24, PAY-25, PAY-28 |
+ * | ends a run that set off (any reason), or drops her early without asking (her "no") | 100 % | PAY-24, PAY-25, PAY-28 |
  * | never came (the run expired)                | 50 %                           | PAY-26 |
  * | late, and she left or switched              | 25 % (void if it became a no-show) | PAY-29 |
  *
@@ -37,6 +37,8 @@ final class DriverFees
     public const string NO_SHOW = 'driver_no_show';
 
     public const string LATE = 'driver_late';
+
+    public const string DROPPED_EARLY = 'driver_dropped_early';
 
     /**
      * Fees written in this transaction, waiting to be told: one message per driver per kind, not
@@ -133,7 +135,7 @@ final class DriverFees
             }
 
             Notifier::send($driver, match ($kind) {
-                self::ACTIVE_CANCEL => NotificationType::DriverEndedTripFee,
+                self::ACTIVE_CANCEL, self::DROPPED_EARLY => NotificationType::DriverEndedTripFee,
                 self::NO_SHOW => NotificationType::DriverNoShowFee,
                 self::LATE => NotificationType::DriverLateFee,
                 default => NotificationType::DriverCancelFee,

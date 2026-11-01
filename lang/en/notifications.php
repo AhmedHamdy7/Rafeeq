@@ -269,6 +269,10 @@ return [
         'title' => 'Late start: EGP :amount',
         'body' => 'A passenger left because you were late, so EGP :amount is added to this week’s commission. Appeal within :hours hours.',
     ],
+    'early_drop_check' => [
+        'title' => 'Did you ask to get off here?',
+        'body' => 'You were set down :distance km before your drop-off. Tell us if you asked for it — if you did not, you pay nothing for this ride.',
+    ],
     'appeal_approved' => [
         'title' => 'Your appeal was approved',
         'body' => 'The record from :date no longer counts towards your reliability. It stays visible so you can see it was cleared.',

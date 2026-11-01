@@ -572,6 +572,8 @@ Route::prefix('v1')->group(function (): void {
          * body would be a free cancellation for the asking, paid for by a driver who was on time.
          */
         Route::post('bookings/{booking}/exit-without-fee', [BookingController::class, 'exitWithoutFee']);
+        // TRIP-20: "Did you ask to get off here?" — her answer.
+        Route::post('bookings/{booking}/early-drop', [BookingController::class, 'earlyDrop']);
 
         /*
          * "Find another commute" — what she could still catch, after a morning was taken away from

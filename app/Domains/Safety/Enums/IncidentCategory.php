@@ -5,10 +5,10 @@ namespace App\Domains\Safety\Enums;
 /**
  * What a report is about (Chapter 10, SAFE-08; Feature 03 files X-7 added the last four).
  *
- * ⚠️ Only the category exists for the four new ones. What each one then DOES belongs to the money
- * rules and is built with them: `false_arrival` freezes the no-show fee while it is reviewed
- * (TRIP-17), `dropped_early` is opened by the platform itself when a passenger is left before her
- * stop (F-9), `women_only_misuse` follows F-12. Until then each is a report a human reads.
+ * What the newer ones do: `dropped_early` is opened when she answers "no" to "Did you ask to get off
+ * here?" (F-9, AnswerEarlyDropAction); `women_only_misuse` and `payment` have money outcomes staff
+ * apply when resolving (F-11, F-12, SettleIncidentMoneyAction); `false_arrival` puts her no-show on
+ * that booking under appeal while it is reviewed (TRIP-17, ReportIncidentAction).
  */
 enum IncidentCategory: string
 {

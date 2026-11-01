@@ -295,6 +295,8 @@ enum ErrorCode: string
     case RidingSuspendedForDebt = 'RIDING_SUSPENDED_FOR_DEBT';
     // Dashboard only: the appeal was already decided, or was never made.
     case FeeAppealNotOpen = 'FEE_APPEAL_NOT_OPEN';
+    // The early-drop question was not asked on this booking, or she already answered (TRIP-20).
+    case EarlyDropNotAsked = 'EARLY_DROP_NOT_ASKED';
 
     // ---- Admin dashboard (Chapter 12) ----------------------------------
     case AdminCredentialsInvalid = 'ADMIN_CREDENTIALS_INVALID';
@@ -568,7 +570,8 @@ enum ErrorCode: string
             self::DebtNothingOwed,
             self::DebtPaymentNotPending,
             self::CouponNotAllowed,
-            self::FeeAppealNotOpen => 409,
+            self::FeeAppealNotOpen,
+            self::EarlyDropNotAsked => 409,
         };
     }
 
