@@ -1377,7 +1377,7 @@ a brand-new member they are unreliable.
 
 #### `GET /account/verifications` — signed-in
 
-The Verification Centre read model. Also powers the home banner.
+The Verification Centre read model. Also powers the home banner. 🔴 **Empty for a passenger-only account** (PROF-12, D-0012, F2-8): `{"level": 0, "of": 0, "percentage": 0, "rows": []}` — passengers never verify, so do not show the Centre or a verification entry in her menu. It fills once she adds the driver capability.
 
 | Response field | Meaning |
 |---|---|
@@ -3197,7 +3197,7 @@ they explain.
 | Field | Meaning |
 |---|---|
 | `greetingName` | Their public first name. |
-| `verification` | `{level, of, percentage, isComplete}` — the same numbers as the Verification Centre, so the banner cannot disagree with the screen behind it. |
+| `verification` | `{level, of, percentage, isComplete}` — the same numbers as the Verification Centre, so the banner cannot disagree with the screen behind it. 🔴 **`null` for a passenger-only account** (PROF-12, F2-8): passengers never verify, so hide the banner. It appears once the account has the driver capability. |
 | `nextJourney` | The soonest journey that has not finished, or **`null`**. Contains the full booking (4.7) plus `originLabel`, `destinationLabel`, `departureAt`, `departureLocal`, `departsInMinutes`, `isToday`, `attendance`, `isTrial`, `driver` (5.1), `vehicle`. |
 | `nextJourney.attendance` | `{coming, away, awaiting, total}` — **four counts, not "2 of 3"**. Somebody who said they are away and somebody who has not answered are not the same person to a driver deciding whether to wait, so the server does not collapse them. `total` includes the driver. |
 | `nextJourney.vehicle` | `make`, `model`, `colour`, `seats`, and `plateNumber` **only when the booking is confirmed**. |
@@ -4157,6 +4157,7 @@ exist, and every live endpoint must be named here.
 
 | Date | Change |
 |---|---|
+| 2026-11-01 | 🙈 **Verification is hidden from passengers (F2-8, PROF-12, D-0012).** `GET /home` now answers `verification: null` for a passenger-only account, and `GET /account/verifications` answers it empty (`of: 0`, `rows: []`). Both fill in as before once the account has the driver capability. Uploading and submitting are unchanged. |
 | 2026-11-01 | ⚙️ **`transmission` is an enum (F2-5):** `manual` · `automatic` · `null` on `POST /driver/vehicles`, `PATCH /driver/vehicles/{vehicle}` and the vehicle shape. Anything else is now `422` (it was free text). Existing values were mapped (`Auto`, `AT`, `أوتوماتيك` → `automatic` …) or cleared. |
 | 2026-11-01 | ⛔ **A suspension stays in the app; only a ban is restricted (F1-3, AUTH-19, D-0018).** New **`POST /account/suspension/appeal`** — one appeal within 48 h, a second only with new `evidence` within 48 h of the first being turned down. A suspended account now gets `nextStep: HOME` (not `RESTRICTED_ACCOUNT`), its reads work and its writes answer `403 ACCOUNT_SUSPENDED`; `user.suspension` gains `permanent` and `appeal`. `RESTRICTED_ACCOUNT` is now only for a **permanent ban**. Suspending (either kind) **cancels every upcoming seat, inside the 16 h lock too, with no fee**, and pauses a driver's commutes (`pausedReason: account_suspended`). |
 | 2026-11-01 | 🚻 **Gender is `woman` / `man` only (F1-2, AUTH-10).** `PUT /account/profile/basic` now refuses `prefer_not_to_say` with `422`. Existing rows keep it: they cannot ask for a women-only seat, and that refusal (`403 SEAT_REQUEST_WOMEN_ONLY`) now carries `error.fields.reason: ["GENDER_NOT_SET"]` so the app can ask Woman / Man and save it with the same endpoint. |

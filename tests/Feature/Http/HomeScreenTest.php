@@ -9,6 +9,9 @@ use App\Domains\Driver\Models\Vehicle;
 use App\Domains\Group\Enums\GroupAttendanceStatus;
 use App\Domains\Group\Models\CommuteGroup;
 use App\Domains\Group\Models\GroupMember;
+use App\Domains\Identity\Actions\EnrollInitialRoleAction;
+use App\Domains\Identity\Enums\Capability;
+use App\Domains\Identity\Models\User;
 use App\Domains\Matching\Models\CommuteDemand;
 use App\Domains\Matching\Models\MatchNotification;
 use App\Domains\Verification\Enums\VerificationType;
@@ -55,9 +58,22 @@ it('answers with an empty home for somebody who has just signed up', function ()
         ->and($data['greetingName'])->not->toBeEmpty();
 });
 
-it('tells a half-verified passenger how far along they are', function () {
+/**
+ * PROF-12, D-0012 (F2-8): passengers never verify, so a passenger-only account has no banner.
+ */
+it('shows a passenger-only account no verification banner', function () {
     fakeOtpSender();
     $token = passenger('01112223344');
+
+    test()->withToken($token)->getJson('/api/v1/home')
+        ->assertOk()
+        ->assertJsonPath('data.verification', null);
+});
+
+it('tells a half-verified driver how far along they are', function () {
+    fakeOtpSender();
+    $token = passenger('01112223344');
+    EnrollInitialRoleAction::grant(User::query()->where('phone_e164', '+201112223344')->sole(), [Capability::Driver]);
 
     $banner = test()->withToken($token)->getJson('/api/v1/home')
         ->assertOk()->json('data.verification');
@@ -85,6 +101,7 @@ it('tells a half-verified passenger how far along they are', function () {
 it('says the same thing about verification as the Verification Centre does', function () {
     fakeOtpSender();
     $token = passenger('01112223344');
+    EnrollInitialRoleAction::grant(User::query()->where('phone_e164', '+201112223344')->sole(), [Capability::Driver]);
 
     $banner = test()->withToken($token)->getJson('/api/v1/home')->assertOk()->json('data.verification');
     $centre = test()->withToken($token)->getJson('/api/v1/account/verifications')->assertOk()->json('data');

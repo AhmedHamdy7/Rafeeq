@@ -2,6 +2,8 @@
 
 namespace App\Domains\Verification\Support;
 
+use App\Domains\Identity\Enums\Capability;
+use App\Domains\Identity\Enums\CapabilityStatus;
 use App\Domains\Identity\Models\User;
 use App\Domains\Verification\Enums\VerificationStatus;
 use App\Domains\Verification\Enums\VerificationType;
@@ -24,6 +26,37 @@ use App\Domains\Verification\Models\UserVerification;
  */
 final class VerificationCentre
 {
+    /**
+     * 🔴 Whether verification is anything to this person at all (PROF-12, D-0012, follow-up F2-8).
+     *
+     * Passengers never verify: they book with a verified phone and nothing else. So the Centre and
+     * the Home banner exist only for an account that can drive. A passenger-only account sees no
+     * banner and an empty Centre — a progress bar she can never be asked to fill would read as a
+     * task left undone. Adding the driver capability later is what makes it appear.
+     */
+    public static function appliesTo(User $user): bool
+    {
+        return $user->capabilities()
+            ->where('capability', Capability::Driver->value)
+            ->where('status', CapabilityStatus::Active->value)
+            ->exists();
+    }
+
+    /**
+     * The Centre as `GET /account/verifications` shows it: the full read model for somebody who
+     * can drive, and the same shape with nothing in it for a passenger-only account.
+     *
+     * @return array{level: int, of: int, percentage: int, rows: array<int, array<string, mixed>>}
+     */
+    public static function forMember(User $user): array
+    {
+        if (! self::appliesTo($user)) {
+            return ['level' => 0, 'of' => 0, 'percentage' => 0, 'rows' => []];
+        }
+
+        return self::for($user);
+    }
+
     /**
      * @return array{level: int, of: int, percentage: int, rows: array<int, array<string, mixed>>}
      */

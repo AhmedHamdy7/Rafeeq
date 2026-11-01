@@ -147,10 +147,17 @@ final class HomeController extends Controller
     }
 
     /**
-     * @return array{level: int, of: int, percentage: int, isComplete: bool}
+     * `null` for a passenger-only account — passengers never verify, so there is no banner to
+     * show her (PROF-12, follow-up F2-8).
+     *
+     * @return array{level: int, of: int, percentage: int, isComplete: bool}|null
      */
-    private function verificationBanner(User $user): array
+    private function verificationBanner(User $user): ?array
     {
+        if (! VerificationCentre::appliesTo($user)) {
+            return null;
+        }
+
         $centre = VerificationCentre::for($user);
 
         return [
