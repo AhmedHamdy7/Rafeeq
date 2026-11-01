@@ -180,6 +180,13 @@ enum NotificationType: string
     case CommutePausedSeatCancelled = 'commute_paused_seat_cancelled';
 
     /**
+     * Her confirmed seats were cancelled because the driver deleted the commute (Feature 03 C-8,
+     * COM-35). Every upcoming day goes, and unlike a pause she is NOT on a waiting list — there is
+     * no commute left — so the wording points her to look for another one.
+     */
+    case CommuteDeletedSeatCancelled = 'commute_deleted_seat_cancelled';
+
+    /**
      * The driver picked her off the waiting list and offered her seats (Feature 03 v5's explicit
      * exception to the automatic fan-out, used when a commute resumes).
      *
@@ -273,6 +280,7 @@ enum NotificationType: string
             self::BookingCancelled,
             self::SeatOffered,
             self::CommutePausedSeatCancelled,
+            self::CommuteDeletedSeatCancelled,
             self::VehicleReplacedSeatCancelled,
             self::SeatsOfferedByDriver,
             self::SeatCounteroffered,

@@ -3,8 +3,10 @@
 namespace App\Domains\Commute\Enums;
 
 /**
- * 🔒 The hard filter (Bible §15.2): `women_only` must exclude non-women
- * entirely from search results, never just score them lower — pitfall #15.
+ * 🔒 `women_only`: only a woman may ask for a seat (Feature 03 C-11, BOOK-31).
+ *
+ * Shown to everybody in search, flagged `womenOnly: true`; anybody whose gender is not `woman` is
+ * refused at request time with `SEAT_REQUEST_WOMEN_ONLY`. It is never a score.
  */
 enum CommuteAudience: string
 {

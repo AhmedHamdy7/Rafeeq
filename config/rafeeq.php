@@ -194,13 +194,6 @@ return [
         'online_payments_enabled' => false,
 
         /*
-         * How long a seat request waits for an answer before expiring. A request
-         * nobody answered is worse than a refusal: the passenger cannot look
-         * elsewhere while it holds their one active request per commute.
-         */
-        'request_expiry_hours' => 48,
-
-        /*
          * How long a request to join a run that is ALREADY MOVING waits for an answer
          * (Feature 03 v5 §416: *"3-minute expiry ... the 3-minute active-ride request is the only
          * timed item left"*).
@@ -310,7 +303,8 @@ return [
          * leaving — and calling it an absence would keep a seat nominally held by
          * someone who is not coming back this term.
          */
-        'max_absence_days' => 60,
+        // One month (R-7, BOOK-32); longer than that is a pause with no end date.
+        'max_absence_days' => 31,
     ],
 
     'matching' => [

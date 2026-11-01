@@ -59,8 +59,8 @@ final class StoreCommuteRequest extends FormRequest
             'maxDetourMinutes' => ['prohibited'],
             'maxWalkMinutes' => ['prohibited'],
 
-            // `women_only` restricts this commute to women. It is applied as a
-            // hard filter, so an ineligible passenger never sees it at all.
+            // `women_only` restricts this commute to women. Everybody can see it,
+            // marked women-only; only a woman can request a seat on it.
             'audience' => ['required', 'string', Rule::enum(CommuteAudience::class)],
 
             // Minimum number of verification levels a passenger must have

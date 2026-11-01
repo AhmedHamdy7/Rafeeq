@@ -9,7 +9,8 @@ use App\Domains\Rating\Enums\RatingKind;
 use App\Domains\Rating\Models\Rating;
 
 /**
- * Feedback on a seat that was cancelled (Feature 03 v5).
+ * Feedback on a seat that was cancelled (Feature 03 v5) — STARS ONLY since 2026-10-31 (X-2, BOOK-41,
+ * decision D2): no comment, no tags.
  *
  * > *"Passenger affected by **canceled confirmed booking** may leave rating/comment even if no ride
  * > occurred. Display as **Canceled Booking Feedback**, distinct from completed-ride review;
@@ -56,7 +57,6 @@ it('lets the passenger rate a seat the driver cancelled', function () {
     $rating = test()->flushHeaders()->withToken($this->paxToken)
         ->postJson("/api/v1/bookings/{$this->bookingId}/rating", [
             'stars' => 2,
-            'comment' => 'Cancelled the night before and I had no way to get in.',
         ])
         ->assertStatus(201)
         ->json('data');
@@ -151,7 +151,6 @@ it('lets a passenger displaced by a pause leave feedback', function () {
     test()->flushHeaders()->withToken($this->paxToken)
         ->postJson("/api/v1/bookings/{$this->bookingId}/rating", [
             'stars' => 2,
-            'comment' => 'Paused with no notice and I had to find another way in.',
         ])
         ->assertStatus(201)
         ->assertJsonPath('data.kind', 'canceled_booking');
@@ -167,15 +166,15 @@ it('lets her correct what she wrote even though it is already visible', function
     cancelledByHer($this->driverToken, $this->bookingId);
 
     $ratingId = test()->flushHeaders()->withToken($this->paxToken)
-        ->postJson("/api/v1/bookings/{$this->bookingId}/rating", ['stars' => 2, 'comment' => 'Typo here'])
+        ->postJson("/api/v1/bookings/{$this->bookingId}/rating", ['stars' => 2])
         ->assertStatus(201)->json('data.id');
 
     // `stars` travels with every edit: the endpoint shares its FormRequest with submission, where
     // stars are mandatory. Not a quirk of this kind of feedback.
     test()->flushHeaders()->withToken($this->paxToken)
-        ->patchJson("/api/v1/ratings/{$ratingId}", ['stars' => 2, 'comment' => 'Fixed'])
+        ->patchJson("/api/v1/ratings/{$ratingId}", ['stars' => 3])
         ->assertOk()
-        ->assertJsonPath('data.comment', 'Fixed');
+        ->assertJsonPath('data.stars', 3);
 });
 
 /**
@@ -201,13 +200,12 @@ it('leaves the double-blind rule alone for a journey that happened', function ()
  * v5: *"Driver can report comment for Admin review."* The existing report route takes it, because
  * this is a rating like any other as far as moderation is concerned.
  */
-it('lets the driver report the comment for admin review', function () {
+it('lets the driver report the feedback for admin review', function () {
     cancelledByHer($this->driverToken, $this->bookingId);
 
     $ratingId = test()->flushHeaders()->withToken($this->paxToken)
         ->postJson("/api/v1/bookings/{$this->bookingId}/rating", [
             'stars' => 1,
-            'comment' => 'Something she considers unfair.',
         ])
         ->assertStatus(201)->json('data.id');
 
@@ -226,7 +224,6 @@ it('shows the feedback separately on the driver’s public profile', function ()
     test()->flushHeaders()->withToken($this->paxToken)
         ->postJson("/api/v1/bookings/{$this->bookingId}/rating", [
             'stars' => 2,
-            'comment' => 'Cancelled the night before.',
         ])->assertStatus(201);
 
     $driver = User::query()->where('phone_e164', '+201012345678')->sole();
@@ -236,7 +233,24 @@ it('shows the feedback separately on the driver’s public profile', function ()
         ->assertOk()->json('data');
 
     expect($profile['canceledBookingFeedback']['count'])->toBe(1)
-        ->and($profile['canceledBookingFeedback']['items'][0]['comment'])->toBe('Cancelled the night before.')
+        ->and($profile['canceledBookingFeedback']['items'][0]['comment'])->toBeNull()
         // 🔴 And it is NOT mixed in with the reviews of journeys.
         ->and($profile['reviews']['count'])->toBe(0);
+});
+
+/*
+ * X-2 (BOOK-41, decision D2): stars only. A comment written right after somebody cancelled on you is
+ * the angriest text the app would publish.
+ */
+it('refuses a comment or tags on cancelled-seat feedback', function () {
+    cancelledByHer($this->driverToken, $this->bookingId);
+
+    test()->flushHeaders()->withToken($this->paxToken)
+        ->postJson("/api/v1/bookings/{$this->bookingId}/rating", ['stars' => 2, 'comment' => 'Angry words'])
+        ->assertStatus(422)
+        ->assertJsonStructure(['error' => ['fields' => ['comment']]]);
+
+    test()->flushHeaders()->withToken($this->paxToken)
+        ->postJson("/api/v1/bookings/{$this->bookingId}/rating", ['stars' => 2])
+        ->assertStatus(201);
 });

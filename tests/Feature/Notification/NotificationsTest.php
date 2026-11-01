@@ -74,7 +74,7 @@ it('tells the driver about a new seat request, by the passenger first name only'
         ->and($note->body)->toContain('Mariam')
         // 🔒 A push body is shown on a lock screen.
         ->and($note->body)->not->toContain('Hassan')
-        ->and($note->data)->toBe(['seatRequestId' => $requestId]);
+        ->and($note->data)->toEqual(['seatRequestId' => $requestId, 'kind' => 'seat_request']);
 });
 
 it('tells the passenger when the driver says yes', function () {

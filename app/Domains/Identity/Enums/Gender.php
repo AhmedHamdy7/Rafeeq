@@ -3,7 +3,7 @@
 namespace App\Domains\Identity\Enums;
 
 /**
- * Feeds the women-only hard filter (Bible §15.2) — never rendered in any
+ * Decides who may request a seat on a women-only commute (Feature 03 C-11) — never rendered in any
  * API response (pitfall #30). Required at registration, not optional.
  */
 enum Gender: string

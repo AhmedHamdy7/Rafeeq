@@ -54,6 +54,7 @@ final readonly class SubmitRatingAction
         $kind = $this->kindFor($reviewer, $booking, $direction);
 
         $this->assertRateable($booking, $kind);
+        $this->assertStarsOnlyWhenCancelled($kind, $attributes);
 
         if ($this->existing($reviewer, $booking) !== null) {
             throw DomainException::of(ErrorCode::RatingAlreadySubmitted);
@@ -132,6 +133,8 @@ final readonly class SubmitRatingAction
             throw DomainException::of(ErrorCode::NotFound);
         }
 
+        $this->assertStarsOnlyWhenCancelled($rating->kind, $attributes);
+
         /*
          * 🔴 "Visible" only blocks an edit where double-blind applies.
          *
@@ -177,6 +180,35 @@ final readonly class SubmitRatingAction
      * timestamps: a booking is created when a seat is approved, which can be a month before the
      * journey, and measuring from that would close the window before the trip had even happened.
      */
+    /**
+     * 🔴 Feedback on a cancelled seat is stars only — no comment and no tags (Feature 03 X-2,
+     * BOOK-41, decision D2). A comment written right after somebody cancelled on you is the angriest
+     * text the app would ever publish, and BOOK-41 already removed written cancellation reasons for
+     * the same reason. Refused rather than silently dropped, so the app learns to hide the box.
+     *
+     * @param  array<string, mixed>  $attributes
+     */
+    private function assertStarsOnlyWhenCancelled(RatingKind $kind, array $attributes): void
+    {
+        if ($kind !== RatingKind::CanceledBooking) {
+            return;
+        }
+
+        $fields = [];
+
+        if (($attributes['comment'] ?? null) !== null && $attributes['comment'] !== '') {
+            $fields['comment'] = [__('rating.cancelled_stars_only')];
+        }
+
+        if (($attributes['tags'] ?? []) !== []) {
+            $fields['tags'] = [__('rating.cancelled_stars_only')];
+        }
+
+        if ($fields !== []) {
+            throw DomainException::of(ErrorCode::ValidationFailed, fields: $fields);
+        }
+    }
+
     private function assertRateable(Booking $booking, RatingKind $kind): void
     {
         /*

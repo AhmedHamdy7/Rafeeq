@@ -18,7 +18,6 @@ final readonly class ScoreBreakdown
         public int $detour,
         public int $audience,
         public int $comfort,
-        public int $price,
         public int $reliability,
         public float $walkMinutes,
         public float $detourMinutes,
@@ -27,7 +26,7 @@ final readonly class ScoreBreakdown
     public function total(): int
     {
         return $this->overlap + $this->schedule + $this->detour
-            + $this->audience + $this->comfort + $this->price + $this->reliability;
+            + $this->audience + $this->comfort + $this->reliability;
     }
 
     /**
@@ -42,7 +41,6 @@ final readonly class ScoreBreakdown
             'detour_score' => $this->detour,
             'audience_score' => $this->audience,
             'comfort_score' => $this->comfort,
-            'price_score' => $this->price,
             'reliability_score' => $this->reliability,
             'walk_minutes' => round($this->walkMinutes, 1),
             'detour_minutes' => round($this->detourMinutes, 1),

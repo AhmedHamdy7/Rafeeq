@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Api\V1\Search;
 
 use App\Domains\Matching\Actions\SaveCommuteDemandAction;
+use App\Domains\Matching\Enums\CommuteDemandStatus;
 use App\Domains\Matching\Models\CommuteDemand;
 use App\Domains\Matching\Models\MatchNotification;
 use App\Domains\Shared\Exceptions\DomainException;
@@ -10,6 +11,7 @@ use App\Domains\Shared\Support\ErrorCode;
 use App\Http\Controllers\Controller;
 use App\Http\OpenApi\ApiErrors;
 use App\Http\Requests\Matching\SearchCommutesRequest;
+use App\Http\Requests\Matching\UpdateCommuteDemandRequest;
 use App\Http\Resources\CommuteDemandResource;
 use App\Http\Resources\MatchNotificationResource;
 use App\Http\Responses\ApiResponse;
@@ -61,6 +63,35 @@ final class CommuteDemandController extends Controller
      * Cancelled, not deleted: the row is why a notification was sent, and erasing
      * it would leave notifications pointing at nothing.
      */
+    /**
+     * PATCH /v1/commute-demands/{demand} — edit a saved ride request, or pause / resume it
+     * (Feature 03 S-4, BOOK-06, decision C12).
+     *
+     * `{ "paused": true }` alone pauses it; the whole request again replaces it. A cancelled one is
+     * gone from her point of view, so it answers 404 like one that never existed.
+     */
+    #[ApiErrors(ErrorCode::NotFound, ErrorCode::ValidationFailed)]
+    public function update(UpdateCommuteDemandRequest $request, string $demand, SaveCommuteDemandAction $action): JsonResponse
+    {
+        $owned = $this->owned($request, $demand);
+
+        if ($owned->status === CommuteDemandStatus::Cancelled) {
+            throw DomainException::of(ErrorCode::NotFound);
+        }
+
+        $updated = $action->update(
+            $owned,
+            $request->replacesCriteria() ? $request->criteria() : null,
+            $request->replacesCriteria() ? [
+                'origin' => $request->input('origin.label'),
+                'destination' => $request->input('destination.label'),
+            ] : null,
+            $request->has('paused') ? $request->boolean('paused') : null,
+        );
+
+        return ApiResponse::success(new CommuteDemandResource($updated));
+    }
+
     #[ApiErrors(ErrorCode::NotFound)]
     public function destroy(Request $request, string $demand, SaveCommuteDemandAction $action): JsonResponse
     {

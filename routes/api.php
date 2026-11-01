@@ -458,6 +458,8 @@ Route::prefix('v1')->group(function (): void {
         Route::get('search/commutes', [SearchController::class, 'commutes']);
 
         Route::get('commute-demands', [CommuteDemandController::class, 'index']);
+        // Edit it, or pause / resume it (S-4, BOOK-06).
+        Route::patch('commute-demands/{demand}', [CommuteDemandController::class, 'update']);
         Route::post('commute-demands', [CommuteDemandController::class, 'store']);
         Route::delete('commute-demands/{demand}', [CommuteDemandController::class, 'destroy']);
 

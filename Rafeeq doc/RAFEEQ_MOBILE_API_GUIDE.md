@@ -14,7 +14,7 @@
 >
 > **Base URL:** `{host}/api/v1` · **Auth:** bearer token · **Format:** JSON only.
 
-**Last updated:** 2026-10-30 · **170 endpoints live** · Phases 0–7, 9 and 11 complete · 10, 12 and 13 all but a decision each
+**Last updated:** 2026-10-30 · **171 endpoints live** · Phases 0–7, 9 and 11 complete · 10, 12 and 13 all but a decision each
 
 ---
 
@@ -22,7 +22,7 @@
 
 ### What is ready
 
-**170 endpoints live** and tested, across the 47 designed screens:
+**171 endpoints live** and tested, across the 47 designed screens:
 
 | | Count | Covers |
 |---|---|---|
@@ -589,7 +589,7 @@ Status: ✅ fully served · ⚠️ served, something named missing · ⛔ no API
 | 10 | Discover | `GET /search/commutes` | ⚠️ Vehicle, score and breakdown, walk and detour, commitment, seats, rules, rating and badges — all there. **Missing: `why[]`**, the match-reason chips. |
 | 11 | Filters | local + `POST /saved-searches` | ⚠️ The **minimum-rating** filter has no data behind it until ratings exist (Phase 10). |
 | 12 | **Match details** | `GET /search/commutes` | ⚠️ Rating and badges ✅. **Missing: the price breakdown** (route contribution ÷ passengers + platform fee) — blocked on an open money decision, section 8 — and **reviews** (Phase 10). |
-| 18 | Create commute request | `POST /commute-demands` | ✅ `flexibilityMinutes` and `wantsReturnTrip` are stored and returned. **Note the rename: the budget is `budgetMonthlyPiastres`, a MONTHLY ceiling**, not per seat. Return-leg *matching* itself is not built — the demand is recorded. |
+| 18 | Create commute request | `POST /commute-demands` · `PATCH /commute-demands/{demand}` | ✅ `flexibilityMinutes` and `wantsReturnTrip` are stored and returned. **No budget any more** (S-2): remove the budget stepper. Edit and pause through `PATCH` (S-4). Return-leg *matching* itself is not built — the demand is recorded. |
 | 42 | Matching spinner | — | 🚫 Loading state. |
 
 ### Verification
@@ -735,6 +735,7 @@ fails if this list and the running routes ever disagree in either direction.
 | `POST /commutes/{commute}/seat-requests` | 4.5 Commutes (driver) |
 | `GET /commute-demands` | 4.6 Search, demands, saved searches |
 | `POST /commute-demands` | 4.6 Search, demands, saved searches |
+| `PATCH /commute-demands/{demand}` | 4.6 Search, demands, saved searches |
 | `DELETE /commute-demands/{demand}` | 4.6 Search, demands, saved searches |
 | `GET /matches` | 4.6 Search, demands, saved searches |
 | `GET /places` | 4.6 Search, demands, saved searches |
@@ -1694,7 +1695,7 @@ Archives. Nothing is deleted: history stays, and only future days nobody has tak
 
 **Query:** `origin[lat,lng]`, `destination[lat,lng]`, `daysMask`, `arrivalWindowStart`,
 `arrivalWindowEnd` (`HH:MM:SS`), `maxWalkMinutes` (0–45), `maxDetourMinutes` (0–45),
-`seatsNeeded`, `audiencePreference`, `budgetMonthlyPiastres`, `flexibilityMinutes` (0–60),
+`seatsNeeded`, `audiencePreference`, `womenOnly`, `flexibilityMinutes` (0–60),
 `wantsReturnTrip`, `rules[]`.
 
 **Verification is NOT required here** — searching is how somebody decides whether Rafeeq is worth
@@ -1704,7 +1705,7 @@ receive a result they cannot then request.
 
 Returns an array of match results — see 4.6, which explains the score breakdown.
 
-#### `GET` / `POST` / `DELETE /commute-demands/{demand}` — active, profile complete
+#### `GET` / `POST` / `PATCH` / `DELETE /commute-demands/{demand}` — active, profile complete
 
 A saved request for when nothing matched. The platform tells the passenger when something turns up.
 
@@ -1714,10 +1715,20 @@ stops Rafeeq being an auction on people.
 
 | Field | Meaning |
 |---|---|
-| `status` | `ACTIVE` · `MATCHED` · `CANCELLED` · `EXPIRED`. |
-| `budgetMonthlyPiastres` | **A monthly ceiling.** Per-ride affordability is derived from it and the days requested — do not treat it as a per-seat figure. |
+| `status` | `ACTIVE` · `PAUSED` · `MATCHED` · `CANCELLED` · `EXPIRED`. |
 | `flexibilityMinutes` | How much the arrival window can bend. |
 | `wantsReturnTrip` | Recorded; return-leg matching itself is not built yet. |
+
+**`PATCH /commute-demands/{demand}`** (S-4, BOOK-06) — two shapes:
+
+- `{ "paused": true }` alone **pauses** it: nothing is notified until `{ "paused": false }`, which
+  matches it again at once. Nothing else changes.
+- The whole request again — exactly the `POST` body — **replaces** it (and is matched again), with
+  `paused` optional beside it.
+
+A cancelled demand, or somebody else's, answers `404`. 🔴 **The budget is gone** (S-2, decision C11):
+the price is RAFEEQ's, so there is nothing to budget against; an old client that still sends
+`budgetMonthlyPiastres` is ignored.
 | `expiresAt` | When it stops looking. |
 
 `DELETE` cancels rather than deletes — the row is why a notification was sent, and erasing it
@@ -1814,8 +1825,7 @@ deserves to see *why* one ranked above the other:
 | `detour` | 15 | How little the driver is inconvenienced. |
 | `audience` | 10 | Whether it matches the audience they asked for. **Never decides eligibility** — that is settled in the query. |
 | `comfort` | 10 | How many requested rules the commute actually has. Somebody who asked for nothing gets full marks, not zero. |
-| `price` | 5 | Against the **monthly** budget, divided by the rides that budget has to cover. |
-| `reliability` | 5 | From the driver's record. **A driver with no history gets full marks** — starting everyone at zero would mean they are never matched, so they never build the history that would let them be matched. |
+| `reliability` | 10 | From the driver's record. **A driver with no history gets full marks** — starting everyone at zero would mean they are never matched, so they never build the history that would let them be matched. |
 | `total` | 100 | The parts always add up to the whole. |
 
 ## 4.7 Seat requests and bookings
@@ -3020,12 +3030,18 @@ is already planning around the answer she was given.
 
 Planned absence — "I'm away next week".
 
-**POST request:** `fromDate`, `toDate`, `reason`, `releasesSeat`.
+🔴 **This is the passenger PAUSE now** (R-7, BOOK-32, decision C5): up to a month, **or with no end
+date**. Her seat **always** goes back to the waiting list for those days, and she joins that waiting
+list herself — paused until the pause ends, then offered a seat like everybody else waiting. **There is
+no guaranteed return**; say so on the screen. Calling the pause off puts her back in the queue as an
+ordinary waiting member; it does not return the seats.
+
+**POST request:** `fromDate`, `toDate` (optional — leave it out for no end date), `reason`.
 
 | Field | Meaning |
 |---|---|
-| `fromDate` / `toDate` | Inclusive. |
-| `releasesSeat` | Whether the seat goes back to the pool for those days. |
+| `fromDate` / `toDate` | Inclusive. `toDate` is `null` for a pause with no end date. |
+| `releasesSeat` | Always `true`. Sending `false` is ignored. |
 | `person` | See 5.1. |
 
 `GROUP_ABSENCE_OVERLAPS` (409) and `GROUP_ABSENCE_TOO_LONG` (422).
@@ -3417,7 +3433,7 @@ other person's rating or whether one exists.
 | Field | |
 |---|---|
 | `stars` | **Required**, 1–5, whole stars. There are no halves in the design. |
-| `comment` | Optional, ≤1000 characters. **Keep it optional in your UI too** — somebody who had an uncomfortable ride may well give three stars and not want to write about it, and requiring a reason is how a rating screen becomes a form people abandon. |
+| `comment` | Optional, ≤1000 characters — **but not on cancelled-seat feedback** (`kind: canceled_booking`, X-2, BOOK-41): that is **stars only**, and a `comment` or `tags` there answers `422` on the field. Hide the box on that screen. **Keep it optional in your UI too** — somebody who had an uncomfortable ride may well give three stars and not want to write about it, and requiring a reason is how a rating screen becomes a form people abandon. |
 | `tags` | Optional, any of six: `safe_driving` · `on_time` · `clean_car` · `great_company` · `comfortable` · `would_ride_again`. Repeats collapsed. |
 
 🔒 **There is no `userId` and no `direction` in the request, and there will not be.** Who the rating

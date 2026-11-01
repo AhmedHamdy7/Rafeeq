@@ -161,6 +161,7 @@ it('generates a document describing every /v1 route', function () {
         'GET /v1/commutes',
         'POST /v1/commutes',
         'GET /v1/commutes/{commute}',
+        'PATCH /v1/commute-demands/{demand}',
         'PATCH /v1/commutes/{commute}',
         'DELETE /v1/commutes/{commute}',
         'PUT /v1/commutes/{commute}/route',
