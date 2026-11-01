@@ -143,6 +143,24 @@ enum NotificationType: string
      */
     case MissedCommitmentWarning = 'missed_commitment_warning';
 
+    // ---- Passenger fees (PAY-20 → PAY-22) — the rung past the warnings ------------
+    // `:amount` in EGP, `:date` the day, `:hours` the appeal window. `data.warningId` is the appeal.
+
+    /** A no-show with a fee on it (PAY-20). */
+    case NoShowFee = 'no_show_fee';
+
+    /** A lateness with a fee on it (PAY-22). Told after drop-off, like the warning. */
+    case LateBoardingFee = 'late_boarding_fee';
+
+    /** A late cancel: the fee that will be charged unless the seat is refilled (PAY-21). */
+    case LateCancelFee = 'late_cancel_fee';
+
+    /** The day departed and the seat stayed empty: the late-cancel fee is now charged. */
+    case LateCancelFeeCharged = 'late_cancel_fee_charged';
+
+    /** Somebody from the waiting list took the seat: the late-cancel fee is dropped (R-8). */
+    case LateCancelFeeWaived = 'late_cancel_fee_waived';
+
     /**
      * Her appeal against a reliability event was approved (Feature 03 v5 §115).
      *
@@ -409,6 +427,11 @@ enum NotificationType: string
             self::CommuteDayExpired,
             self::LateBoardingWarning,
             self::MissedCommitmentWarning,
+            self::NoShowFee,
+            self::LateBoardingFee,
+            self::LateCancelFee,
+            self::LateCancelFeeCharged,
+            self::LateCancelFeeWaived,
             self::AppealApproved,
             self::AppealDeclined,
             self::ChatMessage,

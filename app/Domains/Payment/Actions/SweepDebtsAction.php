@@ -20,6 +20,7 @@ use App\Domains\Payment\Support\SettlementWeek;
  *
  * | step              | when                                               | rule   |
  * |-------------------|----------------------------------------------------|--------|
+ * | late-cancel fees   | the day departed and the seat was not refilled      | PAY-21 |
  * | late fee          | last week's Friday passed with part of it unpaid    | PAY-13 |
  * | suspend (driver)  | money from a week that has missed its 2nd Friday    | PAY-45 |
  * | suspend (rider)   | a fee unpaid 14 days, or over 200 EGP               | PAY-17 |
@@ -31,7 +32,10 @@ use App\Domains\Payment\Support\SettlementWeek;
  */
 final readonly class SweepDebtsAction
 {
-    public function __construct(private SuspendForDebtAction $suspend) {}
+    public function __construct(
+        private SuspendForDebtAction $suspend,
+        private ChargePendingFeesAction $pendingFees,
+    ) {}
 
     /**
      * @return array{lateFees: int, suspended: int, reminded: int}
@@ -39,6 +43,10 @@ final readonly class SweepDebtsAction
     public function execute(): array
     {
         $done = ['lateFees' => 0, 'suspended' => 0, 'reminded' => 0];
+
+        // First: the late-cancel fees whose day has departed (PAY-21, R-8), so what they add is
+        // in the balances below.
+        $this->pendingFees->execute();
 
         DebtAccount::query()
             ->where('balance_piastres', '>', 0)

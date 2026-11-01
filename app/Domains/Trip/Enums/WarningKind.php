@@ -3,7 +3,7 @@
 namespace App\Domains\Trip\Enums;
 
 /**
- * The two things a member gets warned about, and how far each one escalates
+ * The things a member gets warned about, and how far each one escalates
  * (Feature 03 v5 §239).
  *
  * > *"1st warning, 2nd warning, 3rd fee eligible ... Avoid confusing with the distinct
@@ -30,23 +30,27 @@ enum WarningKind: string
     case LateBoarding = 'late_boarding';
 
     /**
-     * She did not travel: recorded a no-show, or cancelled close enough to departure that the seat
-     * could not be filled.
+     * The old shared counter for a no-show OR a late cancellation. Kept so history reads, never
+     * written any more: decision B4 split it in two, each with its own ladder and its own 90 days.
      */
     case MissedCommitment = 'missed_commitment';
+
+    /** The driver recorded her as not there (PAY-20). Its own counter. */
+    case NoShow = 'no_show';
+
+    /** She cancelled within 12 hours of departure (PAY-21). Its own counter. */
+    case LateCancel = 'late_cancel';
 
     /**
      * How many warnings come before a fee becomes possible.
      *
-     * ⚠️ "Possible" is the whole of it. v5: *"3rd fee eligible (**amount not shown until Payments
-     * rules**)"*, and the cancellation policy is still deferred — so crossing this line sets a flag
-     * and never a number.
+     * The amount past it is the ladder in `PassengerFees` (PAY-20 → PAY-22).
      */
     public function warningsBeforeFee(): int
     {
         return match ($this) {
             self::LateBoarding => 2,
-            self::MissedCommitment => 1,
+            self::MissedCommitment, self::NoShow, self::LateCancel => 1,
         };
     }
 

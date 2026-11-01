@@ -1229,40 +1229,49 @@ endpoint is the measure that exists.
 
 #### `GET /account/warnings` · `POST /account/warnings/{warning}/dispute` — signed-in
 
-The escalating warnings, and her answer to one (v5 §239). **This is a different mechanism from the
-reliability score above and you should present it as one.** The score is an aggregate that routes to
-a monthly review; these are the sentences a member is actually *told* — "1st warning", then a fee
-becomes possible.
+The escalating warnings, their fees, and her appeal against one (PAY-20 → PAY-22, SAFE-11). **This
+is a different mechanism from the reliability score above and you should present it as one.** The
+score is an aggregate that routes to a monthly review; these are what a member is actually *told* —
+"1st warning", then a fee with its amount.
 
-**Two counters, and v5 tells us not to confuse them.** They are not degrees of the same thing:
+**Three counters, never feeding each other** (decision B4). Each counts back only while events keep
+coming less than **90 days** apart; ninety days with none starts it again at the first rung. Fees are
+a share of the seat price the booking froze:
 
-| `kind` | What it is | Warnings before a fee |
-|---|---|---|
-| `LATE_BOARDING` | She kept the car waiting and then got in — `PICKED_UP`, **not** a no-show. | **2** (so the 3rd) |
-| `MISSED_COMMITMENT` | A recorded no-show, or a cancellation too close to departure for the seat to be filled. | **1** (so the 2nd) |
+| `kind` | What it is | 1st | 2nd | 3rd | 4th | 5th+ |
+|---|---|---|---|---|---|---|
+| `NO_SHOW` | The driver recorded her as not there. | warning | 30 % | 50 % | 75 % | 100 % |
+| `LATE_CANCEL` | She cancelled within **12 hours** of departure (or said "I can't make it" that late). | warning | 7.5 % | 12.5 % | 18.75 % | 25 % |
+| `LATE_BOARDING` | She boarded after the 5-minute grace — `PICKED_UP`, **not** a no-show. | warning | warning | 10 % | 20 % | 25 % |
+| `MISSED_COMMITMENT` | The old shared counter, before the split. History only; never written now. | | | | | |
 
 | Field | Means |
 |---|---|
-| `ordinal` | Which warning this was — **what she was told at the time**, never recomputed. |
+| `ordinal` | Which rung this was — **what she was told at the time**, never recomputed. |
 | `warningsBeforeFee` | Sent rather than hard-coded, so your copy stays true if the policy changes. |
-| `feeEligible` | 🔴 Whether a fee has become **possible**. ⚠️ **There is no amount and will not be one here** — v5: "amount not shown until Payments rules", and the cancellation policy is still deferred. Do not imply a number. |
+| `feeEligible` · `feePiastres` | Whether this rung carries money, and how much — frozen when it was recorded. |
+| `feeStatus` | `none` (a warning) · `pending` (a late cancel: charged at departure **unless somebody from the waiting list takes the seat**, then free) · `charged` (on her debt — see 4.16; it rides on her next trip) · `waived` · `reversed` (an appeal won after it was charged: credited back). |
+| `appealBy` | 🔴 The last moment to appeal: **48 hours** after she was told. |
 | `stillStands` | `false` once a reviewer overturned it. An overturned warning **stays listed** so she can show she was cleared, and stops counting. |
-| `canDispute` | One dispute per warning. |
+| `canDispute` | Once per warning, and only until `appealBy`. |
 | `meta.standing` | How many of each kind still stand — **use this**, not a count of the page, because an overturned warning is listed and does not count. |
 
 🔴 **A lateness is delivered after her drop-off, never during the trip.** v5 §10 is explicit, and the
 reason is not politeness: the message would otherwise reach a woman sitting in the car beside the
 people she kept waiting, with nowhere to go for the next forty minutes. So it is recorded at her
-pickup and **does not appear in this list** until her journey ends. A missed commitment is told as
-it happens — there is no journey to wait for.
+pickup and **does not appear in this list** until her journey ends. A no-show or a late cancel is told
+as it happens — there is no journey to wait for.
 
-The notification (`late_boarding_warning` / `missed_commitment_warning`) carries `warningId`, which
-is the **dispute link** v5 requires beside every displayed warning.
+The notifications carry `warningId` (the **appeal link**), `feePiastres` and `bookingId`: a warning
+is `late_boarding_warning` / `missed_commitment_warning`; a rung with money is `no_show_fee`,
+`late_boarding_fee` or `late_cancel_fee` (the late cancel's "unless your seat is taken"), then
+`late_cancel_fee_charged` or `late_cancel_fee_waived` at departure.
 
-🔒 **Raising a dispute does not pause the escalation.** If it did, every warning would be disputed as
-a matter of course. A reviewer decides; until then it stands. `POST` once per warning — a second
-attempt answers `422` with `error.fields.dispute: ["ALREADY_DISPUTED"]`, and a further appeal is a
-conversation with support.
+🔒 **Raising an appeal does not pause the escalation**, but it does stop any suspension for debt
+while staff decide (PAY-19). Staff decide in the dashboard: overturned → it stops counting and its
+fee comes off her debt (or becomes a credit if she had paid — PAY-10). `POST` once per warning — a
+second attempt answers `422` with `error.fields.dispute: ["ALREADY_DISPUTED"]`; after 48 hours,
+`["APPEAL_WINDOW_CLOSED"]`.
 
 > 🔒 Hers only. No parameter for whose warnings to read at any access level: a warning is an
 > accusation, and somebody else's is a private record of a morning she let people down.
@@ -3045,6 +3054,10 @@ table from the boarding confirmation in 4.9, on purpose: only the check-in decid
 `GROUP_ATTENDANCE_NOT_DECLARABLE` (409) once it is too close to departure — after that the driver
 is already planning around the answer she was given.
 
+🔴 **`away` cancels her seat that day** (TRIP-26) under the ordinary cancel rules: free more than 12
+hours ahead, a late cancel within 12 (see the warnings under `GET /account/warnings`), nothing if the seat is refilled. Say so
+on the button before she taps it.
+
 #### `GET` / `POST` / `DELETE /groups/{group}/absences/{absence}` — active, profile complete, paginated
 
 Planned absence — "I'm away next week".
@@ -4030,6 +4043,7 @@ exist, and every live endpoint must be named here.
 
 | Date | Change |
 |---|---|
+| 2026-11-01 | 💸 **Passenger fees (PAY-20 → PAY-22, TRIP-26, SAFE-11).** Three counters — `NO_SHOW`, `LATE_CANCEL`, `LATE_BOARDING` — each with its ladder and a 90-day reset; `MISSED_COMMITMENT` is history only. Warnings now carry `feePiastres`, `feeStatus`, `appealBy`. A late cancel's fee waits for departure and is dropped if the seat is refilled. Appeals close after 48 hours (`APPEAL_WINDOW_CLOSED`). `away` on the group attendance cancels that day. |
 | 2026-11-01 | 💳 **Debt and paying it (PAY-08 → PAY-17, PAY-34, PAY-45, PAY-46).** the old `/driver/balance` is gone; `GET /account/debt`, `GET /account/debt/statements` and `POST /account/debt/payments` replace it. Two sides per person (driver commission due Friday 23:59 Cairo; passenger fees on the next trip), no amount cap, +10 % once after the Friday, driving suspended after the second Friday, booking suspended after 14 days or over 200 EGP (`RIDING_SUSPENDED_FOR_DEBT`). Paying is "I paid" with an InstaPay reference that staff confirm. Section 4.16. |
 | 2026-10-31 | 🛡️ **Feature 03 safety, reliability and push (X-3, X-4, X-6, X-7, §8).** **Block:** new **`GET /safety/blocked-users/preview?userId=`** → `{bookingsToCancel, feePiastres, reason}`, and `POST /safety/blocked-users` now **cancels every upcoming booking the two share**, as the blocker (fee 0 today); the blocked person only sees a `booking_cancelled`. The id to block is **`otherPartyUserId`** on the booking (and `passengerUserId` on the driver's attendance rows) — `null` until the journey is over. **Reports:** four new categories (`false_arrival` · `dropped_early` · `women_only_misuse` · `abusive_review`) and a **24-hour window** after the journey ends — `409 REPORT_WINDOW_CLOSED`; no window without a `bookingId`; **no audio** yet (Q-007). **Trusted contacts: 3, not 5** (existing ones are kept). **Reliability:** 90-day window and the partners' weights (table in 4.2), new kinds `DRIVER_LATE` and `PASSENGER_LATE`; still gates nothing. **Push:** FCM HTTP v1 is built and switched on per server; eight new notification types (4.14). |
 | 2026-10-31 | 📍 **"I've arrived" is checked by GPS, per passenger (TRIP-10, TRIP-11), the "+2 min" is gone (TRIP-11, B7), and Cancel Active Trip takes a reason category (TRIP-22).** `POST /trips/{trip}/status` with `AT_PICKUP` now needs `bookingId`, `lat`, `lng`, and so does `POST /trips/{trip}/wait-timers`: both are refused with **`409 NOT_AT_PICKUP`** (`error.fields.distanceMeters`) unless the car is within 150 m of that passenger's pickup, and both start her grace — which now runs from the **later** of the arrival and her pickup time (`graceStartsAt`, `arrivedAt`, `arrivalDistanceMeters` on the timer; `extendedSeconds` is gone). 🛑 **The `.../wait-timers/{timer}/extend` endpoint was removed** — every passenger gets the same grace. `POST /trips/{trip}/cancel-active` takes `reason` as `breakdown` · `accident` · `emergency` · `other`, plus an optional `note`; free text in `reason` is now a 422. |

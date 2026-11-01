@@ -49,6 +49,7 @@ final class AdminActionLog
         'debt.payment_reject',
         'debt.coupon',
         'debt.credit',
+        'fee.appeal_decide',
         // How an emergency ended, and every decision about a report. Months later these
         // rows are read by somebody asking "why was this closed" — sometimes a lawyer.
         'sos.resolve',

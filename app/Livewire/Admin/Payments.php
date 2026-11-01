@@ -3,6 +3,7 @@
 namespace App\Livewire\Admin;
 
 use App\Domains\Admin\Actions\ManageDebtAction;
+use App\Domains\Admin\Actions\ResolveFeeAppealAction;
 use App\Domains\Admin\Enums\AdminPermission;
 use App\Domains\Admin\Models\AdminUser;
 use App\Domains\Identity\Models\User;
@@ -12,6 +13,7 @@ use App\Domains\Payment\Models\DebtEntry;
 use App\Domains\Payment\Models\DebtPayment;
 use App\Domains\Payment\Support\DebtStanding;
 use App\Domains\Shared\Exceptions\DomainException;
+use App\Domains\Trip\Models\MemberWarning;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Validation\Rule;
 use Livewire\Attributes\Layout;
@@ -19,7 +21,7 @@ use Livewire\Component;
 use Livewire\WithPagination;
 
 /**
- * PAYMENTS: the InstaPay transfers members say they sent, oldest first, with Confirm and Refuse;
+ * PAYMENTS: appeals against passenger fees (SAFE-11, PAY-10); the InstaPay transfers members say they sent, oldest first, with Confirm and Refuse;
  * and the two ways staff take money off a debt by hand — a coupon for the harmed side of a
  * collected fee (PAY-34), and a credit (PAY-10). ADM-03, ADM-04.
  *
@@ -48,6 +50,11 @@ class Payments extends Component
     public int $creditPiastres = 0;
 
     public string $creditNote = '';
+
+    /** The appeal whose decision form is open. */
+    public ?string $deciding = null;
+
+    public string $appealNote = '';
 
     public function mount(): void
     {
@@ -157,6 +164,38 @@ class Payments extends Component
         session()->flash('status', __('admin.payments.credited'));
     }
 
+    public function openAppeal(string $warningId): void
+    {
+        $this->resetValidation();
+        $this->deciding = $warningId;
+        $this->appealNote = '';
+    }
+
+    /**
+     * SAFE-11, PAY-10: overturning takes the warning off her ladder and its fee off her debt.
+     */
+    public function decideAppeal(string $warningId, bool $overturn, ResolveFeeAppealAction $action): void
+    {
+        $this->authorizeTo(AdminPermission::DebtManage);
+
+        $this->validate(['appealNote' => ['required', 'string', 'min:10', 'max:255']], attributes: [
+            'appealNote' => __('admin.payments.note'),
+        ]);
+
+        $warning = MemberWarning::query()->whereKey($warningId)->first() ?? abort(404);
+
+        try {
+            $action->execute($warning, $this->admin(), $overturn, $this->appealNote);
+        } catch (DomainException $e) {
+            $this->addError('appealNote', __('errors.'.$e->errorCode->value));
+
+            return;
+        }
+
+        $this->reset('deciding', 'appealNote');
+        session()->flash('status', __($overturn ? 'admin.payments.appeal_overturned' : 'admin.payments.appeal_upheld'));
+    }
+
     private function payment(string $paymentId): DebtPayment
     {
         return DebtPayment::query()->whereKey($paymentId)->first() ?? abort(404);
@@ -186,8 +225,19 @@ class Payments extends Component
             $p->id => DebtStanding::of($p->user_id, $p->side)->owedPiastres(),
         ]);
 
+        // Appeals against a passenger fee or warning, oldest first (SAFE-11).
+        $appeals = MemberWarning::query()
+            ->whereNotNull('disputed_at')
+            ->whereNull('dispute_resolution')
+            ->with('user')
+            ->orderBy('disputed_at')
+            ->orderBy('id')
+            ->limit(50)
+            ->get();
+
         return view('livewire.admin.payments', [
             'pending' => $pending,
+            'appeals' => $appeals,
             'owed' => $owed,
             'mayAct' => $this->admin()?->can(AdminPermission::DebtManage->value) === true,
         ])->title(__('admin.payments.title'));

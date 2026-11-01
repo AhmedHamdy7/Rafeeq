@@ -56,6 +56,41 @@
 
     <x-rq-pager :page="$pending" />
 
+    <h2 class="rq-h1" style="font-size:18px;margin-top:24px">{{ __('admin.payments.appeals_title') }}</h2>
+    @forelse ($appeals as $appeal)
+        <article class="rq-card" wire:key="appeal-{{ $appeal->id }}">
+            <div style="font-weight:600">
+                <bdi>{{ $appeal->user?->public_first_name ?? '—' }}</bdi>
+                &middot; {{ __('admin.payments.kind_'.$appeal->kind->value) }}
+                &middot; {{ $appeal->occurred_on->toDateString() }}
+            </div>
+            <div class="rq-note">
+                {{ __('admin.payments.appeal_fee', ['amount' => number_format($appeal->fee_piastres / 100, 2), 'status' => $appeal->fee_status->value]) }}
+                &middot; <bdi>{{ $appeal->dispute_reason }}</bdi>
+            </div>
+            @if ($mayAct)
+                @if ($deciding === $appeal->id)
+                    <div style="margin-top:13px">
+                        <textarea class="rq-field" wire:model="appealNote" rows="2" required
+                                  placeholder="{{ __('admin.payments.note_placeholder') }}"></textarea>
+                        @error('appealNote') <p class="rq-error">{{ $message }}</p> @enderror
+                        <div class="rq-actions">
+                            <button type="button" class="rq-btn rq-btn--primary" wire:click="decideAppeal('{{ $appeal->id }}', true)">{{ __('admin.payments.overturn') }}</button>
+                            <button type="button" class="rq-btn rq-btn--quiet" wire:click="decideAppeal('{{ $appeal->id }}', false)">{{ __('admin.payments.uphold') }}</button>
+                            <button type="button" class="rq-btn rq-btn--quiet" wire:click="$set('deciding', null)">{{ __('admin.queue.cancel') }}</button>
+                        </div>
+                    </div>
+                @else
+                    <div class="rq-actions">
+                        <button type="button" class="rq-btn rq-btn--quiet" wire:click="openAppeal('{{ $appeal->id }}')">{{ __('admin.payments.decide') }}</button>
+                    </div>
+                @endif
+            @endif
+        </article>
+    @empty
+        <p class="rq-note">{{ __('admin.payments.no_appeals') }}</p>
+    @endforelse
+
     @if ($mayAct)
         <h2 class="rq-h1" style="font-size:18px;margin-top:24px">{{ __('admin.payments.coupon_title') }}</h2>
         <p class="rq-note">{{ __('admin.payments.coupon_help') }}</p>

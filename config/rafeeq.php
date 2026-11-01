@@ -176,6 +176,46 @@ return [
      * dropped off, PAY-07, not two hours later) and `payment.max_driver_debt_piastres` (there is no
      * cap on driver debt, PAY-15 / D-0006 — the weekly deadline replaced it).
      */
+    /*
+    |--------------------------------------------------------------------------
+    | Fees (PAY-20 → PAY-29, PAY-47; Feature 03 backend file F-1 → F-13)
+    |--------------------------------------------------------------------------
+    |
+    | Every percentage is of the seat price the booking froze (all its seats). Every fee goes to
+    | RAFEEQ (PAY-33), lands on the ledger with its reason, is told to the person with the amount
+    | and "appeal within 48h", and is credited back if the appeal wins (PAY-10).
+    |
+    | 🔴 Three passenger counters, kept apart (decision B4): no-show, late cancel, lateness. Each
+    | counts back while events keep coming less than `counter_reset_days` apart; a gap that long
+    | starts it again at the first rung.
+    */
+    'fees' => [
+        'counter_reset_days' => 90,
+
+        // PAY-20, the no-show ladder: 1st a warning, then these.
+        'no_show_step_2_percent' => 30,
+        'no_show_step_3_percent' => 50,
+        'no_show_step_4_percent' => 75,
+        'no_show_step_5_percent' => 100,
+
+        /*
+         * PAY-21: a cancellation within this many hours of departure is a late cancel; earlier is
+         * free. Its fee is this share of the no-show step at the same rung (a quarter: 7.5 %,
+         * 12.5 %, 18.75 %, 25 %) — and nothing at all if the seat is refilled from the waiting list
+         * before departure.
+         */
+        'late_cancel_hours' => 12,
+        'late_cancel_share_percent' => 25,
+
+        // PAY-22, the lateness ladder: 1st and 2nd warnings, then these.
+        'lateness_step_3_percent' => 10,
+        'lateness_step_4_percent' => 20,
+        'lateness_step_5_percent' => 25,
+
+        // SAFE-11: every appeal within this many hours of the fee or decision appearing.
+        'appeal_hours' => 48,
+    ],
+
     'debt' => [
         // Paying a week's commission after its Friday adds this much, once (PAY-13: 180 → 198).
         'late_fee_percent' => 10,

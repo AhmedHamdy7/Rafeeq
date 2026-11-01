@@ -170,6 +170,7 @@ return [
 
     // Debt and settlement.
     'RIDING_SUSPENDED_FOR_DEBT' => 'Booking is paused because a fee is still unpaid. Pay it from the Payments screen, or appeal, to book again.',
+    'FEE_APPEAL_NOT_OPEN' => 'This appeal has already been decided.',
     'DEBT_NOTHING_OWED' => 'You do not owe anything right now, so there is nothing to pay.',
     'DEBT_PAYMENT_NOT_PENDING' => 'This payment has already been confirmed or rejected.',
     'COUPON_NOT_ALLOWED' => 'A coupon needs a fee that was actually collected from the other person on the ride, and only one coupon per fee.',

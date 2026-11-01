@@ -233,6 +233,26 @@ return [
         'title' => 'Missed commute recorded (warning :ordinal)',
         'body' => 'Your seat on :date was not used and was too late to be filled. The 1st is a warning; a 2nd may lead to a fee. Tap to review or dispute.',
     ],
+    'no_show_fee' => [
+        'title' => 'No-show fee: EGP :amount',
+        'body' => 'You were recorded as not there on :date. EGP :amount is added to your next ride. Disagree? Appeal within :hours hours.',
+    ],
+    'late_boarding_fee' => [
+        'title' => 'Late pickup fee: EGP :amount',
+        'body' => 'You boarded after the 5-minute grace on :date. EGP :amount is added to your next ride. Disagree? Appeal within :hours hours.',
+    ],
+    'late_cancel_fee' => [
+        'title' => 'Late cancellation: EGP :amount unless your seat is taken',
+        'body' => 'You cancelled :date within 12 hours of departure. If somebody from the waiting list takes your seat, it costs nothing. Appeal within :hours hours.',
+    ],
+    'late_cancel_fee_charged' => [
+        'title' => 'Late cancellation fee: EGP :amount',
+        'body' => 'Nobody took your seat on :date, so EGP :amount is added to your next ride. Disagree? Appeal within :hours hours.',
+    ],
+    'late_cancel_fee_waived' => [
+        'title' => 'No fee for your cancellation',
+        'body' => 'Somebody from the waiting list took your seat on :date, so your late cancellation costs nothing.',
+    ],
     'appeal_approved' => [
         'title' => 'Your appeal was approved',
         'body' => 'The record from :date no longer counts towards your reliability. It stays visible so you can see it was cleared.',

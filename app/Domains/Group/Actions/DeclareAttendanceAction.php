@@ -2,6 +2,9 @@
 
 namespace App\Domains\Group\Actions;
 
+use App\Domains\Booking\Actions\CancelBookingAction;
+use App\Domains\Booking\Enums\BookingStatus;
+use App\Domains\Booking\Models\Booking;
 use App\Domains\Commute\Enums\ScheduledTripStatus;
 use App\Domains\Commute\Models\ScheduledTrip;
 use App\Domains\Group\Enums\GroupAttendanceStatus;
@@ -15,8 +18,8 @@ use App\Domains\Shared\Support\ErrorCode;
  *
  * ⚠️ This is the DECLARED intention, not the actual check-in. The ERD is emphatic
  * about not confusing the two: `group_attendance` helps a driver plan their
- * morning, while `attendance` (ERD group ⑩, Phase 9) is what actually happened and
- * what drives billing. Nothing here affects money or seat counts.
+ * morning, while `attendance` (ERD group ⑩, Phase 9) is what actually happened.
+ * One exception, decided later (TRIP-26): "I'm away" cancels her seat that day.
  *
  * One declaration per person per day, replaced when they change their mind —
  * enforced by a unique index on (group, trip, user) and honoured here by updating
@@ -29,6 +32,8 @@ use App\Domains\Shared\Support\ErrorCode;
  */
 final readonly class DeclareAttendanceAction
 {
+    public function __construct(private CancelBookingAction $cancel) {}
+
     public function execute(GroupMember $member, ScheduledTrip $trip, GroupAttendanceStatus $status): GroupAttendance
     {
         if ($trip->commute_offer_id !== $member->commuteGroup->commute_offer_id) {
@@ -58,6 +63,23 @@ final readonly class DeclareAttendanceAction
         $declaration->status = $status->value;
         $declaration->marked_at = now();
         $declaration->save();
+
+        /*
+         * 🔴 "I can't make it" CANCELS that day (TRIP-26; Feature 03 backend file T-5): her seat goes
+         * back to the waiting list, and the ordinary cancel rules apply — free more than 12 hours
+         * ahead, a late cancel within 12, nothing if the seat is refilled (PAY-21).
+         */
+        if ($status === GroupAttendanceStatus::Away) {
+            $booking = Booking::query()
+                ->where('scheduled_trip_id', $trip->id)
+                ->where('passenger_user_id', $member->user_id)
+                ->where('status', BookingStatus::Confirmed->value)
+                ->first();
+
+            if ($booking !== null) {
+                $this->cancel->byPassenger($booking, 'declared_away');
+            }
+        }
 
         return $declaration;
     }

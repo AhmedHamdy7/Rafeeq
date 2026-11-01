@@ -137,11 +137,24 @@ final class SettingsCatalogue
         'debt.coupon_percent' => ['group' => 'debt', 'min' => 0, 'max' => 100, 'unit' => 'percent'],
         'debt.reminder_hour' => ['group' => 'debt', 'min' => 6, 'max' => 22, 'unit' => 'hour_of_day'],
 
+        // ---- Fees (PAY-20 → PAY-29) -----------------------------------------
+        'fees.counter_reset_days' => ['group' => 'fees', 'min' => 7, 'max' => 365, 'unit' => 'days'],
+        'fees.no_show_step_2_percent' => ['group' => 'fees', 'min' => 0, 'max' => 200, 'unit' => 'percent'],
+        'fees.no_show_step_3_percent' => ['group' => 'fees', 'min' => 0, 'max' => 200, 'unit' => 'percent'],
+        'fees.no_show_step_4_percent' => ['group' => 'fees', 'min' => 0, 'max' => 200, 'unit' => 'percent'],
+        'fees.no_show_step_5_percent' => ['group' => 'fees', 'min' => 0, 'max' => 200, 'unit' => 'percent'],
+        'fees.late_cancel_hours' => ['group' => 'fees', 'min' => 1, 'max' => 48, 'unit' => 'hours'],
+        'fees.late_cancel_share_percent' => ['group' => 'fees', 'min' => 0, 'max' => 100, 'unit' => 'percent'],
+        'fees.lateness_step_3_percent' => ['group' => 'fees', 'min' => 0, 'max' => 200, 'unit' => 'percent'],
+        'fees.lateness_step_4_percent' => ['group' => 'fees', 'min' => 0, 'max' => 200, 'unit' => 'percent'],
+        'fees.lateness_step_5_percent' => ['group' => 'fees', 'min' => 0, 'max' => 200, 'unit' => 'percent'],
+        'fees.appeal_hours' => ['group' => 'fees', 'min' => 12, 'max' => 168, 'unit' => 'hours'],
+
         // ---- Operations (Chapter 12) -------------------------------------
         'admin.suspension_review_hours' => ['group' => 'admin', 'min' => 1, 'max' => 168, 'unit' => 'hours'],
     ];
 
-    public const array GROUPS = ['auth', 'profile', 'commute', 'booking', 'debt', 'trip', 'rating', 'reliability', 'safety', 'chat', 'admin'];
+    public const array GROUPS = ['auth', 'profile', 'commute', 'booking', 'debt', 'fees', 'trip', 'rating', 'reliability', 'safety', 'chat', 'admin'];
 
     /**
      * @return array{group: string, min: int, max: int, unit: string, locked?: string}|null

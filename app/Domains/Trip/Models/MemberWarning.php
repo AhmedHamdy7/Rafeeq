@@ -6,6 +6,7 @@ use App\Domains\Admin\Models\AdminUser;
 use App\Domains\Booking\Models\Booking;
 use App\Domains\Identity\Models\User;
 use App\Domains\Trip\Enums\DisputeResolution;
+use App\Domains\Trip\Enums\WarningFeeStatus;
 use App\Domains\Trip\Enums\WarningKind;
 use Database\Factories\MemberWarningFactory;
 use Illuminate\Database\Eloquent\Builder;
@@ -33,6 +34,9 @@ class MemberWarning extends Model
             'kind' => WarningKind::class,
             'ordinal' => 'integer',
             'fee_eligible' => 'boolean',
+            'fee_basis_points' => 'integer',
+            'fee_piastres' => 'integer',
+            'fee_status' => WarningFeeStatus::class,
             'occurred_on' => 'date',
             'delivered_at' => 'datetime',
             'disputed_at' => 'datetime',

@@ -6,8 +6,17 @@ use App\Domains\Booking\Models\Booking;
 use App\Domains\Identity\Models\User;
 use App\Domains\Notification\Enums\NotificationType;
 use App\Domains\Notification\Support\Notifier;
+use App\Domains\Payment\Actions\ChargePendingFeesAction;
+use App\Domains\Payment\Enums\DebtEntryType;
+use App\Domains\Payment\Enums\DebtSide;
+use App\Domains\Payment\Support\DebtLedger;
+use App\Domains\Payment\Support\DebtNotices;
+use App\Domains\Payment\Support\FeeSettings;
+use App\Domains\Payment\Support\PassengerFees;
+use App\Domains\Trip\Enums\WarningFeeStatus;
 use App\Domains\Trip\Enums\WarningKind;
 use App\Domains\Trip\Models\MemberWarning;
+use Carbon\CarbonImmutable;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 
@@ -28,10 +37,16 @@ use Illuminate\Support\Str;
  * A missed commitment has no journey to wait for — she is not in the car — so it is told as it is
  * recorded.
  *
- * ⚠️ **No amount, ever.** Crossing into the third lateness or the second missed commitment sets
- * `fee_eligible` and nothing more. v5: *"amount not shown until Payments rules"*, and the
- * cancellation policy is still deferred — a number here would be inventing the one thing v5 is
- * most careful not to state.
+ * 🔴 **And now the fee** (PAY-20 → PAY-22; Feature 03 backend file F-1 → F-3). Past the warnings,
+ * each rung carries a share of the seat price ({@see PassengerFees}), frozen on the row and written
+ * to her ledger:
+ *
+ * - a **no-show** or a **lateness** is charged at once (a lateness is still only TOLD after her
+ *   drop-off);
+ * - a **late cancel** waits, `pending`, until departure: if somebody from the waiting list takes
+ *   the seat meanwhile it costs nothing (PAY-21, R-8) — see {@see ChargePendingFeesAction}.
+ *
+ * Each rung is counted on its own counter, reset after 90 days without one (decision B4).
  */
 final readonly class RecordMemberWarningAction
 {
@@ -56,14 +71,17 @@ final readonly class RecordMemberWarningAction
                 return null;
             }
 
-            /*
-             * Her position in the sequence, counted from the warnings that still stand. An
-             * overturned one does not push the next person's warning up a rung — which is the
-             * whole point of a dispute being able to do anything.
-             */
-            $standing = MemberWarning::query()->standing((string) $member->id, $kind)->count();
+            $occurredOn ??= $booking->scheduledTrip?->trip_date?->toDateString() ?? now()->toDateString();
 
-            $ordinal = $standing + 1;
+            /*
+             * Her rung on this counter, from the warnings that still stand and keep coming less
+             * than 90 days apart. An overturned one does not push the next person's warning up a
+             * rung — which is the whole point of a dispute being able to do anything.
+             */
+            $ordinal = PassengerFees::nextRung((string) $member->id, $kind, CarbonImmutable::parse($occurredOn));
+
+            $basisPoints = PassengerFees::basisPoints($kind, $ordinal);
+            $fee = PassengerFees::amountPiastres($booking, $basisPoints);
 
             $warning = new MemberWarning;
 
@@ -73,11 +91,22 @@ final readonly class RecordMemberWarningAction
                 'kind' => $kind->value,
                 'booking_id' => $booking->getKey(),
                 'ordinal' => $ordinal,
-                'fee_eligible' => $kind->feeBecomesPossibleAt($ordinal),
-                'occurred_on' => $occurredOn ?? $booking->scheduledTrip?->trip_date?->toDateString() ?? now()->toDateString(),
+                'fee_eligible' => $fee > 0,
+                'fee_basis_points' => $fee > 0 ? $basisPoints : 0,
+                'fee_piastres' => $fee,
+                'fee_status' => match (true) {
+                    $fee === 0 => WarningFeeStatus::None,
+                    $kind === WarningKind::LateCancel => WarningFeeStatus::Pending,
+                    default => WarningFeeStatus::Charged,
+                },
+                'occurred_on' => $occurredOn,
                 // Null for a lateness: it waits for her journey to end. See `deliver()`.
                 'delivered_at' => $kind->waitsForDropOff() ? null : now(),
             ])->save();
+
+            if ($warning->fee_status === WarningFeeStatus::Charged) {
+                self::charge($warning, $booking);
+            }
 
             if (! $kind->waitsForDropOff()) {
                 $this->tell($member, $warning);
@@ -133,15 +162,66 @@ final readonly class RecordMemberWarningAction
      */
     private function tell(User $member, MemberWarning $warning): void
     {
+        $data = [
+            'warningId' => (string) $warning->getKey(),
+            'bookingId' => (string) $warning->booking_id,
+            'feeEligible' => $warning->fee_eligible,
+            'feePiastres' => (int) $warning->fee_piastres,
+        ];
+
+        $date = $warning->occurred_on->toFormattedDateString();
+
+        // A rung with money on it says the amount and the 48 hours to appeal (PAY-20 → PAY-22).
+        if ((int) $warning->fee_piastres > 0) {
+            Notifier::send($member, match ($warning->kind) {
+                WarningKind::LateBoarding => NotificationType::LateBoardingFee,
+                WarningKind::LateCancel => NotificationType::LateCancelFee,
+                default => NotificationType::NoShowFee,
+            }, params: [
+                'amount' => DebtNotices::egp((int) $warning->fee_piastres),
+                'date' => $date,
+                'hours' => (string) FeeSettings::appealHours(),
+            ], data: $data);
+
+            return;
+        }
+
         Notifier::send($member, $warning->kind === WarningKind::LateBoarding
             ? NotificationType::LateBoardingWarning
             : NotificationType::MissedCommitmentWarning, params: [
                 'ordinal' => (string) $warning->ordinal,
-                'date' => $warning->occurred_on->toFormattedDateString(),
-            ], data: [
+                'date' => $date,
+            ], data: $data);
+    }
+
+    /**
+     * Writes the warning's fee to her ledger, once (keyed by the warning).
+     */
+    public static function charge(MemberWarning $warning, Booking $booking): void
+    {
+        $line = DebtLedger::charge(
+            User::query()->findOrFail($warning->user_id),
+            DebtEntryType::Fee,
+            (int) $warning->fee_piastres,
+            $warning->kind->value,
+            $booking,
+            meta: [
+                'rule' => match ($warning->kind) {
+                    WarningKind::LateBoarding => 'PAY-22',
+                    WarningKind::LateCancel => 'PAY-21',
+                    default => 'PAY-20',
+                },
+                'rung' => (int) $warning->ordinal,
+                'basisPoints' => (int) $warning->fee_basis_points,
                 'warningId' => (string) $warning->getKey(),
-                'bookingId' => (string) $warning->booking_id,
-                'feeEligible' => $warning->fee_eligible,
-            ]);
+            ],
+            side: DebtSide::Passenger,
+            idempotencyKey: "warning_fee:{$warning->getKey()}",
+        );
+
+        $warning->forceFill([
+            'fee_status' => WarningFeeStatus::Charged,
+            'debt_entry_id' => $line->id,
+        ])->save();
     }
 }

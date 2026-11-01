@@ -15,6 +15,7 @@ use App\Domains\Notification\Enums\NotificationType;
 use App\Domains\Notification\Support\Notifier;
 use App\Domains\Outbox\Enums\OutboxEventType;
 use App\Domains\Outbox\Support\Outbox;
+use App\Domains\Payment\Support\FeeSettings;
 use App\Domains\Reliability\Enums\ReliabilityEventKind;
 use App\Domains\Reliability\Support\ReliabilityLedger;
 use App\Domains\Shared\Exceptions\DomainException;
@@ -217,33 +218,33 @@ final readonly class CancelBookingAction
             return;
         }
 
-        if ($to !== BookingStatus::CancelledByPassenger) {
+        if ($to !== BookingStatus::CancelledByPassenger || $trip->departure_at === null) {
             return;
         }
 
-        // Far enough out that the seat can be sold again: nothing is recorded.
-        if ($trip->departure_at === null
-            || now()->diffInHours($trip->departure_at, absolute: false) > ReliabilityLedger::lateCancellationHours()) {
-            return;
-        }
+        $hoursAhead = now()->diffInHours($trip->departure_at, absolute: false);
 
-        ReliabilityLedger::record(
-            $booking->passenger_user_id,
-            ReliabilityEventKind::PassengerCancelledLate,
-            booking: $booking,
-            commuteOfferId: $trip->commute_offer_id,
-        );
+        // The reliability record looks only at the last 10 hours: far enough out, the seat can be
+        // sold again and nothing is recorded.
+        if ($hoursAhead <= ReliabilityLedger::lateCancellationHours()) {
+            ReliabilityLedger::record(
+                $booking->passenger_user_id,
+                ReliabilityEventKind::PassengerCancelledLate,
+                booking: $booking,
+                commuteOfferId: $trip->commute_offer_id,
+            );
+        }
 
         /*
-         * 🔴 And the escalating warning (Feature 03 v5 §239's second counter: "first warning,
-         * second fee"). The same event feeds both mechanisms on purpose — the score is the
-         * aggregate a monthly review reads, this is the sentence she is told now.
+         * 🔴 And the late-cancel counter, on its own wider window: within 12 hours of departure
+         * (PAY-21; decision B4 split it from the no-show counter). A warning first, then a quarter
+         * of the no-show fee at the same rung — held `pending` until departure and dropped if the
+         * seat is refilled from the waiting list meanwhile (R-8).
          *
-         * Delivered immediately rather than held back: unlike a lateness, there is no journey she
-         * is sitting in, because the whole point is that she is not on it.
+         * Told at once: unlike a lateness, there is no journey she is sitting in.
          */
-        if ($booking->passenger !== null) {
-            $this->warnings->record($booking->passenger, WarningKind::MissedCommitment, $booking);
+        if ($hoursAhead < FeeSettings::lateCancelHours() && $booking->passenger !== null) {
+            $this->warnings->record($booking->passenger, WarningKind::LateCancel, $booking);
         }
     }
 

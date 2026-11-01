@@ -1,0 +1,69 @@
+<?php
+
+namespace App\Domains\Payment\Support;
+
+use App\Domains\Admin\Models\PlatformSetting;
+
+/**
+ * The fee numbers, read live from platform settings with the config as the default (PAY-20 →
+ * PAY-29). Percentages are of the seat price; see config `rafeeq.fees`.
+ */
+final class FeeSettings
+{
+    public static function counterResetDays(): int
+    {
+        return max(1, (int) self::get('fees.counter_reset_days'));
+    }
+
+    /**
+     * PAY-20. `$step` is the rung, from 2 (the first fee) to 5 (the cap).
+     */
+    public static function noShowPercent(int $step): int
+    {
+        return self::percent(match (min(5, $step)) {
+            2 => self::get('fees.no_show_step_2_percent'),
+            3 => self::get('fees.no_show_step_3_percent'),
+            4 => self::get('fees.no_show_step_4_percent'),
+            5 => self::get('fees.no_show_step_5_percent'),
+            default => 0,
+        });
+    }
+
+    public static function lateCancelHours(): int
+    {
+        return max(1, (int) self::get('fees.late_cancel_hours'));
+    }
+
+    public static function lateCancelSharePercent(): int
+    {
+        return self::percent(self::get('fees.late_cancel_share_percent'));
+    }
+
+    /**
+     * PAY-22. `$step` from 3 (the first fee) to 5 (the cap).
+     */
+    public static function latenessPercent(int $step): int
+    {
+        return self::percent(match (min(5, $step)) {
+            3 => self::get('fees.lateness_step_3_percent'),
+            4 => self::get('fees.lateness_step_4_percent'),
+            5 => self::get('fees.lateness_step_5_percent'),
+            default => 0,
+        });
+    }
+
+    public static function appealHours(): int
+    {
+        return max(1, (int) self::get('fees.appeal_hours'));
+    }
+
+    private static function percent(mixed $value): int
+    {
+        return max(0, min(200, (int) $value));
+    }
+
+    private static function get(string $key): mixed
+    {
+        return PlatformSetting::value($key, config("rafeeq.{$key}"));
+    }
+}
