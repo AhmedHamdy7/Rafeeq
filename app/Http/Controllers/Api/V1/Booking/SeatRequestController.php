@@ -88,6 +88,8 @@ final class SeatRequestController extends Controller
     {
         $requests = SeatRequest::query()
             ->where('passenger_user_id', $request->user()->id)
+            // The commute summary and times her screens draw (DISCOVER-13), once for the page.
+            ->with(SeatRequestResource::passengerRelations())
             ->latest('created_at')
             ->orderByDesc('id')
             ->paginate(ApiResponse::perPage($request));

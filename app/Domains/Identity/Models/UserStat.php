@@ -31,6 +31,9 @@ class UserStat extends Model
             'completed_trips_as_driver' => 'integer',
             'avg_rating_as_passenger' => 'decimal:2',
             'avg_rating_as_driver' => 'decimal:2',
+            // How many ratings each average is made of (DISCOVER-4), counted by the same rules.
+            'rating_count_as_passenger' => 'integer',
+            'rating_count_as_driver' => 'integer',
             'on_time_rate' => 'decimal:2',
             'cancellation_rate' => 'decimal:2',
             'no_show_count' => 'integer',

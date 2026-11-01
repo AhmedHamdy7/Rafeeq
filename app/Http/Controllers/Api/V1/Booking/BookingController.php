@@ -51,7 +51,8 @@ final class BookingController extends Controller
     {
         $bookings = Booking::query()
             ->where('passenger_user_id', $request->user()->id)
-            ->with('scheduledTrip')
+            // The day's stops and commute too, for `pickupEta` (DISCOVER-14) — once for the page.
+            ->with('scheduledTrip.navigationStops', 'scheduledTrip.commuteOffer')
             ->latest('created_at')
             ->orderByDesc('id')
             ->paginate(ApiResponse::perPage($request));
@@ -68,7 +69,8 @@ final class BookingController extends Controller
     {
         $bookings = Booking::query()
             ->where('driver_profile_id', $request->user()->id)
-            ->with('scheduledTrip')
+            // The day's stops and commute too, for `pickupEta` (DISCOVER-14) — once for the page.
+            ->with('scheduledTrip.navigationStops', 'scheduledTrip.commuteOffer')
             ->latest('created_at')
             ->orderByDesc('id')
             ->paginate(ApiResponse::perPage($request));
@@ -83,7 +85,7 @@ final class BookingController extends Controller
     public function show(Request $request, string $booking): JsonResponse
     {
         return ApiResponse::success(
-            new BookingResource($this->visible($request, $booking)->load('scheduledTrip'))
+            new BookingResource($this->visible($request, $booking)->load('scheduledTrip.navigationStops', 'scheduledTrip.commuteOffer'))
         );
     }
 
@@ -325,7 +327,7 @@ final class BookingController extends Controller
         $suggested = $action->execute($target);
 
         return ApiResponse::success(
-            MatchResultResource::collection($suggested['results']),
+            MatchResultResource::page($suggested['results'], $request->user()),
             meta: [
                 'origin' => [
                     'lat' => $suggested['origin']->point->lat,

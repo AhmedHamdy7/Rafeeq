@@ -6,6 +6,7 @@ use App\Domains\Identity\Models\UserStat;
 use App\Domains\Rating\Enums\ModerationStatus;
 use App\Domains\Rating\Enums\RatingDirection;
 use App\Domains\Rating\Models\Rating;
+use Illuminate\Database\Eloquent\Builder;
 
 /**
  * The averages three screens read — `avg_rating_as_driver` and `avg_rating_as_passenger`.
@@ -57,6 +58,9 @@ final readonly class RecomputeRatingStatsAction
         $stat->user_id = $userId;
         $stat->avg_rating_as_driver = $this->average($userId, RatingDirection::PassengerToDriver);
         $stat->avg_rating_as_passenger = $this->average($userId, RatingDirection::DriverToPassenger);
+        // The "(210)" beside the stars (DISCOVER-4): the same rows as the mean, so the two agree.
+        $stat->rating_count_as_driver = $this->counted($userId, RatingDirection::PassengerToDriver)->count();
+        $stat->rating_count_as_passenger = $this->counted($userId, RatingDirection::DriverToPassenger)->count();
         $stat->computed_at = now();
 
         $stat->save();
@@ -70,7 +74,21 @@ final readonly class RecomputeRatingStatsAction
      */
     private function average(string $userId, RatingDirection $direction): ?float
     {
-        $average = Rating::query()
+        $average = $this->counted($userId, $direction)->avg('stars');
+
+        return $average === null ? null : round((float) $average, 2);
+    }
+
+    /**
+     * The ratings that count towards this person's average in one direction — and therefore
+     * towards the number shown beside it (DISCOVER-4). One query for both, so the count can never
+     * include a rating the mean was not allowed to.
+     *
+     * @return Builder<Rating>
+     */
+    private function counted(string $userId, RatingDirection $direction): Builder
+    {
+        return Rating::query()
             ->visible()
             /*
              * 🔴 Reviews of journeys only. Feedback on a cancelled seat is published under its own
@@ -82,9 +100,6 @@ final readonly class RecomputeRatingStatsAction
             ->where('reviewed_user_id', $userId)
             ->where('direction', $direction->value)
             // See the class note: a moderator's takedown stops counting, a complaint does not.
-            ->where('moderation_status', '!=', ModerationStatus::Hidden->value)
-            ->avg('stars');
-
-        return $average === null ? null : round((float) $average, 2);
+            ->where('moderation_status', '!=', ModerationStatus::Hidden->value);
     }
 }

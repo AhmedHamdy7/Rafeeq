@@ -4,8 +4,11 @@ namespace App\Http\Resources;
 
 use App\Domains\Booking\Enums\BookingStatus;
 use App\Domains\Booking\Models\Booking;
+use App\Domains\Booking\Support\PickupEta;
+use App\Domains\Geo\Contracts\GeoQueryEngine;
 use App\Domains\Safety\Support\OtherParty;
 use App\Domains\Trip\Support\DriverDelay;
+use Carbon\CarbonImmutable;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
 
@@ -154,9 +157,51 @@ final class BookingResource extends JsonResource
                     : null,
             ),
 
+            /*
+             * "Pickup around 7:55" (DISCOVER-14, handoff B-3) — when the car should reach her pickup
+             * that day. Once the day's itinerary is built it is the departure plus the legs up to
+             * her stop: the same figure her wait grace starts from, and frozen once the itinerary
+             * is (the 16-hour lock). Before that, an estimate along the published route.
+             *
+             * An estimate either way; the promise is the arrival. Present wherever `trip` is.
+             */
+            'pickupEta' => $this->when(
+                $this->resource->relationLoaded('scheduledTrip') && $this->scheduledTrip !== null,
+                fn (): ?string => $this->pickupEta()?->toIso8601String(),
+            ),
+            'pickupEtaLocal' => $this->when(
+                $this->resource->relationLoaded('scheduledTrip') && $this->scheduledTrip !== null,
+                fn (): ?string => PickupEta::local($this->scheduledTrip, $this->pickupEta()),
+            ),
+
             'trip' => new ScheduledTripResource($this->whenLoaded('scheduledTrip')),
         ];
     }
+
+    /**
+     * Worked out once per row, from what the caller loaded: the day's stops when they came with
+     * the trip (a list loads them for the page), the route fallback only when the commute did.
+     */
+    private function pickupEta(): ?CarbonImmutable
+    {
+        if ($this->pickupEtaResolved) {
+            return $this->pickupEtaValue;
+        }
+
+        $trip = $this->scheduledTrip;
+        $stops = $trip->relationLoaded('navigationStops') ? $trip->navigationStops : null;
+
+        $this->pickupEtaValue = $trip->relationLoaded('commuteOffer')
+            ? PickupEta::forBooking(app(GeoQueryEngine::class), $this->resource, $stops)
+            : PickupEta::fromItinerary($this->resource, $stops);
+        $this->pickupEtaResolved = true;
+
+        return $this->pickupEtaValue;
+    }
+
+    private bool $pickupEtaResolved = false;
+
+    private ?CarbonImmutable $pickupEtaValue = null;
 
     /**
      * @return array<string, mixed>|null

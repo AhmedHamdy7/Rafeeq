@@ -41,13 +41,23 @@ final class RecentSearchResource extends JsonResource
              * what she filled in.
              */
             'criteria' => [
+                /*
+                 * Each end with what to call it (DISCOVER-8): the label she sent, or the nearest
+                 * catalogue place's name, or null when nothing was close enough to name it by. The
+                 * search accepts and ignores `label` and `placeId`, so the object still goes
+                 * straight back unchanged.
+                 */
                 'origin' => [
                     'lat' => (float) ($this->criteria['origin']['lat'] ?? 0),
                     'lng' => (float) ($this->criteria['origin']['lng'] ?? 0),
+                    'label' => $this->text($this->criteria['origin']['label'] ?? null),
+                    'placeId' => $this->text($this->criteria['origin']['placeId'] ?? null),
                 ],
                 'destination' => [
                     'lat' => (float) ($this->criteria['destination']['lat'] ?? 0),
                     'lng' => (float) ($this->criteria['destination']['lng'] ?? 0),
+                    'label' => $this->text($this->criteria['destination']['label'] ?? null),
+                    'placeId' => $this->text($this->criteria['destination']['placeId'] ?? null),
                 ],
                 'daysMask' => (int) ($this->criteria['daysMask'] ?? 0),
                 'arrivalWindowStart' => (string) ($this->criteria['arrivalWindowStart'] ?? ''),
@@ -84,6 +94,14 @@ final class RecentSearchResource extends JsonResource
             // When it first appeared. Retention is measured from here, not from `searchedAt`.
             'firstSearchedAt' => $this->created_at?->toIso8601String(),
         ];
+    }
+
+    /**
+     * A stored label, or null — rows recorded before labels existed have none.
+     */
+    private function text(mixed $value): ?string
+    {
+        return is_string($value) && $value !== '' ? $value : null;
     }
 
     /**

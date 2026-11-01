@@ -40,7 +40,7 @@ final class CommuteDemandController extends Controller
             ->orderByDesc('id')
             ->get();
 
-        return ApiResponse::success(CommuteDemandResource::collection($demands));
+        return ApiResponse::success(CommuteDemandResource::page($demands));
     }
 
     /**
@@ -49,10 +49,7 @@ final class CommuteDemandController extends Controller
      */
     public function store(SearchCommutesRequest $request, SaveCommuteDemandAction $action): JsonResponse
     {
-        $demand = $action->execute($request->user(), $request->criteria(), [
-            'origin' => $request->input('origin.label'),
-            'destination' => $request->input('destination.label'),
-        ]);
+        $demand = $action->execute($request->user(), $request->criteria(), $request->places());
 
         return ApiResponse::success(new CommuteDemandResource($demand), status: 201);
     }
@@ -82,10 +79,7 @@ final class CommuteDemandController extends Controller
         $updated = $action->update(
             $owned,
             $request->replacesCriteria() ? $request->criteria() : null,
-            $request->replacesCriteria() ? [
-                'origin' => $request->input('origin.label'),
-                'destination' => $request->input('destination.label'),
-            ] : null,
+            $request->replacesCriteria() ? $request->places() : null,
             $request->has('paused') ? $request->boolean('paused') : null,
         );
 
@@ -115,21 +109,20 @@ final class CommuteDemandController extends Controller
             ->whereIn('commute_demand_id', CommuteDemand::query()
                 ->where('passenger_user_id', $request->user()->id)
                 ->select('id'))
-            ->with([
-                'commuteOffer.vehicle',
-                'commuteOffer.driverProfile.user',
-                // The route and the departure time — see MatchNotificationResource for
-                // why a notification without them names no commute in particular.
-                'commuteOffer.locations',
-                'commuteOffer.schedule',
-            ])
+            /*
+             * The route, the departure, and since DISCOVER-11 everything a search result carries —
+             * the upcoming days, the driver's `person`, the rules. See MatchNotificationResource for
+             * why a notification without them names no commute in particular.
+             */
+            ->with(MatchNotificationResource::relations())
             ->latest('created_at')
             ->orderByDesc('id')
             ->paginate(ApiResponse::perPage($request));
 
         return ApiResponse::paginated(
             $notifications,
-            MatchNotificationResource::collection($notifications->items()),
+            // The page's own standing (myStatus, overlapsBooking) in two queries, not two per row.
+            MatchNotificationResource::page($notifications->items(), $request->user()),
         );
     }
 

@@ -35,6 +35,7 @@ use App\Http\Controllers\Api\V1\PlaceController;
 use App\Http\Controllers\Api\V1\Rating\RatingController;
 use App\Http\Controllers\Api\V1\Safety\SafetyController;
 use App\Http\Controllers\Api\V1\Search\CommuteDemandController;
+use App\Http\Controllers\Api\V1\Search\CommuteDetailController;
 use App\Http\Controllers\Api\V1\Search\RecentSearchController;
 use App\Http\Controllers\Api\V1\Search\SavedSearchController;
 use App\Http\Controllers\Api\V1\Search\SearchController;
@@ -462,6 +463,13 @@ Route::prefix('v1')->group(function (): void {
 
         Route::get('search/commutes', [SearchController::class, 'commutes']);
 
+        /*
+         * A commute as a passenger reads it (DISCOVER-1). Not `GET /commutes/{commute}`, which is
+         * the driver's own and verified-only: a passenger is never verified to search or request
+         * (D-0012). Same eligibility as the search; the route trimmed until she holds a seat.
+         */
+        Route::get('commutes/{commute}/public', [CommuteDetailController::class, 'show']);
+
         Route::get('commute-demands', [CommuteDemandController::class, 'index']);
         // Edit it, or pause / resume it (S-4, BOOK-06).
         Route::patch('commute-demands/{demand}', [CommuteDemandController::class, 'update']);
@@ -483,11 +491,14 @@ Route::prefix('v1')->group(function (): void {
          * demand is a standing instruction that makes the platform notify her. The DELETE here
          * touches only the first.
          *
-         * 🔒 There is no id and no parameter on either: a recent search is where somebody lives and
+         * 🔒 No user id and no filter on any of them: a recent search is where somebody lives and
          * where she works, and the only person who can reach the list is the person who made it.
+         * The one id (removing a single row, DISCOVER-8) is scoped to her own list and answers 404
+         * for anybody else's.
          */
         Route::get('me/recent-searches', [RecentSearchController::class, 'index']);
         Route::delete('me/recent-searches', [RecentSearchController::class, 'destroy']);
+        Route::delete('me/recent-searches/{search}', [RecentSearchController::class, 'destroyOne']);
 
         /*
          * Seat requests and bookings (Chapter 6).

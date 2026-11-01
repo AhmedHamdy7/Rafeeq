@@ -3,10 +3,12 @@
 namespace App\Domains\Matching\Actions;
 
 use App\Domains\Commute\Enums\CommuteAudience;
+use App\Domains\Geo\Actions\SearchPlacesAction;
 use App\Domains\Identity\Models\User;
 use App\Domains\Matching\Enums\CommuteDemandStatus;
 use App\Domains\Matching\Jobs\MatchNewDemand;
 use App\Domains\Matching\Models\CommuteDemand;
+use App\Domains\Matching\Support\PlaceLabels;
 use App\Domains\Matching\Support\SearchCriteria;
 use Illuminate\Support\Facades\DB;
 
@@ -26,7 +28,9 @@ use Illuminate\Support\Facades\DB;
  */
 final readonly class SaveCommuteDemandAction
 {
-    public function execute(User $passenger, SearchCriteria $criteria, ?array $labels = null): CommuteDemand
+    public function __construct(private SearchPlacesAction $places) {}
+
+    public function execute(User $passenger, SearchCriteria $criteria, ?PlaceLabels $labels = null): CommuteDemand
     {
         $demand = new CommuteDemand;
 
@@ -53,7 +57,7 @@ final readonly class SaveCommuteDemandAction
      * running. Pausing keeps everything and stops notifications; resuming matches it again at once,
      * because she paused it to stop being told, not to miss what was published meanwhile.
      */
-    public function update(CommuteDemand $demand, ?SearchCriteria $criteria, ?array $labels, ?bool $paused): CommuteDemand
+    public function update(CommuteDemand $demand, ?SearchCriteria $criteria, ?PlaceLabels $labels, ?bool $paused): CommuteDemand
     {
         $rematch = false;
 
@@ -91,10 +95,14 @@ final readonly class SaveCommuteDemandAction
     /**
      * The criteria columns, shared by creating and editing so the two can never drift.
      *
-     * @param  array{origin?: string|null, destination?: string|null}|null  $labels
+     * The labels are resolved here, so an end sent as bare coordinates is named after the nearest
+     * catalogue place (DISCOVER-9, -12) — every demand screen and Home's suggestion row name the
+     * route, and none of them can geocode.
      */
-    private function fillCriteria(CommuteDemand $demand, SearchCriteria $criteria, ?array $labels): void
+    private function fillCriteria(CommuteDemand $demand, SearchCriteria $criteria, ?PlaceLabels $labels): void
     {
+        $labels = ($labels ?? new PlaceLabels)->resolved($this->places, $criteria->origin, $criteria->destination);
+
         $demand->fill([
             'origin_point' => $criteria->origin,
             'destination_point' => $criteria->destination,
@@ -102,8 +110,10 @@ final readonly class SaveCommuteDemandAction
             'origin_lng' => $criteria->origin->lng,
             'dest_lat' => $criteria->destination->lat,
             'dest_lng' => $criteria->destination->lng,
-            'origin_label' => $labels['origin'] ?? null,
-            'destination_label' => $labels['destination'] ?? null,
+            'origin_label' => $labels->originLabel,
+            'origin_place_id' => $labels->originPlaceId,
+            'destination_label' => $labels->destinationLabel,
+            'destination_place_id' => $labels->destinationPlaceId,
             'commute_type' => $criteria->days->value === 0 ? 'one_time' : 'recurring',
             'days_mask' => $criteria->days->value,
             'preferred_arrival_start' => $criteria->arrivalWindowStart,
@@ -114,6 +124,16 @@ final readonly class SaveCommuteDemandAction
             'wants_return_trip' => $criteria->wantsReturnTrip,
             'audience_preference' => ($criteria->audiencePreference?->value)
                 ?? CommuteAudience::AnyVerified->value,
+
+            /*
+             * Her preferences, the same as the search's own (DISCOVER-9, BOOK-06): the Women-only
+             * filter, the comfort chips and the Comfort car. Kept, so the alerts this demand sends
+             * ask the question she asked — they were dropped before, and a demand for a
+             * women-only commute was alerted about every commute on the corridor.
+             */
+            'women_only' => $criteria->womenOnly,
+            'required_rules' => $criteria->requiredRules === [] ? null : array_values($criteria->requiredRules),
+            'vehicle_tier' => $criteria->tier?->value,
         ]);
     }
 

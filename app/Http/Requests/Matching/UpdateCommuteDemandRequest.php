@@ -2,6 +2,7 @@
 
 namespace App\Http\Requests\Matching;
 
+use App\Domains\Matching\Support\PlaceLabels;
 use App\Domains\Matching\Support\SearchCriteria;
 use Illuminate\Foundation\Http\FormRequest;
 
@@ -42,6 +43,11 @@ final class UpdateCommuteDemandRequest extends FormRequest
     public function criteria(): SearchCriteria
     {
         return SearchCriteria::fromArray($this->safe()->except('paused'));
+    }
+
+    public function places(): PlaceLabels
+    {
+        return PlaceLabels::fromInput($this->validated());
     }
 
     /** Whether the request carries a whole new ride request, not only the switch. */

@@ -23,6 +23,10 @@ final class PlaceController extends Controller
      * people mean the same thing by it. A driver who needs a point that is not
      * listed pins coordinates directly on their commute instead, and admin
      * curation arrives with the dashboard.
+     *
+     * 🔴 Also the reverse lookup for a dropped pin (DISCOVER-12): `lat` + `lng` with no `q` returns
+     * the places nearest that point, closest first, each with `distanceMetres`. A seat request's
+     * custom point needs a `label` the driver can read, and this is where the app gets one.
      */
     public function index(SearchPlacesRequest $request, SearchPlacesAction $action): JsonResponse
     {
@@ -38,6 +42,6 @@ final class PlaceController extends Controller
                 : null,
         );
 
-        return ApiResponse::success(PlaceResource::collection($places));
+        return ApiResponse::success(PlaceResource::near($places, $near));
     }
 }

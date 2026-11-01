@@ -5,7 +5,15 @@ namespace App\Http\Resources;
 use App\Domains\Booking\Enums\SeatRequestKind;
 use App\Domains\Booking\Models\SeatRequest;
 use App\Domains\Booking\Support\OtherConfirmedCommutes;
+use App\Domains\Booking\Support\PickupEta;
 use App\Domains\Booking\Support\StandbyAvailability;
+use App\Domains\Commute\Enums\ScheduledTripStatus;
+use App\Domains\Commute\Models\ScheduledTrip;
+use App\Domains\Geo\Contracts\GeoQueryEngine;
+use App\Domains\Matching\Support\PassengerStanding;
+use App\Domains\Shared\ValueObjects\Coordinate;
+use App\Domains\Shared\ValueObjects\DaysMask;
+use Carbon\CarbonImmutable;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
 
@@ -37,8 +45,44 @@ final class SeatRequestResource extends JsonResource
         return $this;
     }
 
+    /**
+     * What the passenger's own view of a request reads (DISCOVER-13), eager-loaded by her list and
+     * loaded here for a single one. The upcoming days only: the times are worked out on the next
+     * day the request covers.
+     *
+     * @return array<int|string, mixed>
+     */
+    public static function passengerRelations(): array
+    {
+        return [
+            'scheduledTrip',
+            'commuteOffer.locations',
+            'commuteOffer.vehicle',
+            'commuteOffer.driverProfile.user.stats',
+            'commuteOffer.driverProfile.user.verifications',
+            'commuteOffer.scheduledTrips' => fn ($query) => $query
+                ->where('status', ScheduledTripStatus::Scheduled->value)
+                ->where('departure_at', '>', now())
+                ->orderBy('departure_at')
+                ->limit(60),
+        ];
+    }
+
     public function toArray(Request $request): array
     {
+        /*
+         * 🔴 The commute summary and the times are for the PASSENGER's own screens — the pending
+         * request (F3P-51) and the counteroffer (B09). The driver reviewing it already knows his
+         * own commute; he is sent none of this.
+         */
+        $hers = $request->user()?->id === $this->passenger_user_id;
+
+        if ($hers) {
+            $this->resource->loadMissing(self::passengerRelations());
+        }
+
+        $day = $hers ? $this->dayInView() : null;
+
         return [
             'id' => $this->id,
             'commuteId' => $this->commute_offer_id,
@@ -88,8 +132,22 @@ final class SeatRequestResource extends JsonResource
              * inside their own request review". The driver is being asked to decide whether that
              * detour is acceptable, and she cannot judge a rounded pin.
              */
-            'pickup' => $this->chosenPoint('pickup'),
-            'dropoff' => $this->chosenPoint('dropoff'),
+            'pickup' => [
+                ...$this->chosenPoint('pickup'),
+                /*
+                 * When the car should reach it on the day in view (DISCOVER-13, -14) — her own
+                 * view only, null for the driver's. An estimate along the published route.
+                 */
+                'estimatedAt' => $this->etaAt($day, 'pickup')?->toIso8601String(),
+                'estimatedLocal' => $day === null ? null : PickupEta::local($day, $this->etaAt($day, 'pickup')),
+            ],
+            'dropoff' => [
+                ...$this->chosenPoint('dropoff'),
+                'estimatedArrivalAt' => $this->etaAt($day, 'dropoff')?->toIso8601String(),
+                'estimatedArrivalLocal' => $day === null ? null : PickupEta::local($day, $this->etaAt($day, 'dropoff')),
+                // The arrival the driver PROMISED at the end of his route that day.
+                'promisedArrivalLocal' => $day === null ? null : PassengerStanding::promisedArrivalLocal($day),
+            ],
 
             /*
              * The place the driver proposed instead, while it is waiting on the passenger (v5 §2).
@@ -144,6 +202,80 @@ final class SeatRequestResource extends JsonResource
                 $this->resource->relationLoaded('passenger'),
                 fn () => PersonSummary::for($this->passenger, $request->user()),
             ),
+
+            /*
+             * The commute she asked to ride, as her request screens draw it (DISCOVER-13): its two
+             * ends, the day in view, the price, the driver and the car. The same restraint as a
+             * search result — a public first name, no plate, no route line. Only in her own view.
+             */
+            'commute' => $this->when($hers, fn (): array => $this->commuteSummary($request, $day)),
+        ];
+    }
+
+    /**
+     * The day her request is about right now: the one she asked for, or — for a recurring request
+     * — the commute's next upcoming day on the weekdays she asked for.
+     */
+    private function dayInView(): ?ScheduledTrip
+    {
+        if ($this->scheduled_trip_id !== null && $this->scheduledTrip !== null) {
+            return $this->scheduledTrip;
+        }
+
+        $mask = $this->requested_days_mask;
+
+        foreach ($this->commuteOffer?->scheduledTrips ?? [] as $trip) {
+            if ($mask === null || DaysMask::fromBits((int) $mask)->includesDate($trip->trip_date)) {
+                return $trip;
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * @param  'pickup'|'dropoff'  $kind
+     */
+    private function etaAt(?ScheduledTrip $day, string $kind): ?CarbonImmutable
+    {
+        if ($day === null || $this->commuteOffer === null || $this->{"requested_{$kind}_lat"} === null) {
+            return null;
+        }
+
+        return PickupEta::alongRoute(app(GeoQueryEngine::class), $this->commuteOffer, $day, new Coordinate(
+            (float) $this->{"requested_{$kind}_lat"},
+            (float) $this->{"requested_{$kind}_lng"},
+        ));
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function commuteSummary(Request $request, ?ScheduledTrip $day): array
+    {
+        $offer = $this->commuteOffer;
+        $price = $day?->seat_price_piastres ?? $offer->seat_price_piastres;
+
+        return [
+            ...JourneyCard::route($offer),
+            'tripId' => $day?->id,
+            'tripDate' => $day?->trip_date->toDateString(),
+            'departureAt' => $day?->departure_at->toIso8601String(),
+            'departureLocal' => $day?->departure_local->format('Y-m-d H:i:s'),
+            'seatPricePiastres' => $price === null ? null : (int) $price,
+            // ⚠️ Deprecated alias (DISCOVER-15). Same value.
+            'pricePerSeatPiastres' => $price === null ? null : (int) $price,
+            'driver' => [
+                ...PersonSummary::for($offer->driverProfile->user, $request->user(), asDriver: true),
+                'completedTrips' => $offer->driverProfile->completed_trips_count,
+            ],
+            'vehicle' => [
+                'make' => $offer->vehicle?->make,
+                'model' => $offer->vehicle?->model,
+                'colour' => $offer->vehicle?->colour,
+                'tier' => $offer->vehicle?->tierOrDefault()->value,
+                'hasAc' => (bool) $offer->vehicle?->has_ac,
+            ],
         ];
     }
 

@@ -14,7 +14,7 @@
 >
 > **Base URL:** `{host}/api/v1` · **Auth:** bearer token · **Format:** JSON only.
 
-**Last updated:** 2026-11-01 · **179 endpoints live** · Phases 0–7, 9 and 11 complete · 10, 12 and 13 all but a decision each
+**Last updated:** 2026-11-01 · **181 endpoints live** · Phases 0–7, 9 and 11 complete · 10, 12 and 13 all but a decision each
 
 ---
 
@@ -22,7 +22,7 @@
 
 ### What is ready
 
-**179 endpoints live** and tested, across the 47 designed screens:
+**181 endpoints live** and tested, across the 47 designed screens:
 
 | | Count | Covers |
 |---|---|---|
@@ -746,7 +746,9 @@ fails if this list and the running routes ever disagree in either direction.
 | `DELETE /saved-searches/{search}` | 4.6 Search, demands, saved searches |
 | `GET /me/recent-searches` | 4.6 Search, demands, saved searches |
 | `DELETE /me/recent-searches` | 4.6 Search, demands, saved searches |
+| `DELETE /me/recent-searches/{search}` | 4.6 Search, demands, saved searches |
 | `GET /search/commutes` | 4.6 Search, demands, saved searches |
+| `GET /commutes/{commute}/public` | 4.6 Search, demands, saved searches |
 | `GET /bookings/{booking}` | 4.7 Seat requests and bookings |
 | `PATCH /bookings/{booking}/cancel` | 4.7 Seat requests and bookings |
 | `POST /bookings/{booking}/dispute` | 4.7 Seat requests and bookings |
@@ -1529,7 +1531,8 @@ moment with none active, and never one with two.
 
 #### `GET /commutes` · `GET /commutes/{commute}` — verified
 
-The caller's own commutes. Full shape in 4.5.
+The caller's own commutes. Full shape in 4.5. 🔴 **Not the passenger's detail call** — a passenger
+reads a commute with `GET /commutes/{commute}/public` (4.6), which needs no verification.
 
 #### `POST /commutes` — verified
 
@@ -1715,7 +1718,7 @@ Archives. Nothing is deleted: history stays, and only future days nobody has tak
 | `commuteType` | `recurring` · `one_time`. |
 | `direction` | `to_work` · `to_home`. |
 | `vehicleId`, `seatsTotal` | `seatsTotal` is bookable seats, already excluding the driver. |
-| `pricePerSeatPiastres`, `currency` | Always `EGP` today. |
+| `seatPricePiastres`, `currency` | RAFEEQ's seat price; `currency` is always `EGP` today. `pricePerSeatPiastres` is a deprecated alias with the same value (DISCOVER-15). |
 | `maxDetourMinutes` / `maxWalkMinutes` | **RAFEEQ's** limits, the same on every commute (C-1, COM-31): the whole trip may carry at most 10 min **and** at most 5 km of detour, and a passenger's point must be within 1.5 km of the route. Read-only — sending either when creating or revising a commute is refused with `422`. |
 | `audience`, `minTrustLevel` | Who may join. |
 | `allowsCustomPickup` | **Defaults to false.** |
@@ -1738,7 +1741,9 @@ Archives. Nothing is deleted: history stays, and only future days nobody has tak
 **Query:** `origin[lat,lng]`, `destination[lat,lng]`, `daysMask`, `arrivalWindowStart`,
 `arrivalWindowEnd` (`HH:MM:SS`), `maxWalkMinutes` (0–45), `maxDetourMinutes` (0–45),
 `seatsNeeded`, `audiencePreference`, `womenOnly`, `flexibilityMinutes` (0–60),
-`wantsReturnTrip`, `rules[]`.
+`wantsReturnTrip`, `rules[]`, `tier`, `minRating`. Optionally `origin[label]`, `origin[placeId]`,
+`destination[label]`, `destination[placeId]` — they change nothing about the search; they are kept
+on her recent search so the row can say "New Cairo → Smart Village" (DISCOVER-8).
 
 **Verification is NOT required here** — searching is how somebody decides whether Rafeeq is worth
 verifying for. What they are *eligible* to see is decided inside the query from their own account:
@@ -1746,6 +1751,23 @@ a women-only commute is excluded for a non-woman before anything is scored, so y
 receive a result they cannot then request.
 
 Returns an array of match results — see 4.6, which explains the score breakdown.
+
+#### `GET /commutes/{commute}/public` — active, profile complete
+
+**A commute as a passenger reads it** (DISCOVER-1): the detail screen (B01 → B07, F3P-21 → 23) and
+the request screen (B02, F11). Same eligibility as the search — a commute she may not see, or one
+that is not published, answers `404`. A women-only commute is shown to everybody, flagged.
+
+| Field | Meaning |
+|---|---|
+| `commuteId`, `status`, `commuteType`, `direction`, `audience`, `womenOnly`, `seatsTotal` | |
+| `seatPricePiastres` | The current seat price. Each day's own frozen price is on `upcomingTrips[]`. (`pricePerSeatPiastres`: deprecated alias.) |
+| `allowsCustomPickup`, `maxPointDistanceMetres`, `maxDetourMinutes`, `maxDetourKm` | Whether she may drop her own pin, and the limits it is checked against (1.5 km from the route, the whole trip's 10 min / 5 km cap). Preview a pin with `POST /commutes/{commute}/pickup-preview`. |
+| `schedule` | `{daysMask, departureTime, timezone, startDate, endDate}` — **the days it runs** ("Every Sun · Tue · Thu"). |
+| `route` | `{start, end, distanceKm, durationMinutes, polyline, isTrimmed}`. 🔒 **Before she holds a confirmed seat the line is trimmed ~1 km at each end** and `start` / `end` are `{label, lat, lng}` of the trimmed ends, labelled by **area only** ("Nasr City"); `isTrimmed: true`. Once she has a confirmed booking on it, the whole line (`isTrimmed: false`). `distanceKm` / `durationMinutes` are the whole run's ("27 km · about 52 min"). |
+| `pickups[]` / `dropoffs[]` | The driver's suggested points, in road order: `{id, label, lat, lng, estimatedTime}`. **`id` is the `suggestionId` a seat request takes.** `estimatedTime` is `HH:MM:SS` on the commute's clock from the usual departure. Empty arrays when the driver gave none (B07) — her own pin is always the other way to choose. |
+| `upcomingTrips[]` | The next up to 20 days: the `otherDays[]` item of a match result (`id`, `tripDate`, `departureAt`, `departureLocal`, `promisedArrivalAt`, `promisedArrivalLocal`, `seatsAvailable`, `myStatus`, `overlapsBooking`) plus that day's `seatPricePiastres`. |
+| `rules`, `vehicle`, `driver` | As on a match result. 🔒 No plate. |
 
 #### `GET` / `POST` / `PATCH` / `DELETE /commute-demands/{demand}` — active, profile complete
 
@@ -1760,6 +1782,9 @@ stops Rafeeq being an auction on people.
 | `status` | `ACTIVE` · `PAUSED` · `MATCHED` · `CANCELLED` · `EXPIRED`. |
 | `flexibilityMinutes` | How much the arrival window can bend. |
 | `wantsReturnTrip` | Recorded; return-leg matching itself is not built yet. |
+| `origin` / `destination` | `{lat, lng, label, placeId}` (DISCOVER-9). Send `label` and `placeId` with each end in the `POST` / `PATCH` body; an end sent without a label is named after the nearest catalogue place within 500 m, or stays `null`. |
+| `womenOnly`, `rules[]`, `tier` | Her preferences — the search's own fields, sent and returned the same way (DISCOVER-9). **The alerts this demand sends honour them.** |
+| `matchCount` | "3 matching commutes this week" (DISCOVER-10): the different commutes matched to this demand that are **still published and run in the next 7 days**. |
 
 **`PATCH /commute-demands/{demand}`** (S-4, BOOK-06) — two shapes:
 
@@ -1785,8 +1810,9 @@ Commutes found for the caller's demands, newest first.
 | `score` | The score **when the match was found**. The commute may have changed since; this records why the interruption was justified. |
 | `originLabel` / `destinationLabel` | Where it goes. Origin and destination only — the intermediate stops are other passengers' meeting points. |
 | `departureTimeLocal` / `timezone` | Local wall clock plus zone. |
-| `pricePerSeatPiastres`, `audience`, `driver`, `vehicle` | As on a search result, with the same restraint. |
+| `seatPricePiastres`, `audience`, `driver`, `vehicle` | As on a search result, with the same restraint. `driver` is now the full `person` (with `rating`, `ratingCount`) plus `completedTrips`; `vehicle` adds `colour`, `tier`, `hasAc`. |
 | `deliveredAt` / `clickedAt` | Set once notifications exist (Phase 12). `null` today. |
+| **The match-result fields** (DISCOVER-11) | `tripId`, `tripDate`, `departureAt`, `departureLocal`, `promisedArrivalAt`, `promisedArrivalLocal`, `daysMask`, `seatsAvailable`, `womenOnly`, `meetingPoint`, `dropOffPoint`, `rules`, `otherDays[]`, `myStatus`, `overlapsBooking` — the same meaning as on a search result below. The day is the commute's **soonest upcoming day on the demand's weekdays**; the points are the commute's stops nearest the demand's own origin and destination. `null` (and `otherDays: []`) when no such day exists right now. |
 
 #### `GET` / `POST` / `DELETE /saved-searches/{search}` — active, profile complete
 
@@ -1794,7 +1820,7 @@ Commutes found for the caller's demands, newest first.
 
 Returns `id`, `title`, `filters`, `createdAt`. The dedup signature is internal and not returned.
 
-#### `GET` / `DELETE /me/recent-searches` — active, profile complete
+#### `GET` / `DELETE /me/recent-searches` · `DELETE /me/recent-searches/{search}` — active, profile complete
 
 The chips to show **on search-field focus**, plus the `Clear All` behind them (Feature 03 v5 §3).
 Account-synced: she searched on the bus, and the list is there on a new handset.
@@ -1806,6 +1832,8 @@ Nothing creates these explicitly — **running a search records it**. There is n
 | `criteria` | The search, in the exact shape `GET /search/commutes` accepts. **Tap = send this object straight back.** Values are properly typed (`daysMask` is a number, not `"62"`), whatever the query string that produced them looked like. |
 | `searchedAt` | When she last ran it. **The list is ordered by this**, newest first. |
 | `firstSearchedAt` | When it first appeared. Retention is measured from here. |
+| `id` | Send it to `DELETE /me/recent-searches/{search}` to remove **that one row** (DISCOVER-8). Somebody else's id answers `404`. Returns `{ "deleted": true }`. |
+| `criteria.origin` / `criteria.destination` | `{lat, lng, label, placeId}` (DISCOVER-8). `label` is what she sent with the search, else the nearest catalogue place within 500 m, else `null`. The search accepts and ignores `label` / `placeId`, so the object still goes straight back. |
 
 🔴 **Running the same search again does not add a row** — it moves the existing one to the top. At
 most **20** are kept; older ones fall off.
@@ -1819,8 +1847,8 @@ Returns `{ "cleared": n }`.
 🔴 **And searching creates neither of those.** v5: "search alone doesn't create a demand", "do not
 auto-save demand". If you want a demand, post one.
 
-> 🔒 There is no id and no parameter on either call, and nothing anywhere reads another person's
-> list. What is in here is where somebody lives and where she works, with timestamps — so it is
+> 🔒 No user id and no filter on any of these calls, and nothing anywhere reads another person's
+> list (the single-row delete is scoped to her own). What is in here is where somebody lives and where she works, with timestamps — so it is
 > hers only, erasable in one call, and it ages out by itself after **90 days** measured from
 > `firstSearchedAt`.
 
@@ -1832,6 +1860,11 @@ The shared place catalogue. Only needs a signed-in account — a passenger looki
 point has no reason to be verified first. Returns `id`, `name`, `nameAr`, `type`, `lat`, `lng`,
 `city`, `district`.
 
+🔴 **Reverse lookup for a dropped pin** (DISCOVER-12): send `lat` + `lng` **without `q`** and you get
+the places nearest that point, **closest first**, each with `distanceMetres`. Use the first one's
+`name` as the pin's `label` on a seat request (let her edit it). Empty when nothing is within
+`radiusMetres` (default 5 km).
+
 ---
 
 
@@ -1842,16 +1875,22 @@ point has no reason to be verified first. Returns `id`, `name`, `nameAr`, `type`
 | `commuteId` | The commute. |
 | `tripId` / `tripDate` | **The specific day this card matched on** — the soonest that fits. This is what you pass as `scheduledTripId` for a trial. |
 | `departureAt` / `departureLocal` | The instant, and the wall clock to display. |
+| `promisedArrivalAt` / `promisedArrivalLocal` | "07:00 → arrive 08:10" (DISCOVER-2): the arrival the driver **promised at the end of his route** that day. `null` when none was promised — not "any time". Where *she* gets out is `dropOffPoint.estimatedArrival*`. |
+| `daysMask` | **The days the commute runs** (DISCOVER-3) — "Sun · Tue · Thu". Not the same as `tripDate` + `otherDays`, which are only the days that fit this search. |
 | `seatsAvailable` | On that day. |
-| `pricePerSeatPiastres` | Snapshotted on the day — a later price change does not move it. |
-| `audience` | `women_only` · `any_verified`. |
+| `seatPricePiastres` | Snapshotted on the day — a later price change does not move it. **The one name for the seat price everywhere** (DISCOVER-15); `pricePerSeatPiastres` is sent beside it with the same value, deprecated. |
+| `audience` · `womenOnly` | `women_only` · `any_verified`, and the same as a boolean. |
+| `originLabel` / `destinationLabel` | The commute's two ends, as on `/matches`. |
 | `driver` | A `person` (5.1) plus `completedTrips` from the driver profile. |
-| `vehicle` | `make`, `model`, `colour`. 🔒 **No plate** — a search result has not earned it. |
-| `meetingPoint` | `{lat, lng, address, walkMinutes}` — where they would meet and how far they would walk. |
+| `vehicle` | `make`, `model`, `colour`, `tier` (`standard` · `comfort`), `hasAc` — **on every result** (DISCOVER-5), so you can split results on Comfort and AC. 🔒 **No plate** — a search result has not earned it. |
+| `meetingPoint` | `{lat, lng, address, walkMinutes, estimatedAt, estimatedLocal}` — where they would meet, how far she would walk, and **when the car should be there that day** (an estimate along the route; `null` without one). |
+| `dropOffPoint` | `{lat, lng, address, walkMinutes, estimatedArrivalAt, estimatedArrivalLocal}` (DISCOVER-2) — the commute's drop-off point or destination nearest where she is going. |
+| `myStatus` | 🔴 **Where she already stands with that day** (DISCOVER-7): `{kind, seatRequestId, bookingId}`, `kind` = `none` · `pending_request` · `counteroffered` · `waitlisted` · `booked`. Drives the single action button — never show Request Seat on a day she already asked for. A recurring request covers the weekdays she asked for. |
+| `overlapsBooking` | 🔴 **The seat she already holds at the same time on another commute** (DISCOVER-6, BOOK-17): `{bookingId, driverFirstName, departureLocal, arrivalLocal}`, or `null`. When set, the only action is **Request to Join Waiting List**. |
 | `score` | The breakdown, below. |
 | `detourMinutes` | What this passenger would add to the driver's run. |
-| `rules` | A map, e.g. `{"nonsmoking": true, "quiet": true}`. |
-| `otherDays[]` | The other days of the same commute that also fit — `{id, tripDate, departureAt, seatsAvailable}`. **One commute is one card**, not twenty near-identical ones. |
+| `rules` | A map, e.g. `{"nonsmoking": true, "quiet": true}`. On every result (DISCOVER-5). |
+| `otherDays[]` | The other days of the same commute that also fit — `{id, tripDate, departureAt, departureLocal, promisedArrivalAt, promisedArrivalLocal, seatsAvailable, myStatus, overlapsBooking}` (`departureLocal` for the date chip, DISCOVER-3; the standing fields are per date). **One commute is one card**, not twenty near-identical ones. |
 
 🔒 **No route polyline.** A passenger deciding between commutes needs the meeting point, the time
 and the price. The full road a driver takes every day, handed to anyone who searches, is a movement
@@ -2449,7 +2488,12 @@ attendance decision acceptable, and it is the passenger's only move.
 | Field | Meaning |
 |---|---|
 | `id`, `commuteId`, `tripId` | `tripId` is set for a trial request. |
-| `status` | `PENDING` · `APPROVED` · `REJECTED` · `WAITLISTED` · `WITHDRAWN` · `EXPIRED` · `ENDED`. `ENDED` means the approval outlived the membership it created — it frees the slot so the person can ask to rejoin. |
+| `status` | `PENDING` · `APPROVED` · `REJECTED` · `WAITLISTED` · `WITHDRAWN` · `EXPIRED` · `ENDED` · `COUNTEROFFERED` · `COUNTEROFFER_DECLINED` · `CLOSED_DATE_PASSED` · `COMMUTE_ARCHIVED` · `TERMS_CHANGED`. `ENDED` means the approval outlived the membership it created — it frees the slot so the person can ask to rejoin. `COUNTEROFFERED` waits on her answer to the driver's `counteroffer`. |
+| `kind` | `seat_request` · `waitlist_application`. |
+| `pickup` | `{lat, lng, label, source, suggestionId, estimatedAt, estimatedLocal}` — the point she chose; `source` is `driver_suggestion` · `custom_map` · `driver_counteroffer`. `estimated*` (DISCOVER-13): when the car should reach it on the day in view — **her own view only**, `null` in the driver's. |
+| `dropoff` | `{lat, lng, label, source, suggestionId, estimatedArrivalAt, estimatedArrivalLocal, promisedArrivalLocal}` — `promisedArrivalLocal` is the driver's promised arrival at the end of his route that day. |
+| `counteroffer` | **Present only once the driver has proposed one**: `{pickup, dropoff, note, at, answeredAt}`. Only the end he moved is set; the other is `null`. |
+| `commute` | **Her own view only** (DISCOVER-13), for the pending-request (F3P-51) and counteroffer (B09) screens: `{originLabel, destinationLabel, tripId, tripDate, departureAt, departureLocal, seatPricePiastres, driver, vehicle}`. The day is the one she asked for, or — recurring — the commute's next day on her weekdays. `driver` is a `person`; 🔒 no plate. Absent in the driver's inbox. |
 | `commitment` | `trial` · `recurring`. |
 | `requestedDaysMask` | For recurring. |
 | `seats` | 1–4. |
@@ -2473,7 +2517,7 @@ attendance decision acceptable, and it is the passenger's only move.
 | `departureAt` / `departureLocal` | Compute from the first; display the second. They do not differ by a constant across a DST change. |
 | `status` | `SCHEDULED` · `PREPARING` · `EN_ROUTE` · `IN_PROGRESS` · `COMPLETED` · `CANCELLED` · **`EXPIRED`** (new — the morning was never driven, see 4.9). |
 | `seatsTotal` / `seatsTaken` / `seatsAvailable` | Snapshotted when the day was generated — a later change to the commute does not retroactively move them. |
-| `pricePerSeatPiastres` | Snapshotted the same way. |
+| `seatPricePiastres` | Snapshotted the same way. (`pricePerSeatPiastres`: deprecated alias, same value.) |
 | `bookingDeadlineAt` | **21:00 the night before.** After this, requests are refused with `BOOKING_DEADLINE_PASSED`. |
 
 **Booking** — one seat on one day.
@@ -2492,6 +2536,7 @@ attendance decision acceptable, and it is the passenger's only move.
 | `meetingPoint` | `{lat, lng, isExact}`, or **`null` for the standard point** — which is the run's origin. |
 | `cancelledAt`, `cancelledReason`, `cancellationFeePiastres` | The fee is always `0` today. |
 | `otherPartyUserId` | 🔒 **The other person's user id — the driver's to the passenger, the passenger's to the driver — only once the journey is over** (`COMPLETED` · `ENDED_EARLY` · `NO_SHOW` · `EXITED_DUE_TO_DRIVER_DELAY`); `null` before. It is what the trip summary's **Block** sends (`POST /safety/blocked-users`). Before the trip there is no reason for either of you to hold a handle on the other, so don't cache it from anywhere else. |
+| `pickupEta` / `pickupEtaLocal` | "Pickup around 7:55" (DISCOVER-14): when the car should reach her pickup that day. Once the day's itinerary is built it is the departure plus the legs up to her stop — **the same time her wait grace starts from**, and frozen with the itinerary at the 16-hour lock; before that, an estimate along the route. Present wherever `trip` is. |
 | `trip` | The scheduled trip above, when loaded. |
 
 🔒 **All three money figures are frozen at approval and never recomputed.** A driver raising her
@@ -2511,7 +2556,8 @@ given — never compute or show a percentage.
 
 #### `POST /commutes/{commute}/pickup-preview` — active, profile complete
 
-**Request:** `lat`, `lng`, `label`.
+**Request:** `lat`, `lng`, `label`, and optionally `scheduledTripId` — the day she is requesting
+(a match result's `tripId` or an `otherDays[].id`); without it, the commute's next bookable day.
 
 What a proposed point would cost the driver, **without creating anything**. Use it to warn before
 the person commits.
@@ -2522,6 +2568,8 @@ the person commits.
 | `runTotalMinutes` | The detour for the **whole run** including every already-approved pickup. This is the figure the limit is checked against. |
 | `maxDetourMinutes` | RAFEEQ's whole-trip cap in minutes (C-1). |
 | `withinLimit` | Whether a request would be accepted. Show the consequence before they ask. |
+| `runTotalKm` / `maxDetourKm` | The same in kilometres — both caps must hold. |
+| `tripId` · `estimatedPickupAt` · `estimatedPickupLocal` | "Pickup around 7:55" (DISCOVER-14): when the car should reach this point on that day — **an estimate**, the departure plus the point's share of the route's duration. `null` when the commute has no upcoming day. Once she is booked, read `pickupEta` on the booking. |
 
 #### `POST /seat-requests/{seatRequest}/pickup-request` — active, profile complete
 
@@ -4004,6 +4052,7 @@ screens showed the same handful of facts, so they come from one place and cannot
 | `verifiedLevels[]` | **Which** levels, by name (`government_id`, `selfie`, `organization`, `phone`). A level of 2 does not say which two, so a client given only the number has to guess — and guesses wrong the moment the levels are reordered. **Expired levels are excluded.** |
 | `sameOrganisation` | 🔴 **A comparison, never a disclosure.** `true` means you and this person have the same **verified** workplace or university. The employer is never named: a badge naming it would tell every passenger where a driver works, which is most of what somebody needs to wait outside it. Both sides must be verified — an unverified org is a text field somebody typed. |
 | `rating` | `null` **until ratings exist (Phase 10)**. Null is the honest answer: a driver who has not been rated has no rating, and 0 would show a new driver a zero-star badge nobody earned. **Do not render 0.** |
+| `ratingCount` | How many ratings `rating` is the mean of — the "(210)" beside the stars (DISCOVER-4). Counted by the same rules as the mean (revealed, completed rides, not taken down), so it is `0` exactly when `rating` is `null`. |
 | `completedTrips` | Completed journeys in the relevant role. |
 | `onTimeRate` | `0`–`100`, or `null` until computed. Same rule: show a dash. 🔴 **For a driver this now measures two things**: that she set off within 10 minutes of the departure **and**, where the day carries a promised arrival, that she arrived within **5 minutes** of it. A day with no promise is judged on departure alone — no promise, no breach. For a passenger it is still `null`: nothing computes passenger punctuality yet, and v3 requires the two be calculated separately. |
 
@@ -4116,6 +4165,7 @@ exist, and every live endpoint must be named here.
 
 | Date | Change |
 |---|---|
+| 2026-11-01 | 🔎 **Discover gaps (DISCOVER-1 → 15) — all additive, nothing renamed or removed.** **2 new endpoints:** `GET /commutes/{commute}/public` — the commute as a passenger reads it: suggested `pickups[]` / `dropoffs[]` with the `id` a seat request takes as `suggestionId`, `schedule.daysMask`, `upcomingTrips[]` with seats left, rules, car, driver, and the route **trimmed ~1 km at each end with area names only** until she holds a confirmed seat (4.6) — and `DELETE /me/recent-searches/{search}` to remove one row. **Search results** gain `promisedArrivalAt/Local`, `dropOffPoint`, `daysMask`, `originLabel`/`destinationLabel`, `meetingPoint.estimatedAt/Local`, and per day `myStatus` (`none` · `pending_request` · `counteroffered` · `waitlisted` · `booked`) and `overlapsBooking`; `otherDays[]` gain `departureLocal`. `vehicle.tier` / `hasAc` and `rules` are confirmed on every result. **`person.ratingCount`.** **Recent searches** keep `label` / `placeId` on each end (send them with the search; otherwise the nearest catalogue place names it). **Demands** take and return `label` / `placeId`, `womenOnly`, `rules`, `tier` — and their alerts now honour them — plus `matchCount` (this week). **`/matches`** rows carry the whole match-result shape. **`GET /places`** with `lat`/`lng` and no `q` is the reverse lookup for a dropped pin: nearest first, with `distanceMetres`. **Seat requests** (her own view) gain the points' times and a `commute` summary; the shape is documented in full. **`pickup-preview`** returns `estimatedPickupAt/Local` (optional `scheduledTripId`); **bookings** return `pickupEta/Local`. 🔴 **The seat price is `seatPricePiastres` everywhere** — this file said `pricePerSeatPiastres` in four places the API never used; that name is now sent beside it as a deprecated alias. |
 | 2026-11-01 | ❓ **"Did you ask to get off here?" (TRIP-20, PAY-28)** — new `POST /bookings/{booking}/early-drop` and the `early_drop_check` notification; bookings now return `feeLinePiastres`, `feeLineReason` and `earlyDrop`. A `false_arrival` report puts her no-show on that booking under review (TRIP-17). Staff now settle the money of payment disputes (PAY-31, PAY-32) and women-only misuse (PAY-47, the man is suspended until he pays) from the safety desk. |
 | 2026-11-01 | 🚗 **Driver fees (PAY-23 → PAY-29, C-5 → C-10).** New: `POST /driver/bookings/{booking}/cancel` (remove one passenger), `GET /trips/{trip}/cancel-preview` and `GET /commutes/{commute}/cancel-preview` (the fee before he confirms), `POST /account/debt/entries/{entry}/appeal` (48h). Cancelling seats costs the driver by notice (16h+: 0 · 10–16h: 10 % · < 10h: 25 %) on one passenger, Cancel today, pause, delete, a new car and a block; ending a run that set off 100 %; never coming 50 %; a passenger leaving because he was late 25 %. After a breakdown, accident or emergency a passenger aboard pays the share of her route past 25 %; otherwise nothing — her booking's `paymentStatus` is the new `WAIVED`. `PATCH /bookings/{booking}/cancel` now applies the fees. End early is the full fare. |
 | 2026-11-01 | 💸 **Passenger fees (PAY-20 → PAY-22, TRIP-26, SAFE-11).** Three counters — `NO_SHOW`, `LATE_CANCEL`, `LATE_BOARDING` — each with its ladder and a 90-day reset; `MISSED_COMMITMENT` is history only. Warnings now carry `feePiastres`, `feeStatus`, `appealBy`. A late cancel's fee waits for departure and is dropped if the seat is refilled. Appeals close after 48 hours (`APPEAL_WINDOW_CLOSED`). `away` on the group attendance cancels that day. |

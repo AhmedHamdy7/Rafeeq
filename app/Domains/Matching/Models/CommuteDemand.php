@@ -4,6 +4,7 @@ namespace App\Domains\Matching\Models;
 
 use App\Domains\Commute\Enums\CommuteAudience;
 use App\Domains\Commute\Enums\CommuteType;
+use App\Domains\Driver\Enums\VehicleTier;
 use App\Domains\Identity\Models\User;
 use App\Domains\Matching\Enums\CommuteDemandStatus;
 use App\Domains\Shared\Casts\SpatialPoint;
@@ -24,6 +25,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
     'dest_lat', 'dest_lng', 'origin_label', 'destination_label', 'commute_type', 'days_mask',
     'preferred_arrival_start', 'preferred_arrival_end', 'flexibility_minutes', 'max_walk_minutes',
     'max_detour_minutes', 'audience_preference', 'wants_return_trip',
+    'origin_place_id', 'destination_place_id', 'women_only', 'required_rules', 'vehicle_tier',
 ])]
 class CommuteDemand extends Model
 {
@@ -46,6 +48,10 @@ class CommuteDemand extends Model
             'max_detour_minutes' => 'integer',
             'audience_preference' => CommuteAudience::class,
             'wants_return_trip' => 'boolean',
+            // Her preferences, the search's own (DISCOVER-9).
+            'women_only' => 'boolean',
+            'required_rules' => 'array',
+            'vehicle_tier' => VehicleTier::class,
             'status' => CommuteDemandStatus::class,
             'expires_at' => 'datetime',
             'last_notified_at' => 'datetime',

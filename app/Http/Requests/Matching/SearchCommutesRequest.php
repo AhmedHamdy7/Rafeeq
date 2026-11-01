@@ -5,6 +5,7 @@ namespace App\Http\Requests\Matching;
 use App\Domains\Commute\Enums\CommuteAudience;
 use App\Domains\Commute\Enums\CommuteRuleKey;
 use App\Domains\Driver\Enums\VehicleTier;
+use App\Domains\Matching\Support\PlaceLabels;
 use App\Domains\Matching\Support\SearchCriteria;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
@@ -37,10 +38,21 @@ final class SearchCommutesRequest extends FormRequest
             'origin.lat' => ['required', 'numeric', 'between:-90,90'],
             'origin.lng' => ['required', 'numeric', 'between:-180,180'],
 
+            /*
+             * What to call it, and the catalogue place it came from when it was picked from
+             * `GET /places`. Optional, and they change nothing about the search: they are kept so a
+             * recent search or a demand can say "New Cairo → Smart Village". Leave them out and the
+             * nearest catalogue place names the point, when one is close enough.
+             */
+            'origin.label' => ['nullable', 'string', 'max:120'],
+            'origin.placeId' => ['nullable', 'string', 'max:26'],
+
             // Where you need to get to.
             'destination' => ['required', 'array'],
             'destination.lat' => ['required', 'numeric', 'between:-90,90'],
             'destination.lng' => ['required', 'numeric', 'between:-180,180'],
+            'destination.label' => ['nullable', 'string', 'max:120'],
+            'destination.placeId' => ['nullable', 'string', 'max:26'],
 
             /*
              * Which days you need, as a bitmask: Saturday 1, Sunday 2, Monday 4,
@@ -109,5 +121,15 @@ final class SearchCommutesRequest extends FormRequest
     public function criteria(): SearchCriteria
     {
         return SearchCriteria::fromArray($this->validated());
+    }
+
+    /**
+     * The names she gave each end, as sent (DISCOVER-8, -9). Kept apart from the criteria on
+     * purpose: a label is not part of the question, so two searches that differ only in what she
+     * called her street are the same search, with one cache row and one recent-search entry.
+     */
+    public function places(): PlaceLabels
+    {
+        return PlaceLabels::fromInput($this->validated());
     }
 }

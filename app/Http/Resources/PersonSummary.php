@@ -70,6 +70,15 @@ final class PersonSummary
              */
             'rating' => self::rating($stats, $asDriver),
 
+            /*
+             * How many ratings `rating` is the mean of — the "(210)" beside the stars (DISCOVER-4).
+             * Counted by the same rules as the mean (revealed, completed rides, not taken down), so
+             * it is 0 exactly when `rating` is null.
+             */
+            'ratingCount' => $asDriver
+                ? (int) ($stats->rating_count_as_driver ?? 0)
+                : (int) ($stats->rating_count_as_passenger ?? 0),
+
             'completedTrips' => $asDriver
                 ? (int) ($stats->completed_trips_as_driver ?? 0)
                 : (int) ($stats->completed_trips_as_passenger ?? 0),

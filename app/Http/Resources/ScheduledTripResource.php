@@ -36,6 +36,9 @@ final class ScheduledTripResource extends JsonResource
              * generated (P-1, PAY-44): a later settings change does not move it.
              */
             'seatPricePiastres' => (int) $this->seat_price_piastres,
+            // ⚠️ Deprecated alias of `seatPricePiastres` (DISCOVER-15): the name older guide text
+            // used for this field. Same value; read `seatPricePiastres`.
+            'pricePerSeatPiastres' => (int) $this->seat_price_piastres,
             /*
              * 🔒 What the driver keeps of each seat — sent ONLY to the commute's own driver, and
              * absent for everybody else (P-3, PAY-39). The commission rate is never sent.

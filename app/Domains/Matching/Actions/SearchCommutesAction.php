@@ -2,6 +2,7 @@
 
 namespace App\Domains\Matching\Actions;
 
+use App\Domains\Booking\Support\PickupEta;
 use App\Domains\Commute\Enums\CommuteLocationType;
 use App\Domains\Commute\Models\CommuteLocation;
 use App\Domains\Commute\Models\CommuteOffer;
@@ -119,7 +120,7 @@ final readonly class SearchCommutesAction
      * numbers we are holding would cost more than the comparison.
      *
      * @param  Collection<int, ScheduledTrip>  $candidates
-     * @return array<int, array{trip: ScheduledTrip, meetingPoint: CommuteLocation, walk: WalkTime}>
+     * @return array<int, array{trip: ScheduledTrip, meetingPoint: CommuteLocation, walk: WalkTime, dropOff: array{0: CommuteLocation, 1: Distance}|null}>
      */
     private function stageTwoWalkingDistance($candidates, SearchCriteria $criteria): array
     {
@@ -142,7 +143,14 @@ final readonly class SearchCommutesAction
                 continue;
             }
 
-            $survivors[] = ['trip' => $trip, 'meetingPoint' => $point, 'walk' => $walk];
+            $survivors[] = [
+                'trip' => $trip,
+                'meetingPoint' => $point,
+                'walk' => $walk,
+                // Where she would get out (DISCOVER-2). Not a filter: the search never asked how
+                // far she will walk at the other end, and ranking already rewards a good overlap.
+                'dropOff' => $this->nearestDropOff($trip->commuteOffer, $criteria->destination),
+            ];
         }
 
         return $survivors;
@@ -180,6 +188,37 @@ final readonly class SearchCommutesAction
     }
 
     /**
+     * The closest point on this commute she could be dropped at — a drop-off point or its
+     * destination (DISCOVER-2). The mirror of {@see nearestMeetingPoint()}.
+     *
+     * @return array{0: CommuteLocation, 1: Distance}|null
+     */
+    private function nearestDropOff(CommuteOffer $offer, Coordinate $to): ?array
+    {
+        $best = null;
+        $bestDistance = null;
+
+        foreach ($offer->locations as $location) {
+            if ($location->type !== CommuteLocationType::Dropoff
+                && $location->type !== CommuteLocationType::Destination) {
+                continue;
+            }
+
+            $distance = Haversine::between(
+                $to,
+                new Coordinate((float) $location->lat, (float) $location->lng),
+            );
+
+            if ($bestDistance === null || $distance->metres < $bestDistance->metres) {
+                $best = $location;
+                $bestDistance = $distance;
+            }
+        }
+
+        return $best === null ? null : [$best, $bestDistance];
+    }
+
+    /**
      * Stages 3 and 4 — the detour a driver would take, then the score.
      *
      * The passenger's own route is computed ONCE, outside the loop, and each
@@ -187,7 +226,7 @@ final readonly class SearchCommutesAction
      * paid for when the commute was published. What remains inside the loop is
      * arithmetic on geometry already in memory.
      *
-     * @param  array<int, array{trip: ScheduledTrip, meetingPoint: CommuteLocation, walk: WalkTime}>  $candidates
+     * @param  array<int, array{trip: ScheduledTrip, meetingPoint: CommuteLocation, walk: WalkTime, dropOff: array{0: CommuteLocation, 1: Distance}|null}>  $candidates
      * @return array<int, MatchResult>
      */
     private function stageThreeAndFour(array $candidates, SearchCriteria $criteria, User $passenger): array
@@ -227,7 +266,23 @@ final readonly class SearchCommutesAction
                     : (float) $offer->driverProfile->on_time_rate,
             );
 
-            $results[] = new MatchResult($offer, $trip, $score, $candidate['meetingPoint']);
+            [$dropOff, $dropOffDistance] = $candidate['dropOff'] ?? [null, null];
+
+            $results[] = new MatchResult(
+                offer: $offer,
+                trip: $trip,
+                score: $score,
+                meetingPoint: $candidate['meetingPoint'],
+                dropOffPoint: $dropOff,
+                dropOffWalkMinutes: $dropOffDistance?->asWalkTime()->minutes,
+                /*
+                 * How far into the run each point sits (DISCOVER-14) — arithmetic on the route
+                 * already in hand, so the card can say "pickup around 07:05" without a provider
+                 * call per result.
+                 */
+                meetingPointSeconds: PickupEta::secondsAlong($this->geo, $offer, $this->coordinateOf($candidate['meetingPoint'])),
+                dropOffSeconds: $dropOff === null ? null : PickupEta::secondsAlong($this->geo, $offer, $this->coordinateOf($dropOff)),
+            );
         }
 
         usort($results, fn (MatchResult $a, MatchResult $b) => $b->score->total() <=> $a->score->total());
@@ -261,6 +316,11 @@ final readonly class SearchCommutesAction
             distance: Distance::fromMetres((int) $offer->route_distance_meters),
             durationSeconds: (int) $offer->route_duration_seconds,
         );
+    }
+
+    private function coordinateOf(CommuteLocation $location): Coordinate
+    {
+        return new Coordinate((float) $location->lat, (float) $location->lng);
     }
 
     /**

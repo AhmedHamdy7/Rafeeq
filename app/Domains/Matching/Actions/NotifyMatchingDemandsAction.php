@@ -154,6 +154,10 @@ final readonly class NotifyMatchingDemandsAction
             audiencePreference: $demand->audience_preference,
             flexibilityMinutes: $demand->flexibility_minutes,
             wantsReturnTrip: $demand->wants_return_trip,
+            // Her preferences (DISCOVER-9), so an alert answers the question she actually asked.
+            requiredRules: array_values((array) ($demand->required_rules ?? [])),
+            womenOnly: (bool) $demand->women_only,
+            tier: $demand->vehicle_tier,
         );
     }
 }

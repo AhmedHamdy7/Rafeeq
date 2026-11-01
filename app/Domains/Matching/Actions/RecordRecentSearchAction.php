@@ -2,10 +2,12 @@
 
 namespace App\Domains\Matching\Actions;
 
+use App\Domains\Geo\Actions\SearchPlacesAction;
 use App\Domains\Identity\Models\User;
 use App\Domains\Matching\Models\CommuteDemand;
 use App\Domains\Matching\Models\SavedSearch;
 use App\Domains\Matching\Models\SearchHistory;
+use App\Domains\Matching\Support\PlaceLabels;
 use App\Domains\Matching\Support\SearchCriteria;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
@@ -29,7 +31,13 @@ use Throwable;
  */
 final readonly class RecordRecentSearchAction
 {
-    public function execute(User $user, SearchCriteria $criteria): void
+    public function __construct(private SearchPlacesAction $places) {}
+
+    /**
+     * @param  PlaceLabels|null  $labels  what she called each end (DISCOVER-8); a missing one is
+     *                                    named after the nearest catalogue place
+     */
+    public function execute(User $user, SearchCriteria $criteria, ?PlaceLabels $labels = null): void
     {
         /*
          * 🔴 A failure here must never fail the search.
@@ -40,7 +48,7 @@ final readonly class RecordRecentSearchAction
          * it is still findable if it ever happens.
          */
         try {
-            $this->record($user, $criteria);
+            $this->record($user, $criteria, ($labels ?? new PlaceLabels)->resolved($this->places, $criteria->origin, $criteria->destination));
         } catch (Throwable $e) {
             Log::warning('A recent search could not be recorded.', [
                 'user_id' => $user->id,
@@ -49,8 +57,21 @@ final readonly class RecordRecentSearchAction
         }
     }
 
-    private function record(User $user, SearchCriteria $criteria): void
+    private function record(User $user, SearchCriteria $criteria, PlaceLabels $labels): void
     {
+        /*
+         * The criteria in the shape the request accepts, so a client re-runs the search by
+         * sending this object straight back. Not the request's own input: a search arrives as a
+         * query string, where every value is a string, and `daysMask` coming back as `"62"`
+         * would surprise a client doing arithmetic on its own data.
+         *
+         * With each end's label and place beside its coordinates (DISCOVER-8): the search accepts
+         * and ignores both, so the round trip still works, and the row can say where she went.
+         */
+        $stored = $criteria->toArray();
+        $stored['origin'] += ['label' => $labels->originLabel, 'placeId' => $labels->originPlaceId];
+        $stored['destination'] += ['label' => $labels->destinationLabel, 'placeId' => $labels->destinationPlaceId];
+
         /*
          * The same notion of "the same search" the result cache uses, rather than a second one
          * invented here. Two definitions of sameness in one feature drift, and the symptom would be
@@ -69,7 +90,10 @@ final readonly class RecordRecentSearchAction
              * would mean a route she runs every week is never pruned — and this is the one table
              * where never pruning is a privacy decision rather than a storage one.
              */
-            $existing->forceFill(['searched_at' => now()])->save();
+            //
+            // The criteria are rewritten too, for their labels only: the same search with a better
+            // name for her street — or one that now has a name at all — should read that way.
+            $existing->forceFill(['searched_at' => now(), 'criteria' => $stored])->save();
 
             return;
         }
@@ -83,13 +107,8 @@ final readonly class RecordRecentSearchAction
         $row->forceFill([
             'id' => (string) Str::ulid(),
             'user_id' => $user->id,
-            /*
-             * The criteria in the shape the request accepts, so a client re-runs the search by
-             * sending this object straight back. Not the request's own input: a search arrives as a
-             * query string, where every value is a string, and `daysMask` coming back as `"62"`
-             * would surprise a client doing arithmetic on its own data.
-             */
-            'criteria' => $criteria->toArray(),
+            // See above on why this is not the request's own input.
+            'criteria' => $stored,
             'signature' => $signature,
             'searched_at' => now(),
         ])->save();

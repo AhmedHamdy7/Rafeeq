@@ -81,6 +81,29 @@ final readonly class SearchPlacesAction
     }
 
     /**
+     * The catalogue place nearest a point, if one is close enough to name it by (DISCOVER-12).
+     *
+     * The reverse lookup behind a dropped pin, a recent search and a demand that arrived with
+     * coordinates and no label. A curated place rather than a street address from a geocoder: the
+     * catalogue is what both people already call that corner, and it costs nothing to ask.
+     *
+     * Null rather than the nearest place ten kilometres away. A label that names somewhere she is
+     * not is worse than none, because the driver reads it as where to stop.
+     */
+    public function nearest(Coordinate $point, ?Distance $within = null): ?Place
+    {
+        // A full page rather than `limit: 1`: the shortlist is cut by popularity before it is
+        // sorted by distance, and the most used place in the box is not the one under the pin.
+        return $this->execute(near: $point, within: $within ?? Distance::fromMetres(self::NAMING_RADIUS_METRES))->first();
+    }
+
+    /**
+     * How close a catalogue place must be to name a point after it. About six minutes' walk: the
+     * distance at which "near Smart Village B6" still tells somebody where to look.
+     */
+    public const int NAMING_RADIUS_METRES = 500;
+
+    /**
      * @return array{minLat: float, maxLat: float, minLng: float, maxLng: float}
      */
     private function boxAround(Coordinate $centre, Distance $radius): array

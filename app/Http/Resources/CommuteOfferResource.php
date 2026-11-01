@@ -35,6 +35,8 @@ final class CommuteOfferResource extends JsonResource
              * until it is published. Each day carries its own frozen price — see `upcomingTrips`.
              */
             'seatPricePiastres' => $this->seat_price_piastres,
+            // ⚠️ Deprecated alias of `seatPricePiastres` (DISCOVER-15). Same value.
+            'pricePerSeatPiastres' => $this->seat_price_piastres,
             // 🔒 Only to the commute's own driver: this shape is also embedded in a group, which
             // passengers read (P-3, PAY-39).
             'driverSharePiastres' => $this->when(

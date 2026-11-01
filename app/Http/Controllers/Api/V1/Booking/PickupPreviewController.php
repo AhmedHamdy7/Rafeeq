@@ -4,7 +4,10 @@ namespace App\Http\Controllers\Api\V1\Booking;
 
 use App\Domains\Booking\Actions\RequestSeatAction;
 use App\Domains\Booking\Support\PickupDetour;
+use App\Domains\Booking\Support\PickupEta;
+use App\Domains\Commute\Enums\ScheduledTripStatus;
 use App\Domains\Commute\Models\CommuteOffer;
+use App\Domains\Commute\Models\ScheduledTrip;
 use App\Domains\Commute\Support\RouteSettings;
 use App\Domains\Geo\Contracts\GeoQueryEngine;
 use App\Domains\Identity\Models\User;
@@ -14,7 +17,7 @@ use App\Domains\Shared\Support\ErrorCode;
 use App\Domains\Shared\ValueObjects\Coordinate;
 use App\Http\Controllers\Controller;
 use App\Http\OpenApi\ApiErrors;
-use App\Http\Requests\Booking\RequestPickupPointRequest;
+use App\Http\Requests\Booking\PickupPreviewRequest;
 use App\Http\Responses\ApiResponse;
 use Illuminate\Http\JsonResponse;
 
@@ -46,7 +49,7 @@ final class PickupPreviewController extends Controller
 {
     #[ApiErrors(ErrorCode::PickupNotOnCommute, ErrorCode::SeatRequestWomenOnly, ErrorCode::NotFound)]
     public function show(
-        RequestPickupPointRequest $request,
+        PickupPreviewRequest $request,
         string $commute,
         GeoQueryEngine $geo,
     ): JsonResponse {
@@ -59,10 +62,27 @@ final class PickupPreviewController extends Controller
             throw DomainException::of(ErrorCode::PickupNotOnCommute);
         }
 
-        $detour = PickupDetour::measure($geo, $offer, new Coordinate(
+        $point = new Coordinate(
             (float) $request->validated('lat'),
             (float) $request->validated('lng'),
-        ));
+        );
+
+        $detour = PickupDetour::measure($geo, $offer, $point);
+
+        /*
+         * "Pickup around 7:55" (DISCOVER-14, handoff B-3): the day she named, or the commute's next
+         * bookable one. A day that is not this commute's is ignored rather than refused — this is
+         * a preview, and the time is the only thing it changes.
+         */
+        $trip = ScheduledTrip::query()
+            ->where('commute_offer_id', $offer->id)
+            ->where('status', ScheduledTripStatus::Scheduled->value)
+            ->where('departure_at', '>', now())
+            ->when($request->filled('scheduledTripId'), fn ($query) => $query->whereKey($request->validated('scheduledTripId')))
+            ->orderBy('departure_at')
+            ->first();
+
+        $estimated = $trip === null ? null : PickupEta::alongRoute($geo, $offer, $trip, $point);
 
         return ApiResponse::success([
             'addedMinutes' => $detour->addedMinutes,
@@ -82,6 +102,15 @@ final class PickupPreviewController extends Controller
             // Stated rather than left for the client to compare two numbers and get the
             // boundary case wrong.
             'withinLimit' => $detour->isWithin(),
+
+            /*
+             * When the car should reach this point on that day — an ESTIMATE: the departure plus
+             * the point's share of the published route's duration (see PickupEta). Null when the
+             * commute has no upcoming day. Once she is booked, `pickupEta` on the booking takes over.
+             */
+            'tripId' => $trip?->id,
+            'estimatedPickupAt' => $estimated?->toIso8601String(),
+            'estimatedPickupLocal' => $trip === null ? null : PickupEta::local($trip, $estimated),
         ]);
     }
 
