@@ -179,22 +179,25 @@ class DemoDataSeeder extends Seeder
     /**
      * One approved driver with an active vehicle and a published recurring commute.
      *
+     * Protected, with the organisation optional, because `ReviewAccountsSeeder` builds the store
+     * reviewers' accounts with it on a production database that may have no organisation at all.
+     *
      * @param  array<string, mixed>  $spec
      */
-    private function seedDriverWithCommute(
+    protected function seedDriverWithCommute(
         array $spec,
-        Organization $organization,
+        ?Organization $organization,
         AdminUser $admin,
         Corridor $corridor,
         Place $origin,
         Place $destination,
-    ): void {
+    ): User {
         $driver = User::factory()->woman()->create([
             'phone_e164' => $spec['phone'],
             'full_name' => $spec['name'],
             'public_first_name' => $spec['first'],
             'org_type' => OrgType::Work,
-            'organization_id' => $organization->id,
+            'organization_id' => $organization?->id,
             'registered_role' => RegisteredRole::Driver,
             'account_status' => AccountStatus::Active,
             'profile_status' => ProfileStatus::BasicComplete,
@@ -307,6 +310,8 @@ class DemoDataSeeder extends Seeder
             'start_date' => now()->toDateString(),
             'end_date' => now()->addMonths(4)->toDateString(),
         ]);
+
+        return $driver;
     }
 
     /**
@@ -560,7 +565,7 @@ class DemoDataSeeder extends Seeder
      * The soonest bookable day that still has a seat, so two testers do not land on the same one
      * and fight over the last place.
      */
-    private function nextFreeTrip(?User $for = null): ?ScheduledTrip
+    protected function nextFreeTrip(?User $for = null): ?ScheduledTrip
     {
         return ScheduledTrip::query()
             // Never a day this person already holds a seat on.
@@ -582,7 +587,7 @@ class DemoDataSeeder extends Seeder
      * move when an admin later moves a pricing setting. A seeder that recomputed them would be modelling
      * a bug.
      */
-    private function seatOn(User $passenger, ?ScheduledTrip $trip): void
+    protected function seatOn(User $passenger, ?ScheduledTrip $trip): void
     {
         if ($trip === null || $trip->commuteOffer === null) {
             return;

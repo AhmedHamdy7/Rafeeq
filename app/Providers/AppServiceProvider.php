@@ -13,6 +13,7 @@ use App\Domains\Geo\Support\CachingGeoEngine;
 use App\Domains\Geo\Support\GoogleRoutesGeoEngine;
 use App\Domains\Geo\Support\StraightLineGeoEngine;
 use App\Domains\Identity\Contracts\OtpSender;
+use App\Domains\Identity\Support\HttpSmsOtpSender;
 use App\Domains\Identity\Support\LogOtpSender;
 use App\Domains\Notification\Contracts\PushSender;
 use App\Domains\Notification\Support\ChatSettings;
@@ -63,6 +64,7 @@ class AppServiceProvider extends ServiceProvider
 
         $this->app->bind(OtpSender::class, fn () => match (config('rafeeq.auth.otp.driver')) {
             'log' => new LogOtpSender,
+            'http' => HttpSmsOtpSender::fromConfig(),
             default => throw new InvalidArgumentException(
                 'Unsupported OTP driver ['.config('rafeeq.auth.otp.driver').'].'
             ),

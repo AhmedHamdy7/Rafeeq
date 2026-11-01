@@ -111,6 +111,8 @@ it('generates a document describing every /v1 route', function () {
         'POST /v1/auth/logout',
         'GET /v1/account/devices',
         'DELETE /v1/account/devices/{device}/session',
+        'GET /v1/account/deletion',
+        'DELETE /v1/account',
         'PATCH /v1/account/devices/current/security',
         'GET /v1/account/consents',
         'POST /v1/account/consents',

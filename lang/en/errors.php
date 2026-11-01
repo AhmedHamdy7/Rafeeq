@@ -170,6 +170,8 @@ return [
 
     // Debt and settlement.
     'RIDING_SUSPENDED_FOR_DEBT' => 'Booking is paused because a fee is still unpaid. Pay it from the Payments screen, or appeal, to book again.',
+    'ACCOUNT_HAS_DEBT' => 'You cannot delete your account while you owe Rafeeq money. Pay it from the Payments screen first.',
+    'ACCOUNT_HAS_TRIP_IN_FEE_WINDOW' => 'You have a trip coming up that would cost a fee to cancel. Once it is over you can delete your account.',
     'FEE_APPEAL_NOT_OPEN' => 'This appeal has already been decided.',
     'EARLY_DROP_NOT_ASKED' => 'There is no question to answer about this drop-off.',
     'DEBT_NOTHING_OWED' => 'You do not owe anything right now, so there is nothing to pay.',
