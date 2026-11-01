@@ -75,8 +75,12 @@ final class VehicleController extends Controller
      */
     #[ApiErrors(
         ErrorCode::NotFound,
-        // An unapproved replacement, or one too small for a commute that would move onto it.
+        // An unapproved replacement.
         ErrorCode::VehicleNotAllowed,
+        // C-3: a replacement whose approved seats are fewer than a commute moving onto it offers,
+        // or one nobody has reviewed yet.
+        ErrorCode::CommuteSeatsExceedApproved,
+        ErrorCode::VehicleSeatsNotApproved,
         ErrorCode::ValidationFailed,
     )]
     public function activate(Request $request, string $vehicle, ManageVehicleAction $action): JsonResponse

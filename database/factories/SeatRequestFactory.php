@@ -6,6 +6,7 @@ use App\Domains\Booking\Enums\MeetingPreference;
 use App\Domains\Booking\Enums\PaymentType;
 use App\Domains\Booking\Enums\PointSource;
 use App\Domains\Booking\Enums\SeatRequestCommitment;
+use App\Domains\Booking\Enums\SeatRequestKind;
 use App\Domains\Booking\Enums\SeatRequestStatus;
 use App\Domains\Booking\Models\SeatRequest;
 use App\Domains\Commute\Models\CommuteOffer;
@@ -54,7 +55,9 @@ class SeatRequestFactory extends Factory
             'agreed_to_rules_at' => now(),
             'payment_type' => PaymentType::Cash,
             'status' => SeatRequestStatus::Pending,
-            'expires_at' => now()->addHours(48),
+            'kind' => SeatRequestKind::SeatRequest,
+            // Requests never expire (Feature 03 R-4); only a during-ride one carries a deadline.
+            'expires_at' => null,
         ];
     }
 

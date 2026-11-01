@@ -31,4 +31,22 @@ enum DisplacementReason: string
      * vehicle — the replacement is not a per-commute decision.
      */
     case VehicleReplaced = 'vehicle_replaced';
+
+    /**
+     * She deleted the commute (Feature 03 C-8, COM-35, decision C6): every upcoming day goes,
+     * booked ones included.
+     *
+     * Unlike the two above, nobody goes back on a waiting list: there is no commute left to wait
+     * for. Her request is closed `commute_archived` instead.
+     */
+    case CommuteDeleted = 'commute_deleted';
+
+    /**
+     * Whether a displaced passenger is put back on this commute's waiting list. A paused commute
+     * may resume and a replaced car may be approved; a deleted commute is gone.
+     */
+    public function rejoinsWaitlist(): bool
+    {
+        return $this !== self::CommuteDeleted;
+    }
 }

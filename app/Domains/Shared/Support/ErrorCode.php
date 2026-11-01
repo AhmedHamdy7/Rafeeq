@@ -77,6 +77,18 @@ enum ErrorCode: string
     case CommuteSeatsConflict = 'COMMUTE_SEATS_CONFLICT';
     case CommuteVehicleUnavailable = 'COMMUTE_VEHICLE_UNAVAILABLE';
 
+    /**
+     * More seats than the admin approved on the car (C-3, PROF-28). `error.fields.approvedSeats`
+     * carries the most that may be offered, so the seat stepper can stop there.
+     */
+    case CommuteSeatsExceedApproved = 'COMMUTE_SEATS_EXCEED_APPROVED';
+
+    /**
+     * The car has not been through the admin's car review, so it has no approved seats yet and no
+     * price can be divided by them (F2-6, PROF-28). Nothing for the driver to correct: he waits.
+     */
+    case VehicleSeatsNotApproved = 'VEHICLE_SEATS_NOT_APPROVED';
+
     // ---- Seat requests & bookings (Phase 7, Chapter 6) -----------------
     case SeatUnavailable = 'SEAT_UNAVAILABLE';
     case RulesNotAgreed = 'BOOKING_RULES_NOT_AGREED';
@@ -131,7 +143,28 @@ enum ErrorCode: string
     case WaitlistFull = 'BOOKING_WAITLIST_FULL';
     case BookingNotCancellable = 'BOOKING_NOT_CANCELLABLE';
     case CannotBookOwnCommute = 'BOOKING_OWN_COMMUTE';
+
+    /**
+     * A seat request on a women-only commute from an account whose gender is not `woman` (Feature
+     * 03 C-11, BOOK-31).
+     *
+     * Women-only commutes are shown to everybody now, so this is an answer rather than a secret:
+     * the commute is visible with `womenOnly: true`, and only a woman may ask for a seat on it.
+     */
+    case SeatRequestWomenOnly = 'SEAT_REQUEST_WOMEN_ONLY';
+
+    /**
+     * Editing or pausing a saved demand that is no longer live — cancelled or expired (Feature 03
+     * S-4). Save a new one instead.
+     */
+    case CommuteDemandNotEditable = 'COMMUTE_DEMAND_NOT_EDITABLE';
     case RecurringDaysNotOffered = 'BOOKING_RECURRING_DAYS_NOT_OFFERED';
+
+    /**
+     * The beta is cash only (P-4, PAY-01). `online` stays in the enum for when a provider exists,
+     * and is refused until then rather than accepted and never collected.
+     */
+    case PaymentTypeNotAvailable = 'PAYMENT_TYPE_NOT_AVAILABLE';
 
     /*
      * ---- The passenger's two required points (Feature 03 v5 §2) ---------
@@ -215,6 +248,12 @@ enum ErrorCode: string
     case AttendanceDisputeWindowClosed = 'ATTENDANCE_DISPUTE_WINDOW_CLOSED';
     case WaitTimerAlreadyRunning = 'WAIT_TIMER_ALREADY_RUNNING';
     case WaitTimerNotRunning = 'WAIT_TIMER_NOT_RUNNING';
+
+    /**
+     * "I've arrived" from further than `trip.arrival_radius_meters` from THIS passenger's pickup
+     * (TRIP-10). Carries `distanceMeters` so the driver's screen can say how far she still is.
+     */
+    case NotAtPickup = 'NOT_AT_PICKUP';
 
     // ---- Ratings (Phase 10, Chapter 9) ---------------------------------
     case RatingWindowClosed = 'RATING_WINDOW_CLOSED';
@@ -332,7 +371,14 @@ enum ErrorCode: string
             // A conflict, not a validation error: the request is well formed and
             // the seat count is legal — it is the already-booked passengers that
             // make it impossible right now.
-            self::CommuteSeatsConflict => 409,
+            self::CommuteSeatsConflict,
+            // 409: the car's review state refuses it; the request itself is fine.
+            self::VehicleSeatsNotApproved => 409,
+
+            // 422: fixed by offering fewer seats.
+            self::CommuteSeatsExceedApproved,
+            // 422: fixed by choosing cash.
+            self::PaymentTypeNotAvailable => 422,
 
             self::CommuteIncomplete,
             self::CommuteRouteInvalid,
@@ -392,7 +438,13 @@ enum ErrorCode: string
 
             // 403: the account is fine, this particular person may not do this.
             self::CannotBookOwnCommute,
+            // 403: the commute is visible to her and the account is fine — this car is not one
+            // she may ask to ride in.
+            self::SeatRequestWomenOnly,
             self::GroupDriverCannotLeave => 403,
+
+            // 409: a well-formed edit the demand's current state refuses.
+            self::CommuteDemandNotEditable => 409,
 
             /*
              * 409: the same reasoning as the booking group. A driver tapping "start"
@@ -406,7 +458,9 @@ enum ErrorCode: string
             self::TripNotCancellable,
             self::AttendanceNotConfirmable,
             self::WaitTimerAlreadyRunning,
-            self::WaitTimerNotRunning => 409,
+            self::WaitTimerNotRunning,
+            // 409: the request is fine; where the car is right now is not. Drive closer and tap again.
+            self::NotAtPickup => 409,
 
             /*
              * 422 for these two, because both are about WHEN: a run started the night

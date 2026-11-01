@@ -31,9 +31,19 @@ final class ScheduledTripResource extends JsonResource
             // Cast on the outside: `max()` returns the wider of its arguments'
             // types, which the API contract would describe as untyped.
             'seatsAvailable' => (int) max(0, $this->seats_total - $this->seats_taken),
-            // Snapshotted when the day was generated: a later price change does
-            // not move it.
-            'pricePerSeatPiastres' => $this->price_snapshot_piastres,
+            /*
+             * What one seat on this day costs, computed by RAFEEQ and frozen when the day was
+             * generated (P-1, PAY-44): a later settings change does not move it.
+             */
+            'seatPricePiastres' => (int) $this->seat_price_piastres,
+            /*
+             * 🔒 What the driver keeps of each seat — sent ONLY to the commute's own driver, and
+             * absent for everybody else (P-3, PAY-39). The commission rate is never sent.
+             */
+            'driverSharePiastres' => $this->when(
+                SeatPriceView::viewerDrivesCommute($request, $this->commute_offer_id),
+                fn (): int => (int) $this->driver_share_piastres,
+            ),
             'bookingDeadlineAt' => $this->booking_deadline_at?->toIso8601String(),
 
             /*

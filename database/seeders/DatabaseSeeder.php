@@ -27,6 +27,7 @@ use App\Domains\Commute\Models\CommuteRule;
 use App\Domains\Commute\Models\CommuteSchedule;
 use App\Domains\Commute\Models\ScheduledTrip;
 use App\Domains\Commute\Support\DepartureTimeCalculator;
+use App\Domains\Commute\Support\SeatPricing;
 use App\Domains\Driver\Enums\VehicleVerificationStatus;
 use App\Domains\Driver\Models\DriverProfile;
 use App\Domains\Driver\Models\Vehicle;
@@ -393,7 +394,6 @@ class DatabaseSeeder extends Seeder
             'status' => CommuteOfferStatus::Published,
             'direction' => CommuteDirection::ToWork,
             'seats_total' => 3,
-            'price_per_seat_piastres' => 8000,
             'max_detour_minutes' => 10,
             'max_walk_minutes' => 10,
             'audience' => CommuteAudience::WomenOnly,
@@ -425,6 +425,14 @@ class DatabaseSeeder extends Seeder
             )->toColumns(),
             'published_at' => now(),
         ]);
+
+        // The commute's cache of its current automatic price (P-1), as publishing writes it.
+        $quote = SeatPricing::quote((int) $offer->route_distance_meters, $vehicle);
+
+        $offer->forceFill([
+            'seat_price_piastres' => $quote->seatPricePiastres,
+            'driver_share_piastres' => $quote->driverSharePiastres,
+        ])->save();
 
         CommuteLocation::create([
             'commute_offer_id' => $offer->id,
@@ -501,18 +509,26 @@ class DatabaseSeeder extends Seeder
     {
         $tripDate = now()->next('Sunday')->toDateString();
 
-        return ScheduledTrip::create([
+        $trip = new ScheduledTrip;
+
+        $trip->fill([
             'commute_offer_id' => $offer->id,
             'commute_schedule_id' => $schedule->id,
             'trip_date' => $tripDate,
             'departure_at' => DepartureTimeCalculator::toUtc($tripDate, $schedule->departure_time, $schedule->timezone),
             'departure_local' => "{$tripDate} 07:05:00",
             'seats_total' => $offer->seats_total,
-            'seats_taken' => 0,
-            'price_snapshot_piastres' => $offer->price_per_seat_piastres,
-            'status' => ScheduledTripStatus::Scheduled,
             'booking_deadline_at' => now()->parse($tripDate)->subDay()->setTime(21, 0),
         ]);
+
+        // Priced by the same quote the generator uses (P-1); these columns are not fillable.
+        $trip->forceFill([
+            'seats_taken' => 0,
+            'status' => ScheduledTripStatus::Scheduled,
+            ...SeatPricing::quote((int) $offer->route_distance_meters, $offer->vehicle)->toTripColumns(),
+        ])->save();
+
+        return $trip;
     }
 
     private function seedMariamsBooking(User $mariam, CommuteOffer $offer, ScheduledTrip $trip, CommuteGroup $group): void
@@ -561,8 +577,6 @@ class DatabaseSeeder extends Seeder
             'requested_dropoff_source' => PointSource::CustomMap->value,
         ])->save();
 
-        $platformFee = (int) round($trip->price_snapshot_piastres * 0.03);
-
         $booking = Booking::create([
             'scheduled_trip_id' => $trip->id,
             'passenger_user_id' => $mariam->id,
@@ -570,9 +584,9 @@ class DatabaseSeeder extends Seeder
             'commute_group_id' => $group->id,
             'seat_request_id' => $seatRequest->id,
             'seats_reserved' => 1,
-            'price_snapshot_piastres' => $trip->price_snapshot_piastres,
-            'platform_fee_snapshot_piastres' => $platformFee,
-            'driver_amount_snapshot_piastres' => $trip->price_snapshot_piastres - $platformFee,
+            'price_snapshot_piastres' => $trip->seat_price_piastres,
+            'platform_fee_snapshot_piastres' => $trip->commission_piastres,
+            'driver_amount_snapshot_piastres' => $trip->driver_share_piastres,
             'payment_type' => PaymentType::Cash,
             'payment_status' => PaymentStatus::NotDue,
             'status' => BookingStatus::Confirmed,

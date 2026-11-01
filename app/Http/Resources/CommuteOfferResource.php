@@ -4,6 +4,8 @@ namespace App\Http\Resources;
 
 use App\Domains\Commute\Models\CommuteOffer;
 use App\Domains\Commute\Support\CommuteChecklist;
+use App\Domains\Commute\Support\RouteSettings;
+use App\Domains\Shared\ValueObjects\Distance;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
 
@@ -27,10 +29,22 @@ final class CommuteOfferResource extends JsonResource
             'direction' => $this->direction->value,
             'vehicleId' => $this->vehicle_id,
             'seatsTotal' => $this->seats_total,
-            'pricePerSeatPiastres' => $this->price_per_seat_piastres,
+            /*
+             * The seat price RAFEEQ computed from your route and your car (P-1, PAY-42), and what
+             * you keep of it. Read-only, and null on a draft: there is no route length to price
+             * until it is published. Each day carries its own frozen price — see `upcomingTrips`.
+             */
+            'seatPricePiastres' => $this->seat_price_piastres,
+            // 🔒 Only to the commute's own driver: this shape is also embedded in a group, which
+            // passengers read (P-3, PAY-39).
+            'driverSharePiastres' => $this->when(
+                SeatPriceView::viewerDrives($request, $this->driver_profile_id),
+                fn (): ?int => $this->driver_share_piastres,
+            ),
             'currency' => $this->currency,
-            'maxDetourMinutes' => $this->max_detour_minutes,
-            'maxWalkMinutes' => $this->max_walk_minutes,
+            // RAFEEQ's limits for every commute, not the driver's (C-1, COM-31). Read-only.
+            'maxDetourMinutes' => RouteSettings::maxTripDetourMinutes(),
+            'maxWalkMinutes' => Distance::fromMetres(RouteSettings::matchRadiusMeters())->asWalkTime()->minutes,
             'audience' => $this->audience->value,
             'minTrustLevel' => $this->min_trust_level,
             'allowsCustomPickup' => $this->allows_custom_pickup,

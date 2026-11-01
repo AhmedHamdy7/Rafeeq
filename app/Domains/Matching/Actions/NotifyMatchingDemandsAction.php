@@ -6,6 +6,7 @@ use App\Domains\Commute\Models\CommuteOffer;
 use App\Domains\Matching\Enums\CommuteDemandStatus;
 use App\Domains\Matching\Models\CommuteDemand;
 use App\Domains\Matching\Models\MatchNotification;
+use App\Domains\Matching\Support\HardFilters;
 use App\Domains\Matching\Support\MatchResult;
 use App\Domains\Matching\Support\SearchCriteria;
 use App\Domains\Notification\Enums\NotificationType;
@@ -119,6 +120,14 @@ final readonly class NotifyMatchingDemandsAction
      */
     private function bestMatchFor(CommuteDemand $demand, CommuteOffer $offer): ?MatchResult
     {
+        /*
+         * Search shows women-only commutes to everybody now (Feature 03 C-11), but an alert is an
+         * invitation to ask for a seat — so it goes only to somebody who may ask on this one.
+         */
+        if (! HardFilters::mayJoinAudience($demand->passenger, $offer)) {
+            return null;
+        }
+
         foreach ($this->search->execute($demand->passenger, self::criteriaFor($demand)) as $result) {
             if ($result->offer->id === $offer->id) {
                 return $result;
@@ -143,7 +152,6 @@ final readonly class NotifyMatchingDemandsAction
             maxWalk: WalkTime::fromMinutes($demand->max_walk_minutes),
             maxDetourMinutes: $demand->max_detour_minutes,
             audiencePreference: $demand->audience_preference,
-            budgetMonthlyPiastres: $demand->budget_monthly_piastres,
             flexibilityMinutes: $demand->flexibility_minutes,
             wantsReturnTrip: $demand->wants_return_trip,
         );

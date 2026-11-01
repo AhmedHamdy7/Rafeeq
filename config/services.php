@@ -41,6 +41,15 @@ return [
         'project_id' => env('FIREBASE_PROJECT_ID'),
     ],
 
+    /*
+     * Google Maps Platform — the Routes API behind `RAFEEQ_GEO_ENGINE=google`
+     * (`GoogleRoutesGeoEngine`). Restrict the key to the Routes API and to the server's IPs:
+     * it is billed per call.
+     */
+    'google_maps' => [
+        'key' => env('GOOGLE_MAPS_API_KEY'),
+    ],
+
     'slack' => [
         'notifications' => [
             'bot_user_oauth_token' => env('SLACK_BOT_USER_OAUTH_TOKEN'),

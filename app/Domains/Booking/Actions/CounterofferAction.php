@@ -142,11 +142,12 @@ final readonly class CounterofferAction
                 'counteroffer_dropoff_label' => $dropoffMoved ? $dropoffLabel : null,
 
                 /*
-                 * The clock restarts, as it does when a driver waitlists somebody: the 48 hours the
-                 * request had were for the driver to answer, and she just did. Expiring it on the
-                 * old deadline would close a conversation the passenger had minutes to join.
+                 * No deadline (Feature 03 R-4): a counteroffer stays open until she accepts or
+                 * declines it, or — for one day — the day passes. Cleared rather than left, so a
+                 * during-ride request the driver countered is not closed on its three minutes
+                 * while she is reading his proposal.
                  */
-                'expires_at' => now()->addHours((int) config('rafeeq.booking.request_expiry_hours')),
+                'expires_at' => null,
             ])->save();
 
             Notifier::send($request->passenger, NotificationType::SeatCounteroffered, params: [

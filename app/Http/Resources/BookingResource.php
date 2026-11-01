@@ -22,8 +22,10 @@ use Illuminate\Http\Resources\Json\JsonResource;
  * hundred metres, which is enough to show the right neighbourhood on a map and not
  * enough to knock on a door.
  *
- * The money is shown broken into its three frozen parts, because a passenger is
- * entitled to see what they are paying and what of it reaches the driver.
+ * 🔒 The money depends on who is looking (P-3, PAY-39). The passenger is sent the
+ * seat price and her total — nothing else. The commute's driver is sent those and
+ * the share he keeps. Nobody is sent RAFEEQ's commission or its rate: the app is
+ * public, so a figure in a passenger payload is a figure anybody can read.
  *
  * @mixin Booking
  */
@@ -60,13 +62,25 @@ final class BookingResource extends JsonResource
             'boardingCode' => $this->boarding_code,
 
             /*
-             * Frozen at approval and never recomputed. A driver raising their price
-             * tomorrow, or the platform changing its percentage, moves nothing here.
+             * Frozen at approval from the day's own automatic price (PAY-44) and never
+             * recomputed: an admin moving a rate tomorrow moves nothing here.
+             *
+             * - `seatPricePiastres`: one seat. `totalPiastres`: what she pays, seat × seats.
+             * - `driverSharePiastres` / `driverShareTotalPiastres`: what the driver keeps, per
+             *   seat and in all — 🔒 present ONLY for the commute's own driver.
              */
             'price' => [
-                'totalPiastres' => $this->price_snapshot_piastres,
-                'platformFeePiastres' => $this->platform_fee_snapshot_piastres,
-                'driverAmountPiastres' => $this->driver_amount_snapshot_piastres,
+                // Exact: the total was written as seat price × seats.
+                'seatPricePiastres' => intdiv((int) $this->price_snapshot_piastres, max(1, (int) $this->seats_reserved)),
+                'totalPiastres' => (int) $this->price_snapshot_piastres,
+                'driverSharePiastres' => $this->when(
+                    SeatPriceView::viewerDrives($request, $this->driver_profile_id),
+                    fn (): int => intdiv((int) $this->driver_amount_snapshot_piastres, max(1, (int) $this->seats_reserved)),
+                ),
+                'driverShareTotalPiastres' => $this->when(
+                    SeatPriceView::viewerDrives($request, $this->driver_profile_id),
+                    fn (): int => (int) $this->driver_amount_snapshot_piastres,
+                ),
             ],
 
             'paymentType' => $this->payment_type->value,

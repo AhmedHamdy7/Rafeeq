@@ -133,7 +133,7 @@ final readonly class RequestedPoints
          * pass a limit the two together break.
          */
         $detour = PickupDetour::measureAll($geo, $offer, [$pickup, $dropoff]);
-        $detour->assertWithin((int) $offer->max_detour_minutes);
+        $detour->assertWithin();
 
         return $detour;
     }

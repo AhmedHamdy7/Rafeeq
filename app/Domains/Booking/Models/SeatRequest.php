@@ -6,6 +6,7 @@ use App\Domains\Booking\Enums\MeetingPreference;
 use App\Domains\Booking\Enums\PaymentType;
 use App\Domains\Booking\Enums\PointSource;
 use App\Domains\Booking\Enums\SeatRequestCommitment;
+use App\Domains\Booking\Enums\SeatRequestKind;
 use App\Domains\Booking\Enums\SeatRequestStatus;
 use App\Domains\Commute\Models\CommuteLocation;
 use App\Domains\Commute\Models\CommuteOffer;
@@ -35,6 +36,13 @@ class SeatRequest extends Model
     {
         return [
             'commitment' => SeatRequestCommitment::class,
+
+            /*
+             * What she is asking for — a seat, or a place on the waiting list (Feature 03 R-1/R-2).
+             * Not fillable: the server decides it from the day's seats and her other bookings, and
+             * moves it one way only. See {@see SeatRequestKind}.
+             */
+            'kind' => SeatRequestKind::class,
 
             /*
              * Whether she asked to join a run that was already moving (Feature 03 v5 §416). Set at
@@ -90,6 +98,14 @@ class SeatRequest extends Model
             // Set when the platform took her seat away and put her back on the list — a paused
             // commute or a replaced vehicle. Null for everybody who joined by asking.
             'displaced_at' => 'datetime',
+
+            /*
+             * Her own pause (Feature 03 R-7, BOOK-32): set on her waiting-list place while she has
+             * stepped away. `paused_until` null with `paused_at` set means "no end date". While
+             * paused she is offered nothing and keeps her place in the queue.
+             */
+            'paused_at' => 'datetime',
+            'paused_until' => 'date',
             'responded_at' => 'datetime',
             'expires_at' => 'datetime',
         ];
@@ -162,6 +178,11 @@ class SeatRequest extends Model
     public function pickupPointRequests(): HasMany
     {
         return $this->hasMany(PickupPointRequest::class);
+    }
+
+    public function isWaitlistApplication(): bool
+    {
+        return $this->kind === SeatRequestKind::WaitlistApplication;
     }
 
     public function isPending(): bool

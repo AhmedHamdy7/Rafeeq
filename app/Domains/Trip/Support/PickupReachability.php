@@ -4,6 +4,7 @@ namespace App\Domains\Trip\Support;
 
 use App\Domains\Commute\Enums\CommuteLocationType;
 use App\Domains\Commute\Models\ScheduledTrip;
+use App\Domains\Commute\Support\RouteSettings;
 use App\Domains\Geo\Contracts\GeoQueryEngine;
 use App\Domains\Geo\ValueObjects\Route;
 use App\Domains\Shared\Exceptions\DomainException;
@@ -31,8 +32,8 @@ use App\Domains\Trip\Models\TripSession;
  *    needed to order stops by road position rather than by naive pairing.
  * 2. **Would collecting her break what the people already aboard were promised?** Answered by
  *    measuring the detour against the slack left before the promised arrival. No promise means
- *    nothing to break, and then the driver's own `max_detour_minutes` is the limit — the number she
- *    chose to say how far out of her way she will go.
+ *    nothing to break, and then RAFEEQ's whole-trip detour cap is the limit (C-1, COM-31 — it used
+ *    to be the driver's own `max_detour_minutes`).
  *
  * ⚠️ **What it deliberately does NOT do is invent a time limit.** v5 says "no fixed offer expiry"
  * twice, and the temptation here is a rule like "unreachable thirty minutes after departure"
@@ -123,8 +124,8 @@ final readonly class PickupReachability
             return $detourMinutes <= $slack ? null : 'would_break_promise';
         }
 
-        // No promised arrival to protect, so the driver's own tolerance is the limit.
-        return $detourMinutes <= (int) $trip->commuteOffer?->max_detour_minutes
+        // No promised arrival to protect, so the platform's whole-trip cap is the limit (C-1).
+        return $detourMinutes <= RouteSettings::maxTripDetourMinutes()
             ? null
             : 'detour_too_long';
     }

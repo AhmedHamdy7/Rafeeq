@@ -213,10 +213,16 @@ it('says nothing while the driver is still collecting people', function () {
 });
 
 it('says nothing at a pickup either', function () {
+    $paxToken = verifiedPassenger('01112223344');
+    $bookingId = approveSeat($this->driverToken, requestSeat($paxToken, $this->commuteId, [
+        'scheduledTripId' => $this->tripId,
+    ])->assertStatus(201)->json('data.id'));
+
     underway($this->driverToken, $this->tripId);
 
     test()->withToken($this->driverToken)
-        ->postJson("/api/v1/trips/{$this->tripId}/status", ['status' => 'AT_PICKUP'])->assertOk();
+        ->postJson("/api/v1/trips/{$this->tripId}/status", ['status' => 'AT_PICKUP', 'bookingId' => $bookingId, ...atPickupOf($bookingId)])
+        ->assertOk();
 
     reportPosition($this->driverToken, $this->tripId, [position(lat: 30.4000, lng: 31.2314)])->assertOk();
 

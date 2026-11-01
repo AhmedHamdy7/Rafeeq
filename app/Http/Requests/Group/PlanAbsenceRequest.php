@@ -30,15 +30,15 @@ final class PlanAbsenceRequest extends FormRequest
             // The first day you will be away.
             'fromDate' => ['required', 'date_format:Y-m-d'],
 
-            // The last day you will be away. The same date as `fromDate` for a
-            // single day.
-            'toDate' => ['required', 'date_format:Y-m-d', 'after_or_equal:fromDate'],
+            // The last day you will be away — the same date as `fromDate` for a single day, at
+            // most a month after it. Leave it out for a pause with no end date (R-7).
+            'toDate' => ['nullable', 'date_format:Y-m-d', 'after_or_equal:fromDate'],
 
             // Why, if you want the group to know. Optional.
             'reason' => ['nullable', 'string', 'max:255'],
 
-            // Whether somebody else may have your seat on those days. Your seat
-            // stays yours unless you say so.
+            // Ignored: a pause always gives your seat to the waiting list and puts you on that
+            // list yourself, with no guaranteed return (R-7). Kept so older apps still work.
             'releasesSeat' => ['nullable', 'boolean'],
         ];
     }

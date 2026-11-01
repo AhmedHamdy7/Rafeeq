@@ -204,6 +204,13 @@ Route::prefix('v1')->group(function (): void {
              */
             Route::post('initial-role', [OnboardingController::class, 'storeInitialRole'])
                 ->middleware('profile.complete');
+
+            /*
+             * "Become a driver" later, on the same account (F1-7, F2-10; decision E6). Same gate as
+             * the role step it extends; idempotent, and no OTP — the person is already signed in.
+             */
+            Route::post('capabilities/driver', [OnboardingController::class, 'addDriverCapability'])
+                ->middleware('profile.complete');
         });
     });
 
@@ -268,11 +275,10 @@ Route::prefix('v1')->group(function (): void {
             Route::put('{commute}/schedule', [CommuteController::class, 'saveSchedule']);
 
             /*
-             * "The fair suggested price" (ERD §23.3) — what the journey costs to drive,
-             * split by the assumed occupancy. Advice beside the slider on screen 24, not
-             * a rule: validation still accepts anything between the bounds.
+             * The seat price RAFEEQ computes (P-1, PAY-42), read-only. It replaced the old
+             * `price-suggestion` slider when the driver stopped choosing the price (D-0016).
              */
-            Route::get('{commute}/price-suggestion', [CommuteController::class, 'priceSuggestion']);
+            Route::get('{commute}/price', [CommuteController::class, 'price']);
 
             Route::post('{commute}/publish', [CommuteController::class, 'publish']);
             Route::post('{commute}/pause', [CommuteController::class, 'pause']);
@@ -454,6 +460,8 @@ Route::prefix('v1')->group(function (): void {
         Route::get('search/commutes', [SearchController::class, 'commutes']);
 
         Route::get('commute-demands', [CommuteDemandController::class, 'index']);
+        // Edit it, or pause / resume it (S-4, BOOK-06).
+        Route::patch('commute-demands/{demand}', [CommuteDemandController::class, 'update']);
         Route::post('commute-demands', [CommuteDemandController::class, 'store']);
         Route::delete('commute-demands/{demand}', [CommuteDemandController::class, 'destroy']);
 
@@ -807,7 +815,6 @@ Route::prefix('v1')->group(function (): void {
          */
         Route::get('trips/{trip}/wait-timers', [WaitTimerController::class, 'index']);
         Route::post('trips/{trip}/wait-timers', [WaitTimerController::class, 'store']);
-        Route::post('trips/{trip}/wait-timers/{timer}/extend', [WaitTimerController::class, 'extend']);
 
         /*
          * Where the car is (Chapter 8, Live Location).

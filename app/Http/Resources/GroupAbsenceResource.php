@@ -24,7 +24,8 @@ final class GroupAbsenceResource extends JsonResource
         return [
             'id' => $this->id,
             'fromDate' => $this->from_date->toDateString(),
-            'toDate' => $this->to_date->toDateString(),
+            // Null: a pause with no end date (R-7).
+            'toDate' => $this->to_date?->toDateString(),
             'reason' => $this->reason,
             // Whether the seat went back on offer for those days.
             'releasesSeat' => $this->releases_seat,

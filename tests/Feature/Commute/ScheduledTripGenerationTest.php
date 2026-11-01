@@ -35,7 +35,8 @@ function publishedOffer(array $overrides = []): CommuteOffer
     return CommuteOffer::factory()->create(array_merge([
         'status' => CommuteOfferStatus::Published->value,
         'seats_total' => 3,
-        'price_per_seat_piastres' => 8000,
+        // PAY-42's reference journey: 40 km in a Standard 3-seat car is a 110 EGP seat.
+        'route_distance_meters' => 40_000,
     ], $overrides));
 }
 
@@ -191,8 +192,8 @@ it('keeps the same local departure time across the autumn transition too', funct
         ->and($winter->departure_at->format('H:i'))->toBe('05:05');
 });
 
-it('snapshots the seats and price so a later change cannot move a booked day', function () {
-    $offer = publishedOffer(['seats_total' => 3, 'price_per_seat_piastres' => 8000]);
+it('snapshots the seats and the automatic price so a later change cannot move a booked day', function () {
+    $offer = publishedOffer(['seats_total' => 3]);
     scheduleFor($offer, ['days_mask' => 127]);
 
     app(GenerateScheduledTripsAction::class)->execute($offer->refresh());
@@ -200,12 +201,39 @@ it('snapshots the seats and price so a later change cannot move a booked day', f
     $trip = ScheduledTrip::orderBy('trip_date')->first();
 
     expect($trip->seats_total)->toBe(3)
-        ->and($trip->price_snapshot_piastres)->toBe(8000);
+        ->and($trip->seat_price_piastres)->toBe(11_000)
+        ->and($trip->driver_share_piastres)->toBe(10_000)
+        ->and($trip->commission_piastres)->toBe(1_000);
 
-    // The offer changes; the day already generated does not.
-    $offer->forceFill(['price_per_seat_piastres' => 12000])->save();
+    // P-5, PAY-44: the launch moves the commission to 15%; the day already generated does not move.
+    setPlatformSetting('pricing.commission_rate_percent', 15);
 
-    expect($trip->refresh()->price_snapshot_piastres)->toBe(8000);
+    expect($trip->refresh()->seat_price_piastres)->toBe(11_000)
+        ->and($trip->pricing_commission_rate_percent)->toBe(10);
+
+    // …and the next days generated are priced at the new rate: 100 + 15 = 115.
+    $later = publishedOffer(['seats_total' => 3]);
+    scheduleFor($later, ['days_mask' => 127]);
+
+    app(GenerateScheduledTripsAction::class)->execute($later->refresh());
+
+    $new = ScheduledTrip::query()->where('commute_offer_id', $later->id)->orderBy('trip_date')->first();
+
+    expect($new->seat_price_piastres)->toBe(11_500)
+        ->and($new->pricing_commission_rate_percent)->toBe(15);
+});
+
+/** The database refuses a day whose three figures do not add up, as `bookings` does its own. */
+it('refuses a day whose seat price is not the share plus the commission', function () {
+    $offer = publishedOffer();
+    scheduleFor($offer, ['days_mask' => 127]);
+
+    app(GenerateScheduledTripsAction::class)->execute($offer->refresh());
+
+    $trip = ScheduledTrip::orderBy('trip_date')->first();
+
+    expect(fn () => $trip->forceFill(['commission_piastres' => 1])->save())
+        ->toThrow(QueryException::class);
 });
 
 it('sets a booking deadline the evening before, in the driver timezone', function () {

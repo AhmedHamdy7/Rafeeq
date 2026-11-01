@@ -8,6 +8,7 @@ use App\Domains\Booking\Models\PickupPointRequest;
 use App\Domains\Booking\Models\SeatRequest;
 use App\Domains\Booking\Support\PickupDetour;
 use App\Domains\Commute\Models\CommuteOffer;
+use App\Domains\Commute\Support\RouteSettings;
 use App\Domains\Geo\Contracts\GeoQueryEngine;
 use App\Domains\Geo\Models\Place;
 use App\Domains\Group\Models\CommuteGroup;
@@ -126,7 +127,7 @@ final class PickupPointRequestController extends Controller
             $runTotals[$offer->id] ??= PickupDetour::runTotalFor($geo, $offer);
 
             $cards[] = (new PickupPointRequestResource($pickup))->withDetourContext(
-                $offer->max_detour_minutes,
+                RouteSettings::maxTripDetourMinutes(),
                 // The request's own cost is included, because the driver is deciding
                 // whether to ADD it: screen 29 asks "does this keep me within my limit".
                 round($runTotals[$offer->id] + (float) $pickup->added_minutes, 1),

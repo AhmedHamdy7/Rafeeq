@@ -181,6 +181,13 @@ enum NotificationType: string
     case CommutePausedSeatCancelled = 'commute_paused_seat_cancelled';
 
     /**
+     * Her confirmed seats were cancelled because the driver deleted the commute (Feature 03 C-8,
+     * COM-35). Every upcoming day goes, and unlike a pause she is NOT on a waiting list — there is
+     * no commute left — so the wording points her to look for another one.
+     */
+    case CommuteDeletedSeatCancelled = 'commute_deleted_seat_cancelled';
+
+    /**
      * The driver picked her off the waiting list and offered her seats (Feature 03 v5's explicit
      * exception to the automatic fan-out, used when a commute resumes).
      *
@@ -279,8 +286,8 @@ enum NotificationType: string
     /**
      * The driver says she is at this passenger's meeting point, and the grace has started.
      *
-     * Sent from one method, {@see DriverArrivalNotice}, so the per-passenger arrival that
-     * replaces today's wait-timer path calls the same code and says the same words.
+     * Sent from one method, {@see DriverArrivalNotice}, when the driver's GPS-checked arrival at her
+     * pickup starts her grace (TRIP-10).
      */
     case DriverArrived = 'driver_arrived';
 
@@ -307,6 +314,13 @@ enum NotificationType: string
     /** Her driving licence expires inside the warning window (PROF-15's "Expiring"). Once per expiry date. */
     case LicenceExpiring = 'licence_expiring';
 
+    /**
+     * To the driver: RAFEEQ moved his departure for one day because a rider joined or left
+     * (C-2, COM-15) — "Leave at 07:10 on 2026-11-03". Only on days where he gave an arrival time
+     * and not a fixed departure, and never inside the 16-hour lock.
+     */
+    case DepartureTimeChanged = 'departure_time_changed';
+
     public function category(): NotificationCategory
     {
         return match ($this) {
@@ -325,6 +339,7 @@ enum NotificationType: string
             self::BookingCancelled,
             self::SeatOffered,
             self::CommutePausedSeatCancelled,
+            self::CommuteDeletedSeatCancelled,
             self::VehicleReplacedSeatCancelled,
             self::SeatsOfferedByDriver,
             self::SeatCounteroffered,
@@ -335,6 +350,7 @@ enum NotificationType: string
             self::ChangeProposalRejected,
             self::WaitlistClearedByChange,
             self::TripDayCancelled,
+            self::DepartureTimeChanged,
             self::MatchFound => NotificationCategory::Booking,
 
             self::TripStarted,
