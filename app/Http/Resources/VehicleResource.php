@@ -55,7 +55,8 @@ final class VehicleResource extends JsonResource
             'tier' => $this->tierOrDefault()->value,
             // Air conditioning, as checked by the reviewer.
             'hasAc' => (bool) $this->has_ac,
-            'transmission' => $this->transmission,
+            // `manual` · `automatic` · null (F2-5).
+            'transmission' => $this->transmission?->value,
             'fuelType' => $this->fuel_type?->value,
             'isActive' => $this->is_active,
             'status' => strtoupper($this->verification_status->value),

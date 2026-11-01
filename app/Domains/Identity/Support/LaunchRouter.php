@@ -2,7 +2,6 @@
 
 namespace App\Domains\Identity\Support;
 
-use App\Domains\Identity\Enums\AccountStatus;
 use App\Domains\Identity\Enums\NextStep;
 use App\Domains\Identity\Enums\ProfileStatus;
 use App\Domains\Identity\Models\Device;
@@ -39,15 +38,15 @@ final class LaunchRouter
     {
         return match (true) {
             /*
-             * 🔒 Outranks everything. A restricted account must never be routed Home whatever else
+             * 🔒 Outranks everything. A banned account must never be routed Home whatever else
              * is true about it.
              *
-             * ⚠️ Today this reads `account_status`, which is all-or-nothing. v3 splits restriction
-             * into ACCOUNT and DRIVER scope, and a DRIVER-scope restriction must route Home with
-             * full passenger access — so when `account_restrictions` lands, this line narrows to
-             * the ACCOUNT scope rather than growing a second case.
+             * 🔴 Only a PERMANENT ban (AUTH-19, D-0018, follow-up F1-3). A suspension stays in the
+             * app: it falls through to the steps below and normally lands on `HOME`, where the
+             * app shows the banner from `user.suspension` with Appeal, and every write is refused
+             * by `account.active` with `ACCOUNT_SUSPENDED`.
              */
-            $user->account_status === AccountStatus::Suspended => NextStep::RestrictedAccount,
+            $user->isBanned() => NextStep::RestrictedAccount,
 
             /*
              * An unfinished profile is resumed, never skipped. v3 §5 extends this: once the initial
@@ -88,7 +87,7 @@ final class LaunchRouter
     public static function nextStepAfterBasicProfile(User $user): NextStep
     {
         return match (true) {
-            $user->account_status === AccountStatus::Suspended => NextStep::RestrictedAccount,
+            $user->isBanned() => NextStep::RestrictedAccount,
 
             // Still incomplete after a successful save means the save did not include everything,
             // so the person stays where she is rather than being advanced past a gap.

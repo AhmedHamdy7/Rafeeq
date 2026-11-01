@@ -26,6 +26,8 @@ enum ErrorCode: string
     case OtpInvalid = 'AUTH_OTP_INVALID';
     case OtpExpired = 'AUTH_OTP_EXPIRED';
     case OtpMaxAttempts = 'AUTH_OTP_MAX_ATTEMPTS';
+    // AUTH-08: the number is locked for this purpose until `fields.lockedUntil`.
+    case OtpLocked = 'AUTH_OTP_LOCKED';
     case OtpResendCooldown = 'AUTH_OTP_RESEND_COOLDOWN';
     case OtpMaxResends = 'AUTH_OTP_MAX_RESENDS';
     case OtpDeliveryFailed = 'AUTH_OTP_DELIVERY_FAILED';
@@ -295,6 +297,8 @@ enum ErrorCode: string
     case RidingSuspendedForDebt = 'RIDING_SUSPENDED_FOR_DEBT';
     // Dashboard only: the appeal was already decided, or was never made.
     case FeeAppealNotOpen = 'FEE_APPEAL_NOT_OPEN';
+    // Dashboard only: the suspension appeal was already decided (F1-3).
+    case SuspensionAppealNotOpen = 'SUSPENSION_APPEAL_NOT_OPEN';
     // The early-drop question was not asked on this booking, or she already answered (TRIP-20).
     case EarlyDropNotAsked = 'EARLY_DROP_NOT_ASKED';
 
@@ -350,6 +354,7 @@ enum ErrorCode: string
             self::OtpChallengeNotFound => 404,
             self::PhoneInvalid => 422,
             self::OtpMaxAttempts,
+            self::OtpLocked,
             self::OtpResendCooldown,
             self::OtpMaxResends => 429,
             self::OtpDeliveryFailed => 503,
@@ -582,6 +587,7 @@ enum ErrorCode: string
             self::DebtPaymentNotPending,
             self::CouponNotAllowed,
             self::FeeAppealNotOpen,
+            self::SuspensionAppealNotOpen,
             self::EarlyDropNotAsked => 409,
         };
     }

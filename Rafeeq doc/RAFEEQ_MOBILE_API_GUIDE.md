@@ -14,7 +14,7 @@
 >
 > **Base URL:** `{host}/api/v1` · **Auth:** bearer token · **Format:** JSON only.
 
-**Last updated:** 2026-11-01 · **183 endpoints live** · Phases 0–7, 9 and 11 complete · 10, 12 and 13 all but a decision each
+**Last updated:** 2026-11-01 · **184 endpoints live** · Phases 0–7, 9 and 11 complete · 10, 12 and 13 all but a decision each
 
 ---
 
@@ -22,7 +22,7 @@
 
 ### What is ready
 
-**183 endpoints live** and tested, across the 47 designed screens:
+**184 endpoints live** and tested, across the 47 designed screens:
 
 | | Count | Covers |
 |---|---|---|
@@ -301,7 +301,7 @@ order of precedence:
 | `nextStep` | Show | Why it outranks what follows |
 |---|---|---|
 | `PHONE_OTP` | Screen 5 | No usable session. Returned by refresh when the token is dead, so you have one vocabulary for "go back to the phone screen" rather than inferring it from a 401. |
-| `RESTRICTED_ACCOUNT` | Screen 35 | A restricted account must never be routed home, whatever else is true. 🔴 This is the **whole account**. A **driver-only** restriction does NOT return this — that person goes `HOME` with full passenger access, and you detect it from `GET /driver/eligibility`, which returns the `driver_suspended` blocker with a message and `nextStep: CONTACT_SUPPORT`. Her commutes also stop appearing in search, and publishing answers `403`. |
+| `RESTRICTED_ACCOUNT` | Screen 35 | A **permanently banned** account must never be routed home, whatever else is true. 🔴 **Only a ban** (AUTH-19, F1-3): a **suspension** routes like any other account — normally `HOME` — and you show the suspension banner from `user.suspension` (`permanent: false`) with **Appeal**; her trips are readable and every write answers `403 ACCOUNT_SUSPENDED`. A **driver-only** restriction does NOT return this — that person goes `HOME` with full passenger access, and you detect it from `GET /driver/eligibility`, which returns the `driver_suspended` blocker with a message and `nextStep: CONTACT_SUPPORT`. Her commutes also stop appearing in search, and publishing answers `403`. |
 | `BASIC_PROFILE` | Screen 7, then 8 | The profile is unfinished **or no role has been chosen yet**, so it is resumed — never skipped. See the warning below: this is the answer even when the profile looks complete. |
 | `ROLE_SELECTION` | Screen 8 | Passenger / Driver / Both. 🔴 Returned by `PUT /account/profile/basic` **and by nothing else** — see below. |
 | `HOME` | Screen 9 | Nothing is outstanding. Read `user.capabilities` and `activeMode` to pick which home. |
@@ -581,7 +581,7 @@ Status: ✅ fully served · ⚠️ served, something named missing · ⛔ no API
 | 4 | ~~Forgot PIN~~ | — | 🔴 **Removed from the MVP** (v3). `purpose=pin_reset` is now a `422`. |
 | 5 | Phone | `POST /auth/otp/request` | ✅ |
 | 6 | OTP | `POST /auth/otp/verify` | ✅ Drive the countdown from `resendAvailableInSeconds`, and on 429 from `Retry-After`. |
-| 7 | Basic profile | `PUT /account/profile/basic` | ✅ **Send `firstName` + `lastName`** (or `fullName` — both work). `lastName` optional. ⚠️ Two things still differ from your screen: it collects **workplace/university in this step** where we have a separate verification endpoint (section 8), and it offers **Woman/Man only** while the API also accepts `prefer_not_to_say` — see the note below. |
+| 7 | Basic profile | `PUT /account/profile/basic` | ✅ **Send `firstName` + `lastName`** (or `fullName` — both work). `lastName` optional. ⚠️ One thing still differs from your screen: it collects **workplace/university in this step** where we have a separate verification endpoint (section 8). Gender is **Woman/Man only** on both sides now (F1-2). |
 | 8 | Role | `POST /account/initial-role` | ✅ **Now its own endpoint** (v3). Reached when `PUT /account/profile/basic` answers `nextStep: ROLE_SELECTION` — which happens when you omit `registeredRole`. Keep sending it in step 7 and this screen is skipped, exactly as today. |
 | — | Onboarding recovery | `GET /account/onboarding-state` | ✅ Not a screen — call it at launch to find out which of 5–9 to open after an interrupted sign-up. |
 
@@ -699,6 +699,7 @@ fails if this list and the running routes ever disagree in either direction.
 | `GET /account/stats` | 4.2 Account, devices, consents |
 | `GET /account/reliability` | 4.2 Account, devices, consents |
 | `POST /account/reliability/events/{event}/appeal` | 4.2 Account, devices, consents |
+| `POST /account/suspension/appeal` | 4.2 Account, devices, consents |
 | `GET /account/warnings` | 4.2 Account, devices, consents |
 | `POST /account/warnings/{warning}/dispute` | 4.2 Account, devices, consents |
 | `GET /users/{user}/public-profile` | 4.2 Account, devices, consents |
@@ -886,9 +887,23 @@ Send a code. **This is also registration** — a number nobody has used before g
 | Response field | Meaning |
 |---|---|
 | `challengeId` | Pass this back to `/verify`. Not a secret, but single-purpose. |
-| `expiresInSeconds` | How long the code is valid. Show a countdown. |
+| `expiresInSeconds` | How long the code is valid (300 today, tunable). Show a countdown. |
 | `resendAvailableInSeconds` | Do not enable "resend" before this elapses — it will 429. |
 | `maskedPhone` | `+2010****678`. Safe to display; confirms we read the number they meant. |
+
+🔒 **The OTP lock (AUTH-07, AUTH-08).** A code lives **5 minutes** and takes **3 wrong tries**. The
+third wrong code locks **the number** for **5 minutes** — on every challenge, so a new code does not
+reset it. While locked, both `/request` and `/verify` answer **`429 AUTH_OTP_LOCKED`** with
+`Retry-After` and `error.fields.lockedUntil` (one UTC instant):
+
+```json
+{ "success": false, "error": { "code": "AUTH_OTP_LOCKED",
+  "message": "Too many incorrect codes. You can try again in a few minutes.",
+  "fields": { "lockedUntil": ["2026-11-01T18:05:00Z"] } } }
+```
+
+Show a countdown to `lockedUntil` and disable both "verify" and "resend" until it passes. All three
+numbers are admin settings, so read them from the response, never hard-code them.
 
 #### `POST /auth/otp/verify` — public
 
@@ -1005,7 +1020,7 @@ Put this URL in the Play Console data-safety form.
 | `fullName` | **required unless you send `firstName`** | Arabic or Latin letters; spaces, `-`, `'`, `.` allowed; at least one letter. Length bounds are a platform setting. |
 | `firstName` | **required unless you send `fullName`** | ✅ **The design collects two fields, and this is the one.** Also what other members see — your screen says so: *"Only your first name and photo are shown to other members."* |
 | `lastName` | optional | Optional **even when sending `firstName`**, because a single name is a real name: somebody called only `Sara` must be able to finish signing up. |
-| `gender` | required | `woman` · `man` · `prefer_not_to_say`. 🔒 Never returned by any endpoint. ⚠️ **Your screen offers Woman/Man only.** The third value is kept server-side on purpose: `prefer_not_to_say` is a real answer, and it is **not** the same as "not answered" — a half-registered woman with an unknown gender would be silently excluded from women-only commutes. If the screen will never send it, nothing breaks; existing accounts that hold it keep working. |
+| `gender` | required | `woman` · `man` (AUTH-10). 🔒 Never returned by any endpoint. 🔴 **`prefer_not_to_say` is now a `422`** (F1-2). Accounts that already hold it keep working, but they are **not** women for the women-only rule: a seat request on a women-only commute answers `403 SEAT_REQUEST_WOMEN_ONLY` with **`error.fields.reason: ["GENDER_NOT_SET"]`**. On that reason, show the Woman / Man picker and send this endpoint again with the same name and the new `gender` (omit `registeredRole`). Nothing maps the old value to either answer for her. |
 | `registeredRole` | **optional** | `driver` · `passenger` · `both`. 🔴 Was required. Send it to finish in one step and go straight to `HOME`; omit it and the response answers `nextStep: ROLE_SELECTION`, which you satisfy with `POST /account/initial-role`. Both paths are supported — nothing breaks if you keep sending it. |
 | `dateOfBirth` | optional | **`YYYY-MM-DD`** only. Must make the person at least the minimum age (18 today — a platform setting, do not hard-code it) and no more than 120. |
 | `publicFirstName` | optional | Up to 50 characters. Defaults to the first word of `fullName`. |
@@ -1274,6 +1289,31 @@ It is gone rather than computed: a single rate conflates a driver calling off a 
 passenger not turning up, which is the exact conflation the two scores above keep apart. This
 endpoint is the measure that exists.
 
+#### `POST /account/suspension/appeal` — signed-in, while suspended
+
+🔴 **The Appeal button on the suspension banner (AUTH-19, D-0018, F1-3).** A suspension now keeps
+her in the app: `nextStep` is `HOME`, `user.suspension.permanent` is `false`, her trips are
+**read-only** (every `GET` works, every write answers `403 ACCOUNT_SUSPENDED`) and **every upcoming
+seat was cancelled** when staff suspended her — inside the 16-hour lock too, no fee for anybody.
+As a driver, every published commute was paused (`pausedReason: account_suspended`); lifting the
+hold gives none of it back, she resumes herself. Only a **permanent ban** keeps the full Account
+restricted screen (`RESTRICTED_ACCOUNT`, `permanent: true`), with every endpoint behind
+`account.active` closed, reads included.
+
+**Request:** `message` (required, 10–1000 characters, her side of it) and `evidence` (optional,
+≤ 2000 — a description, a reference number). **Answer `201`:**
+
+```json
+{ "success": true, "data": { "id": "01J…", "attempt": 1, "status": "pending",
+  "createdAt": "2026-11-01T18:00:00+00:00", "resolvedAt": null } }
+```
+
+| | |
+|---|---|
+| The rule | **One appeal within 48 hours** of the hold. If it is turned down (`upheld`), **one more, only with new `evidence`**, within 48 hours of that answer. Read `user.suspension.appeal` rather than counting yourself: `canAppeal`, `appealBy`, `needsNewEvidence`, `appeals[]`. |
+| Refusals | `422` with `error.fields.appeal`: `APPEAL_PENDING` (one is waiting) · `EVIDENCE_REQUIRED` (second appeal without evidence) · `ALREADY_APPEALED` (both used) · `APPEAL_WINDOW_CLOSED` · `PERMANENT_BAN`. `404` when she is not suspended. |
+| The answer | Staff decide on the Members page. `overturned` lifts the hold (she gets `account_reinstated`); `upheld` keeps it and opens the second window. |
+
 #### `GET /account/warnings` · `POST /account/warnings/{warning}/dispute` — signed-in
 
 The escalating warnings, their fees, and her appeal against one (PAY-20 → PAY-22, SAFE-11). **This
@@ -1337,7 +1377,7 @@ second attempt answers `422` with `error.fields.dispute: ["ALREADY_DISPUTED"]`; 
 | `dateOfBirth`, `email` | Own only. |
 | `accountStatus` | `ACTIVE` · `SUSPENDED` · `PENDING_DELETION` · `DELETED`. `PENDING_DELETION` is reserved for the 30-day grace after a deletion request (not built yet); treat any value you do not know as "not active". |
 | `suspensionReason` | Present only while suspended: **one sentence, already in the request's language**, saying why in general terms (e.g. "A safety report is under review, so new bookings are paused."). Show it as written. It is a category, never the note staff wrote, and never names anybody. |
-| `suspension` | Present only while suspended: `caseNumber` (the reference the member quotes, e.g. `RF-482913`), `reasonCode` (`safety_report` · `identity_check` · `payment_issue` · `policy_breach` — for an icon or analytics, not for wording), `suspendedAt`, `reviewDueAt` (the promised "expected update" time — show it as a time, and keep showing it if it has passed rather than hiding it). `caseNumber` can be `null` only for an account suspended before holds were recorded. |
+| `suspension` | Present only while suspended: `caseNumber` (the reference the member quotes, e.g. `RF-482913`), `reasonCode` (`safety_report` · `identity_check` · `payment_issue` · `policy_breach` — for an icon or analytics, not for wording), `suspendedAt`, `reviewDueAt` (the promised "expected update" time — show it as a time, and keep showing it if it has passed rather than hiding it). `caseNumber` can be `null` only for an account suspended before holds were recorded. 🔴 **New (F1-3):** `permanent` — `false` for a suspension (stay in the app, show the banner with Appeal), `true` for a ban (`RESTRICTED_ACCOUNT`) — and `appeal`: `{canAppeal, appealBy, needsNewEvidence, appeals: [{id, attempt, status, createdAt, resolvedAt}]}`, see `POST /account/suspension/appeal`. |
 | `profileStatus` | `NOT_STARTED` (signed in with a phone, basic profile not filled yet) · `BASIC_COMPLETE` (after `PUT /account/profile/basic` succeeds). **Until `BASIC_COMPLETE` the `active` tier refuses most endpoints** with `403 ACCOUNT_PROFILE_INCOMPLETE` — send the person to screen 7. *(An earlier version of this file said `PHONE_ONLY`; the API has always returned `NOT_STARTED`.)* |
 | `capabilities[]` | 🔴 **What this account may actually do:** `["PASSENGER"]`, `["DRIVER"]`, both, or empty before the role step. **Drive your UI from this, not from `registeredRole`.** |
 | `initialRoleSelected` | Whether the role step is done. Do not infer it from `capabilities` being empty — this is the field `nextStep` is derived from. |
@@ -1379,7 +1419,7 @@ a brand-new member they are unreliable.
 
 #### `GET /account/verifications` — signed-in
 
-The Verification Centre read model. Also powers the home banner.
+The Verification Centre read model. Also powers the home banner. 🔴 **Empty for a passenger-only account** (PROF-12, D-0012, F2-8): `{"level": 0, "of": 0, "percentage": 0, "rows": []}` — passengers never verify, so do not show the Centre or a verification entry in her menu. It fills once she adds the driver capability.
 
 | Response field | Meaning |
 |---|---|
@@ -1530,6 +1570,7 @@ missing, so gating it would leave them with a refusal and no explanation.
 
 | Field | Meaning |
 |---|---|
+| `transmission` | `manual` · `automatic` · `null` (F2-5). Optional; anything else is a `422`. Older free-text values were mapped where unambiguous and cleared otherwise. |
 | `plateNumber` | As entered. The normalised form we deduplicate on is internal and not returned. |
 | `seats` | What the driver entered: total including the driver. It does **not** limit a commute — `approvedSeats` does. |
 | `approvedSeats` | Set by RAFEEQ at the car review (F2-6, PROF-28): seats with working belts, at least 3. No commute or day may offer more, and the seat price is divided by it. `null` until reviewed — such a car cannot publish (`VEHICLE_SEATS_NOT_APPROVED`). |
@@ -1788,7 +1829,7 @@ confirmed seat (16h+: 0 · 10–16h: 10 % · < 10h: 25 %) — **show it first** 
 | `audience`, `minTrustLevel` | Who may join. |
 | `allowsCustomPickup` | **Defaults to false.** |
 | `routePolyline`, `routeDistanceMeters`, `routeDurationSeconds` | Computed at publish; `null` on a draft. **Only ever returned to the commute's own driver.** |
-| `publishedAt`, `pausedAt`, `pausedReason`, `archivedAt` | `pausedReason` is `by_driver` · `vehicle_suspended` · `licence_expired` · `commission_unpaid` — the last three are automatic, so show the right copy. `commission_unpaid` means a week's commission missed two Fridays (PAY-45): show the debt screen; after paying she resumes the commute herself. |
+| `publishedAt`, `pausedAt`, `pausedReason`, `archivedAt` | `pausedReason` is `by_driver` · `vehicle_suspended` · `licence_expired` · `commission_unpaid` · `account_suspended` — the last four are automatic, so show the right copy. `account_suspended` means staff suspended her account (F1-3); once it is lifted she resumes the commute herself. `commission_unpaid` means a week's commission missed two Fridays (PAY-45): show the debt screen; after paying she resumes the commute herself. |
 | `missing[]` | What still has to be done before it can be published. Drive the wizard from this. |
 | `locations[]` | `{id, type, lat, lng, address, placeId, sequence}`; type is `origin` · `pickup` · `dropoff` · `destination`. |
 | `schedule` | `{daysMask, departureTime, timezone, startDate, endDate, generatedUntil}`. `generatedUntil` is **how far ahead bookable days currently exist**, rolled forward daily — not the end of the commute. |
@@ -3303,7 +3344,7 @@ they explain.
 | Field | Meaning |
 |---|---|
 | `greetingName` | Their public first name. |
-| `verification` | `{level, of, percentage, isComplete}` — the same numbers as the Verification Centre, so the banner cannot disagree with the screen behind it. |
+| `verification` | `{level, of, percentage, isComplete}` — the same numbers as the Verification Centre, so the banner cannot disagree with the screen behind it. 🔴 **`null` for a passenger-only account** (PROF-12, F2-8): passengers never verify, so hide the banner. It appears once the account has the driver capability. |
 | `unreadNotifications` | The bell badge: the same number as `GET /notifications` → `meta.unreadCount`, so Home is one request. |
 | `nextJourney` | The journey the card is about, or **`null`** (F3P-01). Contains the full booking (4.7) plus `originLabel`, `destinationLabel`, `departureAt`, `departureLocal`, `departsInMinutes`, `isToday`, `attendance`, `isTrial`, `driver` (5.1), `vehicle`, and the state fields below. **Which journey**, the first that exists: ① the one **happening now** (run started, or departure passed and the driver has not started — today only); ② one that **ended on her today** — cancelled by the driver, expired, she left for a driver delay, or completed and not yet rated — until the end of that day (Cairo); ③ the **soonest upcoming** one (what this always was); ④ a **completed ride still waiting for her stars**, inside the rating window, only when nothing is upcoming. A ride she cancelled herself is not shown. |
 | `nextJourney.phase` | **The state the card switches on**, decided by the server: `scheduled` (F3P-02/03; also a `PENDING` booking) · `driver_en_route` (F3P-04, the run has started) · `driver_arrived` (F3P-05, the driver's GPS-checked "I've arrived" for her) · `on_board` (F3P-06, she is checked in and not yet dropped off) · `driver_delayed` (F3P-07, departure has passed and the run has not started) · `cancelled_by_driver` (F3P-08) · `expired` (F3P-09, the driver never started and the day was closed) · `exited` (F3P-10, she pressed Leave Without Fee) · `completed` (F3P-11). `status` and `trip.status` are unchanged — switch on `phase`, not on them. |

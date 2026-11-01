@@ -81,8 +81,9 @@ it('takes the OTP and session numbers from platform settings', function (string 
 
     expect($read())->toBe($tuned);
 })->with([
-    ['auth.otp.ttl_seconds', fn () => AuthSettings::otpTtlSeconds(), 300],
-    ['auth.otp.max_attempts', fn () => AuthSettings::otpMaxAttempts(), 3],
+    ['auth.otp.ttl_seconds', fn () => AuthSettings::otpTtlSeconds(), 600],
+    ['auth.otp.max_attempts', fn () => AuthSettings::otpMaxAttempts(), 5],
+    ['auth.otp.lock_seconds', fn () => AuthSettings::otpLockSeconds(), 600],
     ['auth.otp.resend_cooldown_seconds', fn () => AuthSettings::otpResendCooldownSeconds(), 60],
     ['auth.session.access_ttl_minutes', fn () => AuthSettings::accessTtlMinutes(), 5],
     ['auth.session.refresh_ttl_days', fn () => AuthSettings::refreshTtlDays(), 30],
@@ -92,17 +93,17 @@ it('takes the OTP and session numbers from platform settings', function (string 
 it('applies a tuned OTP lifetime to a real challenge', function () {
     $sender = fakeOtpSender();
 
-    setSetting('auth.otp.ttl_seconds', 300);
+    setSetting('auth.otp.ttl_seconds', 600);
 
     $response = $this->postJson('/api/v1/auth/otp/request', [
         'phone' => '01012345678',
         'device' => ['publicId' => 'dev-1', 'platform' => 'android'],
     ])->assertStatus(202);
 
-    expect($response->json('data.expiresInSeconds'))->toBe(300);
+    expect($response->json('data.expiresInSeconds'))->toBe(600);
 
-    // Past the shipped 120s default, still inside the tuned 300s window.
-    $this->travel(200)->seconds();
+    // Past the shipped 300s default, still inside the tuned 600s window.
+    $this->travel(400)->seconds();
 
     $this->postJson('/api/v1/auth/otp/verify', [
         'challengeId' => $response->json('data.challengeId'),

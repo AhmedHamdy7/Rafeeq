@@ -10,6 +10,7 @@ use App\Http\Controllers\Api\V1\Account\ProfileController;
 use App\Http\Controllers\Api\V1\Account\PublicProfileController;
 use App\Http\Controllers\Api\V1\Account\ReliabilityController;
 use App\Http\Controllers\Api\V1\Account\StatsController;
+use App\Http\Controllers\Api\V1\Account\SuspensionAppealController;
 use App\Http\Controllers\Api\V1\Account\VerificationController;
 use App\Http\Controllers\Api\V1\Account\WarningController;
 use App\Http\Controllers\Api\V1\Auth\OtpController;
@@ -155,6 +156,13 @@ Route::prefix('v1')->group(function (): void {
          * requires beside every displayed warning — a warning recorded about somebody by somebody
          * else, which escalates to money, has to be answerable.
          */
+        /*
+         * 🔴 The Appeal button on the suspension banner (AUTH-19, follow-up F1-3). Outside
+         * `account.active` on purpose: the only person who can use it is a suspended one.
+         */
+        Route::post('suspension/appeal', [SuspensionAppealController::class, 'store'])
+            ->middleware('throttle:safety-reports');
+
         Route::get('warnings', [WarningController::class, 'index']);
         Route::post('warnings/{warning}/dispute', [WarningController::class, 'dispute'])
             ->middleware('throttle:safety-reports');

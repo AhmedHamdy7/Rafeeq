@@ -1,5 +1,7 @@
 <?php
 
+use App\Domains\Identity\Actions\EnrollInitialRoleAction;
+use App\Domains\Identity\Enums\Capability;
 use App\Domains\Identity\Models\User;
 use App\Domains\Verification\Enums\VerificationStatus;
 use App\Domains\Verification\Enums\VerificationType;
@@ -13,6 +15,16 @@ use App\Domains\Verification\Models\UserVerification;
 beforeEach(function () {
     $this->session = signIn();
     $this->token = $this->session['session']['accessToken'];
+
+    // The Centre is a driver's (PROF-12, F2-8): passengers never verify and see it empty.
+    EnrollInitialRoleAction::grant(User::sole(), [Capability::Driver]);
+});
+
+it('shows a passenger-only account an empty Centre', function () {
+    fakeOtpSender();
+    $token = passenger('01112223344', device: 'pax-only');
+
+    expect(centre($token))->toBe(['level' => 0, 'of' => 0, 'percentage' => 0, 'rows' => []]);
 });
 
 function centre(string $token): array

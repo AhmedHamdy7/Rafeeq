@@ -107,9 +107,19 @@ it('refuses a man a seat on a women-only commute, with its own code', function (
 it('refuses an account that never said she is a woman, too', function () {
     $token = verifiedPassenger('01223334466', gender: 'prefer_not_to_say', device: 'pax-unsaid');
 
+    // F1-2: and is told what would change the answer.
     requestSeat($token, $this->commuteId, ['scheduledTripId' => $this->tripId])
         ->assertStatus(403)
-        ->assertJsonPath('error.code', 'SEAT_REQUEST_WOMEN_ONLY');
+        ->assertJsonPath('error.code', 'SEAT_REQUEST_WOMEN_ONLY')
+        ->assertJsonPath('error.fields.reason.0', 'GENDER_NOT_SET');
+});
+
+it('does not tell a man to set his gender', function () {
+    $manToken = verifiedPassenger('01223334455', gender: 'man', device: 'pax-man');
+
+    requestSeat($manToken, $this->commuteId, ['scheduledTripId' => $this->tripId])
+        ->assertStatus(403)
+        ->assertJsonPath('error.fields', null);
 });
 
 it('lets a man ask for a seat on a commute open to everybody', function () {
@@ -516,10 +526,8 @@ it('still refuses an unverified identity the driver surface', function () {
     $unverified = signIn(phone: '01223337777', devicePublicId: 'drv-unverified')['session']['accessToken'];
     completeBasicProfile($unverified);
 
-    test()->withToken($unverified)->getJson('/api/v1/driver/application')
-        ->assertStatus(403)
-        ->assertJsonPath('error.code', 'VERIFICATION_REQUIRED');
-
+    // The application itself is open in any order since F2-1 (the five items are checked on
+    // submit), so the gate that still stands is publishing a commute.
     test()->withToken($unverified)->postJson('/api/v1/commutes', [])
         ->assertStatus(403)
         ->assertJsonPath('error.code', 'VERIFICATION_REQUIRED');

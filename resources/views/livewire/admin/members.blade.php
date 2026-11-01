@@ -81,7 +81,38 @@
                             </dd>
                         </div>
                     @endif
+                    @if ($opened->activeSuspension?->is_permanent)
+                        <div><dt>{{ __('admin.members.kind') }}</dt><dd style="font-weight:700">{{ __('admin.members.permanent') }}</dd></div>
+                    @endif
                 </dl>
+
+                {{-- Her appeals against the hold (F1-3). Overturning lifts it. --}}
+                @if ($opened->activeSuspension?->appeals?->isNotEmpty())
+                    <h2 class="rq-h2" style="margin-top:16px">{{ __('admin.members.appeals') }}</h2>
+                    <ul class="rq-checks">
+                        @foreach ($opened->activeSuspension->appeals as $appeal)
+                            <li class="rq-check">
+                                <span class="rq-check__label">
+                                    #{{ $appeal->attempt }} · {{ __('admin.members.appeal_status.'.($appeal->resolution?->value ?? 'pending')) }}
+                                    · {{ $appeal->created_at->timezone('Africa/Cairo')->format('j M H:i') }}
+                                </span>
+                                <span class="rq-note">{{ $appeal->message }}</span>
+                                @if ($appeal->evidence)
+                                    <span class="rq-note"><strong>{{ __('admin.members.evidence') }}:</strong> {{ $appeal->evidence }}</span>
+                                @endif
+                                @if ($mayAct && $appeal->resolution === null)
+                                    <textarea class="rq-field" wire:model="note" rows="2" style="margin-top:8px"
+                                              placeholder="{{ __('admin.members.appeal_note_placeholder') }}"></textarea>
+                                    @error('note') <p class="rq-error">{{ $message }}</p> @enderror
+                                    <div class="rq-actions">
+                                        <button type="button" class="rq-btn rq-btn--approve" wire:click="decideAppeal('{{ $appeal->id }}', true)" wire:loading.attr="disabled">{{ __('admin.members.appeal_overturn') }}</button>
+                                        <button type="button" class="rq-btn rq-btn--quiet" wire:click="decideAppeal('{{ $appeal->id }}', false)" wire:loading.attr="disabled">{{ __('admin.members.appeal_uphold') }}</button>
+                                    </div>
+                                @endif
+                            </li>
+                        @endforeach
+                    </ul>
+                @endif
 
                 @if ($openReports->isNotEmpty())
                     <h2 class="rq-h2" style="margin-top:16px">{{ __('admin.members.reports_about') }}</h2>
@@ -154,8 +185,14 @@
                                       placeholder="{{ __('admin.members.note_placeholder') }}"></textarea>
                             @error('note') <p class="rq-error">{{ $message }}</p> @enderror
 
+                            {{-- AUTH-19: a suspension stays in the app with Appeal; only a ban shows the restricted screen. --}}
+                            <label class="rq-label" style="margin-top:10px;display:flex;gap:8px;align-items:center">
+                                <input type="checkbox" wire:model="permanent"> {{ __('admin.members.permanent_label') }}
+                            </label>
+                            <p class="rq-note" style="margin:4px 0 0">{{ __('admin.members.permanent_hint') }}</p>
+
                             @if ($strandedDays > 0)
-                                {{-- Shown before the button, because the hold does not cancel these. --}}
+                                {{-- Shown before the button, because the hold cancels these (ADM-08). --}}
                                 <p class="rq-error" style="margin-top:10px">{{ trans_choice('admin.members.stranded', $strandedDays, ['count' => $strandedDays]) }}</p>
                             @endif
 

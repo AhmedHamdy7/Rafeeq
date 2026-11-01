@@ -28,10 +28,13 @@ final class VerificationController extends Controller
     /**
      * GET /v1/account/verifications — the Verification Centre
      * (MASTER_PLAN §247): progress plus one row per level.
+     *
+     * Empty (`of: 0`, `rows: []`) for a passenger-only account: passengers never verify
+     * (PROF-12, follow-up F2-8).
      */
     public function index(Request $request): JsonResponse
     {
-        return ApiResponse::success(VerificationCentre::for($request->user()));
+        return ApiResponse::success(VerificationCentre::forMember($request->user()));
     }
 
     /**

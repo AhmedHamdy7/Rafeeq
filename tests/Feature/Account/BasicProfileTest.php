@@ -1,7 +1,9 @@
 <?php
 
 use App\Domains\Identity\Enums\AccountStatus;
+use App\Domains\Identity\Enums\Gender;
 use App\Domains\Identity\Enums\ProfileStatus;
+use App\Domains\Identity\Models\AccountSuspension;
 use App\Domains\Identity\Models\User;
 use Illuminate\Database\QueryException;
 
@@ -101,6 +103,8 @@ it('blocks a suspended account from editing its profile but not from seeing its 
     $signIn = signIn();
 
     User::sole()->forceFill(['account_status' => AccountStatus::Suspended->value])->save();
+    // RESTRICTED_ACCOUNT is a permanent ban since AUTH-19 (F1-3).
+    AccountSuspension::factory()->create(['user_id' => User::sole()->id, 'is_permanent' => true]);
 
     completeProfile($signIn['session']['accessToken'])
         ->assertStatus(403)
@@ -192,4 +196,27 @@ it('still refuses a profile with no name at all', function () {
         ->putJson('/api/v1/account/profile/basic', ['gender' => 'woman'])
         ->assertStatus(422)
         ->assertJsonStructure(['error' => ['fields' => ['fullName']]]);
+});
+
+/**
+ * AUTH-10, follow-up F1-2: Woman / Man only. `prefer_not_to_say` is refused on new input.
+ */
+it('refuses prefer_not_to_say on new input', function () {
+    $signIn = signIn();
+
+    completeProfile($signIn['session']['accessToken'], ['gender' => 'prefer_not_to_say'])
+        ->assertStatus(422)
+        ->assertJsonStructure(['error' => ['fields' => ['gender']]]);
+
+    expect(User::sole()->gender)->toBeNull();
+});
+
+it('lets a legacy prefer_not_to_say account answer again', function () {
+    $signIn = signIn();
+    completeProfile($signIn['session']['accessToken'])->assertOk();
+    User::query()->update(['gender' => Gender::PreferNotToSay->value]);
+
+    completeProfile($signIn['session']['accessToken'], ['gender' => 'woman', 'registeredRole' => null])->assertOk();
+
+    expect(User::sole()->gender)->toBe(Gender::Woman);
 });
