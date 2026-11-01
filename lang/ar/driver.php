@@ -13,7 +13,6 @@ return [
         'profile_incomplete' => 'أكمل بيانات حسابك الأساسية الأول.',
         'date_of_birth_missing' => 'ضيف تاريخ ميلادك في بياناتك.',
         'below_minimum_age' => 'لازم تكون أكبر سنًا عشان تقود مع رفيق.',
-        'identity_not_verified' => 'وثّق هويتك قبل ما تقدّم كسائق.',
         'already_a_driver' => 'إنت سائق معتمَد بالفعل.',
         'application_under_review' => 'طلبك تحت المراجعة. عادة بياخد 24 لـ 48 ساعة.',
         'driver_suspended' => 'حساب السائق بتاعك موقوف. تواصل مع الدعم.',

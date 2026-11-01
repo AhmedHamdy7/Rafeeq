@@ -21,9 +21,9 @@ final class UploadVehicleDocumentRequest extends FormRequest
     public function rules(): array
     {
         return [
-            // Registration is required before an application can be submitted.
-            // Insurance and inspection are accepted now and will become
-            // required later.
+            // The registration — `registration_front` + `registration_back` (F2-4), or the
+            // single legacy `registration` — is required before submit. Insurance and
+            // inspection are accepted and never required (F2-15).
             'type' => ['required', 'string', Rule::enum(VehicleDocumentType::class)],
 
             // A photo of the document. JPEG, PNG or WebP. Metadata including

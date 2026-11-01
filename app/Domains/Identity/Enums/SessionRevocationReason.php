@@ -27,6 +27,9 @@ enum SessionRevocationReason: string
      */
     case Rotated = 'rotated';
 
+    // F1-4: the account itself was deleted, so every session it had ends with it.
+    case AccountDeleted = 'account_deleted';
+
     /**
      * Whether re-presenting a token revoked for this reason means someone
      * captured it. Rotation is single-use by construction, so a second use

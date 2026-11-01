@@ -660,9 +660,27 @@ tests/Support/FakeOtpSender.php
 
   **الكارت (HOME-3 → HOME-7):** `daysMask`، و`pickup` (المكان بنفس قاعدة `meetingPoint`، **ووقتها** = التحرك + المسافة لنقطتها — نفس اللحظة اللي مهلة الانتظار بتتحسب منها؛ اتنقل الحساب لـ `PickupTime` عشان الاتنين مايختلفوش)، و`dropoff` بالوصول الموعود لليوم، و`live` (الـ ETA من آخر نقطة العربية وصلتلها + مدد المقاطع المقاسة، عمره ما يبقى في الماضي، ومفيش ETA لو مفيش itinerary — مفيش أرقام مخترعة)، و`canLeaveWithoutFee` بنفس حكم `POST /bookings/{booking}/exit-without-fee`، و`endedAt` + أول اتنين من `GET /bookings/{booking}/alternatives` (كاش 5 دقايق لأن الـ Home بيتعمله polling)، و`completedAt` + `canRate` بنفس قواعد `GET /ratings/pending`.
 
-  **تحت الكارت (HOME-8 → HOME-10):** `demandAlert` (الطلب اللي عنده أكتر matches **ماتفتحتش**)، و**endpoint جديد `POST /matches/{match}/opened`** — `clicked_at` كان في السكيمة من الأول ومحدش بيكتبه، فمن غيره العدد عمره ما كان هينزل. و`topMatches[]` خدت `demandTitle` و`seatsAvailable` و`driver.completedTrips` (جوّه الـ Home بس، `GET /matches` زي ما هو)، و`savedSearches[]` خدت `lastSearchedAt` من سجل البحث بنفس الـ signature، و`unreadNotifications` بنفس عدّاد الإنبوكس. **180 endpoint.**
+  **تحت الكارت (HOME-8 → HOME-10):** `demandAlert` (الطلب اللي عنده أكتر matches **ماتفتحتش**)، و**endpoint جديد `POST /matches/{match}/opened`** — `clicked_at` كان في السكيمة من الأول ومحدش بيكتبه، فمن غيره العدد عمره ما كان هينزل. و`topMatches[]` خدت `demandTitle` و`seatsAvailable` و`driver.completedTrips` (جوّه الـ Home بس، `GET /matches` زي ما هو)، و`savedSearches[]` خدت `lastSearchedAt` من سجل البحث بنفس الـ signature، و`unreadNotifications` بنفس عدّاد الإنبوكس. **182 endpoint.**
 
   **مفتوح لعمر:** نوافذ "لحد ما تشوفها" متقدّرة بالوقت مش متتبّعة؛ والـ polling كل 30 ثانية.
+
+- **2026-11-01** — **توثيق السواق بقى بأي ترتيب، والسيلفي إجباري، ورخصة العربية وشّين، وكل قرار بإشعار (F2-1، F2-2، F2-4، F2-14، F2-15).**
+
+  **أي ترتيب (F2-1، PROF-13، E1):** الطلب والرخصة والعربية ومستنداتها **مابقوش محتاجين بطاقة متوافق عليها** — اتشال `verified:government_id` من كل مسارات `/driver/application` و`/driver/vehicles`، و`identity_not_verified` مابقاش blocker. الـ submit هو اللي بيجمع الخمسة: البطاقة والسيلفي لازم يكونوا **اتبعتوا** (pending أو approved) و`missing[]` بيسمّيهم. النشر لسه وراه البطاقة.
+
+  **السيلفي (F2-2، B33):** موافقة الأدمن على السواق بترفض لو البطاقة أو السيلفي مش متوافق عليهم (`DRIVER_APPLICATION_INCOMPLETE` بـ `missing`)، والأدمن بيشوف "وافق عليهم من طابور التوثيق الأول". كان ممكن سواق يتعمد من غير وش متسجّل يتقارن بالبطاقة.
+
+  **رخصة العربية (F2-4، F2-15):** نوعين جداد `registration_front` / `registration_back`، و`registration` القديم لوحده لسه كفاية لحد ما كل نسخ التطبيق تبعت الوشّين. وش واحد ← `missing` بيسمّي التاني والـ checklist بيقول `in_progress`. التأمين والفحص مقبولين ومابيمنعوش حاجة (اتأكد بتست). صور العربية اتشالت.
+
+  **الإشعارات (F2-14، PROF-23):** `driver_item_approved` / `driver_item_rejected` (بـ `itemKey` و`rejectionReason`) على قرارات البطاقة والسيلفي والرخصة — **للسواق بس** (driver profile أو capability). `driver_verified` مرة واحدة في عمر الحساب (بدل `driver_documents_approved`)، و`driver_item_expiring` بدل `licence_expiring`.
+
+- **2026-11-01** — **مسح الحساب، ودخول مراجعة المتاجر، والـ SMS بقى جاهز يتوصّل (F1-4، F1-1، F1-6 — beta blockers).**
+
+  **مسح الحساب (F1-4، PROF-31، D-0028):** `GET /account/deletion` بيقول ينفع تمسح ولا لأ وليه، و`DELETE /account` بيرفض بـ `409 ACCOUNT_HAS_DEBT` (عليها فلوس على أي جانب) أو `409 ACCOUNT_HAS_TRIP_IN_FEE_WINDOW` (كرسي راكبة خلال 12 ساعة، أو كرسي محجوز على رحلة سواقة خلال 16 ساعة، أو رحلة ماشية). غير كده: كراسيها بتتلغي من غير رسوم (الكرسي للقايمة)، والـ commutes بتاعتها بتتأرشف والركاب بيتبلّغوا (من غير رسوم)، والطلبات المفتوحة بتتقفل، وكل الجلسات بتتلغي، وبتتجهّل (الاسم والصورة والإيميل والميلاد والأماكن والبحث المحفوظ وجهات الاتصال) والرقم بيتفك فتقدر تسجّل تاني. الرحلات والفلوس والتقييمات والبلاغات بتفضل من غير اسم. **فوري** — مفيش 30 يوم grace لحد ما Q-055 يتحسم، والمستندات لسه محفوظة لنفس السبب. وصفحة ويب `/delete-account` لجوجل بلاي: رقم ← كود `high_risk_action` (مايدخّلش حد) ← مسح، بنفس القواعد، ومابتعملش حساب لرقم مالوش حساب.
+
+  **مراجعة المتاجر (F1-1):** `RAFEEQ_REVIEW_PHONE` + `RAFEEQ_REVIEW_OTP` — رقم واحد بكود ثابت **شغّال في production عن قصد**، مابيتبعتلوش SMS، وكل استخدام warning + `review_otp_issued`، والحدود زي أي رقم. `php artisan rafeeq:review-accounts` بيعمل الحساب (راكبة موثّقة + سواقة معتمدة برحلة منشورة + كرسي محجوز) وسواقة تانية للبحث. Idempotent.
+
+  **الـ SMS (F1-6):** `HttpSmsOtpSender` (`RAFEEQ_OTP_DRIVER=http`) — POST واحد، أسامي الحقول ومكان المفتاح من الـ env، فالتوقيع مع أي مزوّد مصري بقى deploy مش release. الكود عمره ما بيظهر في لوج ولا في رسالة خطأ. **181 endpoint.**
 
 - **2026-11-01** — **"انت طلبت تنزل هنا؟"، ونتايج نزاعات الدفع، وحالة women-only (W3 جزء 3: F-9، F-11، F-12، TRIP-17، L-11).**
 

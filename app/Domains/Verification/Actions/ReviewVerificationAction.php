@@ -3,11 +3,16 @@
 namespace App\Domains\Verification\Actions;
 
 use App\Domains\Admin\Models\AdminUser;
+use App\Domains\Driver\Models\DriverProfile;
+use App\Domains\Identity\Enums\Capability;
 use App\Domains\Identity\Enums\SecurityEventType;
 use App\Domains\Identity\Support\SecurityLog;
+use App\Domains\Notification\Enums\NotificationType;
+use App\Domains\Notification\Support\Notifier;
 use App\Domains\Shared\Exceptions\DomainException;
 use App\Domains\Shared\Support\ErrorCode;
 use App\Domains\Verification\Enums\VerificationStatus;
+use App\Domains\Verification\Enums\VerificationType;
 use App\Domains\Verification\Models\UserVerification;
 use Illuminate\Support\Facades\DB;
 
@@ -68,6 +73,8 @@ final readonly class ReviewVerificationAction
                 'reviewer_id' => $reviewer->id,
             ]);
 
+            self::tellDriver($verification, NotificationType::DriverItemApproved);
+
             return $verification;
         });
     }
@@ -116,8 +123,44 @@ final readonly class ReviewVerificationAction
                 'reviewer_id' => $reviewer->id,
             ]);
 
+            self::tellDriver($verification, NotificationType::DriverItemRejected, ['rejectionReason' => $reason]);
+
             return $verification;
         });
+    }
+
+    /**
+     * F2-14 (PROF-23): one notice per decision on a driver item, so he is not left reopening the
+     * profile to find out. The ID, the selfie and the licence are reviewed here; the car is decided
+     * with the application (`driver_verified`).
+     *
+     * 🔒 Only to somebody becoming or being a driver — a driver profile or the driver capability.
+     * A passenger's ID review is not driver verification, and she must never hear about that (PROF-12,
+     * E3). And never a document path, a link, an ID number or a licence number in the payload.
+     *
+     * @param  array<string, string>  $extra
+     */
+    private static function tellDriver(UserVerification $verification, NotificationType $type, array $extra = []): void
+    {
+        if (! in_array($verification->type, [VerificationType::GovernmentId, VerificationType::Selfie, VerificationType::DrivingLicence], true)) {
+            return;
+        }
+
+        $user = $verification->user;
+
+        $isDriver = DriverProfile::query()->where('user_id', $user->id)->exists()
+            || $user->capabilities()->where('capability', Capability::Driver->value)->exists();
+
+        if (! $isDriver) {
+            return;
+        }
+
+        $item = __('notifications.driver_items.'.$verification->type->value, [], $user->preferred_language ?: config('app.locale'));
+
+        Notifier::send($user, $type, params: ['item' => $item], data: [
+            'itemKey' => $verification->type->value,
+            ...$extra,
+        ]);
     }
 
     private function assertUnderReview(UserVerification $verification): void

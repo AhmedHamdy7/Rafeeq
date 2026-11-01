@@ -21,6 +21,18 @@ use App\Domains\Verification\Support\DocumentStorage;
  */
 function approveSelfieFor(string $token): UserVerification
 {
+    // A driver from `approvedDriver()` already has one (F2-2: approval requires it), and an approved
+    // selfie cannot be submitted again.
+    $approved = UserVerification::query()
+        ->where('user_id', test()->withToken($token)->getJson('/api/v1/auth/me')->json('data.user.id'))
+        ->where('type', VerificationType::Selfie->value)
+        ->where('status', 'approved')
+        ->first();
+
+    if ($approved !== null) {
+        return $approved;
+    }
+
     uploadVerificationDocument($token, 'selfie', 'selfie');
     test()->withToken($token)->postJson('/api/v1/account/verifications/selfie/submit')->assertOk();
 
@@ -103,7 +115,9 @@ it('keeps a verified passenger on initials, and refuses to serve her face at all
 });
 
 it('shows initials until a reviewer has actually approved the selfie', function () {
-    $driverToken = approvedDriver();
+    // An applicant rather than an approved driver: since F2-2 approval itself needs the selfie approved.
+    $driverToken = signIn(phone: '01012345678', devicePublicId: 'dev-1')['session']['accessToken'];
+    completeBasicProfile($driverToken);
 
     uploadVerificationDocument($driverToken, 'selfie', 'selfie');
     test()->withToken($driverToken)->postJson('/api/v1/account/verifications/selfie/submit')->assertOk();
