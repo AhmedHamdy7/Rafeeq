@@ -151,6 +151,7 @@ return [
             'dropped_early' => 'نزّلها قبل محطتها',
             'women_only_misuse' => 'إساءة استخدام رحلة السيدات',
             'abusive_review' => 'تقييم مسيء',
+            'safety_concern' => 'قلق على السلامة',
         ],
         'reported_by' => 'من :reporter · عن :reported',
         'nobody_named' => 'محدش متسمّي',

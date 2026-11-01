@@ -63,6 +63,13 @@ final readonly class ReportIncidentAction
         IncidentCategory::WomenOnlyMisuse->value => SafetySeverity::High,
         IncidentCategory::FalseArrival->value => SafetySeverity::Medium,
         IncidentCategory::AbusiveReview->value => SafetySeverity::Low,
+        /*
+         * HISTORY-9. High, with unsafe driving, and not critical: "safety concern" is the form's
+         * general safety reason, and the reports that page somebody within the hour are the named
+         * ones (harassment, the wrong person in the car). Critical for a catch-all would make the
+         * one-hour queue the place every vague worry goes, and then it stops being one hour.
+         */
+        IncidentCategory::SafetyConcern->value => SafetySeverity::High,
     ];
 
     /**

@@ -51,7 +51,8 @@ final class BookingController extends Controller
     {
         $bookings = Booking::query()
             ->where('passenger_user_id', $request->user()->id)
-            ->with('scheduledTrip')
+            // The route and the driver on every card (HISTORY-1).
+            ->with(['scheduledTrip', ...BookingResource::historyRelations()])
             ->latest('created_at')
             ->orderByDesc('id')
             ->paginate(ApiResponse::perPage($request));
@@ -83,7 +84,8 @@ final class BookingController extends Controller
     public function show(Request $request, string $booking): JsonResponse
     {
         return ApiResponse::success(
-            new BookingResource($this->visible($request, $booking)->load('scheduledTrip'))
+            // The same history fields as the list, so the past trip screen needs one call.
+            new BookingResource($this->visible($request, $booking)->load(['scheduledTrip', ...BookingResource::historyRelations()]))
         );
     }
 

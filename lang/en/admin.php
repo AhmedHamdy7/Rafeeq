@@ -154,6 +154,7 @@ return [
             'dropped_early' => 'Dropped before her stop',
             'women_only_misuse' => 'Women-only misuse',
             'abusive_review' => 'Abusive review',
+            'safety_concern' => 'Safety concern',
         ],
         'reported_by' => 'From :reporter · about :reported',
         'nobody_named' => 'nobody named',

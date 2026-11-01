@@ -2397,7 +2397,9 @@ four points can appear here while `navigation-route` still returns two.
 
 #### `GET /my-bookings` — active, profile complete, paginated
 
-The caller's seats, newest first. See 4.7.
+The caller's seats, newest first. See 4.7. Every item carries the History fields — `commuteId`,
+`originLabel`, `destinationLabel`, `driver` (first name only) and the pickup/drop-off as
+`meetingPoint`/`dropoffPoint` (HISTORY-1) — so a History card needs no second call.
 
 #### `GET /driver/bookings` — active, profile complete, paginated
 
@@ -2406,7 +2408,7 @@ Every seat the caller has approved. The largest list in the API.
 #### `GET /bookings/{booking}` — active, profile complete
 
 Visible to its passenger or its driver; **404 for anybody else**, because a 403 would confirm the
-id exists.
+id exists. Carries the same History fields as `GET /my-bookings`, so the past trip screen is one call.
 
 #### `PATCH /bookings/{booking}/cancel` — active, profile complete
 
@@ -2481,6 +2483,9 @@ attendance decision acceptable, and it is the passenger's only move.
 | Field | Meaning |
 |---|---|
 | `id`, `tripId`, `commuteGroupId` | |
+| `commuteId` | The commute the booking belongs to — for "Ride again" and `GET /commutes/{commute}/reviews`. On `GET /my-bookings` and `GET /bookings/{booking}` (HISTORY-1). |
+| `originLabel` · `destinationLabel` | The commute's start and end, as on `nextJourney` (`Rehab Gate 2` → `Smart Village B6`) — the History card's title. Same two endpoints. |
+| `driver` | The driver as a `person` (5.1) — **`publicFirstName`**, badges, `rating`, `completedTrips`. 🔒 **Never a full name, phone or user id**; Block uses `otherPartyUserId`. `null` if the driver's account is gone. Same two endpoints. |
 | `status` | `PENDING` · `CONFIRMED` · `COMPLETED` · `CANCELLED_BY_PASSENGER` · `CANCELLED_BY_DRIVER` · `EXPIRED` · `NO_SHOW`. A booking is created **already `CONFIRMED`**: the driver has just approved a request she read, so leaving it pending would invent a second approval nobody performs. |
 | `seatsReserved` | |
 | `boardingCode` | 🔒 **Four digits, to check against the car at the kerb** — show it under the plate, as the design does. **Both the passenger and the driver see the same number**, so she can ask and the driver can confirm. One per journey, so it changes daily. `null` on bookings made before this shipped. 🔴 **It decides nothing**: `check-in` takes no code, attendance is the driver's tap (D18), and the Master Plan rejected a code for that job because "a PIN fails when somebody is running for the car". **Never block boarding, payment or a no-show on it** — a flat battery must not lock somebody out of a car she has verified by plate and sight. |
@@ -2489,7 +2494,8 @@ attendance decision acceptable, and it is the passenger's only move.
 | `price.driverSharePiastres` · `price.driverShareTotalPiastres` | 🔒 What the driver keeps, per seat and in all — **present only for the commute's own driver**, absent for the passenger (P-3). The commission and its rate are never sent. |
 | `paymentType` | `cash`. `online` is refused with `422 PAYMENT_TYPE_NOT_AVAILABLE` until a payment provider exists (P-4). |
 | `paymentStatus` | `NOT_DUE` (nothing recorded yet) · `PENDING` · `PAID` · `FAILED` · `REFUNDED` · `DISPUTED`. **Cash:** the passenger pays in the car; the booking turns `PAID` about **two hours after the driver confirms they travelled** (the delay lets a wrong tap be noticed). A no-show stays `NOT_DUE`. `DISPUTED` as soon as the passenger contests the attendance record, until staff decide. |
-| `meetingPoint` | `{lat, lng, isExact}`, or **`null` for the standard point** — which is the run's origin. |
+| `meetingPoint` | Her **pickup**: `{lat, lng, label, isExact}`, or **`null` for the standard point** — which is the run's origin. 🔒 Fuzzed to ~110m with `label: null` and `isExact: false` unless the booking is `CONFIRMED`, `COMPLETED`, `ENDED_EARLY` or `EXITED_DUE_TO_DRIVER_DELAY` — so a pending, expired or cancelled booking in History shows the area only. |
+| `dropoffPoint` | Her **drop-off**, same shape and same rule; `null` = the destination. |
 | `cancelledAt`, `cancelledReason`, `cancellationFeePiastres` | The fee is always `0` today. |
 | `otherPartyUserId` | 🔒 **The other person's user id — the driver's to the passenger, the passenger's to the driver — only once the journey is over** (`COMPLETED` · `ENDED_EARLY` · `NO_SHOW` · `EXITED_DUE_TO_DRIVER_DELAY`); `null` before. It is what the trip summary's **Block** sends (`POST /safety/blocked-users`). Before the trip there is no reason for either of you to hold a handle on the other, so don't cache it from anywhere else. |
 | `trip` | The scheduled trip above, when loaded. |
@@ -3299,7 +3305,7 @@ empty list for a stranger is genuinely empty.
 | Category | |
 |---|---|
 | `harassment` · `identity_mismatch` | Treated as **critical** |
-| `unsafe_driving` · `dropped_early` · `women_only_misuse` | **high** |
+| `unsafe_driving` · `dropped_early` · `women_only_misuse` · `safety_concern` | **high** |
 | `other` · `false_arrival` | **medium** |
 | `no_show` · `payment` · `lost_item` · `abusive_review` | **low** |
 
@@ -3308,6 +3314,12 @@ arrived and was not there · `dropped_early` — put out of the car before the d
 `women_only_misuse` · `abusive_review`. ⚠️ Today each is a report a person reads; what it then does
 to a fee (freezing a no-show fee, F-9, F-12) arrives with the fee work. **Audio evidence is not
 accepted** — Q-007 is still open.
+
+**`safety_concern`** (HISTORY-9, 2026-11-01) is the report form's "Safety concern" — send it instead
+of `other`, which ranks **medium**; this one is **high** (4-hour deadline), with unsafe driving. Map
+the form's six reasons as: Safety concern → `safety_concern` · Unsafe driving → `unsafe_driving` ·
+Harassment → `harassment` · False arrival → `false_arrival` (live) · No-show → `no_show` · Other →
+`other`.
 
 🔴 **There is no `severity` field and there must not be.** It is decided from the category by the
 server. A reporter cannot be asked to rate their own emergency — somebody who has just been harassed
@@ -4116,6 +4128,7 @@ exist, and every live endpoint must be named here.
 
 | Date | Change |
 |---|---|
+| 2026-11-01 | 🧾 **Trips history (HISTORY-1, HISTORY-9).** Every booking on `GET /my-bookings` and `GET /bookings/{booking}` now carries `commuteId`, `originLabel`, `destinationLabel` and `driver` (a `person`, first name only); the pickup and drop-off are the existing `meetingPoint`/`dropoffPoint`, fuzzed unless confirmed. New report category **`safety_concern`**, ranked **high**; `false_arrival` is live. |
 | 2026-11-01 | ❓ **"Did you ask to get off here?" (TRIP-20, PAY-28)** — new `POST /bookings/{booking}/early-drop` and the `early_drop_check` notification; bookings now return `feeLinePiastres`, `feeLineReason` and `earlyDrop`. A `false_arrival` report puts her no-show on that booking under review (TRIP-17). Staff now settle the money of payment disputes (PAY-31, PAY-32) and women-only misuse (PAY-47, the man is suspended until he pays) from the safety desk. |
 | 2026-11-01 | 🚗 **Driver fees (PAY-23 → PAY-29, C-5 → C-10).** New: `POST /driver/bookings/{booking}/cancel` (remove one passenger), `GET /trips/{trip}/cancel-preview` and `GET /commutes/{commute}/cancel-preview` (the fee before he confirms), `POST /account/debt/entries/{entry}/appeal` (48h). Cancelling seats costs the driver by notice (16h+: 0 · 10–16h: 10 % · < 10h: 25 %) on one passenger, Cancel today, pause, delete, a new car and a block; ending a run that set off 100 %; never coming 50 %; a passenger leaving because he was late 25 %. After a breakdown, accident or emergency a passenger aboard pays the share of her route past 25 %; otherwise nothing — her booking's `paymentStatus` is the new `WAIVED`. `PATCH /bookings/{booking}/cancel` now applies the fees. End early is the full fare. |
 | 2026-11-01 | 💸 **Passenger fees (PAY-20 → PAY-22, TRIP-26, SAFE-11).** Three counters — `NO_SHOW`, `LATE_CANCEL`, `LATE_BOARDING` — each with its ladder and a 90-day reset; `MISSED_COMMITMENT` is history only. Warnings now carry `feePiastres`, `feeStatus`, `appealBy`. A late cancel's fee waits for departure and is dropped if the seat is refilled. Appeals close after 48 hours (`APPEAL_WINDOW_CLOSED`). `away` on the group attendance cancels that day. |
