@@ -91,6 +91,10 @@ return [
      * and naming the real cause would tell her passengers something about her documents that is
      * none of their business. "Has been paused" is true however it happened.
      */
+    'commute_deleted_seat_cancelled' => [
+        'title' => 'Your commute was cancelled',
+        'body' => ':name has deleted this commute, so :days booked day(s) were cancelled. Search for another commute on your route.',
+    ],
     'commute_paused_seat_cancelled' => [
         'title' => 'Your commute was paused',
         'body' => ':name’s commute has been paused, so :days booked day(s) were cancelled. You are back on the waiting list.',

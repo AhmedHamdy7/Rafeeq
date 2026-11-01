@@ -79,8 +79,19 @@ final readonly class DisplaceConfirmedBookingsAction
              * Her request goes back on the list once, however many days she lost. A recurring
              * membership is ONE request covering five bookings; flipping it per booking would write
              * the same row five times and notify her five times for one decision.
+             *
+             * Not for a deleted commute (C-8): there is no list left to wait on, so her request is
+             * closed `commute_archived` with everybody else's — see ChangeCommuteStatusAction.
              */
-            $this->preserveOnWaitlist($offer, $bookings->pluck('seat_request_id')->filter()->unique(), $reason);
+            if ($reason->rejoinsWaitlist()) {
+                $this->preserveOnWaitlist($offer, $bookings->pluck('seat_request_id')->filter()->unique(), $reason);
+            }
+
+            /*
+             * ⚠️ No fee yet. The driver-cancel fee by timing (Feature 03 C-7, C-8, C-10, PAY-23) is
+             * charged per affected seat by the fee work that follows (W3), here, on `$bookings`,
+             * through the shared `DebtLedger`. Until then a displacement costs nothing.
+             */
 
             /*
              * Any seat offer still open on these days is closed. They were offers to join a commute
@@ -244,6 +255,7 @@ final readonly class DisplaceConfirmedBookingsAction
         $type = match ($reason) {
             DisplacementReason::CommutePaused => NotificationType::CommutePausedSeatCancelled,
             DisplacementReason::VehicleReplaced => NotificationType::VehicleReplacedSeatCancelled,
+            DisplacementReason::CommuteDeleted => NotificationType::CommuteDeletedSeatCancelled,
         };
 
         // Loaded before the loop: strict mode turns a lazy load inside one into an exception, and

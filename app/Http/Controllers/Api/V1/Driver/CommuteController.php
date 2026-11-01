@@ -269,7 +269,12 @@ final class CommuteController extends Controller
 
     /**
      * DELETE /v1/commutes/{commute} — archives it. Nothing is deleted: the
-     * history stays, and only future days nobody has taken are cancelled.
+     * history stays.
+     *
+     * Every upcoming day is cancelled, booked ones included (Feature 03 C-8). Each
+     * passenger who loses a seat is told once (`commute_deleted_seat_cancelled`), and
+     * every open request or waiting-list place on it closes as `COMMUTE_ARCHIVED`.
+     * A run already under way is not touched. No fee is charged yet.
      */
     #[ApiErrors(ErrorCode::CommuteInvalidTransition, ErrorCode::NotFound)]
     public function destroy(Request $request, string $commute, ChangeCommuteStatusAction $action): JsonResponse
