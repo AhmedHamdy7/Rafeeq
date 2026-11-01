@@ -130,19 +130,22 @@ it('shows the driver every passenger row with the fee broken out', function () {
         ->and($statement['rows'])->toHaveCount(1);
 
     $row = $statement['rows'][0];
+    $booking = Booking::sole();
 
-    expect($row['pricePiastres'])->toBe(8000)
-        // 3% of the seat, deducted from her — the decision settled 2026-10-06.
-        ->and($row['platformFeePiastres'])->toBe(240)
-        ->and($row['driverKeepsPiastres'])->toBe(7760)
+    // The day's automatic price, frozen on the booking (P-1, PAY-44): RAFEEQ's commission sits on
+    // top of the driver's share, and the two add up to what the passenger pays.
+    expect($row['pricePiastres'])->toBe($booking->price_snapshot_piastres)
+        ->and($row['platformFeePiastres'])->toBe($booking->platform_fee_snapshot_piastres)
+        ->and($row['driverKeepsPiastres'])->toBe($booking->driver_amount_snapshot_piastres)
+        ->and($row['platformFeePiastres'] + $row['driverKeepsPiastres'])->toBe($row['pricePiastres'])
         // She is the one collecting the cash, so she needs to know from whom.
         ->and($row['passengerFirstName'])->toBe('سارة');
 
-    expect($statement['totals']['duePiastres'])->toBe(8000)
-        ->and($statement['totals']['platformFeePiastres'])->toBe(240)
-        ->and($statement['totals']['driverKeepsPiastres'])->toBe(7760)
+    expect($statement['totals']['duePiastres'])->toBe($booking->price_snapshot_piastres)
+        ->and($statement['totals']['platformFeePiastres'])->toBe($booking->platform_fee_snapshot_piastres)
+        ->and($statement['totals']['driverKeepsPiastres'])->toBe($booking->driver_amount_snapshot_piastres)
         // Stated rather than left as subtraction: this is the number the screen is opened to find.
-        ->and($statement['totals']['outstandingPiastres'])->toBe(8000);
+        ->and($statement['totals']['outstandingPiastres'])->toBe($booking->price_snapshot_piastres);
 });
 
 /**
@@ -192,12 +195,15 @@ it('shows a passenger only her own rows, and none of the driver economics', func
  * change what somebody already agreed to pay.
  */
 it('reports what was agreed, not what the commute costs today', function () {
-    test()->withToken($this->driverToken)->patchJson("/api/v1/commutes/{$this->commuteId}", [
-        'pricePerSeatPiastres' => 11000,
-    ])->assertOk();
+    $agreed = Booking::sole()->price_snapshot_piastres;
+
+    // The day is repriced afterwards (an admin moved a rate and the day was regenerated).
+    ScheduledTrip::query()->whereKey($this->tripId)->update([
+        'seat_price_piastres' => 99500, 'driver_share_piastres' => 90000, 'commission_piastres' => 9500,
+    ]);
 
     expect(test()->withToken($this->driverToken)->getJson("/api/v1/groups/{$this->groupId}/statement")
-        ->assertOk()->json('data.rows.0.pricePiastres'))->toBe(8000);
+        ->assertOk()->json('data.rows.0.pricePiastres'))->toBe($agreed);
 });
 
 it('separates what is due from what has been paid', function () {
@@ -208,8 +214,10 @@ it('separates what is due from what has been paid', function () {
         ->getJson("/api/v1/groups/{$this->groupId}/statement")
         ->assertOk()->json('data.totals');
 
-    expect($totals['duePiastres'])->toBe(8000)
-        ->and($totals['paidPiastres'])->toBe(8000)
+    $price = Booking::sole()->price_snapshot_piastres;
+
+    expect($totals['duePiastres'])->toBe($price)
+        ->and($totals['paidPiastres'])->toBe($price)
         ->and($totals['outstandingPiastres'])->toBe(0);
 });
 
@@ -226,7 +234,7 @@ it('still charges a no-show, and says that is what it was', function () {
 
     expect($statement['rows'])->toHaveCount(1)
         ->and($statement['rows'][0]['wasNoShow'])->toBeTrue()
-        ->and($statement['totals']['duePiastres'])->toBe(8000);
+        ->and($statement['totals']['duePiastres'])->toBe(Booking::sole()->price_snapshot_piastres);
 });
 
 it('leaves out bookings that never happened', function (string $status) {

@@ -142,14 +142,17 @@ it('approves a request into a confirmed booking with the money frozen', function
         ->and($approval['membership']['role'])->toBe('trial');
 
     $booking = $approval['bookings'][0];
+    $trip = ScheduledTrip::query()->whereKey($this->tripId)->sole();
 
     expect($booking['status'])->toBe('CONFIRMED')
         ->and($booking['seatsReserved'])->toBe(1)
-        // 3% of 8000 is 240, and the two halves must sum to the whole exactly.
+        // The day's automatic price, frozen (P-1, PAY-44). The approval is read by the driver, so
+        // it carries his share; it never carries the commission or its rate (P-3).
         ->and($booking['price'])->toBe([
-            'totalPiastres' => 8000,
-            'platformFeePiastres' => 240,
-            'driverAmountPiastres' => 7760,
+            'seatPricePiastres' => $trip->seat_price_piastres,
+            'totalPiastres' => $trip->seat_price_piastres,
+            'driverSharePiastres' => $trip->driver_share_piastres,
+            'driverShareTotalPiastres' => $trip->driver_share_piastres,
         ])
         // Cash is settled in the car, so nothing is owed to the platform yet.
         ->and($booking['paymentStatus'])->toBe('NOT_DUE')
@@ -161,36 +164,46 @@ it('approves a request into a confirmed booking with the money frozen', function
  * every price, or the ledger never reconciles.
  */
 it('always splits the price into two halves that sum exactly', function (int $pricePiastres) {
-    CommuteOffer::query()->whereKey($this->commuteId)->update(['price_per_seat_piastres' => $pricePiastres]);
-    ScheduledTrip::query()->whereKey($this->tripId)->update(['price_snapshot_piastres' => $pricePiastres]);
+    $commission = intdiv($pricePiastres, 11);
+
+    ScheduledTrip::query()->whereKey($this->tripId)->update([
+        'seat_price_piastres' => $pricePiastres,
+        'driver_share_piastres' => $pricePiastres - $commission,
+        'commission_piastres' => $commission,
+    ]);
 
     $requestId = requestSeat($this->paxToken, $this->commuteId, ['scheduledTripId' => $this->tripId])
         ->assertStatus(201)->json('data.id');
 
-    $price = test()->withToken($this->driverToken)
+    test()->withToken($this->driverToken)
         ->postJson("/api/v1/driver/seat-requests/{$requestId}/approve")
-        ->assertStatus(201)->json('data.bookings.0.price');
+        ->assertStatus(201);
 
-    expect($price['platformFeePiastres'] + $price['driverAmountPiastres'])
-        ->toBe($price['totalPiastres']);
+    $booking = Booking::sole();
+
+    expect($booking->platform_fee_snapshot_piastres + $booking->driver_amount_snapshot_piastres)
+        ->toBe($booking->price_snapshot_piastres)
+        ->and($booking->price_snapshot_piastres)->toBe($pricePiastres);
 })->with([8000, 8333, 1, 501, 49999]);
 
 /**
  * Pitfall #42 and #13: the fee percentage and the driver's price can both change
  * tomorrow, and neither may move money on a booking that already exists.
  */
-it('keeps the frozen money when the commute price changes afterwards', function () {
+it('keeps the frozen money when the day is repriced afterwards', function () {
     $requestId = requestSeat($this->paxToken, $this->commuteId, ['scheduledTripId' => $this->tripId])
         ->assertStatus(201)->json('data.id');
 
     test()->withToken($this->driverToken)
         ->postJson("/api/v1/driver/seat-requests/{$requestId}/approve")->assertStatus(201);
 
-    test()->withToken($this->driverToken)
-        ->patchJson("/api/v1/commutes/{$this->commuteId}", ['pricePerSeatPiastres' => 11000])
-        ->assertOk();
+    $agreed = Booking::sole()->price_snapshot_piastres;
 
-    expect(Booking::sole()->price_snapshot_piastres)->toBe(8000);
+    ScheduledTrip::query()->whereKey($this->tripId)->update([
+        'seat_price_piastres' => 99500, 'driver_share_piastres' => 90000, 'commission_piastres' => 9500,
+    ]);
+
+    expect(Booking::sole()->price_snapshot_piastres)->toBe($agreed);
 });
 
 it('creates the group on first approval, with the driver in it', function () {

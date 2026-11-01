@@ -34,7 +34,6 @@ beforeEach(function () {
     // A full journey: route with an advertised stop, a per-weekday schedule, preferences.
     $this->commuteId = createCommute($this->driverToken, $this->vehicleId, [
         'seatsTotal' => 3,
-        'pricePerSeatPiastres' => 8000,
         'audience' => 'women_only',
         'allowsCustomPickup' => true,
     ])->assertStatus(201)->json('data.id');
@@ -61,11 +60,10 @@ beforeEach(function () {
         'promisedArrivalTime' => '08:00:00',
         'startDate' => CarbonImmutable::tomorrow()->toDateString(),
         'endDate' => CarbonImmutable::today()->addMonths(3)->toDateString(),
-        // One cheaper, roomier Thursday, so the per-day table has something worth carrying.
+        // One different Thursday, so the per-day table has something worth carrying.
         'perDay' => [
             (string) DaysMask::THURSDAY => [
                 'departureTime' => '07:30:00',
-                'pricePerSeatPiastres' => 6000,
                 'seatsTotal' => 2,
             ],
         ],
@@ -103,7 +101,8 @@ it('copies the terms, the route and the weekly pattern into a draft', function (
         // 🔴 A draft. A shortcut that published would put a journey on sale nobody reviewed.
         ->assertJsonPath('data.status', 'DRAFT')
         ->assertJsonPath('data.seatsTotal', 3)
-        ->assertJsonPath('data.pricePerSeatPiastres', 8000)
+        // 🔒 No price on a draft: RAFEEQ prices it from the route when it is published (P-1).
+        ->assertJsonPath('data.seatPricePiastres', null)
         ->assertJsonPath('data.audience', 'women_only')
         ->assertJsonPath('data.direction', 'to_work')
         ->json('data');
@@ -119,11 +118,11 @@ it('copies the terms, the route and the weekly pattern into a draft', function (
         ->and($draft->locations->sortBy('sequence')->pluck('address')->all())
         ->toBe($source->locations->sortBy('sequence')->pluck('address')->all());
 
-    // Her preferences, and the cheaper Thursday she set up by hand.
+    // Her preferences, and the Thursday she set up by hand.
     expect($draft->rules->pluck('rule_key')->map->value->sort()->values()->all())
         ->toBe($source->rules->pluck('rule_key')->map->value->sort()->values()->all())
-        ->and($draft->weekdaySchedules->firstWhere('weekday_bit', DaysMask::THURSDAY)->price_per_seat_piastres)
-        ->toBe(6000)
+        ->and($draft->weekdaySchedules->firstWhere('weekday_bit', DaysMask::THURSDAY)->seats_total)
+        ->toBe(2)
         ->and($draft->weekdaySchedules->firstWhere('weekday_bit', DaysMask::THURSDAY)->departure_time)
         ->toBe('07:30:00');
 });

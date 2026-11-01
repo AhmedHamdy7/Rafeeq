@@ -1510,7 +1510,8 @@ The caller's own commutes. Full shape in 4.5.
 
 🔴 **No price field any more** (P-1, D-0016). RAFEEQ computes the seat price from the route length,
 the car's tier and its approved seats — see `GET /commutes/{commute}/price`. A
-`pricePerSeatPiastres` sent here or in `perDay` is ignored.
+`pricePerSeatPiastres` sent here, in `PATCH /commutes/{commute}` or in `perDay` is **refused** with
+`422 VALIDATION_FAILED` on that field — drop it from the form.
 
 Creates a **draft**. Route and schedule arrive through their own endpoints because each is a whole
 thing that has to be validated together. `allowsCustomPickup` defaults to **false** — a commute

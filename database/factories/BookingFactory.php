@@ -25,7 +25,6 @@ class BookingFactory extends Factory
         $offer = $trip->commuteOffer;
         $passenger = User::factory()->woman()->create();
 
-
         return [
             'scheduled_trip_id' => $trip->id,
             'passenger_user_id' => $passenger->id,

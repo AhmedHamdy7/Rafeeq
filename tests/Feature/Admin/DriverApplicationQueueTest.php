@@ -86,7 +86,7 @@ it('sets the approved seats, the Comfort badge and the AC on the car, and logs i
     $log = VerificationLog::query()->where('entity_type', 'vehicle')->sole();
 
     expect($log->action)->toBe(VerificationLogAction::ReviewCar)
-        ->and($log->new_value)->toBe(['approved_seats' => 4, 'tier' => 'comfort', 'has_ac' => true]);
+        ->and($log->new_value)->toEqual(['approved_seats' => 4, 'tier' => 'comfort', 'has_ac' => true]);
 });
 
 /**

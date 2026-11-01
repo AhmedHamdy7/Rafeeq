@@ -94,12 +94,11 @@ final class OnboardingController extends Controller
          * instead of guessing when it is present. Inside `data`, because `meta` is reserved for
          * pagination in this API.
          */
-        return ApiResponse::success([
-            ...(new PreferenceResource($preference))->resolve($request),
-            'publishedCommutesCount' => CommuteOffer::query()
+        return ApiResponse::success((new PreferenceResource($preference))->withPublishedCommutesCount(
+            CommuteOffer::query()
                 ->where('driver_profile_id', $request->user()->getKey())
                 ->where('status', CommuteOfferStatus::Published->value)
                 ->count(),
-        ]);
+        ));
     }
 }
