@@ -434,6 +434,7 @@ return [
             'auth__otp__ttl_seconds' => 'How long a sign-in code works',
             'auth__otp__resend_cooldown_seconds' => 'Wait before a new code can be sent',
             'auth__otp__max_attempts' => 'Wrong codes allowed per challenge',
+            'auth__otp__lock_seconds' => 'Lock after too many wrong codes',
             'auth__otp__max_resends' => 'Codes that can be re-sent',
             'auth__session__access_ttl_minutes' => 'Access token lifetime',
             'auth__session__refresh_ttl_days' => 'How long a device stays signed in',

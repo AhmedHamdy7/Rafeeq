@@ -21,6 +21,7 @@ return [
     'AUTH_OTP_INVALID' => 'The code you entered is incorrect.',
     'AUTH_OTP_EXPIRED' => 'This code has expired. Please request a new one.',
     'AUTH_OTP_MAX_ATTEMPTS' => 'Too many incorrect attempts. Please request a new code.',
+    'AUTH_OTP_LOCKED' => 'Too many incorrect codes. You can try again in a few minutes.',
     'AUTH_OTP_RESEND_COOLDOWN' => 'Please wait a moment before requesting another code.',
     'AUTH_OTP_MAX_RESENDS' => 'You have requested too many codes. Please try again later.',
     'AUTH_OTP_DELIVERY_FAILED' => 'We could not send the code right now. Please try again shortly.',

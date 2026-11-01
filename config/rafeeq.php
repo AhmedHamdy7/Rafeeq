@@ -1236,11 +1236,17 @@ return [
             'length' => 6,
 
             // Chapter 2 §12: "2 to 5 minutes" lifetime, "30 to 60 seconds"
-            // resend cooldown.
-            'ttl_seconds' => 120,
+            // resend cooldown. Feature 01 v3 (AUTH-07) settles the lifetime at
+            // the top of that range: five minutes.
+            'ttl_seconds' => 300,
             'resend_cooldown_seconds' => 45,
 
-            'max_attempts' => 5,
+            // AUTH-08: three wrong codes, then the number is locked for five
+            // minutes — for that purpose, on every challenge, not just the
+            // burnt one. Without the timed lock, "request a new code" was an
+            // instant reset and the attempt cap only cost a resend.
+            'max_attempts' => 3,
+            'lock_seconds' => 300,
             'max_resends' => 3,
         ],
 

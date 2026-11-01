@@ -115,14 +115,75 @@ it('blocks the challenge once the attempts run out', function () {
 
     expect(OtpChallenge::findOrFail($challengeId)->status)->toBe(OtpStatus::Blocked);
 
-    // The correct code no longer helps — the challenge itself is dead.
+    // The correct code no longer helps — the challenge itself is dead, and the number is locked.
     $this->postJson('/api/v1/auth/otp/verify', [
         'challengeId' => $challengeId,
         'code' => $this->sender->lastCode(),
         'device' => ['publicId' => 'dev-1', 'platform' => 'android'],
-    ])->assertStatus(429)->assertJsonPath('error.code', 'AUTH_OTP_MAX_ATTEMPTS');
+    ])->assertStatus(429)->assertJsonPath('error.code', 'AUTH_OTP_LOCKED');
 
     expect(User::count())->toBe(0);
+});
+
+/**
+ * AUTH-07 / AUTH-08 (follow-up F1-5): five minutes, three tries, then a five-minute lock.
+ */
+it('ships the agreed code lifetime, attempt cap and lock', function () {
+    expect(AuthSettings::otpTtlSeconds())->toBe(300)
+        ->and(AuthSettings::otpMaxAttempts())->toBe(3)
+        ->and(AuthSettings::otpLockSeconds())->toBe(300);
+});
+
+it('locks the number on the third wrong code and says until when', function () {
+    $this->freezeSecond();
+    $challengeId = requestCode();
+    $device = ['publicId' => 'dev-1', 'platform' => 'android'];
+
+    foreach ([1, 2] as $ignored) {
+        $this->postJson('/api/v1/auth/otp/verify', ['challengeId' => $challengeId, 'code' => '000000', 'device' => $device])
+            ->assertStatus(401)->assertJsonPath('error.code', 'AUTH_OTP_INVALID');
+    }
+
+    $lockedUntil = now()->addSeconds(300)->utc()->toIso8601ZuluString();
+
+    $this->postJson('/api/v1/auth/otp/verify', ['challengeId' => $challengeId, 'code' => '000000', 'device' => $device])
+        ->assertStatus(429)
+        ->assertJsonPath('error.code', 'AUTH_OTP_LOCKED')
+        ->assertJsonPath('error.fields.lockedUntil.0', $lockedUntil)
+        ->assertHeader('Retry-After', '300');
+
+    expect(OtpChallenge::findOrFail($challengeId)->status)->toBe(OtpStatus::Blocked);
+});
+
+it('sends no new code while the number is locked, and lets it sign in once the lock runs out', function () {
+    $challengeId = requestCode();
+    $device = ['publicId' => 'dev-1', 'platform' => 'android'];
+
+    foreach (range(1, 3) as $ignored) {
+        $this->postJson('/api/v1/auth/otp/verify', ['challengeId' => $challengeId, 'code' => '000000', 'device' => $device]);
+    }
+
+    // A fresh challenge would restart the guessing — the lock belongs to the number.
+    $this->postJson('/api/v1/auth/otp/request', [
+        'phone' => '01012345678',
+        'purpose' => 'authentication',
+        'device' => $device,
+    ])->assertStatus(429)
+        ->assertJsonPath('error.code', 'AUTH_OTP_LOCKED')
+        ->assertHeader('Retry-After');
+
+    // Another number is untouched: the lock says nothing about anyone else.
+    requestCode(phone: '01098765432');
+
+    $this->travel(301)->seconds();
+
+    $fresh = requestCode();
+
+    $this->postJson('/api/v1/auth/otp/verify', [
+        'challengeId' => $fresh,
+        'code' => $this->sender->lastCode(),
+        'device' => $device,
+    ])->assertOk();
 });
 
 it('refuses a code whose lifetime has run out', function () {

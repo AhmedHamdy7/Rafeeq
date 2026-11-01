@@ -8,6 +8,7 @@ use App\Domains\Identity\Enums\OtpStatus;
 use App\Domains\Identity\Enums\SecurityEventType;
 use App\Domains\Identity\Models\OtpChallenge;
 use App\Domains\Identity\Support\AuthSettings;
+use App\Domains\Identity\Support\OtpLock;
 use App\Domains\Identity\Support\SecurityLog;
 use App\Domains\Shared\Exceptions\DomainException;
 use App\Domains\Shared\Support\ErrorCode;
@@ -42,6 +43,10 @@ final readonly class RequestOtpAction
         ?string $devicePublicId = null,
     ): array {
         $this->assertWithinRateLimits($phone, $ip);
+
+        // AUTH-08: three wrong codes lock the number for this purpose; a new code would
+        // restart the guessing, so none is sent until the lock runs out.
+        OtpLock::assertNotLocked($phone, $purpose);
 
         $previous = $this->activeChallengeFor($phone, $purpose);
 

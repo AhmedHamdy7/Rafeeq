@@ -32,6 +32,11 @@ final class AuthSettings
         return (int) self::get('auth.otp.max_attempts');
     }
 
+    public static function otpLockSeconds(): int
+    {
+        return (int) self::get('auth.otp.lock_seconds');
+    }
+
     public static function otpMaxResends(): int
     {
         return (int) self::get('auth.otp.max_resends');

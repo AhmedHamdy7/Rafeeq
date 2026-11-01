@@ -26,6 +26,8 @@ enum ErrorCode: string
     case OtpInvalid = 'AUTH_OTP_INVALID';
     case OtpExpired = 'AUTH_OTP_EXPIRED';
     case OtpMaxAttempts = 'AUTH_OTP_MAX_ATTEMPTS';
+    // AUTH-08: the number is locked for this purpose until `fields.lockedUntil`.
+    case OtpLocked = 'AUTH_OTP_LOCKED';
     case OtpResendCooldown = 'AUTH_OTP_RESEND_COOLDOWN';
     case OtpMaxResends = 'AUTH_OTP_MAX_RESENDS';
     case OtpDeliveryFailed = 'AUTH_OTP_DELIVERY_FAILED';
@@ -344,6 +346,7 @@ enum ErrorCode: string
             self::OtpChallengeNotFound => 404,
             self::PhoneInvalid => 422,
             self::OtpMaxAttempts,
+            self::OtpLocked,
             self::OtpResendCooldown,
             self::OtpMaxResends => 429,
             self::OtpDeliveryFailed => 503,

@@ -24,6 +24,7 @@ final class OtpController extends Controller
         ErrorCode::TooManyRequests,
         ErrorCode::OtpResendCooldown,
         ErrorCode::OtpMaxResends,
+        ErrorCode::OtpLocked,
         ErrorCode::OtpDeliveryFailed,
     )]
     public function request(RequestOtpRequest $request, RequestOtpAction $action): JsonResponse
@@ -52,6 +53,7 @@ final class OtpController extends Controller
         ErrorCode::OtpInvalid,
         ErrorCode::OtpExpired,
         ErrorCode::OtpMaxAttempts,
+        ErrorCode::OtpLocked,
     )]
     public function verify(VerifyOtpRequest $request, AuthenticateWithOtpAction $action): JsonResponse
     {

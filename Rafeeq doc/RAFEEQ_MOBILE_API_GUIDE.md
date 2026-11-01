@@ -881,9 +881,23 @@ Send a code. **This is also registration** — a number nobody has used before g
 | Response field | Meaning |
 |---|---|
 | `challengeId` | Pass this back to `/verify`. Not a secret, but single-purpose. |
-| `expiresInSeconds` | How long the code is valid. Show a countdown. |
+| `expiresInSeconds` | How long the code is valid (300 today, tunable). Show a countdown. |
 | `resendAvailableInSeconds` | Do not enable "resend" before this elapses — it will 429. |
 | `maskedPhone` | `+2010****678`. Safe to display; confirms we read the number they meant. |
+
+🔒 **The OTP lock (AUTH-07, AUTH-08).** A code lives **5 minutes** and takes **3 wrong tries**. The
+third wrong code locks **the number** for **5 minutes** — on every challenge, so a new code does not
+reset it. While locked, both `/request` and `/verify` answer **`429 AUTH_OTP_LOCKED`** with
+`Retry-After` and `error.fields.lockedUntil` (one UTC instant):
+
+```json
+{ "success": false, "error": { "code": "AUTH_OTP_LOCKED",
+  "message": "Too many incorrect codes. You can try again in a few minutes.",
+  "fields": { "lockedUntil": ["2026-11-01T18:05:00Z"] } } }
+```
+
+Show a countdown to `lockedUntil` and disable both "verify" and "resend" until it passes. All three
+numbers are admin settings, so read them from the response, never hard-code them.
 
 #### `POST /auth/otp/verify` — public
 
@@ -4116,6 +4130,7 @@ exist, and every live endpoint must be named here.
 
 | Date | Change |
 |---|---|
+| 2026-11-01 | 🔒 **OTP lock (F1-5, AUTH-07, AUTH-08).** A code now lives **300 s** (was 120) and takes **3** wrong tries (was 5). The third wrong code locks the number for **5 minutes**: `/auth/otp/request` and `/auth/otp/verify` answer **`429 AUTH_OTP_LOCKED`** with `Retry-After` and `error.fields.lockedUntil`. A new code no longer resets the guessing. All three are admin settings (`auth.otp.lock_seconds` is new). `AUTH_OTP_MAX_ATTEMPTS` is now only the per-minute rate limit. |
 | 2026-11-01 | ❓ **"Did you ask to get off here?" (TRIP-20, PAY-28)** — new `POST /bookings/{booking}/early-drop` and the `early_drop_check` notification; bookings now return `feeLinePiastres`, `feeLineReason` and `earlyDrop`. A `false_arrival` report puts her no-show on that booking under review (TRIP-17). Staff now settle the money of payment disputes (PAY-31, PAY-32) and women-only misuse (PAY-47, the man is suspended until he pays) from the safety desk. |
 | 2026-11-01 | 🚗 **Driver fees (PAY-23 → PAY-29, C-5 → C-10).** New: `POST /driver/bookings/{booking}/cancel` (remove one passenger), `GET /trips/{trip}/cancel-preview` and `GET /commutes/{commute}/cancel-preview` (the fee before he confirms), `POST /account/debt/entries/{entry}/appeal` (48h). Cancelling seats costs the driver by notice (16h+: 0 · 10–16h: 10 % · < 10h: 25 %) on one passenger, Cancel today, pause, delete, a new car and a block; ending a run that set off 100 %; never coming 50 %; a passenger leaving because he was late 25 %. After a breakdown, accident or emergency a passenger aboard pays the share of her route past 25 %; otherwise nothing — her booking's `paymentStatus` is the new `WAIVED`. `PATCH /bookings/{booking}/cancel` now applies the fees. End early is the full fare. |
 | 2026-11-01 | 💸 **Passenger fees (PAY-20 → PAY-22, TRIP-26, SAFE-11).** Three counters — `NO_SHOW`, `LATE_CANCEL`, `LATE_BOARDING` — each with its ladder and a 90-day reset; `MISSED_COMMITMENT` is history only. Warnings now carry `feePiastres`, `feeStatus`, `appealBy`. A late cancel's fee waits for departure and is dropped if the seat is refilled. Appeals close after 48 hours (`APPEAL_WINDOW_CLOSED`). `away` on the group attendance cancels that day. |

@@ -7,6 +7,7 @@ use App\Domains\Identity\Enums\OtpStatus;
 use App\Domains\Identity\Enums\SecurityEventType;
 use App\Domains\Identity\Models\OtpChallenge;
 use App\Domains\Identity\Support\AuthSettings;
+use App\Domains\Identity\Support\OtpLock;
 use App\Domains\Identity\Support\SecurityLog;
 use App\Domains\Shared\Exceptions\DomainException;
 use App\Domains\Shared\Support\ErrorCode;
@@ -99,6 +100,13 @@ final readonly class VerifyOtpAction
 
     private function assertUsable(OtpChallenge $challenge): void
     {
+        // AUTH-08: a burnt challenge whose lock has not run out yet answers with the lock, so
+        // the app shows the same countdown here as on `/request`. Once the lock is over it is
+        // just a dead challenge — "request a new code".
+        if ($challenge->status === OtpStatus::Blocked && $challenge->locked_until?->isFuture()) {
+            OtpLock::refuse($challenge->locked_until);
+        }
+
         if ($challenge->status !== OtpStatus::Pending) {
             // Each dead state gets the answer that tells the app what to do
             // about it: offer a resend for an expired or burnt-out challenge,
@@ -118,9 +126,7 @@ final readonly class VerifyOtpAction
         }
 
         if (! $challenge->hasAttemptsRemaining()) {
-            $challenge->forceFill(['status' => OtpStatus::Blocked->value])->save();
-
-            throw DomainException::of(ErrorCode::OtpMaxAttempts);
+            OtpLock::engage($challenge);
         }
     }
 
@@ -142,10 +148,9 @@ final readonly class VerifyOtpAction
             'attempt_count' => $challenge->attempt_count,
         ]);
 
+        // The last wrong code locks the number (AUTH-08), not only this challenge.
         if (! $challenge->hasAttemptsRemaining()) {
-            $challenge->forceFill(['status' => OtpStatus::Blocked->value])->save();
-
-            throw DomainException::of(ErrorCode::OtpMaxAttempts);
+            OtpLock::engage($challenge);
         }
 
         throw DomainException::of(ErrorCode::OtpInvalid);

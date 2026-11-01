@@ -431,6 +431,7 @@ return [
             'auth__otp__ttl_seconds' => 'مدة صلاحية كود الدخول',
             'auth__otp__resend_cooldown_seconds' => 'الانتظار قبل إرسال كود جديد',
             'auth__otp__max_attempts' => 'محاولات الكود الغلط المسموحة',
+            'auth__otp__lock_seconds' => 'مدة القفل بعد الكود الغلط',
             'auth__otp__max_resends' => 'مرات إعادة إرسال الكود',
             'auth__session__access_ttl_minutes' => 'عمر توكن الوصول',
             'auth__session__refresh_ttl_days' => 'مدة بقاء الجهاز داخل',
