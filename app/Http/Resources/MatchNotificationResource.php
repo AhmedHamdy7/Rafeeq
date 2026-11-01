@@ -28,7 +28,8 @@ final class MatchNotificationResource extends JsonResource
             // since; this records why the interruption was justified.
             'score' => $this->score,
             'audience' => $offer->audience->value,
-            'pricePerSeatPiastres' => $offer->price_per_seat_piastres,
+            // The commute's current automatic seat price (P-1); null only if it was never priced.
+            'seatPricePiastres' => $offer->seat_price_piastres,
 
             /*
              * Where it goes and when it leaves. Without these the notification says a
@@ -48,6 +49,7 @@ final class MatchNotificationResource extends JsonResource
             'vehicle' => [
                 'make' => $offer->vehicle?->make,
                 'model' => $offer->vehicle?->model,
+                'tier' => $offer->vehicle?->tierOrDefault()->value,
             ],
             'deliveredAt' => $this->delivered_at?->toIso8601String(),
             'clickedAt' => $this->clicked_at?->toIso8601String(),

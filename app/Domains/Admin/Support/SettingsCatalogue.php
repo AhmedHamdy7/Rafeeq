@@ -51,18 +51,20 @@ final class SettingsCatalogue
         // ---- Verification -------------------------------------------------
         'verification.document_retention_days' => ['group' => 'verification', 'min' => 30, 'max' => 730, 'unit' => 'days'],
 
-        // ---- Commutes and pricing (Chapter 4, ERD §23.3) ------------------
-        'commute.min_price_piastres' => ['group' => 'commute', 'min' => 1_000, 'max' => 20_000, 'unit' => 'piastres'],
-        'commute.max_price_piastres' => ['group' => 'commute', 'min' => 2_000, 'max' => 50_000, 'unit' => 'piastres'],
-        'pricing.cost_per_km_piastres' => ['group' => 'commute', 'min' => 100, 'max' => 5_000, 'unit' => 'piastres'],
-        'pricing.assumed_occupancy' => ['group' => 'commute', 'min' => 1, 'max' => 7, 'unit' => 'passengers'],
+        // ---- The automatic seat price (P-1 → P-5; PAY-41 → PAY-43, PAY-48) ----
+        'pricing.km_rate_standard_piastres' => ['group' => 'commute', 'min' => 100, 'max' => 5_000, 'unit' => 'piastres'],
+        'pricing.km_rate_comfort_piastres' => ['group' => 'commute', 'min' => 100, 'max' => 5_000, 'unit' => 'piastres'],
+        // 10% in the beta, 15% at the public launch (PAY-41).
+        'pricing.commission_rate_percent' => ['group' => 'commute', 'min' => 0, 'max' => 50, 'unit' => 'percent'],
+        'pricing.min_commission_piastres' => ['group' => 'commute', 'min' => 0, 'max' => 5_000, 'unit' => 'piastres'],
         'pricing.rounding_step_piastres' => ['group' => 'commute', 'min' => 100, 'max' => 2_500, 'unit' => 'piastres'],
+        'pricing.min_seat_divisor' => ['group' => 'commute', 'min' => 1, 'max' => 7, 'unit' => 'seats'],
+        // PROF-28: the fewest seats a car may be approved for at verification.
+        'driver.min_approved_seats' => ['group' => 'commute', 'min' => 1, 'max' => 7, 'unit' => 'seats'],
 
         // ---- Money -------------------------------------------------------
         'payment.collection_delay_minutes' => ['group' => 'booking', 'min' => 30, 'max' => 1_440, 'unit' => 'minutes'],
         'payment.max_driver_debt_piastres' => ['group' => 'booking', 'min' => 5_000, 'max' => 200_000, 'unit' => 'piastres'],
-        // Decided 2026-10-06: deducted from the driver's price, 3% by default, editable here.
-        'booking.platform_fee_percent' => ['group' => 'booking', 'min' => 0, 'max' => 20, 'unit' => 'percent'],
 
         // ---- The trip itself (Chapter 8) ---------------------------------
         'trip.start_window_minutes' => ['group' => 'trip', 'min' => 15, 'max' => 240, 'unit' => 'minutes'],

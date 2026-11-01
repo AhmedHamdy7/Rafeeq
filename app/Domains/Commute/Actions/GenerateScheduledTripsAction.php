@@ -7,6 +7,8 @@ use App\Domains\Commute\Models\CommuteOffer;
 use App\Domains\Commute\Models\CommuteSchedule;
 use App\Domains\Commute\Models\ScheduledTrip;
 use App\Domains\Commute\Support\DepartureTimeCalculator;
+use App\Domains\Commute\Support\SeatPriceQuote;
+use App\Domains\Commute\Support\SeatPricing;
 use App\Domains\Shared\ValueObjects\DaysMask;
 use Carbon\CarbonImmutable;
 use Illuminate\Support\Facades\DB;
@@ -49,7 +51,7 @@ final readonly class GenerateScheduledTripsAction
          * and strict mode would turn a lazy load there into an exception — or, worse in production,
          * into one query per generated day.
          */
-        $offer->loadMissing('weekdaySchedules');
+        $offer->loadMissing(['weekdaySchedules', 'vehicle']);
 
         if ($schedule === null || $offer->status !== CommuteOfferStatus::Published) {
             // Only a published offer produces bookable days. A paused one keeps
@@ -73,15 +75,36 @@ final readonly class GenerateScheduledTripsAction
 
         $created = 0;
 
-        DB::transaction(function () use ($offer, $schedule, $days, $from, $until, $existing, &$created): void {
+        /*
+         * 🔴 The automatic seat price (P-1, P-2, P-5), quoted ONCE per run at today's settings and
+         * frozen onto every day this run creates (PAY-44). Days generated earlier keep the quote
+         * they were born with, which is the whole of "a settings change never alters a day already
+         * generated": a rate moved this afternoon reaches tomorrow's new days and nothing else.
+         *
+         * Never refused here. Publishing is where a car without approved seats is stopped; a
+         * commute that got past it (or predates it) still has to keep generating days, so the
+         * quote falls back to the minimum divisor rather than throwing in a nightly job.
+         */
+        $quote = SeatPricing::quote((int) $offer->route_distance_meters, $offer->vehicle);
+
+        DB::transaction(function () use ($offer, $schedule, $days, $from, $until, $existing, $quote, &$created): void {
             for ($date = $from; $date->lessThanOrEqualTo($until); $date = $date->addDay()) {
                 if (! $days->includesDate($date) || in_array($date->toDateString(), $existing, true)) {
                     continue;
                 }
 
-                $this->createTrip($offer, $schedule, $date);
+                $this->createTrip($offer, $schedule, $date, $quote);
                 $created++;
             }
+
+            /*
+             * The commute's own copy of "what a seat costs now", shown to the driver on his
+             * commute. A cache of the latest quote, never read to price anything.
+             */
+            $offer->forceFill([
+                'seat_price_piastres' => $quote->seatPricePiastres,
+                'driver_share_piastres' => $quote->driverSharePiastres,
+            ])->save();
 
             // Recorded even when nothing was created, so the next run starts
             // from here rather than walking the same empty days again.
@@ -135,12 +158,12 @@ final readonly class GenerateScheduledTripsAction
         return $dates;
     }
 
-    private function createTrip(CommuteOffer $offer, CommuteSchedule $schedule, CarbonImmutable $date): void
+    private function createTrip(CommuteOffer $offer, CommuteSchedule $schedule, CarbonImmutable $date, SeatPriceQuote $quote): void
     {
         /*
-         * 🔴 The weekday's own row decides the time, the price and the capacity (Feature 03 v3:
-         * "each weekday has independent departure, promised arrival, price and capacity"). This is
-         * where that independence actually takes effect — everything upstream merely records it.
+         * 🔴 The weekday's own row decides the time and the capacity (Feature 03 v3). The price is
+         * no longer per weekday: it comes from the route and the car (PAY-42), which are the same
+         * every day.
          *
          * Falls back to the schedule's derived `departure_time` if a row is somehow missing, so a
          * commute never stops generating trips over a data gap. That fallback should be
@@ -167,13 +190,10 @@ final readonly class GenerateScheduledTripsAction
             'departure_at' => $departureAt,
             'departure_local' => $date->toDateString().' '.$departureTime,
             /*
-             * Snapshots, deliberately: Chapter 4 §6 says a price change affects only FUTURE trips.
-             * A booked passenger's day keeps the terms they agreed to, so these are copied rather
-             * than read through the offer — and now they are copied from the WEEKDAY, which falls
-             * back to the commute when she has not priced that day differently.
+             * A snapshot, deliberately: a booked passenger's day keeps the terms she agreed to, so
+             * the capacity is copied from the WEEKDAY rather than read through the offer.
              */
             'seats_total' => $weekday?->seatsFor($offer) ?? $offer->seats_total,
-            'price_snapshot_piastres' => $weekday?->priceFor($offer) ?? $offer->price_per_seat_piastres,
             'promised_arrival_at' => $weekday?->promised_arrival_time === null ? null : DepartureTimeCalculator::toUtc(
                 $date->toDateString(),
                 $weekday->promised_arrival_time,
@@ -181,6 +201,9 @@ final readonly class GenerateScheduledTripsAction
             ),
             'booking_deadline_at' => $this->bookingDeadline($date, $schedule->timezone),
         ]);
+
+        // Not fillable: only a quote may price a day.
+        $trip->forceFill($quote->toTripColumns());
 
         $trip->save();
     }

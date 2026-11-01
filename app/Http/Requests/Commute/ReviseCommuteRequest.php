@@ -15,9 +15,9 @@ use Illuminate\Validation\Rule;
  * Maintainer notes:
  *
  * - Allowed after publishing, unlike the route and schedule, because each trip
- *   carries a snapshot of the price and seat count it was generated with: a new
- *   price applies to days generated from now on, never to a day someone already
- *   booked.
+ *   carries a snapshot of the seat count and price it was generated with.
+ * - `pricePerSeatPiastres` is `prohibited` (P-1, D-0016): the price is automatic,
+ *   and a refusal is clearer than accepting a value and ignoring it.
  * - Lowering seats below what is already booked is refused as a conflict, not a
  *   validation error. The number is legal; the existing passengers are what make
  *   it impossible today.
@@ -34,16 +34,12 @@ final class ReviseCommuteRequest extends FormRequest
             'vehicleId' => ['sometimes', 'string', 'size:26'],
 
             // Seats offered, not counting your own. Cannot go below the number
-            // already booked on any future day.
+            // already booked on any future day, nor above the seats approved on
+            // your car.
             'seatsTotal' => ['sometimes', 'integer', 'min:1', 'max:7'],
 
-            // Contribution per passenger, in piastres. Applies to days generated
-            // from now on; days already booked keep their original price.
-            'pricePerSeatPiastres' => [
-                'sometimes', 'integer',
-                'min:'.config('rafeeq.commute.min_price_piastres'),
-                'max:'.config('rafeeq.commute.max_price_piastres'),
-            ],
+            // Do not send. The seat price is set by RAFEEQ; sending one is refused.
+            'pricePerSeatPiastres' => ['prohibited'],
 
             'maxDetourMinutes' => ['sometimes', 'integer', 'min:0', 'max:30'],
             'maxWalkMinutes' => ['sometimes', 'integer', 'min:0', 'max:30'],
@@ -62,6 +58,16 @@ final class ReviseCommuteRequest extends FormRequest
              */
             'rules' => ['sometimes', 'array'],
             'rules.*' => ['boolean'],
+        ];
+    }
+
+    /**
+     * @return array<string, string>
+     */
+    public function messages(): array
+    {
+        return [
+            'pricePerSeatPiastres.prohibited' => __('commute.price.set_by_rafeeq'),
         ];
     }
 

@@ -185,13 +185,13 @@ final class ScoringModel
             return self::PRICE_WEIGHT;
         }
 
-        if ($trip->price_snapshot_piastres <= $ceiling) {
+        if ($trip->seat_price_piastres <= $ceiling) {
             return self::PRICE_WEIGHT;
         }
 
         // Twice the budget is worth nothing. Between the two it tapers, so a
         // commute slightly over budget still ranks above one at double.
-        $over = $trip->price_snapshot_piastres / $ceiling - 1;
+        $over = $trip->seat_price_piastres / $ceiling - 1;
 
         return (int) round(self::PRICE_WEIGHT * max(0.0, 1 - $over));
     }

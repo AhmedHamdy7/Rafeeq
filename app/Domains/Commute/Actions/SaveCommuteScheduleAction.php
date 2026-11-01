@@ -39,6 +39,7 @@ final readonly class SaveCommuteScheduleAction
             : (int) $input['daysMask'];
 
         $this->assertUsable($offer, $startDate, $endDate, $daysMask);
+        $this->assertDaySeatsFitVehicle($offer, $input);
 
         return DB::transaction(function () use ($offer, $input, $startDate, $endDate, $daysMask): CommuteOffer {
             // Replaced, not patched: a schedule is one thing, and a half-updated
@@ -74,8 +75,9 @@ final readonly class SaveCommuteScheduleAction
      * way to keep a cache honest is to give it exactly one owner.
      *
      * `perDay` is optional and sparse. A driver who leaves at the same time every day sends
-     * nothing, gets the single `departureTime` on every weekday, and inherits the commute's price
-     * and capacity — which is precisely how this behaved before the table existed.
+     * nothing, gets the single `departureTime` on every weekday, and inherits the commute's
+     * capacity — which is precisely how this behaved before the table existed. There is no
+     * per-day price: the seat price is automatic (P-1, PAY-42).
      *
      * @param  array<string, mixed>  $input
      */
@@ -99,9 +101,8 @@ final readonly class SaveCommuteScheduleAction
             $weekday->weekday_bit = $bit;
             $weekday->departure_time = $day['departureTime'] ?? $input['departureTime'];
             $weekday->promised_arrival_time = $day['promisedArrivalTime'] ?? ($input['promisedArrivalTime'] ?? null);
-            // Null, not a copy of the parent: null means "follow the commute", so a later price
-            // change reaches every day she did not deliberately price differently.
-            $weekday->price_per_seat_piastres = $day['pricePerSeatPiastres'] ?? null;
+            // Null, not a copy of the parent: null means "follow the commute", so a later change
+            // reaches every day he did not deliberately set differently.
             $weekday->seats_total = $day['seatsTotal'] ?? null;
 
             $weekday->save();
@@ -121,6 +122,21 @@ final readonly class SaveCommuteScheduleAction
             'days_mask' => DaysMask::fromBitList($saved->pluck('weekday_bit')->all())->value,
             'departure_time' => $saved->min('departure_time'),
         ]);
+    }
+
+    /**
+     * C-3: a weekday that offers its own seat count still cannot offer more than the car's
+     * approved seats. Checked before anything is written, like the rest of the schedule.
+     *
+     * @param  array<string, mixed>  $input
+     */
+    private function assertDaySeatsFitVehicle(CommuteOffer $offer, array $input): void
+    {
+        foreach ((array) ($input['perDay'] ?? []) as $day) {
+            if (isset($day['seatsTotal'])) {
+                CreateCommuteOfferAction::assertSeatsFitVehicle($offer->vehicle, (int) $day['seatsTotal']);
+            }
+        }
     }
 
     private function assertUsable(

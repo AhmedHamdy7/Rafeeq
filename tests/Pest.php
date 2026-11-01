@@ -3,10 +3,14 @@
 use App\Domains\Admin\Actions\SyncAdminRolesAction;
 use App\Domains\Admin\Enums\AdminRole;
 use App\Domains\Admin\Models\AdminUser;
+use App\Domains\Admin\Models\PlatformSetting;
 use App\Domains\Commute\Models\ScheduledTrip;
 use App\Domains\Driver\Actions\ReviewDriverApplicationAction;
+use App\Domains\Driver\Actions\ReviewVehicleAction;
 use App\Domains\Driver\Enums\DriverProfileStatus;
+use App\Domains\Driver\Enums\VehicleTier;
 use App\Domains\Driver\Models\DriverProfile;
+use App\Domains\Driver\Models\Vehicle;
 use App\Domains\Identity\Contracts\OtpSender;
 use App\Domains\Shared\ValueObjects\DaysMask;
 use App\Domains\Verification\Actions\ReviewVerificationAction;
@@ -275,12 +279,35 @@ function approvedDriver(string $phone = '01012345678', string $devicePublicId = 
 
     // Scoped to the application awaiting a decision, so a test with two drivers
     // approves the right one rather than failing on an ambiguous `sole()`.
-    app(ReviewDriverApplicationAction::class)->approve(
-        DriverProfile::query()->where('status', DriverProfileStatus::PendingReview->value)->sole(),
-        AdminUser::factory()->create(),
-    );
+    $profile = DriverProfile::query()->where('status', DriverProfileStatus::PendingReview->value)->sole();
+    $reviewer = AdminUser::factory()->create();
+
+    /*
+     * The car review first (F2-7): 3 approved seats in a Standard car — PAY-42's reference car — so
+     * the automatic price of the reference journey is the formula's and nothing else.
+     */
+    foreach ($profile->vehicles()->get() as $vehicle) {
+        app(ReviewVehicleAction::class)->execute($vehicle, $reviewer, 3, VehicleTier::Standard, true);
+    }
+
+    app(ReviewDriverApplicationAction::class)->approve($profile, $reviewer);
 
     return $token;
+}
+
+/**
+ * Fills in the admin car review for every car on the pending applications (F2-7), on the Livewire
+ * queue page, so a test can then press approve. Takes and returns the `Livewire::test()` handle.
+ */
+function reviewCarOnPage(mixed $page, int $seats = 3, string $tier = 'standard', bool $hasAc = true): mixed
+{
+    foreach (Vehicle::query()->pluck('id') as $vehicleId) {
+        $page->set("cars.{$vehicleId}.approvedSeats", $seats)
+            ->set("cars.{$vehicleId}.tier", $tier)
+            ->set("cars.{$vehicleId}.hasAc", $hasAc);
+    }
+
+    return $page;
 }
 
 /*
@@ -300,7 +327,6 @@ function createCommute(string $token, string $vehicleId, array $overrides = [])
         'vehicleId' => $vehicleId,
         'direction' => 'to_work',
         'seatsTotal' => 3,
-        'pricePerSeatPiastres' => 8000,
         'maxDetourMinutes' => 10,
         'maxWalkMinutes' => 15,
         'audience' => 'women_only',
@@ -671,16 +697,30 @@ function setDriverBalance(string $driverUserId, array $values): void
 }
 
 /**
+ * Overrides an admin setting the way the dashboard does (a `platform_settings` row), so the code
+ * reads it through its `*Settings` class exactly as in production.
+ */
+function setPlatformSetting(string $key, int $value): void
+{
+    PlatformSetting::query()->updateOrCreate(['setting_key' => $key], [
+        'setting_value' => $value,
+        'value_type' => 'integer',
+        'description' => 'Set by a test',
+    ]);
+}
+
+/**
  * Moves a booking's price, keeping the three money columns consistent.
  *
  * 🔴 `bookings` carries a CHECK constraint — `price = platform_fee + driver_amount` — so changing
  * the price alone is rejected by the database. That is the constraint doing its job: a money row
  * that does not add up is worse than one that is wrong, because nothing downstream can tell which
- * of the three to trust. The fee is recomputed at the settled 3%.
+ * of the three to trust. The split is a plausible one (a tenth to RAFEEQ), not the formula: a test
+ * that needs the formula reads the day's own snapshot.
  */
 function repriceBooking(string $bookingId, int $pricePiastres): void
 {
-    $fee = (int) round($pricePiastres * 0.03);
+    $fee = intdiv($pricePiastres, 10);
 
     DB::table('bookings')->where('id', $bookingId)->update([
         'price_snapshot_piastres' => $pricePiastres,

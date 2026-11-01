@@ -6,18 +6,20 @@ use App\Domains\Commute\Enums\CommuteRuleKey;
 use App\Domains\Commute\Models\CommuteOffer;
 use App\Domains\Commute\Models\CommuteRule;
 use App\Domains\Commute\Models\ScheduledTrip;
+use App\Domains\Driver\Models\Vehicle;
 use App\Domains\Shared\Exceptions\DomainException;
 use App\Domains\Shared\Support\ErrorCode;
 use Illuminate\Support\Facades\DB;
 
 /**
- * Revising the terms of a commute — seats, price, preferences, tolerances.
+ * Revising the terms of a commute — seats, vehicle, preferences, tolerances.
  *
- * Allowed after publishing, unlike the route and schedule, and Chapter 4 §6 says
- * why it is safe: "price changes affect only future scheduled trips". Each trip
- * carries a snapshot of the price and seat count it was generated with, so a
- * passenger who booked Tuesday keeps Tuesday's terms and a new price applies from
- * the next day generated onwards.
+ * Allowed after publishing, unlike the route and schedule, because each trip
+ * carries a snapshot of the seat count and the automatic price it was generated
+ * with, so a passenger who booked Tuesday keeps Tuesday's terms.
+ *
+ * 🔒 The price is not here at all (P-1, D-0016): it is computed by the server, and
+ * the request refuses `pricePerSeatPiastres` outright.
  *
  * Seats are the exception that needs care. Chapter 4 §5: if seats drop below what
  * is already booked, the change is blocked until the conflict is resolved —
@@ -33,14 +35,25 @@ final readonly class ReviseCommuteOfferAction
     {
         CommuteState::assertRevisable($offer);
 
-        if (array_key_exists('seatsTotal', $attributes)) {
-            $this->assertSeatsFit($offer, (int) $attributes['seatsTotal']);
-        }
+        $vehicle = $offer->vehicle;
 
         if (array_key_exists('vehicleId', $attributes)) {
             // Chapter 4's edge case: changing vehicle is allowed only if the
             // replacement is approved and active.
-            CreateCommuteOfferAction::usableVehicle($offer->driverProfile, $attributes['vehicleId']);
+            $vehicle = CreateCommuteOfferAction::usableVehicle($offer->driverProfile, $attributes['vehicleId']);
+
+            /*
+             * C-3: the commute as it stands — every weekday's own seat count included — has to
+             * fit the approved seats of the car it is moving to. Checked here because a smaller
+             * replacement would otherwise leave days selling seats the car does not have.
+             */
+            if (! array_key_exists('seatsTotal', $attributes)) {
+                CreateCommuteOfferAction::assertCommuteFitsVehicle($offer, $vehicle);
+            }
+        }
+
+        if (array_key_exists('seatsTotal', $attributes)) {
+            $this->assertSeatsFit($offer, $vehicle, (int) $attributes['seatsTotal']);
         }
 
         return DB::transaction(function () use ($offer, $attributes): CommuteOffer {
@@ -60,9 +73,13 @@ final readonly class ReviseCommuteOfferAction
      * scheduled. Past trips keep their own snapshot and are none of this
      * change's business.
      */
-    private function assertSeatsFit(CommuteOffer $offer, int $seatsTotal): void
+    private function assertSeatsFit(CommuteOffer $offer, Vehicle $vehicle, int $seatsTotal): void
     {
-        CreateCommuteOfferAction::assertSeatsFitVehicle($offer->vehicle, $seatsTotal);
+        CreateCommuteOfferAction::assertSeatsFitVehicle($vehicle, $seatsTotal);
+
+        foreach ($offer->weekdaySchedules()->whereNotNull('seats_total')->pluck('seats_total') as $daySeats) {
+            CreateCommuteOfferAction::assertSeatsFitVehicle($vehicle, (int) $daySeats);
+        }
 
         $mostBooked = (int) ScheduledTrip::query()
             ->where('commute_offer_id', $offer->id)
@@ -111,7 +128,6 @@ final readonly class ReviseCommuteOfferAction
         $map = [
             'vehicleId' => 'vehicle_id',
             'seatsTotal' => 'seats_total',
-            'pricePerSeatPiastres' => 'price_per_seat_piastres',
             'maxDetourMinutes' => 'max_detour_minutes',
             'maxWalkMinutes' => 'max_walk_minutes',
             'audience' => 'audience',

@@ -18,6 +18,19 @@ use Illuminate\Http\Resources\Json\JsonResource;
  */
 final class PreferenceResource extends JsonResource
 {
+    /**
+     * How many of the caller's commutes are published right now. Set by the PATCH that changes
+     * the mode (F2-10), so a driver switching to the passenger side can be reminded they keep running.
+     */
+    public int $publishedCommutesCount = 0;
+
+    public function withPublishedCommutesCount(int $count): self
+    {
+        $this->publishedCommutesCount = $count;
+
+        return $this;
+    }
+
     public function toArray(Request $request): array
     {
         return [
@@ -29,6 +42,9 @@ final class PreferenceResource extends JsonResource
             // `Accept-Language` on the request instead.
             'language' => $this->language,
             'theme' => $this->theme?->value,
+            // F2-10: published commutes keep running, and passengers keep expecting the driver,
+            // until he pauses them. Remind him when he switches to `passenger` and this is above 0.
+            'publishedCommutesCount' => $this->publishedCommutesCount,
         ];
     }
 }

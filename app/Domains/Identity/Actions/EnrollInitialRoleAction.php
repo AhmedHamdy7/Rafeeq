@@ -27,26 +27,7 @@ final readonly class EnrollInitialRoleAction
         $capabilities = Capability::forRegisteredRole($role);
 
         DB::transaction(function () use ($user, $role, $capabilities): void {
-            /*
-             * 🔴 `insertOrIgnore`, not `firstOrCreate`.
-             *
-             * `firstOrCreate` reads, then writes, and two retries arriving together both read
-             * "absent" and both insert. One then dies on the unique index with a 500 — on the
-             * final step of somebody's registration. `insertOrIgnore` leans on the index instead
-             * of racing it, in one statement, and the duplicate is simply not inserted.
-             */
-            UserCapability::query()->insertOrIgnore(array_map(
-                fn (Capability $capability): array => [
-                    'id' => (string) Str::ulid(),
-                    'user_id' => $user->getKey(),
-                    'capability' => $capability->value,
-                    'status' => CapabilityStatus::Active->value,
-                    'enrolled_at' => now(),
-                    'created_at' => now(),
-                    'updated_at' => now(),
-                ],
-                $capabilities,
-            ));
+            self::grant($user, $capabilities);
 
             /*
              * Written only the first time. `registered_role` is the intent declared at sign-up and
@@ -78,6 +59,38 @@ final readonly class EnrollInitialRoleAction
         });
 
         return $user->refresh();
+    }
+
+    /**
+     * Adds capability rows, idempotently. Shared with AddDriverCapabilityAction (F1-7) so there is
+     * one way a capability comes into existence, and it is race-safe.
+     *
+     * Call inside a transaction.
+     *
+     * @param  array<int, Capability>  $capabilities
+     */
+    public static function grant(User $user, array $capabilities): void
+    {
+        /*
+         * 🔴 `insertOrIgnore`, not `firstOrCreate`.
+         *
+         * `firstOrCreate` reads, then writes, and two retries arriving together both read
+         * "absent" and both insert. One then dies on the unique index with a 500 — on the
+         * final step of somebody's registration. `insertOrIgnore` leans on the index instead
+         * of racing it, in one statement, and the duplicate is simply not inserted.
+         */
+        UserCapability::query()->insertOrIgnore(array_map(
+            fn (Capability $capability): array => [
+                'id' => (string) Str::ulid(),
+                'user_id' => $user->getKey(),
+                'capability' => $capability->value,
+                'status' => CapabilityStatus::Active->value,
+                'enrolled_at' => now(),
+                'created_at' => now(),
+                'updated_at' => now(),
+            ],
+            $capabilities,
+        ));
     }
 
     /*

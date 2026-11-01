@@ -107,7 +107,7 @@ final readonly class DuplicateCommuteOfferAction
 
         $vehicle = CreateCommuteOfferAction::usableVehicle($profile, (string) $source->vehicle_id);
 
-        CreateCommuteOfferAction::assertSeatsFitVehicle($vehicle, (int) $source->seats_total);
+        CreateCommuteOfferAction::assertCommuteFitsVehicle($source, $vehicle);
 
         $draft = new CommuteOffer;
 
@@ -117,7 +117,6 @@ final readonly class DuplicateCommuteOfferAction
             'commute_type' => $source->commute_type->value,
             'direction' => $direction->value,
             'seats_total' => $source->seats_total,
-            'price_per_seat_piastres' => $source->price_per_seat_piastres,
             'max_detour_minutes' => $source->max_detour_minutes,
             'max_walk_minutes' => $source->max_walk_minutes,
             'audience' => $source->audience->value,
@@ -292,7 +291,6 @@ final readonly class DuplicateCommuteOfferAction
             $dayCopy->weekday_bit = $weekday->weekday_bit;
             $dayCopy->departure_time = $weekday->departure_time;
             $dayCopy->promised_arrival_time = $weekday->promised_arrival_time;
-            $dayCopy->price_per_seat_piastres = $weekday->price_per_seat_piastres;
             $dayCopy->seats_total = $weekday->seats_total;
 
             $dayCopy->save();

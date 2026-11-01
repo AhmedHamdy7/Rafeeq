@@ -23,10 +23,33 @@
 
             <ul class="rq-checks">
                 @foreach ($application->vehicles as $vehicle)
-                    <li class="rq-check">
+                    <li class="rq-check" wire:key="car-{{ $vehicle->id }}">
                         <span class="rq-check__label">{{ $vehicle->make }} {{ $vehicle->model }} &middot; {{ $vehicle->colour }}</span>
-                        <span>{{ trans_choice('admin.drivers.seats', $vehicle->seats, ['count' => $vehicle->seats]) }}</span>
+                        <span>{{ __('admin.drivers.car.entered_seats', ['count' => $vehicle->seats]) }}</span>
                     </li>
+                    {{-- The car review (F2-7): the reviewer's answer, not the driver's entry. --}}
+                    @if ($mayDecide)
+                        <li class="rq-check">
+                            <label class="rq-check__label" for="seats-{{ $vehicle->id }}">{{ __('admin.drivers.car.approved_seats') }}</label>
+                            <input id="seats-{{ $vehicle->id }}" class="rq-field" type="number"
+                                   min="{{ $minApprovedSeats }}" max="{{ $maxApprovedSeats }}" style="max-width:90px"
+                                   wire:model="cars.{{ $vehicle->id }}.approvedSeats">
+                        </li>
+                        <li class="rq-check">
+                            <label class="rq-check__label" for="tier-{{ $vehicle->id }}">{{ __('admin.drivers.car.tier') }}</label>
+                            <select id="tier-{{ $vehicle->id }}" class="rq-field" style="max-width:180px"
+                                    wire:model="cars.{{ $vehicle->id }}.tier">
+                                <option value="standard">{{ __('admin.drivers.car.tier_standard') }}</option>
+                                <option value="comfort">{{ __('admin.drivers.car.tier_comfort') }}</option>
+                            </select>
+                        </li>
+                        <li class="rq-check">
+                            <label class="rq-check__label">
+                                <input type="checkbox" wire:model="cars.{{ $vehicle->id }}.hasAc">
+                                {{ __('admin.drivers.car.has_ac') }}
+                            </label>
+                        </li>
+                    @endif
                 @endforeach
             </ul>
 
