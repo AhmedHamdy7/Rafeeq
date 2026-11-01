@@ -14,3 +14,5 @@
 - Hide or disable "Request seat" for anyone who isn't a woman, and still handle the 403.
 
 **Open:** nothing.
+
+**Merged to main in `f9cc8cc`.**

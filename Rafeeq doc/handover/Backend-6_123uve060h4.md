@@ -22,3 +22,5 @@ All of these now exist and are listed in **guide §4.14** ("Every `type`, by who
 - Show an unknown type as a plain message.
 
 **Open:** nothing.
+
+**Merged to main in `f9cc8cc`.**

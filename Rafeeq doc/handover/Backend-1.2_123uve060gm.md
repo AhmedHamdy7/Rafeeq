@@ -15,3 +15,5 @@
 - Handle the new statuses: `CLOSED_DATE_PASSED`, `COMMUTE_ARCHIVED`, `COUNTEROFFERED`, `COUNTEROFFER_DECLINED`, `TERMS_CHANGED`.
 
 **Open:** nothing.
+
+**Merged to main in `f9cc8cc`.**

@@ -17,3 +17,5 @@
 - Driver inbox: choose the buttons by `kind`. Show the `hasOtherConfirmedCommute` hint. Route the `waitlist_application_received` push to the request card. Handle `BOOKING_WAITLIST_FULL`, and don't hard-code 10.
 
 **Open:** nothing.
+
+**Merged to main in `f9cc8cc`.**

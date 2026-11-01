@@ -23,3 +23,5 @@ It only refused people seats that were still free. (The other "9 PM" in the deci
 - Keep handling `BOOKING_DEADLINE_PASSED` as "this day has left".
 
 **Open:** nothing on the backend. It is no longer an admin setting because there is no deadline at all.
+
+**Merged to main in `f9cc8cc`.**

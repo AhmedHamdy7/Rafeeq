@@ -15,3 +15,5 @@
 - Show `feePiastres` on the block confirm sheet whenever it is above 0, worded by `reason`.
 
 **Open:** the amounts are the partners' (PAY-21, PAY-23), all admin settings in the "Fees" group. No sign-off needed from the backend side.
+
+**Merged to main in `f9cc8cc`.**

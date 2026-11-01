@@ -18,3 +18,5 @@
 - Driver: on approve, show "she's no longer free at that time".
 
 **Open:** nothing.
+
+**Merged to main in `f9cc8cc`.**

@@ -18,3 +18,5 @@
 - Passenger: route `commute_deleted_seat_cancelled`, and show `COMMUTE_ARCHIVED` on her requests.
 
 **Open:** nothing.
+
+**Merged to main in `f9cc8cc`.**
