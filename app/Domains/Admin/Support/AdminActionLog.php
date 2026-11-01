@@ -45,6 +45,11 @@ final class AdminActionLog
         'account.reactivate',
         'commute.unpublish',
         'booking.refund',
+        // Money off somebody's debt that she did not pay, or a payment she says she made refused.
+        'debt.payment_reject',
+        'debt.coupon',
+        'debt.credit',
+        'fee.appeal_decide',
         // How an emergency ended, and every decision about a report. Months later these
         // rows are read by somebody asking "why was this closed" — sometimes a lawyer.
         'sos.resolve',

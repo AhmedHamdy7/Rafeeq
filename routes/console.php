@@ -97,20 +97,32 @@ Schedule::command('demands:expire')
     ->withoutOverlapping();
 
 /*
- * 🔴 Cash collected on the day, recorded once the driver has confirmed who travelled and two hours
- * have passed undisputed (Bible §8.1, Master Plan §15.6). Writes the payment, the platform's fee as
- * the driver's debt, and marks the booking paid. Idempotent — one charge per booking by key.
+ * 🔴 The safety net under "PAID on drop-off" (PAY-07): any travelled cash seat the drop-off did not
+ * settle is settled here, its commission written to the driver's debt. Idempotent — one charge per
+ * booking by key.
  *
- * If it does not run: no cash trip is ever recorded as paid, drivers' fee debt never grows, and the
- * debt cap never stops anybody — the platform's whole income from cash trips goes unrecorded.
+ * If it does not run: a seat whose drop-off failed half-way stays unpaid and its commission is never
+ * recorded.
  */
 Schedule::command('payments:settle-cash')
     ->everyFifteenMinutes()
     ->withoutOverlapping();
 
 /*
- * Pitfall #39: every driver's balance against the sum of their fee ledger. Reports drift to the
- * critical log and fails; never repairs it (see ReconcileDriverBalancesAction).
+ * 🔴 The weekly debt cycle (PAY-11 → PAY-17, PAY-45): last week's late fee once its Friday has
+ * passed, the day's reminder from `debt.reminder_hour`, and suspension for debt — a driver after
+ * the second missed Friday, a passenger after 14 days unpaid. Hourly, and safe to repeat.
+ *
+ * If it does not run: nobody is reminded, no late fee is added and nobody is ever suspended for
+ * debt — the Friday deadline becomes a suggestion.
+ */
+Schedule::command('payments:sweep-debts')
+    ->hourly()
+    ->withoutOverlapping();
+
+/*
+ * Pitfall #39: every debt account (driver and passenger side) against the sum of its ledger.
+ * Reports drift to the critical log and fails; never repairs it (see ReconcileDebtAccountsAction).
  */
 Schedule::command('payments:reconcile-balances')
     ->dailyAt('03:30')
@@ -181,7 +193,8 @@ Schedule::command('trips:sweep-delays')
     ->withoutOverlapping();
 
 /*
- * Closes seat requests whose window has run out (Feature 03 v5 §416).
+ * Closes seat requests whose window has run out (Feature 03 v5 §416), and one-day requests whose day
+ * has passed (Feature 03 R-4). Nothing else expires: requests stay open until answered.
  *
  * 🔴 Every minute because of the three-minute one. The same sweep already ran with the daily
  * membership roll, which was right while every window was forty-eight hours — a request sitting
@@ -194,6 +207,28 @@ Schedule::command('trips:sweep-delays')
  */
 Schedule::command('requests:expire')
     ->everyMinute()
+    ->withoutOverlapping();
+
+/*
+ * "Your commute leaves in an hour" / "…in 10 minutes", to the driver and every confirmed passenger
+ * (Feature 03 files §8). Every minute, because the ten-minute one is useless five minutes late.
+ * Each is sent once per day, stamped on the day, so overlapping or repeated runs cannot repeat it.
+ *
+ * If it does not run: nobody is reminded. The commute still happens.
+ */
+Schedule::command('trips:send-reminders')
+    ->everyMinute()
+    ->withoutOverlapping();
+
+/*
+ * "Your driving licence expires soon" (Feature 03 files §8), once per expiry date, starting the
+ * same day the driver card starts saying "Expiring". Mid-morning Cairo time, not at night.
+ *
+ * If it does not run: the card still warns her, but nothing reaches her phone.
+ */
+Schedule::command('licences:warn-expiring')
+    ->dailyAt('10:15')
+    ->timezone('Africa/Cairo')
     ->withoutOverlapping();
 
 /*

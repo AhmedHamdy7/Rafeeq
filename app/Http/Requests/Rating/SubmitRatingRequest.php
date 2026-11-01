@@ -34,6 +34,9 @@ final class SubmitRatingRequest extends FormRequest
              * What they want to say, if anything. Optional on purpose: somebody who had an
              * uncomfortable ride may well give three stars and not want to write about it, and
              * requiring a reason is how a rating screen turns into a form people abandon.
+             *
+             * Not on feedback for a seat the driver cancelled: that is stars only (X-2, BOOK-41),
+             * and a comment or tags there is refused.
              */
             'comment' => ['nullable', 'string', 'max:1000'],
 

@@ -8,7 +8,9 @@ use App\Domains\Shared\Support\ErrorCode;
 use App\Domains\Trip\Enums\WaitTimerOutcome;
 use App\Domains\Trip\Models\TripSession;
 use App\Domains\Trip\Models\TripWaitTimer;
+use App\Domains\Trip\Support\DriverArrivalNotice;
 use App\Domains\Trip\Support\TripSettings;
+use Carbon\CarbonImmutable;
 use Illuminate\Support\Facades\DB;
 
 /**
@@ -35,9 +37,18 @@ final readonly class WaitTimerAction
 {
     /**
      * Start waiting for one passenger.
+     *
+     * Called only by {@see ArriveAtPickupAction}, once the driver's arrival at THIS passenger's
+     * pickup has been checked by GPS (TRIP-10): the arrival and the moment her grace starts are
+     * written on the timer, because the lateness and no-show fees are read off them.
      */
-    public function start(TripSession $session, Booking $booking): TripWaitTimer
-    {
+    public function start(
+        TripSession $session,
+        Booking $booking,
+        ?CarbonImmutable $arrivedAt = null,
+        ?int $arrivalDistanceMeters = null,
+        ?CarbonImmutable $graceStartsAt = null,
+    ): TripWaitTimer {
         $this->assertUnderway($session);
 
         if ($this->running($session, $booking->id) !== null) {
@@ -57,6 +68,9 @@ final readonly class WaitTimerAction
              * in force this morning — not against whatever the number became afterwards.
              */
             'grace_seconds' => TripSettings::waitGraceSeconds(),
+            'arrived_at' => $arrivedAt,
+            'arrival_distance_meters' => $arrivalDistanceMeters,
+            'grace_starts_at' => $graceStartsAt,
         ]);
 
         /*
@@ -68,30 +82,14 @@ final readonly class WaitTimerAction
 
         $timer->save();
 
-        return $timer;
-    }
-
-    /**
-     * "+2 min" — the driver choosing to give somebody longer.
-     *
-     * Extends rather than restarts, so `started_at` still says when the waiting began and
-     * `extended_seconds` says how much was given on top. A restart would erase the fact
-     * that a driver waited nine minutes in total, which is the generous version of the
-     * story and the one she would want on record.
-     */
-    public function extend(TripWaitTimer $timer): TripWaitTimer
-    {
-        $this->assertRunning($timer);
-
         /*
-         * Allowed even after the grace has run out. The screen still shows the timer with
-         * "grace ended" beside it, and a driver who sees somebody running towards the car
-         * at 5:10 should be able to give them another two minutes — refusing would make the
-         * generous act the one the app forbids.
+         * The GPS-checked "I've arrived" at her pickup (TRIP-10, via ArriveAtPickupAction) is what
+         * starts this, so this is the moment to tell her (Feature 03 files §8: "Driver arrived") —
+         * through the one method that says it, at most once.
          */
-        $timer->increment('extended_seconds', TripSettings::waitExtensionSeconds());
+        DriverArrivalNotice::send($session, $booking);
 
-        return $timer->refresh();
+        return $timer;
     }
 
     /**
@@ -153,15 +151,6 @@ final readonly class WaitTimerAction
 
             return $timer;
         });
-    }
-
-    private function assertRunning(TripWaitTimer $timer): void
-    {
-        if (! $timer->isRunning()) {
-            throw DomainException::of(ErrorCode::WaitTimerNotRunning, fields: [
-                'outcome' => [strtoupper($timer->outcome->value)],
-            ]);
-        }
     }
 
     private function assertUnderway(TripSession $session): void

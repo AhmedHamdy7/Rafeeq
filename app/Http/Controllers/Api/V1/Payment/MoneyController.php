@@ -6,56 +6,27 @@ use App\Domains\Booking\Enums\BookingStatus;
 use App\Domains\Booking\Enums\PaymentStatus;
 use App\Domains\Booking\Models\Booking;
 use App\Domains\Group\Models\CommuteGroup;
-use App\Domains\Payment\Models\DriverBalance;
 use App\Domains\Shared\Exceptions\DomainException;
 use App\Domains\Shared\Support\ErrorCode;
 use App\Http\Controllers\Controller;
 use App\Http\OpenApi\ApiErrors;
-use App\Http\Resources\DriverBalanceResource;
 use App\Http\Responses\ApiResponse;
 use Carbon\CarbonImmutable;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
 /**
- * The money, as the two people in the car see it (Bible §8, Chapter 7).
+ * The group's money, as the two people in the car see it (Bible §8, Chapter 7).
  *
- * 🔴 The decision this whole controller rests on, settled 2026-10-06: **the platform's fee is
- * deducted from the DRIVER, at 3%, and the passenger pays the seat price.** The Bible's own worked
- * example showed a passenger paying 8800 for an 8000 seat, which is the other reading and was
- * rejected — so an 8000 seat means the passenger owes 8000 and the driver keeps 7760.
+ * 🔴 The passenger pays the seat price; RAFEEQ's commission is on top of the driver's share
+ * (PAY-48), frozen on each booking. On a CASH trip the driver collects the whole seat at the
+ * roadside, so the commission becomes a debt she owes RAFEEQ — see `GET /account/debt`
+ * ({@see DebtController}), which replaced `GET /driver/balance`.
  *
- * 🔴 And the consequence the screens exist to make visible: on a CASH trip the driver collects the
- * whole 8000 at the roadside, so the 240 is not withheld from her — it becomes a **debt she owes
- * us**. It accrues trip by trip and eventually stops her publishing. A driver who is only ever
- * shown "earnings" and then cannot publish has been told nothing.
- *
- * 🔒 What is deliberately NOT here: anything that moves money. No payment method, no capture, no
- * payout, no refund. Those need a provider that has not been chosen, and a half-built capture path
- * is worse than none — see section 7 of the mobile guide.
+ * 🔒 Nothing here moves money.
  */
 final class MoneyController extends Controller
 {
-    /**
-     * GET /v1/driver/balance — what she owes and what she has earned.
-     *
-     * 🔒 Her own, always. There is no endpoint at any access level that reads another driver's
-     * balance: it is her income and her debt, and the only other party entitled to see it is the
-     * dashboard, which authenticates separately.
-     */
-    public function driverBalance(Request $request): JsonResponse
-    {
-        /*
-         * `firstOrNew`, because a driver who has never completed a cash trip has no row yet — and
-         * the honest answer for her is zeros, not a 404. A 404 would read as "no such driver".
-         */
-        $balance = DriverBalance::query()
-            ->whereKey($request->user()->id)
-            ->first() ?? new DriverBalance;
-
-        return ApiResponse::success(new DriverBalanceResource($balance));
-    }
-
     /**
      * GET /v1/groups/{group}/statement — the group's week, screen 20's `payments` tab.
      *

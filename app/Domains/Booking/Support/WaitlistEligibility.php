@@ -64,6 +64,12 @@ final class WaitlistEligibility
             ->where(fn (Builder $q) => $q
                 ->whereNull('unavailable_on')
                 ->orWhere('unavailable_on', '!=', $trip->trip_date->toDateString()))
+            // R-7 (BOOK-32): not while she has paused — an open-ended pause, or a day inside it.
+            ->where(fn (Builder $q) => $q
+                ->whereNull('paused_at')
+                ->orWhere(fn (Builder $q) => $q
+                    ->whereNotNull('paused_until')
+                    ->where('paused_until', '<', $trip->trip_date->toDateString())))
             ->where(fn (Builder $q) => self::stillWaiting($q))
             /*
              * Ordered by position even though the seat is a race. The order decides who is TOLD
@@ -110,6 +116,13 @@ final class WaitlistEligibility
             ->when(
                 $request->unavailable_on !== null,
                 fn (Builder $q) => $q->where('trip_date', '!=', $request->unavailable_on->toDateString()),
+            )
+            // R-7: none of the days she has paused, and nothing at all for an open-ended pause.
+            ->when(
+                $request->paused_at !== null,
+                fn (Builder $q) => $request->paused_until === null
+                    ? $q->whereRaw('1 = 0')
+                    : $q->where('trip_date', '>', $request->paused_until->toDateString()),
             )
             ->orderBy('departure_at')
             // Standard #42: a tiebreak, so two days departing at the same minute order the same way

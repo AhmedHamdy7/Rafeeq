@@ -5,13 +5,17 @@ namespace App\Domains\Commute\Actions;
 use App\Domains\Booking\Actions\DisplaceConfirmedBookingsAction;
 use App\Domains\Booking\Actions\OfferSeatsToWaitlistMembersAction;
 use App\Domains\Booking\Enums\DisplacementReason;
+use App\Domains\Booking\Enums\SeatOfferStatus;
+use App\Domains\Booking\Enums\SeatRequestStatus;
+use App\Domains\Booking\Models\SeatOffer;
+use App\Domains\Booking\Models\SeatRequest;
 use App\Domains\Commute\Enums\CommuteOfferStatus;
 use App\Domains\Commute\Enums\CommutePausedReason;
 use App\Domains\Commute\Enums\ScheduledTripStatus;
 use App\Domains\Commute\Models\CommuteOffer;
 use App\Domains\Commute\Models\ScheduledTrip;
 use App\Domains\Driver\Models\DriverProfile;
-use App\Domains\Payment\Support\DriverDebt;
+use App\Domains\Payment\Support\DriverCommission;
 use Illuminate\Support\Facades\DB;
 
 /**
@@ -37,9 +41,10 @@ use Illuminate\Support\Facades\DB;
  * automatic fan-out a freed seat normally gets: the driver chooses who to offer seats to. See
  * {@see OfferSeatsToWaitlistMembersAction}.
  *
- * Archiving is the end. Chapter 4: "archived commutes cannot be booked" — so
- * future days that nobody has taken are cancelled, because leaving them bookable
- * would let someone join a commute that no longer exists.
+ * Archiving — `DELETE /commutes/{commute}` — is the end, and it now cancels EVERY upcoming day,
+ * booked ones included (Feature 03 C-8, COM-35, decision C6). It used to cancel only the days
+ * nobody had taken, so passengers kept confirmed seats on a commute that no longer existed and
+ * waited at the kerb for a driver who was not coming, and nobody told them.
  */
 final readonly class ChangeCommuteStatusAction
 {
@@ -67,7 +72,12 @@ final readonly class ChangeCommuteStatusAction
              * notification, find the commute still published, and request the seat she was just
              * told she had lost. One transaction means neither half can land without the other.
              */
-            $this->displace->forCommute($offer, DisplacementReason::CommutePaused);
+            $this->displace->forCommute(
+                $offer,
+                DisplacementReason::CommutePaused,
+                // PAY-23 (C-7): his choice costs the fee by timing; an automatic pause does not.
+                chargeDriver: $reason === CommutePausedReason::ByDriver,
+            );
 
             return $offer;
         });
@@ -80,8 +90,10 @@ final readonly class ChangeCommuteStatusAction
         // Re-checked on the way back: a commute paused because the vehicle was
         // suspended must not resume just because the driver asked.
         CreateCommuteOfferAction::assertDriverMayPublish($offer->driverProfile);
-        DriverDebt::assertMayPublish($offer->driverProfile);
-        CreateCommuteOfferAction::usableVehicle($offer->driverProfile, $offer->vehicle_id);
+        DriverCommission::assertNotOverdue($offer->driver_profile_id);
+        $vehicle = CreateCommuteOfferAction::usableVehicle($offer->driverProfile, $offer->vehicle_id);
+        // C-3: the car's approved seats may have been lowered while the commute was paused.
+        CreateCommuteOfferAction::assertCommuteFitsVehicle($offer, $vehicle);
 
         return DB::transaction(function () use ($offer): CommuteOffer {
             $offer->forceFill([
@@ -107,7 +119,23 @@ final readonly class ChangeCommuteStatusAction
                 'archived_at' => now(),
             ])->save();
 
-            $this->cancelUntakenFutureTrips($offer, $reason);
+            /*
+             * 1. Every confirmed upcoming seat, through the one displacement path pause and vehicle
+             *    replacement already use — the same cancellation, reliability record and one
+             *    notice per passenger. Not put back on the waiting list: there is no commute left.
+             */
+            $this->displace->forCommute(
+                $offer,
+                DisplacementReason::CommuteDeleted,
+                // PAY-23 (C-8): deleting it is his choice; a schedule that simply ended is not.
+                chargeDriver: $reason === null,
+            );
+
+            // 2. Then every upcoming day, which now has nobody on it.
+            $days = $this->cancelFutureTrips($offer, $reason);
+
+            // 3. And every open question about the commute: requests, waiting-list places, offers.
+            $this->closeOpenRequests($offer, $days);
 
             return $offer;
         });
@@ -141,21 +169,65 @@ final readonly class ChangeCommuteStatusAction
     }
 
     /**
-     * Only days nobody has taken. A trip with passengers on it is a commitment
-     * that has to be cancelled deliberately, with the refunds and notifications
-     * that belong to later phases — silently voiding it here would leave people
-     * expecting a lift that will not come.
+     * Every day that has not started. A run already under way is left alone — the driver ends it
+     * with Cancel Active Trip, and the people in the car are not displaced by a setting.
+     *
+     * @return list<string> the ids of the days cancelled
      */
-    private function cancelUntakenFutureTrips(CommuteOffer $offer, ?string $reason): void
+    private function cancelFutureTrips(CommuteOffer $offer, ?string $reason): array
     {
-        ScheduledTrip::query()
+        $ids = ScheduledTrip::query()
             ->where('commute_offer_id', $offer->id)
             ->where('status', ScheduledTripStatus::Scheduled->value)
             ->where('departure_at', '>', now())
-            ->where('seats_taken', 0)
-            ->update([
+            ->orderBy('id')
+            ->pluck('id')
+            ->map(fn ($id): string => (string) $id)
+            ->all();
+
+        if ($ids !== []) {
+            ScheduledTrip::query()->whereIn('id', $ids)->update([
                 'status' => ScheduledTripStatus::Cancelled->value,
                 'cancelled_reason' => $reason ?? 'commute_archived',
             ]);
+        }
+
+        return $ids;
+    }
+
+    /**
+     * Requests still waiting on this commute — pending, countered or queued — close as
+     * `commute_archived`, and any seat offer still open on its days is closed.
+     *
+     * 🔴 Needed because requests no longer expire (R-4): before, an open request on a deleted
+     * commute quietly timed out after 48 hours. Now nothing else would ever close it. An approved
+     * request is closed too: the membership it stood for has no days left.
+     *
+     * @param  list<string>  $tripIds
+     */
+    private function closeOpenRequests(CommuteOffer $offer, array $tripIds): void
+    {
+        SeatRequest::query()
+            ->where('commute_offer_id', $offer->id)
+            ->whereIn('status', [
+                SeatRequestStatus::Pending->value,
+                SeatRequestStatus::Waitlisted->value,
+                SeatRequestStatus::Counteroffered->value,
+                SeatRequestStatus::Approved->value,
+            ])
+            ->update([
+                'status' => SeatRequestStatus::CommuteArchived->value,
+                'waitlist_position' => null,
+            ]);
+
+        if ($tripIds !== []) {
+            SeatOffer::query()
+                ->whereIn('scheduled_trip_id', $tripIds)
+                ->open()
+                ->update([
+                    'status' => SeatOfferStatus::Closed->value,
+                    'closed_at' => now(),
+                ]);
+        }
     }
 }

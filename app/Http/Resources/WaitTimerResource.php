@@ -22,6 +22,20 @@ final class WaitTimerResource extends JsonResource
             'startedAt' => $this->started_at->toIso8601String(),
 
             /*
+             * "I've arrived", as the server checked it (TRIP-10): when, and how far from this
+             * passenger's pickup the driver was. Null only on timers from before the check existed.
+             */
+            'arrivedAt' => $this->arrived_at?->toIso8601String(),
+            'arrivalDistanceMeters' => $this->arrival_distance_meters,
+
+            /*
+             * When her five minutes began: the later of the arrival and her own pickup time
+             * (TRIP-11). A driver who is early waits for the pickup time first, and the countdown
+             * only starts then.
+             */
+            'graceStartsAt' => ($this->grace_starts_at ?? $this->started_at)->toIso8601String(),
+
+            /*
              * The moment the grace runs out, which is what the client should count down to.
              * `remainingSeconds` is the SERVER's answer at this instant, sent for the same
              * reason the departure countdown is: a phone with a skewed clock would run the
@@ -36,12 +50,10 @@ final class WaitTimerResource extends JsonResource
             'remainingSeconds' => $this->remainingSeconds(),
 
             /*
-             * What was promised, and what was given on top. Both, because the story the
-             * record has to be able to tell is "she waited five minutes and then gave two
-             * more" — a single total would lose the generous half of it.
+             * The grace in force when the wait began. Every passenger gets the same one — there is
+             * no driver extension any more (TRIP-11, B7).
              */
             'graceSeconds' => $this->grace_seconds,
-            'extendedSeconds' => $this->extended_seconds,
 
             'hasExpired' => $this->hasExpired(),
             'isRunning' => $this->isRunning(),

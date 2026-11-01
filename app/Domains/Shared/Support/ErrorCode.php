@@ -54,7 +54,11 @@ enum ErrorCode: string
 
     // ---- Driver & vehicles (Phase 4, Chapter 3) ------------------------
     case DriverNotEligible = 'DRIVER_NOT_ELIGIBLE';
-    case DriverDebtLimitReached = 'DRIVER_DEBT_LIMIT_REACHED';
+    /*
+     * The week's commission was not paid by its Friday 23:59 (PAY-12). Replaces the 200 EGP
+     * `DRIVER_DEBT_LIMIT_REACHED`: there is no cap any more (PAY-15), only the deadline.
+     */
+    case DriverCommissionOverdue = 'DRIVER_COMMISSION_OVERDUE';
     case DriverApplicationLocked = 'DRIVER_APPLICATION_LOCKED';
     case DriverApplicationIncomplete = 'DRIVER_APPLICATION_INCOMPLETE';
     case LicenceExpired = 'DRIVER_LICENCE_EXPIRED';
@@ -76,6 +80,18 @@ enum ErrorCode: string
     case CommuteRouteInvalid = 'COMMUTE_ROUTE_INVALID';
     case CommuteSeatsConflict = 'COMMUTE_SEATS_CONFLICT';
     case CommuteVehicleUnavailable = 'COMMUTE_VEHICLE_UNAVAILABLE';
+
+    /**
+     * More seats than the admin approved on the car (C-3, PROF-28). `error.fields.approvedSeats`
+     * carries the most that may be offered, so the seat stepper can stop there.
+     */
+    case CommuteSeatsExceedApproved = 'COMMUTE_SEATS_EXCEED_APPROVED';
+
+    /**
+     * The car has not been through the admin's car review, so it has no approved seats yet and no
+     * price can be divided by them (F2-6, PROF-28). Nothing for the driver to correct: he waits.
+     */
+    case VehicleSeatsNotApproved = 'VEHICLE_SEATS_NOT_APPROVED';
 
     // ---- Seat requests & bookings (Phase 7, Chapter 6) -----------------
     case SeatUnavailable = 'SEAT_UNAVAILABLE';
@@ -131,7 +147,28 @@ enum ErrorCode: string
     case WaitlistFull = 'BOOKING_WAITLIST_FULL';
     case BookingNotCancellable = 'BOOKING_NOT_CANCELLABLE';
     case CannotBookOwnCommute = 'BOOKING_OWN_COMMUTE';
+
+    /**
+     * A seat request on a women-only commute from an account whose gender is not `woman` (Feature
+     * 03 C-11, BOOK-31).
+     *
+     * Women-only commutes are shown to everybody now, so this is an answer rather than a secret:
+     * the commute is visible with `womenOnly: true`, and only a woman may ask for a seat on it.
+     */
+    case SeatRequestWomenOnly = 'SEAT_REQUEST_WOMEN_ONLY';
+
+    /**
+     * Editing or pausing a saved demand that is no longer live — cancelled or expired (Feature 03
+     * S-4). Save a new one instead.
+     */
+    case CommuteDemandNotEditable = 'COMMUTE_DEMAND_NOT_EDITABLE';
     case RecurringDaysNotOffered = 'BOOKING_RECURRING_DAYS_NOT_OFFERED';
+
+    /**
+     * The beta is cash only (P-4, PAY-01). `online` stays in the enum for when a provider exists,
+     * and is refused until then rather than accepted and never collected.
+     */
+    case PaymentTypeNotAvailable = 'PAYMENT_TYPE_NOT_AVAILABLE';
 
     /*
      * ---- The passenger's two required points (Feature 03 v5 §2) ---------
@@ -216,6 +253,12 @@ enum ErrorCode: string
     case WaitTimerAlreadyRunning = 'WAIT_TIMER_ALREADY_RUNNING';
     case WaitTimerNotRunning = 'WAIT_TIMER_NOT_RUNNING';
 
+    /**
+     * "I've arrived" from further than `trip.arrival_radius_meters` from THIS passenger's pickup
+     * (TRIP-10). Carries `distanceMeters` so the driver's screen can say how far she still is.
+     */
+    case NotAtPickup = 'NOT_AT_PICKUP';
+
     // ---- Ratings (Phase 10, Chapter 9) ---------------------------------
     case RatingWindowClosed = 'RATING_WINDOW_CLOSED';
     case RatingAlreadySubmitted = 'RATING_ALREADY_SUBMITTED';
@@ -233,11 +276,27 @@ enum ErrorCode: string
     case IncidentEvidenceLimitReached = 'INCIDENT_EVIDENCE_LIMIT_REACHED';
     case IncidentClosed = 'INCIDENT_CLOSED';
     case LiveShareAlreadyEnded = 'LIVE_SHARE_ALREADY_ENDED';
+    // Feature 03 files X-7, SAFE-08: more than 24 hours since that journey ended.
+    case ReportWindowClosed = 'REPORT_WINDOW_CLOSED';
 
     // ---- Notifications (Phase 12, Chapter 11) --------------------------
     case NotificationCategoryLocked = 'NOTIFICATION_CATEGORY_LOCKED';
     case ChatNotOpen = 'CHAT_NOT_OPEN';
     case ChatContactInfoNotAllowed = 'CHAT_CONTACT_INFO_NOT_ALLOWED';
+
+    // ---- Debt and settlement (PAY-08 → PAY-19, PAY-34) ----------------
+    // A payment towards a debt when there is nothing to pay.
+    case DebtNothingOwed = 'DEBT_NOTHING_OWED';
+    // Dashboard only: the payment was already confirmed or rejected by somebody else.
+    case DebtPaymentNotPending = 'DEBT_PAYMENT_NOT_PENDING';
+    // Dashboard only: a coupon needs a fee that was actually collected, from the other side.
+    case CouponNotAllowed = 'COUPON_NOT_ALLOWED';
+    // A passenger suspended for debt may not book until she pays (PAY-17, PAY-46).
+    case RidingSuspendedForDebt = 'RIDING_SUSPENDED_FOR_DEBT';
+    // Dashboard only: the appeal was already decided, or was never made.
+    case FeeAppealNotOpen = 'FEE_APPEAL_NOT_OPEN';
+    // The early-drop question was not asked on this booking, or she already answered (TRIP-20).
+    case EarlyDropNotAsked = 'EARLY_DROP_NOT_ASKED';
 
     // ---- Admin dashboard (Chapter 12) ----------------------------------
     case AdminCredentialsInvalid = 'ADMIN_CREDENTIALS_INVALID';
@@ -318,9 +377,11 @@ enum ErrorCode: string
             // 403: the account is fine, this person just may not do it yet.
             self::DriverNotEligible => 403,
 
-            // 403: the driver owes more in uncollected cash fees than the platform allows before
-            // a new commute may go up (Bible §8.1). Settling brings it back under the cap.
-            self::DriverDebtLimitReached => 403,
+            // 403: a week's commission is unpaid past its Friday (PAY-12). Paying (and staff
+            // confirming it) lifts the block; existing bookings run meanwhile.
+            self::DriverCommissionOverdue => 403,
+            // 403: suspended for debt (PAY-46). `error.fields.amountOwedPiastres` is what lifts it.
+            self::RidingSuspendedForDebt => 403,
 
             self::DriverApplicationLocked,
             self::DriverDuplicateDetected,
@@ -330,7 +391,14 @@ enum ErrorCode: string
             // A conflict, not a validation error: the request is well formed and
             // the seat count is legal — it is the already-booked passengers that
             // make it impossible right now.
-            self::CommuteSeatsConflict => 409,
+            self::CommuteSeatsConflict,
+            // 409: the car's review state refuses it; the request itself is fine.
+            self::VehicleSeatsNotApproved => 409,
+
+            // 422: fixed by offering fewer seats.
+            self::CommuteSeatsExceedApproved,
+            // 422: fixed by choosing cash.
+            self::PaymentTypeNotAvailable => 422,
 
             self::CommuteIncomplete,
             self::CommuteRouteInvalid,
@@ -390,7 +458,13 @@ enum ErrorCode: string
 
             // 403: the account is fine, this particular person may not do this.
             self::CannotBookOwnCommute,
+            // 403: the commute is visible to her and the account is fine — this car is not one
+            // she may ask to ride in.
+            self::SeatRequestWomenOnly,
             self::GroupDriverCannotLeave => 403,
+
+            // 409: a well-formed edit the demand's current state refuses.
+            self::CommuteDemandNotEditable => 409,
 
             /*
              * 409: the same reasoning as the booking group. A driver tapping "start"
@@ -404,7 +478,9 @@ enum ErrorCode: string
             self::TripNotCancellable,
             self::AttendanceNotConfirmable,
             self::WaitTimerAlreadyRunning,
-            self::WaitTimerNotRunning => 409,
+            self::WaitTimerNotRunning,
+            // 409: the request is fine; where the car is right now is not. Drive closer and tap again.
+            self::NotAtPickup => 409,
 
             /*
              * 422 for these two, because both are about WHEN: a run started the night
@@ -438,7 +514,9 @@ enum ErrorCode: string
              * client's move is to file a new report, not to retry with different credentials — and
              * that distinction is the whole reason this is not a generic Forbidden.
              */
-            self::IncidentClosed => 409,
+            self::IncidentClosed,
+            // 409: the time to report that journey has passed — a state, like a closed rating window.
+            self::ReportWindowClosed => 409,
 
             // 422: about what was sent. The list is full, or the report has nothing to attach to.
             self::EmergencyContactLimitReached,
@@ -486,7 +564,14 @@ enum ErrorCode: string
             self::MemberNotSuspended,
             // The corridor is already watched, or the watch already ended.
             self::EscortAlreadyArmed,
-            self::EscortNotActive => 409,
+            self::EscortNotActive,
+            // The state of the money, not a permission: nothing owed, a payment already decided,
+            // a fee that cannot back a coupon.
+            self::DebtNothingOwed,
+            self::DebtPaymentNotPending,
+            self::CouponNotAllowed,
+            self::FeeAppealNotOpen,
+            self::EarlyDropNotAsked => 409,
         };
     }
 

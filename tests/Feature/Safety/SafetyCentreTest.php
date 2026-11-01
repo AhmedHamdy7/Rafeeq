@@ -261,10 +261,10 @@ it('normalises the number, so the same contact cannot be added twice', function 
 
 /**
  * 🔒 A limit because this list is who receives somebody's live location, and an unbounded one is a
- * way to broadcast their movements to a crowd.
+ * way to broadcast their movements to a crowd. Three (SAFE-14, Feature 03 files X-6).
  */
 it('caps how many people can receive somebody location', function () {
-    foreach (range(1, 5) as $i) {
+    foreach (range(1, 3) as $i) {
         test()->withToken($this->token)->postJson('/api/v1/safety/emergency-contacts', [
             'name' => "Contact {$i}",
             'phone' => '0109876543'.$i,
@@ -276,7 +276,27 @@ it('caps how many people can receive somebody location', function () {
         'phone' => '01098765439',
     ])->assertStatus(422)
         ->assertJsonPath('error.code', 'EMERGENCY_CONTACT_LIMIT_REACHED')
-        ->assertJsonPath('error.fields.limit.0', '5');
+        ->assertJsonPath('error.fields.limit.0', '3');
+});
+
+/**
+ * Lowering the cap from five took nobody's contacts away: it is checked only when one is ADDED.
+ */
+it('keeps contacts somebody already had above the cap', function () {
+    foreach (range(1, 3) as $i) {
+        test()->withToken($this->token)->postJson('/api/v1/safety/emergency-contacts', [
+            'name' => "Contact {$i}",
+            'phone' => '0109876543'.$i,
+        ])->assertStatus(201);
+    }
+
+    // Two more from the days of five.
+    EmergencyContact::factory()->count(2)->create([
+        'user_id' => EmergencyContact::query()->value('user_id'),
+    ]);
+
+    expect(test()->withToken($this->token)->getJson('/api/v1/safety/emergency-contacts')
+        ->assertOk()->json('data'))->toHaveCount(5);
 });
 
 /**

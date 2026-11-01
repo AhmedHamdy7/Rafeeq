@@ -6,7 +6,11 @@ use App\Domains\Commute\Models\ScheduledTrip;
 use App\Domains\Driver\Models\DriverProfile;
 use App\Domains\Driver\Models\Vehicle;
 use App\Domains\Group\Models\CommuteGroup;
-use App\Domains\Payment\Support\PaymentSettings;
+use App\Domains\Identity\Models\User;
+use App\Domains\Payment\Enums\DebtEntryType;
+use App\Domains\Payment\Enums\DebtSide;
+use App\Domains\Payment\Support\DebtLedger;
+use App\Domains\Payment\Support\SettlementWeek;
 use Carbon\CarbonImmutable;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Storage;
@@ -41,78 +45,70 @@ beforeEach(function () {
 
 /*
 |--------------------------------------------------------------------------
-| The driver's balance
+| Her debt to RAFEEQ (PAY-08 → PAY-17)
 |--------------------------------------------------------------------------
 */
 
-it('answers zeros for a driver who has never been owed anything', function () {
-    // Not a 404: a driver with no cash trips yet has no balance ROW, and "no such driver" is the
+it('answers zeros for a driver who has never owed anything', function () {
+    // Not a 404: a driver with no cash trips yet has no account ROW, and "no such driver" is the
     // wrong answer to "what do I owe".
-    $balance = test()->withToken($this->driverToken)->getJson('/api/v1/driver/balance')
+    $debt = test()->withToken($this->driverToken)->getJson('/api/v1/account/debt')
         ->assertOk()->json('data');
 
-    expect($balance['outstandingFeePiastres'])->toBe(0)
-        ->and($balance['lifetimeEarningsPiastres'])->toBe(0)
-        ->and($balance['isBlockedFromPublishing'])->toBeFalse()
-        ->and($balance['debtCapPiastres'])->toBe(PaymentSettings::maxDriverDebtPiastres());
+    expect($debt['driver']['owedPiastres'])->toBe(0)
+        ->and($debt['driver']['blocked'])->toBeFalse()
+        ->and($debt['driver']['suspended'])->toBeFalse()
+        ->and($debt['passenger']['owedPiastres'])->toBe(0)
+        ->and($debt['payments'])->toBe([])
+        ->and($debt['coupons'])->toBe([]);
 });
 
-it('shows the debt, the cap and the headroom together', function () {
-    setDriverBalance(driverUserId(), ['outstanding_fee_piastres' => 5000, 'lifetime_earnings_piastres' => 160000]);
+it('has no driver side for somebody who has never been a driver', function () {
+    expect(test()->withToken($this->paxToken)->getJson('/api/v1/account/debt')
+        ->assertOk()->json('data.driver'))->toBeNull();
+});
 
-    $balance = test()->withToken($this->driverToken)->getJson('/api/v1/driver/balance')
+it('shows the two sides apart, and the Friday the commission is due', function () {
+    $driver = User::query()->find(driverUserId());
+    DebtLedger::charge($driver, DebtEntryType::Commission, 1_000, 'test', side: DebtSide::Driver);
+    DebtLedger::charge($driver, DebtEntryType::Fee, 2_500, 'test', side: DebtSide::Passenger);
+
+    $debt = test()->withToken($this->driverToken)->getJson('/api/v1/account/debt')
         ->assertOk()->json('data');
 
-    $cap = PaymentSettings::maxDriverDebtPiastres();
-
-    expect($balance['outstandingFeePiastres'])->toBe(5000)
-        ->and($balance['lifetimeEarningsPiastres'])->toBe(160000)
-        // The headroom is stated, so a client does not hard-code the cap to draw a progress bar —
-        // the cap is a runtime setting and a hard-coded one is wrong the first time staff move it.
-        ->and($balance['remainingBeforeBlockPiastres'])->toBe($cap - 5000);
+    expect($debt['driver']['owedPiastres'])->toBe(1_000)
+        ->and($debt['passenger']['owedPiastres'])->toBe(2_500)
+        ->and($debt['driver']['dueAt'])->toBe(SettlementWeek::dueAt(SettlementWeek::current())->utc()->toIso8601String())
+        // A passenger's fee rides on her next trip: there is no Friday for it.
+        ->and($debt['passenger']['dueAt'])->toBeNull();
 });
 
-/**
- * 🔴 Computed from the CURRENT cap, not read from `is_blocked_from_publishing`.
- *
- * That column is a projection a nightly job maintains; the cap is a setting staff can change at any
- * moment. Trusting the flag would tell a driver she may publish minutes after the limit was lowered
- * below her balance, and the refusal would arrive as a surprise she had just been promised.
- */
-it('follows the live cap rather than the stored flag', function () {
-    setDriverBalance(driverUserId(), [
-        'outstanding_fee_piastres' => 25000,
-        // Deliberately stale and deliberately wrong.
-        'is_blocked_from_publishing' => false,
-    ]);
+it('never shows one person debt to another', function () {
+    DebtLedger::charge(User::query()->find(driverUserId()), DebtEntryType::Commission, 9_999, 'test', side: DebtSide::Driver);
 
-    expect(test()->withToken($this->driverToken)->getJson('/api/v1/driver/balance')
-        ->assertOk()->json('data.isBlockedFromPublishing'))->toBeTrue();
-});
+    $asPassenger = test()->withToken($this->paxToken)->getJson('/api/v1/account/debt')->assertOk();
 
-/**
- * 🔒 Being over the cap stops her publishing something NEW. Every run already booked goes ahead,
- * because the passengers on it did nothing wrong — and a screen reading "account blocked" would be
- * both frightening and untrue.
- */
-it('says that existing runs continue', function () {
-    expect(test()->withToken($this->driverToken)->getJson('/api/v1/driver/balance')
-        ->assertOk()->json('data.existingRunsContinue'))->toBeTrue();
-});
-
-it('never shows one person balance to another', function () {
-    setDriverBalance(driverUserId(), ['outstanding_fee_piastres' => 9999]);
-
-    // A passenger asking the same endpoint gets her OWN balance — zeros — not the driver's.
-    $asPassenger = test()->withToken($this->paxToken)->getJson('/api/v1/driver/balance')
-        ->assertOk();
-
-    expect($asPassenger->json('data.outstandingFeePiastres'))->toBe(0)
+    expect($asPassenger->json('data.passenger.owedPiastres'))->toBe(0)
         ->and($asPassenger->getContent())->not->toContain('9999');
 });
 
+it('lists one week of one side, line by line', function () {
+    $driver = User::query()->find(driverUserId());
+    DebtLedger::charge($driver, DebtEntryType::Commission, 1_000, 'passenger_dropped_off', side: DebtSide::Driver);
+    DebtLedger::credit($driver, DebtEntryType::Credit, 400, 'appeal_upheld', side: DebtSide::Driver);
+
+    $week = test()->withToken($this->driverToken)->getJson('/api/v1/account/debt/statements?side=driver')
+        ->assertOk()->json('data');
+
+    expect($week['weekOf'])->toBe(SettlementWeek::current())
+        ->and($week['addedPiastres'])->toBe(1_000)
+        ->and($week['takenOffPiastres'])->toBe(400)
+        ->and(array_column($week['lines'], 'amountPiastres'))->toBe([1_000, -400])
+        ->and($week['lines'][1]['balanceAfterPiastres'])->toBe(600);
+});
+
 it('requires a signed-in account', function () {
-    test()->withoutToken()->getJson('/api/v1/driver/balance')->assertStatus(401);
+    test()->withoutToken()->getJson('/api/v1/account/debt')->assertStatus(401);
 });
 
 /*
@@ -130,19 +126,22 @@ it('shows the driver every passenger row with the fee broken out', function () {
         ->and($statement['rows'])->toHaveCount(1);
 
     $row = $statement['rows'][0];
+    $booking = Booking::sole();
 
-    expect($row['pricePiastres'])->toBe(8000)
-        // 3% of the seat, deducted from her — the decision settled 2026-10-06.
-        ->and($row['platformFeePiastres'])->toBe(240)
-        ->and($row['driverKeepsPiastres'])->toBe(7760)
+    // The day's automatic price, frozen on the booking (P-1, PAY-44): RAFEEQ's commission sits on
+    // top of the driver's share, and the two add up to what the passenger pays.
+    expect($row['pricePiastres'])->toBe($booking->price_snapshot_piastres)
+        ->and($row['platformFeePiastres'])->toBe($booking->platform_fee_snapshot_piastres)
+        ->and($row['driverKeepsPiastres'])->toBe($booking->driver_amount_snapshot_piastres)
+        ->and($row['platformFeePiastres'] + $row['driverKeepsPiastres'])->toBe($row['pricePiastres'])
         // She is the one collecting the cash, so she needs to know from whom.
         ->and($row['passengerFirstName'])->toBe('سارة');
 
-    expect($statement['totals']['duePiastres'])->toBe(8000)
-        ->and($statement['totals']['platformFeePiastres'])->toBe(240)
-        ->and($statement['totals']['driverKeepsPiastres'])->toBe(7760)
+    expect($statement['totals']['duePiastres'])->toBe($booking->price_snapshot_piastres)
+        ->and($statement['totals']['platformFeePiastres'])->toBe($booking->platform_fee_snapshot_piastres)
+        ->and($statement['totals']['driverKeepsPiastres'])->toBe($booking->driver_amount_snapshot_piastres)
         // Stated rather than left as subtraction: this is the number the screen is opened to find.
-        ->and($statement['totals']['outstandingPiastres'])->toBe(8000);
+        ->and($statement['totals']['outstandingPiastres'])->toBe($booking->price_snapshot_piastres);
 });
 
 /**
@@ -192,12 +191,15 @@ it('shows a passenger only her own rows, and none of the driver economics', func
  * change what somebody already agreed to pay.
  */
 it('reports what was agreed, not what the commute costs today', function () {
-    test()->withToken($this->driverToken)->patchJson("/api/v1/commutes/{$this->commuteId}", [
-        'pricePerSeatPiastres' => 11000,
-    ])->assertOk();
+    $agreed = Booking::sole()->price_snapshot_piastres;
+
+    // The day is repriced afterwards (an admin moved a rate and the day was regenerated).
+    ScheduledTrip::query()->whereKey($this->tripId)->update([
+        'seat_price_piastres' => 99500, 'driver_share_piastres' => 90000, 'commission_piastres' => 9500,
+    ]);
 
     expect(test()->withToken($this->driverToken)->getJson("/api/v1/groups/{$this->groupId}/statement")
-        ->assertOk()->json('data.rows.0.pricePiastres'))->toBe(8000);
+        ->assertOk()->json('data.rows.0.pricePiastres'))->toBe($agreed);
 });
 
 it('separates what is due from what has been paid', function () {
@@ -208,8 +210,10 @@ it('separates what is due from what has been paid', function () {
         ->getJson("/api/v1/groups/{$this->groupId}/statement")
         ->assertOk()->json('data.totals');
 
-    expect($totals['duePiastres'])->toBe(8000)
-        ->and($totals['paidPiastres'])->toBe(8000)
+    $price = Booking::sole()->price_snapshot_piastres;
+
+    expect($totals['duePiastres'])->toBe($price)
+        ->and($totals['paidPiastres'])->toBe($price)
         ->and($totals['outstandingPiastres'])->toBe(0);
 });
 
@@ -226,7 +230,7 @@ it('still charges a no-show, and says that is what it was', function () {
 
     expect($statement['rows'])->toHaveCount(1)
         ->and($statement['rows'][0]['wasNoShow'])->toBeTrue()
-        ->and($statement['totals']['duePiastres'])->toBe(8000);
+        ->and($statement['totals']['duePiastres'])->toBe(Booking::sole()->price_snapshot_piastres);
 });
 
 it('leaves out bookings that never happened', function (string $status) {

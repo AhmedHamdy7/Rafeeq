@@ -14,6 +14,7 @@ use App\Domains\Geo\Contracts\GeoQueryEngine;
 use App\Domains\Identity\Models\User;
 use App\Domains\Notification\Enums\NotificationType;
 use App\Domains\Notification\Support\Notifier;
+use App\Domains\Payment\Support\DriverCommission;
 use App\Domains\Shared\Exceptions\DomainException;
 use App\Domains\Shared\Support\ErrorCode;
 use App\Domains\Shared\ValueObjects\Coordinate;
@@ -72,6 +73,10 @@ final readonly class CounterofferAction
         if ($request->status !== SeatRequestStatus::Pending) {
             throw DomainException::of(ErrorCode::SeatRequestNotPending);
         }
+
+        // Offering a new rider a seat is taking a new rider (PAY-12), so the Friday deadline
+        // applies here as on a plain approval.
+        DriverCommission::assertNotOverdue($driver->getKey());
 
         $offer = $request->commuteOffer;
 
@@ -142,11 +147,12 @@ final readonly class CounterofferAction
                 'counteroffer_dropoff_label' => $dropoffMoved ? $dropoffLabel : null,
 
                 /*
-                 * The clock restarts, as it does when a driver waitlists somebody: the 48 hours the
-                 * request had were for the driver to answer, and she just did. Expiring it on the
-                 * old deadline would close a conversation the passenger had minutes to join.
+                 * No deadline (Feature 03 R-4): a counteroffer stays open until she accepts or
+                 * declines it, or — for one day — the day passes. Cleared rather than left, so a
+                 * during-ride request the driver countered is not closed on its three minutes
+                 * while she is reading his proposal.
                  */
-                'expires_at' => now()->addHours((int) config('rafeeq.booking.request_expiry_hours')),
+                'expires_at' => null,
             ])->save();
 
             Notifier::send($request->passenger, NotificationType::SeatCounteroffered, params: [
@@ -220,7 +226,7 @@ final readonly class CounterofferAction
              * the last one while this conversation was open, and the honest answer then is
              * `SEAT_UNAVAILABLE` rather than an eleventh booking in a ten-seat car.
              */
-            return $this->approve->execute($request->refresh(), $driver);
+            return $this->approve->execute($request->refresh(), $driver, driverDecides: false);
         });
     }
 

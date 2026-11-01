@@ -16,19 +16,22 @@ use App\Domains\Shared\ValueObjects\WalkTime;
  * | detour      |     15 | how little the driver has to go out of the way  |
  * | audience    |     10 | the commute matches their audience preference   |
  * | comfort     |     10 | the house rules they asked for                  |
- * | price       |      5 | within their budget                             |
- * | reliability |      5 | the driver's record of turning up               |
+ * | reliability |     10 | the driver's record of turning up               |
  *
  * The weights say what Rafeeq is. Route overlap and schedule together are more
  * than half the score because a commute that is not going the passenger's way at
- * the time they need is not a match however pleasant it is; price is worth five
- * because this is shared cost, not a marketplace.
+ * the time they need is not a match however pleasant it is.
+ *
+ * 🔴 There is no price component any more (Feature 03 S-2, decision C11). The seat price is
+ * computed by RAFEEQ (PAY-42) from the distance and the car's tier, so it is the same for everybody
+ * on the same trip: there is nothing for a budget to choose between, and BOOK-02 says there is no
+ * price filter. Its five points went to reliability, the one remaining component that is about the
+ * driver rather than the route.
  *
  * What is NOT here matters as much. The audience component scores 10 or 0 for a
- * PREFERENCE — it never decides eligibility. A women-only commute excludes
- * non-women in the SQL query, before anything is scored (pitfall #15): scoring
- * that as "6 out of 10" would put a man in a women-only group's results, which
- * is a security failure, not a ranking one.
+ * PREFERENCE — it never decides who may ride. Women-only commutes are shown to
+ * everybody (Feature 03 C-11); who may ASK for a seat on one is decided at request
+ * time from the account, never by a score.
  */
 final class ScoringModel
 {
@@ -42,9 +45,7 @@ final class ScoringModel
 
     private const int COMFORT_WEIGHT = 10;
 
-    private const int PRICE_WEIGHT = 5;
-
-    private const int RELIABILITY_WEIGHT = 5;
+    private const int RELIABILITY_WEIGHT = 10;
 
     /**
      * @param  float  $overlapPercent  how much of the passenger's route this commute covers
@@ -66,7 +67,6 @@ final class ScoringModel
             detour: self::detour($detourMinutes, $criteria->maxDetourMinutes),
             audience: self::audience($offer, $criteria),
             comfort: self::comfort($criteria->requiredRules, $offerRules),
-            price: self::price($trip, $criteria),
             reliability: self::reliability($driverOnTimeRate),
             walkMinutes: $walk->minutes,
             detourMinutes: $detourMinutes,
@@ -136,8 +136,8 @@ final class ScoringModel
      * it scores full marks; someone who did not ask still scores full marks,
      * because nothing about the commute disappoints them.
      *
-     * Eligibility was settled in the query. By the time anything reaches here it
-     * is already a commute this passenger is allowed to join.
+     * Who may ASK for a seat is not decided here either: that is the request's own
+     * rule (Feature 03 C-11), from the account rather than from a score.
      */
     private static function audience(CommuteOffer $offer, SearchCriteria $criteria): int
     {
@@ -165,35 +165,6 @@ final class ScoringModel
         $met = count(array_intersect($wanted, $offered));
 
         return (int) round($met / count($wanted) * self::COMFORT_WEIGHT);
-    }
-
-    /**
-     * Within budget scores full; over it falls away. A passenger who named no
-     * budget is not disappointed by any price.
-     *
-     * 🔴 Compared against the per-seat ceiling DERIVED from the monthly budget, not
-     * against the monthly figure itself. The passenger states a month's ceiling (screen
-     * 18's stepper runs 800–3000 EGP) and a trip costs 70–95, so comparing the two
-     * directly made every commute "under budget" and these five points full marks for
-     * everybody — a scoring component that silently did nothing.
-     */
-    private static function price(ScheduledTrip $trip, SearchCriteria $criteria): int
-    {
-        $ceiling = $criteria->perSeatCeilingPiastres();
-
-        if ($ceiling === null || $ceiling <= 0) {
-            return self::PRICE_WEIGHT;
-        }
-
-        if ($trip->price_snapshot_piastres <= $ceiling) {
-            return self::PRICE_WEIGHT;
-        }
-
-        // Twice the budget is worth nothing. Between the two it tapers, so a
-        // commute slightly over budget still ranks above one at double.
-        $over = $trip->price_snapshot_piastres / $ceiling - 1;
-
-        return (int) round(self::PRICE_WEIGHT * max(0.0, 1 - $over));
     }
 
     /**

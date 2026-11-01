@@ -9,7 +9,42 @@ enum SeatRequestStatus: string
     case Rejected = 'rejected';
     case Waitlisted = 'waitlisted';
     case Withdrawn = 'withdrawn';
+
+    /**
+     * A request to join a run that was already moving, unanswered in its three minutes (Feature 03
+     * v5 §416, TRIP-09).
+     *
+     * 🔴 The ONLY request that still runs out of time. Every other request stays open until it is
+     * accepted, rejected, withdrawn or its day has passed (BOOK-36, decision C2-note) — the
+     * 48-hour window that used to close pending, waitlisted and counteroffered requests is gone.
+     * Older rows carry this status from that rule and keep it: it is a true record of what
+     * happened to them then. (A request on a day the driver cancelled is closed with it too —
+     * `CancelTripDayAction`, `CancelActiveTripAction` — because the day it asked about is gone.)
+     */
     case Expired = 'expired';
+
+    /**
+     * A one-day request whose day has gone by without her being seated (Feature 03 R-4).
+     *
+     * 🔴 Requests do not expire any more, so something has to end the ones that can no longer mean
+     * anything: a trial for last Tuesday is not a question anybody can answer. Its own case rather
+     * than `expired`, because `expired` says "nobody answered in time" — which is not what happened,
+     * and would read as a mark against the driver. The day simply passed.
+     *
+     * Outside `active_request_key`, so she can ask this commute again at once.
+     */
+    case ClosedDatePassed = 'closed_date_passed';
+
+    /**
+     * The driver deleted the commute she was asking to join or queueing for (Feature 03 C-8,
+     * COM-35).
+     *
+     * 🔴 Needed because requests no longer expire: before, an open request on an archived commute
+     * quietly timed out after 48 hours. Now nothing would ever close it, and she would be shown a
+     * live question about a journey that no longer exists. Not `rejected` — nobody turned her down
+     * — and not `withdrawn`, which says she left.
+     */
+    case CommuteArchived = 'commute_archived';
 
     /**
      * The driver answered with a different pickup or drop-off, and it is the passenger's turn

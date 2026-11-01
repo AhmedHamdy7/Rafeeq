@@ -1,27 +1,30 @@
 <?php
 
-use App\Domains\Admin\Models\PlatformSetting;
+use App\Domains\Admin\Actions\ManageDebtAction;
+use App\Domains\Admin\Models\AdminUser;
 use App\Domains\Booking\Enums\PaymentStatus;
 use App\Domains\Booking\Models\Booking;
 use App\Domains\Commute\Models\ScheduledTrip;
 use App\Domains\Driver\Models\Vehicle;
 use App\Domains\Identity\Models\User;
-use App\Domains\Payment\Enums\DriverFeeLedgerType;
+use App\Domains\Payment\Enums\DebtEntryType;
+use App\Domains\Payment\Enums\DebtSide;
 use App\Domains\Payment\Enums\PaymentTransactionStatus;
-use App\Domains\Payment\Models\DriverBalance;
-use App\Domains\Payment\Models\DriverFeeLedger;
+use App\Domains\Payment\Models\DebtAccount;
+use App\Domains\Payment\Models\DebtEntry;
+use App\Domains\Payment\Models\DebtPayment;
 use App\Domains\Payment\Models\Payment;
-use App\Domains\Payment\Support\DriverFeeLedgerWriter;
+use App\Domains\Payment\Support\DebtLedger;
 use App\Domains\Trip\Models\Attendance;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
 
 /**
- * Phase 8, the cash path (Bible §8.1): the passenger paid in the car, and the platform records it
- * once the driver has confirmed who travelled and the safeguards have had their time.
+ * The cash path and the driver's commission (PAY-07 → PAY-15; Feature 03 backend file L-1 → L-4).
  *
- * 🔴 What is guarded is when money is NOT recorded as much as when it is: never before the delay,
- * never on a disputed record, never on a no-show, and never twice.
+ * 🔴 The seat is PAID the moment she is dropped off, and the commission lands on the driver's debt
+ * at once. There is no amount cap any more — only the Friday deadline: owing a lot on Wednesday is
+ * fine, owing anything from last week on Saturday is not.
  */
 beforeEach(function () {
     Storage::fake('documents');
@@ -40,80 +43,52 @@ beforeEach(function () {
 });
 
 /**
- * The driver says the passenger was in the car, and the clock is moved back past the delay — on the
- * row, not the clock: travelling hours would expire the test's access token.
+ * She got in, and the run finished with her in the car.
  */
-function travelledHoursAgo(int $hours = 3): void
+function rodeAndFinished(): void
 {
     underway(test()->driverToken, test()->tripId);
     checkIn(test()->driverToken, test()->tripId, ['bookingId' => test()->bookingId])->assertOk();
 
-    Attendance::query()->whereKey(test()->bookingId)->update(['confirmed_at' => now()->subHours($hours)]);
+    test()->withToken(test()->driverToken)
+        ->postJson('/api/v1/trips/'.test()->tripId.'/status', ['status' => 'IN_PROGRESS'])->assertOk();
+    test()->withToken(test()->driverToken)->postJson('/api/v1/trips/'.test()->tripId.'/complete')->assertOk();
 }
 
-it('records the cash, the fee as the driver’s debt, and the booking as paid', function () {
-    travelledHoursAgo();
-
-    $this->artisan('payments:settle-cash')->expectsOutputToContain('Settled 1')->assertSuccessful();
+it('records the cash, the commission as the driver’s debt, and the booking as paid', function () {
+    rodeAndFinished();
 
     $booking = Booking::query()->findOrFail($this->bookingId);
     $payment = Payment::query()->where('booking_id', $this->bookingId)->sole();
-    $ledger = DriverFeeLedger::query()->where('booking_id', $this->bookingId)->sole();
-    $balance = DriverBalance::query()->findOrFail($this->driver->id);
+    $line = DebtEntry::query()->where('booking_id', $this->bookingId)->sole();
 
     expect($booking->payment_status)->toBe(PaymentStatus::Paid)
         ->and($payment->status)->toBe(PaymentTransactionStatus::SettledOffline)
         ->and($payment->amount_piastres)->toBe($booking->price_snapshot_piastres)
         ->and($payment->platform_fee_piastres + $payment->driver_amount_piastres)->toBe($payment->amount_piastres)
-        ->and($payment->idempotency_key)->toBe("bk_{$this->bookingId}_charge")
-        ->and($ledger->type)->toBe(DriverFeeLedgerType::FeeDue)
-        ->and($ledger->amount_piastres)->toBe($booking->platform_fee_snapshot_piastres)
-        ->and($ledger->balance_after_piastres)->toBe($booking->platform_fee_snapshot_piastres)
-        ->and($balance->outstanding_fee_piastres)->toBe($booking->platform_fee_snapshot_piastres)
-        ->and($balance->lifetime_earnings_piastres)->toBe($booking->driver_amount_snapshot_piastres);
+        ->and($line->type)->toBe(DebtEntryType::Commission)
+        ->and($line->side)->toBe(DebtSide::Driver)
+        ->and($line->user_id)->toBe($this->driver->id)
+        ->and($line->amount_piastres)->toBe($booking->platform_fee_snapshot_piastres)
+        ->and(DebtLedger::owedBy($this->driver, DebtSide::Driver))->toBe($booking->platform_fee_snapshot_piastres);
 });
 
-it('waits out the collection delay', function () {
-    travelledHoursAgo(hours: 1);
+it('settles a ride the drop-off missed, once, however many times the sweep runs', function () {
+    underway($this->driverToken, $this->tripId);
+    checkIn($this->driverToken, $this->tripId, ['bookingId' => $this->bookingId])->assertOk();
+    // The journey ended for her, but nothing settled it.
+    Attendance::query()->whereKey($this->bookingId)->update(['checked_out_at' => now()]);
 
-    $this->artisan('payments:settle-cash')->expectsOutputToContain('Settled 0')->assertSuccessful();
-
-    expect(Payment::query()->exists())->toBeFalse()
-        ->and(Booking::query()->findOrFail($this->bookingId)->payment_status)->toBe(PaymentStatus::NotDue);
-});
-
-it('settles once, however many times it runs', function () {
-    travelledHoursAgo();
-
-    $this->artisan('payments:settle-cash')->assertSuccessful();
+    $this->artisan('payments:settle-cash')->expectsOutputToContain('Settled 1')->assertSuccessful();
     $this->artisan('payments:settle-cash')->expectsOutputToContain('Settled 0')->assertSuccessful();
 
     expect(Payment::query()->count())->toBe(1)
-        ->and(DriverFeeLedger::query()->count())->toBe(1);
+        ->and(DebtEntry::query()->where('type', DebtEntryType::Commission->value)->count())->toBe(1);
 });
 
-/**
- * 🔴 A passenger who says "I was not in that car" stops the collection until staff decide.
- */
-it('collects nothing on a disputed record, and marks the booking disputed', function () {
-    travelledHoursAgo(hours: 1);
-
-    $this->withToken($this->paxToken)->postJson("/api/v1/bookings/{$this->bookingId}/dispute", [
-        'reason' => 'العربية مشيت قبل ما أوصل.',
-    ])->assertOk();
-
-    Attendance::query()->whereKey($this->bookingId)->update(['confirmed_at' => now()->subHours(3)]);
-
-    $this->artisan('payments:settle-cash')->expectsOutputToContain('Settled 0')->assertSuccessful();
-
-    expect(Booking::query()->findOrFail($this->bookingId)->payment_status)->toBe(PaymentStatus::Disputed)
-        ->and(Payment::query()->exists())->toBeFalse();
-});
-
-it('never collects on a no-show — that policy is not decided', function () {
+it('never settles a no-show as a fare', function () {
     underway($this->driverToken, $this->tripId);
     $this->withToken($this->driverToken)->postJson("/api/v1/trips/{$this->tripId}/no-show", ['bookingId' => $this->bookingId])->assertOk();
-    Attendance::query()->whereKey($this->bookingId)->update(['confirmed_at' => now()->subHours(3)]);
 
     $this->artisan('payments:settle-cash')->expectsOutputToContain('Settled 0')->assertSuccessful();
 
@@ -122,12 +97,22 @@ it('never collects on a no-show — that policy is not decided', function () {
 
 /*
 |--------------------------------------------------------------------------
-| The debt cap
+| The Friday deadline (PAY-11, PAY-12, PAY-15)
 |--------------------------------------------------------------------------
 */
 
-it('stops a driver over the debt cap from publishing, and lets them once it is settled', function () {
-    DriverFeeLedgerWriter::record($this->driver->id, DriverFeeLedgerType::FeeDue, 25_000);
+it('lets a driver owe any amount this week and still publish', function () {
+    DebtLedger::charge($this->driver, DebtEntryType::Commission, 500_000, 'seat_commission', side: DebtSide::Driver);
+
+    $draft = createCommute($this->driverToken, Vehicle::sole()->id)->json('data.id');
+    saveRoute($this->driverToken, $draft);
+    saveSchedule($this->driverToken, $draft);
+
+    $this->withToken($this->driverToken)->postJson("/api/v1/commutes/{$draft}/publish")->assertOk();
+});
+
+it('stops a driver with last week unpaid from publishing, and lets her once staff confirm the payment', function () {
+    owe($this->driver->id, 1_800, weeksAgo: 1);
 
     $draft = createCommute($this->driverToken, Vehicle::sole()->id)->json('data.id');
     saveRoute($this->driverToken, $draft);
@@ -135,37 +120,43 @@ it('stops a driver over the debt cap from publishing, and lets them once it is s
 
     $this->withToken($this->driverToken)->postJson("/api/v1/commutes/{$draft}/publish")
         ->assertForbidden()
-        ->assertJsonPath('error.code', 'DRIVER_DEBT_LIMIT_REACHED')
-        ->assertJsonPath('error.fields.outstandingPiastres.0', '25000')
-        ->assertJsonPath('error.fields.capPiastres.0', '20000');
+        ->assertJsonPath('error.code', 'DRIVER_COMMISSION_OVERDUE')
+        ->assertJsonPath('error.fields.amountOwedPiastres.0', '1800');
 
-    expect(DriverBalance::query()->findOrFail($this->driver->id)->is_blocked_from_publishing)->toBeTrue();
+    $paymentId = $this->withToken($this->driverToken)->postJson('/api/v1/account/debt/payments', [
+        'side' => 'driver',
+        'amountPiastres' => 1_800,
+        'instapayReference' => 'IP12345678',
+    ])->assertStatus(201)
+        ->assertJsonPath('data.status', 'pending_confirmation')
+        ->json('data.id');
 
-    DriverFeeLedgerWriter::record($this->driver->id, DriverFeeLedgerType::FeeSettled, -25_000, note: 'Paid by InstaPay');
+    // Nothing comes off until staff see the money.
+    $this->withToken($this->driverToken)->postJson("/api/v1/commutes/{$draft}/publish")->assertForbidden();
+
+    app(ManageDebtAction::class)->confirmPayment(DebtPayment::query()->findOrFail($paymentId), AdminUser::factory()->create());
 
     $this->withToken($this->driverToken)->postJson("/api/v1/commutes/{$draft}/publish")->assertOk();
 
-    expect(DriverBalance::query()->findOrFail($this->driver->id)->is_blocked_from_publishing)->toBeFalse();
+    expect(DebtLedger::owedBy($this->driver, DebtSide::Driver))->toBe(0);
 });
 
 /**
- * Existing bookings continue (Bible §8.1): the passengers on a run did nothing wrong.
+ * PAY-12: the riders already booked did nothing wrong.
  */
-it('does not stop a driver over the cap from driving the runs already booked', function () {
-    DriverFeeLedgerWriter::record($this->driver->id, DriverFeeLedgerType::FeeDue, 25_000);
+it('does not stop an overdue driver from driving the runs already booked', function () {
+    owe($this->driver->id, 1_800, weeksAgo: 1);
 
     runLeavingIn($this->tripId, 10);
     $this->withToken($this->driverToken)->postJson("/api/v1/trips/{$this->tripId}/start")->assertStatus(201);
 });
 
-it('applies a new cap at once, for everybody', function () {
-    DriverFeeLedgerWriter::record($this->driver->id, DriverFeeLedgerType::FeeDue, 10_000);
-    PlatformSetting::updateOrCreate(['setting_key' => 'payment.max_driver_debt_piastres'], ['setting_value' => 5_000, 'value_type' => 'integer']);
-
-    $this->withToken($this->driverToken)->postJson("/api/v1/commutes/{$this->commuteId}/pause")->assertOk();
-    $this->withToken($this->driverToken)->postJson("/api/v1/commutes/{$this->commuteId}/resume")
-        ->assertForbidden()
-        ->assertJsonPath('error.code', 'DRIVER_DEBT_LIMIT_REACHED');
+it('refuses a payment when that side owes nothing', function () {
+    $this->withToken($this->paxToken)->postJson('/api/v1/account/debt/payments', [
+        'side' => 'passenger',
+        'amountPiastres' => 1_000,
+        'instapayReference' => 'IP12345678',
+    ])->assertStatus(409)->assertJsonPath('error.code', 'DEBT_NOTHING_OWED');
 });
 
 /*
@@ -174,30 +165,29 @@ it('applies a new cap at once, for everybody', function () {
 |--------------------------------------------------------------------------
 */
 
-it('never takes a balance below zero', function () {
-    DriverFeeLedgerWriter::record($this->driver->id, DriverFeeLedgerType::FeeDue, 300);
-    $entry = DriverFeeLedgerWriter::record($this->driver->id, DriverFeeLedgerType::FeeSettled, -1_000);
+it('keeps a credit beyond what she owes, below zero, for next time', function () {
+    DebtLedger::charge($this->driver, DebtEntryType::Commission, 300, 'seat_commission', side: DebtSide::Driver);
+    $entry = DebtLedger::credit($this->driver, DebtEntryType::Credit, 1_000, 'appeal_upheld', side: DebtSide::Driver);
 
-    expect($entry->amount_piastres)->toBe(-300)
-        ->and($entry->balance_after_piastres)->toBe(0)
-        ->and(DriverBalance::query()->findOrFail($this->driver->id)->outstanding_fee_piastres)->toBe(0);
+    expect($entry->balance_after_piastres)->toBe(-700)
+        ->and(DebtLedger::owedBy($this->driver, DebtSide::Driver))->toBe(0);
 });
 
-it('finds a balance that has drifted from its ledger, and does not repair it', function () {
-    DriverFeeLedgerWriter::record($this->driver->id, DriverFeeLedgerType::FeeDue, 300);
-    DriverBalance::query()->whereKey($this->driver->id)->update(['outstanding_fee_piastres' => 999]);
+it('finds an account that has drifted from its ledger, and does not repair it', function () {
+    DebtLedger::charge($this->driver, DebtEntryType::Commission, 300, 'seat_commission', side: DebtSide::Driver);
+    DebtAccount::query()->where('user_id', $this->driver->id)->update(['balance_piastres' => 999]);
 
     Log::shouldReceive('critical')->once();
 
     $this->artisan('payments:reconcile-balances')->assertFailed();
 
-    expect(DriverBalance::query()->findOrFail($this->driver->id)->outstanding_fee_piastres)->toBe(999);
+    expect(DebtLedger::balanceOf($this->driver, DebtSide::Driver))->toBe(999);
 });
 
-it('stamps a balance that matches its ledger', function () {
-    DriverFeeLedgerWriter::record($this->driver->id, DriverFeeLedgerType::FeeDue, 300);
+it('stamps an account that matches its ledger', function () {
+    DebtLedger::charge($this->driver, DebtEntryType::Commission, 300, 'seat_commission', side: DebtSide::Driver);
 
     $this->artisan('payments:reconcile-balances')->assertSuccessful();
 
-    expect(DriverBalance::query()->findOrFail($this->driver->id)->reconciled_at)->not->toBeNull();
+    expect(DebtAccount::query()->where('user_id', $this->driver->id)->sole()->reconciled_at)->not->toBeNull();
 });

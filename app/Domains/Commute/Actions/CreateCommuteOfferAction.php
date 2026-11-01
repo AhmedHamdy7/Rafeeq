@@ -4,20 +4,26 @@ namespace App\Domains\Commute\Actions;
 
 use App\Domains\Commute\Enums\CommuteOfferStatus;
 use App\Domains\Commute\Models\CommuteOffer;
+use App\Domains\Commute\Support\RouteSettings;
 use App\Domains\Driver\Enums\DriverProfileStatus;
 use App\Domains\Driver\Enums\VehicleVerificationStatus;
 use App\Domains\Driver\Models\DriverProfile;
 use App\Domains\Driver\Models\Vehicle;
 use App\Domains\Shared\Exceptions\DomainException;
 use App\Domains\Shared\Support\ErrorCode;
+use App\Domains\Shared\ValueObjects\Distance;
 
 /**
  * Opens a commute as a draft (Chapter 4 steps 1, 2, 5, 6, 7).
  *
  * The route and schedule arrive through their own Actions, because each is a
  * whole thing that has to be validated together. What lands here is everything
- * that is a single value: type, vehicle, direction, seats, price, audience and
- * the tolerances.
+ * that is a single value: type, vehicle, direction, seats, audience and the
+ * tolerances.
+ *
+ * 🔒 Not the price. The seat price is automatic (P-1, PAY-42, D-0016): the
+ * server computes it from the route and the car when days are generated, and a
+ * draft has no price until it is published.
  */
 final readonly class CreateCommuteOfferAction
 {
@@ -40,9 +46,13 @@ final readonly class CreateCommuteOfferAction
             'commute_type' => $attributes['commuteType'],
             'direction' => $attributes['direction'],
             'seats_total' => $attributes['seatsTotal'],
-            'price_per_seat_piastres' => $attributes['pricePerSeatPiastres'],
-            'max_detour_minutes' => $attributes['maxDetourMinutes'],
-            'max_walk_minutes' => $attributes['maxWalkMinutes'],
+            /*
+             * The platform's limits at the time, stored for history only (C-1, COM-31). Nothing
+             * reads these columns to decide anything: every check asks RouteSettings, so an admin
+             * moving a limit moves it for every commute at once.
+             */
+            'max_detour_minutes' => RouteSettings::maxTripDetourMinutes(),
+            'max_walk_minutes' => Distance::fromMetres(RouteSettings::matchRadiusMeters())->asWalkTime()->minutes,
             'audience' => $attributes['audience'],
             'min_trust_level' => $attributes['minTrustLevel'] ?? 0,
             'allows_custom_pickup' => $attributes['allowsCustomPickup'] ?? false,
@@ -97,22 +107,44 @@ final readonly class CreateCommuteOfferAction
     }
 
     /**
-     * Chapter 4 §5: seats offered cannot exceed vehicle capacity.
+     * Seats offered can never exceed the seats an admin approved on the car (C-3, PROF-28, COM-30).
      *
-     * `vehicles.seats` is the TOTAL including the driver, so what can be offered
-     * is one fewer — the driver is occupying one of them.
+     * 🔴 `approved_seats`, not `seats`. `seats` is what the driver typed on the vehicle form, an
+     * entry for the reviewer to check (PROF-30); the approved count is the reviewer's answer — the
+     * seats with working belts that may be sold — and the only number that limits a commute.
+     *
+     * A car nobody has reviewed has no approved seats, and is refused with its own code rather than
+     * a "0 seats" message: the driver has nothing to correct, he is waiting for a review.
      */
     public static function assertSeatsFitVehicle(Vehicle $vehicle, int $seatsTotal): void
     {
-        $bookable = max(0, $vehicle->seats - 1);
+        $approved = $vehicle->approved_seats;
 
-        if ($seatsTotal < 1 || $seatsTotal > $bookable) {
-            throw DomainException::of(ErrorCode::ValidationFailed, fields: [
-                'seatsTotal' => [__('commute.seats.exceeds_vehicle', [
-                    'seats' => $vehicle->seats,
-                    'bookable' => $bookable,
-                ])],
+        if ($approved === null) {
+            throw DomainException::of(ErrorCode::VehicleSeatsNotApproved, fields: [
+                'vehicleId' => [$vehicle->getKey()],
             ]);
+        }
+
+        if ($seatsTotal < 1 || $seatsTotal > $approved) {
+            throw DomainException::of(ErrorCode::CommuteSeatsExceedApproved, fields: [
+                'seatsTotal' => [__('commute.seats.exceeds_approved', ['approved' => $approved])],
+                'approvedSeats' => [(string) $approved],
+            ]);
+        }
+    }
+
+    /**
+     * The same check for a whole commute: its own seat count and every weekday that offers a
+     * different one (C-3: "seats per day ≤ approved seats"). Used wherever a commute meets a car —
+     * publishing, swapping the vehicle, activating a replacement, duplicating.
+     */
+    public static function assertCommuteFitsVehicle(CommuteOffer $offer, Vehicle $vehicle): void
+    {
+        self::assertSeatsFitVehicle($vehicle, (int) $offer->seats_total);
+
+        foreach ($offer->weekdaySchedules()->whereNotNull('seats_total')->pluck('seats_total') as $seats) {
+            self::assertSeatsFitVehicle($vehicle, (int) $seats);
         }
     }
 }

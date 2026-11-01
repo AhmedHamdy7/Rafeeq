@@ -32,6 +32,10 @@ beforeEach(function () {
     $this->commuteId = readyCommute($this->driverToken, Vehicle::sole()->id);
     test()->withToken($this->driverToken)->postJson("/api/v1/commutes/{$this->commuteId}/publish")->assertOk();
 
+    // The "documents approved" notice approvedDriver() just sent (Feature 03 §8) — these tests are
+    // about what the driver is told after that, and count her inbox.
+    Notification::query()->where('type', 'driver_documents_approved')->delete();
+
     $this->paxToken = verifiedPassenger('01223339999', device: 'pax-2');
     $this->driver = User::query()->where('phone_e164', '+201012345678')->sole();
     $this->pax = User::query()->where('phone_e164', '+201223339999')->sole();
@@ -74,7 +78,7 @@ it('tells the driver about a new seat request, by the passenger first name only'
         ->and($note->body)->toContain('Mariam')
         // 🔒 A push body is shown on a lock screen.
         ->and($note->body)->not->toContain('Hassan')
-        ->and($note->data)->toBe(['seatRequestId' => $requestId]);
+        ->and($note->data)->toEqual(['seatRequestId' => $requestId, 'kind' => 'seat_request']);
 });
 
 it('tells the passenger when the driver says yes', function () {

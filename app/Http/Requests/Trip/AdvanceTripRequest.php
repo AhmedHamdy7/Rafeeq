@@ -29,6 +29,15 @@ final class AdvanceTripRequest extends FormRequest
         return [
             // Where the run has got to: EN_ROUTE, AT_PICKUP or IN_PROGRESS.
             'status' => ['required', 'string', Rule::enum(TripSessionStatus::class)],
+
+            // AT_PICKUP only: "I've arrived" for this passenger — her booking on this run. Her
+            // 5-minute grace starts from the later of now and her pickup time.
+            'bookingId' => ['required_if:status,at_pickup', 'nullable', 'string', 'size:26'],
+
+            // AT_PICKUP only: where the car is now. Refused with 409 NOT_AT_PICKUP (with
+            // `distanceMeters`) unless it is within 150 m of her pickup point.
+            'lat' => ['required_if:status,at_pickup', 'nullable', 'numeric', 'between:-90,90'],
+            'lng' => ['required_if:status,at_pickup', 'nullable', 'numeric', 'between:-180,180'],
         ];
     }
 

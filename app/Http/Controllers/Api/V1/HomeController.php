@@ -383,13 +383,11 @@ final class HomeController extends Controller
             /*
              * 🔴 Two figures, not the screen's one "You collect EGP 240", because with a
              * cash commute those are different numbers and the driver needs both: what
-             * to take at the door, and what of it is theirs once the platform's fee is
-             * settled.
+             * to take at the door (the seat prices), and what of it is his once RAFEEQ's
+             * commission — added on top of his share (PAY-48) — is settled.
              *
              * Both are sums of what was FROZEN on each booking at approval, never
-             * recomputed — so a price change tomorrow moves neither, and whichever way
-             * the open question about the fee's direction is settled (see the screen map,
-             * §8.1), this keeps reporting what those bookings actually say.
+             * recomputed — so a rate change tomorrow moves neither.
              */
             'collectPiastres' => (int) $confirmed->sum('price_snapshot_piastres'),
             'keepPiastres' => (int) $confirmed->sum('driver_amount_snapshot_piastres'),
@@ -478,7 +476,7 @@ final class HomeController extends Controller
         $requests = $query
             ->with(['passenger.stats', 'passenger.verifications'])
             // Oldest first: the person who has been waiting longest is the one whose
-            // answer is most overdue, and a request expires after 48 hours.
+            // answer is most overdue — and nothing closes a request but an answer (R-4).
             ->oldest('created_at')
             ->orderBy('id')
             ->limit(self::PENDING_REQUESTS)

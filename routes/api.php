@@ -29,6 +29,7 @@ use App\Http\Controllers\Api\V1\Group\GroupController;
 use App\Http\Controllers\Api\V1\HomeController;
 use App\Http\Controllers\Api\V1\Notification\ChatController;
 use App\Http\Controllers\Api\V1\Notification\NotificationController;
+use App\Http\Controllers\Api\V1\Payment\DebtController;
 use App\Http\Controllers\Api\V1\Payment\MoneyController;
 use App\Http\Controllers\Api\V1\PlaceController;
 use App\Http\Controllers\Api\V1\Rating\RatingController;
@@ -204,6 +205,13 @@ Route::prefix('v1')->group(function (): void {
              */
             Route::post('initial-role', [OnboardingController::class, 'storeInitialRole'])
                 ->middleware('profile.complete');
+
+            /*
+             * "Become a driver" later, on the same account (F1-7, F2-10; decision E6). Same gate as
+             * the role step it extends; idempotent, and no OTP — the person is already signed in.
+             */
+            Route::post('capabilities/driver', [OnboardingController::class, 'addDriverCapability'])
+                ->middleware('profile.complete');
         });
     });
 
@@ -268,11 +276,12 @@ Route::prefix('v1')->group(function (): void {
             Route::put('{commute}/schedule', [CommuteController::class, 'saveSchedule']);
 
             /*
-             * "The fair suggested price" (ERD §23.3) — what the journey costs to drive,
-             * split by the assumed occupancy. Advice beside the slider on screen 24, not
-             * a rule: validation still accepts anything between the bounds.
+             * The seat price RAFEEQ computes (P-1, PAY-42), read-only. It replaced the old
+             * `price-suggestion` slider when the driver stopped choosing the price (D-0016).
              */
-            Route::get('{commute}/price-suggestion', [CommuteController::class, 'priceSuggestion']);
+            Route::get('{commute}/price', [CommuteController::class, 'price']);
+            // C-9: the fee pausing, deleting or replacing the car would cost, before she confirms.
+            Route::get('{commute}/cancel-preview', [CommuteController::class, 'cancelPreview']);
 
             Route::post('{commute}/publish', [CommuteController::class, 'publish']);
             Route::post('{commute}/pause', [CommuteController::class, 'pause']);
@@ -351,6 +360,8 @@ Route::prefix('v1')->group(function (): void {
         Route::delete('safety/live-shares/{share}', [SafetyController::class, 'revokeLiveShare']);
 
         Route::get('safety/blocked-users', [SafetyController::class, 'blocked']);
+        // What a block would cancel and cost, shown before the confirm (Feature 03 files X-4).
+        Route::get('safety/blocked-users/preview', [SafetyController::class, 'blockPreview']);
         Route::post('safety/blocked-users', [SafetyController::class, 'block']);
         Route::delete('safety/blocked-users/{user}', [SafetyController::class, 'unblock']);
 
@@ -452,6 +463,8 @@ Route::prefix('v1')->group(function (): void {
         Route::get('search/commutes', [SearchController::class, 'commutes']);
 
         Route::get('commute-demands', [CommuteDemandController::class, 'index']);
+        // Edit it, or pause / resume it (S-4, BOOK-06).
+        Route::patch('commute-demands/{demand}', [CommuteDemandController::class, 'update']);
         Route::post('commute-demands', [CommuteDemandController::class, 'store']);
         Route::delete('commute-demands/{demand}', [CommuteDemandController::class, 'destroy']);
 
@@ -559,6 +572,8 @@ Route::prefix('v1')->group(function (): void {
          * body would be a free cancellation for the asking, paid for by a driver who was on time.
          */
         Route::post('bookings/{booking}/exit-without-fee', [BookingController::class, 'exitWithoutFee']);
+        // TRIP-20: "Did you ask to get off here?" — her answer.
+        Route::post('bookings/{booking}/early-drop', [BookingController::class, 'earlyDrop']);
 
         /*
          * "Find another commute" — what she could still catch, after a morning was taken away from
@@ -607,6 +622,8 @@ Route::prefix('v1')->group(function (): void {
         Route::post('seat-requests/{seatRequest}/counteroffer/decline', [SeatRequestController::class, 'declineCounteroffer']);
 
         Route::get('driver/bookings', [BookingController::class, 'forDriver']);
+        // C-5: the driver removing ONE passenger — a driver cancellation, with the fee by timing.
+        Route::post('driver/bookings/{booking}/cancel', [BookingController::class, 'cancelAsDriver']);
 
         /*
          * Her waiting list, and the one place a driver hands out seats herself (Feature 03 v5).
@@ -649,18 +666,20 @@ Route::prefix('v1')->group(function (): void {
         Route::post('change-proposals/{proposal}/respond', [ChangeProposalController::class, 'respond']);
 
         /*
-         * The money, as the two people in the car see it (Phase 8, Bible §8).
+         * The money (PAY-08 → PAY-17, PAY-34 → PAY-37).
          *
-         * 🔴 Nothing here MOVES money. No payment method, no capture, no payout, no refund —
-         * those need a provider that has not been chosen, and a half-built capture path is
-         * worse than none. These two read what the cash path has already recorded.
+         * 🔒 Her debt is hers alone: there is no endpoint at any access level that reads another
+         * member's debt. The group statement shows a passenger only her own rows.
          *
-         * 🔒 `driver/balance` is hers alone: there is no endpoint at any access level that
-         * reads another driver's income or debt. The group statement shows a passenger only her
-         * own rows — what her fellow passengers pay is not her business, and they may be on
-         * different prices after a change.
+         * `account/debt` replaced `driver/balance`: one person has up to two debts (driver side:
+         * weekly commission; passenger side: fees), and the screen shows both. Paying is "I paid"
+         * with an InstaPay reference; staff confirm it before anything comes off. The upload shares
+         * the reports' rate limiter rather than running unthrottled.
          */
-        Route::get('driver/balance', [MoneyController::class, 'driverBalance']);
+        Route::get('account/debt', [DebtController::class, 'show']);
+        Route::get('account/debt/statements', [DebtController::class, 'statement']);
+        Route::post('account/debt/payments', [DebtController::class, 'storePayment'])->middleware('throttle:safety-reports');
+        Route::post('account/debt/entries/{entry}/appeal', [DebtController::class, 'appealFee']);
         Route::get('groups/{group}/statement', [MoneyController::class, 'groupStatement']);
 
         /*
@@ -753,6 +772,8 @@ Route::prefix('v1')->group(function (): void {
         Route::patch('trips/{trip}/receive-requests', [TripController::class, 'receiveRequests']);
 
         // "Cancel today" — one day off, before it starts; the commute stands (screen 23).
+        // C-9: what "Cancel today" would cost him, before he confirms.
+        Route::get('trips/{trip}/cancel-preview', [TripController::class, 'cancelPreview']);
         Route::post('trips/{trip}/cancel', [TripController::class, 'cancel']);
 
         /*
@@ -805,7 +826,6 @@ Route::prefix('v1')->group(function (): void {
          */
         Route::get('trips/{trip}/wait-timers', [WaitTimerController::class, 'index']);
         Route::post('trips/{trip}/wait-timers', [WaitTimerController::class, 'store']);
-        Route::post('trips/{trip}/wait-timers/{timer}/extend', [WaitTimerController::class, 'extend']);
 
         /*
          * Where the car is (Chapter 8, Live Location).

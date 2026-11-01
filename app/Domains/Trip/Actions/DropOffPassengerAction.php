@@ -9,6 +9,7 @@ use App\Domains\Booking\Models\Booking;
 use App\Domains\Booking\Support\BookingEventLog;
 use App\Domains\Notification\Enums\NotificationType;
 use App\Domains\Notification\Support\Notifier;
+use App\Domains\Payment\Actions\SettleBookingAction;
 use App\Domains\Shared\Exceptions\DomainException;
 use App\Domains\Shared\Support\ErrorCode;
 use App\Domains\Trip\Enums\AttendanceStatus;
@@ -16,6 +17,7 @@ use App\Domains\Trip\Enums\NavigationStopKind;
 use App\Domains\Trip\Models\Attendance;
 use App\Domains\Trip\Models\NavigationStop;
 use App\Domains\Trip\Models\TripSession;
+use App\Domains\Trip\Support\EarlyDropCheck;
 use Illuminate\Support\Facades\DB;
 
 /**
@@ -41,7 +43,11 @@ use Illuminate\Support\Facades\DB;
  */
 final readonly class DropOffPassengerAction
 {
-    public function __construct(private RecordMemberWarningAction $warnings) {}
+    public function __construct(
+        private RecordMemberWarningAction $warnings,
+        private SettleBookingAction $settle,
+        private EarlyDropCheck $earlyDrop,
+    ) {}
 
     public function execute(TripSession $session, Booking $booking, string $confirmedBy): Attendance
     {
@@ -101,6 +107,13 @@ final readonly class DropOffPassengerAction
             }
 
             /*
+             * 🔴 And the seat is PAID, now (PAY-07, decision D-0004): the fare was handed over in
+             * the car, and RAFEEQ's commission becomes the driver's debt this instant — along with
+             * any fee line she carried (PAY-16). Not two hours later, and not when the run ends.
+             */
+            $this->settle->execute($booking);
+
+            /*
              * The stop is behind her, so the in-progress navigation stops listing it. v5 §3: the
              * live itinerary "reflects remaining actionable stops and current position, not
              * completed stops".
@@ -135,6 +148,12 @@ final readonly class DropOffPassengerAction
              * still, as far as she knows, being told something about the ride she just finished.
              */
             $this->warnings->deliverFor($booking);
+
+            /*
+             * 🔴 TRIP-20: set down more than 1 km before her point without asking? She is asked
+             * whether she did — her "no" is what makes it the driver's fault (PAY-28).
+             */
+            $this->earlyDrop->afterDropOff($session, $booking);
 
             return $attendance;
         });

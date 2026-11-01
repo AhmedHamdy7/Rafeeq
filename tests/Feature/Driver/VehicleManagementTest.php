@@ -41,7 +41,8 @@ function addVehicle(string $token, array $overrides = [])
 function approveVehicleRow(string $vehicleId): void
 {
     Vehicle::findOrFail($vehicleId)
-        ->forceFill(['verification_status' => VehicleVerificationStatus::Approved->value])
+        // Reviewed too (F2-6): a car carrying a live commute must have approved seats.
+        ->forceFill(['verification_status' => VehicleVerificationStatus::Approved->value, 'approved_seats' => 3])
         ->save();
 }
 

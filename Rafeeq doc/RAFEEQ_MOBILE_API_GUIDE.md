@@ -14,7 +14,7 @@
 >
 > **Base URL:** `{host}/api/v1` · **Auth:** bearer token · **Format:** JSON only.
 
-**Last updated:** 2026-10-30 · **170 endpoints live** · Phases 0–7, 9 and 11 complete · 10, 12 and 13 all but a decision each
+**Last updated:** 2026-11-01 · **179 endpoints live** · Phases 0–7, 9 and 11 complete · 10, 12 and 13 all but a decision each
 
 ---
 
@@ -22,7 +22,7 @@
 
 ### What is ready
 
-**170 endpoints live** and tested, across the 47 designed screens:
+**179 endpoints live** and tested, across the 47 designed screens:
 
 | | Count | Covers |
 |---|---|---|
@@ -391,7 +391,7 @@ quarter of an hour.
    → 200  a ranked list; each row has commuteId, score + its breakdown, driver summary, vehicle
 
 8  POST /commutes/{commute}/pickup-preview   { lat, lng }
-   → 200  { addedMinutes, runTotalMinutes, maxDetourMinutes, withinLimit }
+   → 200  { addedMinutes, runTotalMinutes, maxDetourMinutes, runTotalKm, maxDetourKm, withinLimit }
 ```
 
 Step 8 creates nothing. It exists so the passenger can see the detour **before** committing to a
@@ -474,7 +474,7 @@ to open.
 ```
 19 POST /trips/{trip}/check-in   { bookingId }      (driver)  → 200
    POST /trips/{trip}/no-show    { bookingId }      (driver)  → 200
-   POST /trips/{trip}/wait-timers { bookingId }     (driver)  → 201
+   POST /trips/{trip}/wait-timers { bookingId, lat, lng }  (driver, within 150 m of her pickup)  → 201
    POST /bookings/{booking}/dispute { reason }      (passenger, 24 hours)  → 201
 ```
 
@@ -519,6 +519,7 @@ GET  /safety/emergency-contacts · POST · PATCH · DELETE
 POST /trips/{trip}/live-share          { contactId? }   → 201  { url, token } ONCE
 POST /incidents                        { category, description?, bookingId? }       → 201
 POST /incidents/{incident}/evidence    multipart: kind, file                        → 201
+GET  /safety/blocked-users/preview?userId=                                          → 200  { bookingsToCancel, feePiastres, reason }
 POST /safety/blocked-users             { userId, reason? }                          → 201
 ```
 
@@ -589,7 +590,7 @@ Status: ✅ fully served · ⚠️ served, something named missing · ⛔ no API
 | 10 | Discover | `GET /search/commutes` | ⚠️ Vehicle, score and breakdown, walk and detour, commitment, seats, rules, rating and badges — all there. **Missing: `why[]`**, the match-reason chips. |
 | 11 | Filters | local + `POST /saved-searches` | ⚠️ The **minimum-rating** filter has no data behind it until ratings exist (Phase 10). |
 | 12 | **Match details** | `GET /search/commutes` | ⚠️ Rating and badges ✅. **Missing: the price breakdown** (route contribution ÷ passengers + platform fee) — blocked on an open money decision, section 8 — and **reviews** (Phase 10). |
-| 18 | Create commute request | `POST /commute-demands` | ✅ `flexibilityMinutes` and `wantsReturnTrip` are stored and returned. **Note the rename: the budget is `budgetMonthlyPiastres`, a MONTHLY ceiling**, not per seat. Return-leg *matching* itself is not built — the demand is recorded. |
+| 18 | Create commute request | `POST /commute-demands` · `PATCH /commute-demands/{demand}` | ✅ `flexibilityMinutes` and `wantsReturnTrip` are stored and returned. **No budget any more** (S-2): remove the budget stepper. Edit and pause through `PATCH` (S-4). Return-leg *matching* itself is not built — the demand is recorded. |
 | 42 | Matching spinner | — | 🚫 Loading state. |
 
 ### Verification
@@ -604,7 +605,7 @@ Status: ✅ fully served · ⚠️ served, something named missing · ⛔ no API
 | # | Screen | Endpoints | Status |
 |---|---|---|---|
 | 23 | **Driver home** | **`GET /driver/home`** | ✅ One call: today's run, countdown, attendance counts, seats open, what to collect and what she keeps, approved passengers with their meeting points, pending requests with the full count, and her stats. A passenger who is not a driver gets an **empty** payload, not a 404 — the role switch lives on this screen. **"Cancel today"** → `POST /trips/{trip}/cancel` (4.9). |
-| 24 | Publish route | `POST /commutes` · `PUT /commutes/{commute}/route` · `PUT /commutes/{commute}/schedule` · `GET /commutes/{commute}/price-suggestion` | ✅ The suggestion returns the number, the slider bounds, and the reasoning behind it. **Price bounds are 5,000–12,000 piastres (EGP 50–120)** — matching your slider. |
+| 24 | Publish route | `POST /commutes` · `PUT /commutes/{commute}/route` · `PUT /commutes/{commute}/schedule` · `GET /commutes/{commute}/price` | ✅ The price is computed by RAFEEQ (read-only): show `seatPricePiastres` and `driverSharePiastres`. **Remove the price slider and tiers** (P-1). |
 | 25 | Publish review | `GET /commutes/{commute}` · `POST /commutes/{commute}/publish` | ✅ |
 | 31 | Vehicle capture | `POST /driver/vehicles` · `POST /driver/vehicles/{vehicle}/documents` | ⚠️ **Missing: a second vehicle photo** (one `photo_path` column), **`Seat belts (all seats)` is not modelled anywhere**, and **`Air conditioning` is modelled per COMMUTE** (`rules.ac`), not per vehicle as your screen has it. Section 8. |
 
@@ -628,7 +629,7 @@ Status: ✅ fully served · ⚠️ served, something named missing · ⛔ no API
 | 17 | **Active trip** | `GET /trips/{trip}` · `GET /trips/{trip}/location` · channel `private-trip.{sessionId}` | ✅ Status, timings, `isUnderway`, `lastLocationAt`, the live position, and **route deviation** (`deviationDetectedAt`). |
 | 36 | **Pre-trip check-in** | `GET`/`POST /groups/{group}/attendance` | ✅ This screen is the **declared** attendance, not boarding confirmation. `I'm coming` = `coming`, `Can't make it` = `away`. **Missing: `5 min late`** — a third declared state that does not exist yet. Section 8. |
 | 40 | No-show | `POST /trips/{trip}/no-show` · `POST /bookings/{booking}/dispute` | ✅ The driver records it; the passenger has 24 hours to contest it. |
-| 41 | **Driver wait timer** | `GET`/`POST /trips/{trip}/wait-timers` · `POST .../extend` | ⚠️ **There is deliberately no endpoint that stops a timer** — "She's here" is the check-in and "Mark no-show & depart" is the no-show, and both close it. **Missing: `Stop 2 of 3`** (needs an ordered pickup sequence) and `notified twice`, Call, Message (Phase 12). |
+| 41 | **Driver wait timer** | `GET`/`POST /trips/{trip}/wait-timers` (the POST is "I've arrived", GPS-checked; **no "+2 min" any more**) | ⚠️ **There is deliberately no endpoint that stops a timer** — "She's here" is the check-in and "Mark no-show & depart" is the no-show, and both close it. **Missing: `Stop 2 of 3`** (needs an ordered pickup sequence) and `notified twice`, Call, Message (Phase 12). |
 | 39 | **Route changed** | `GET /trips/{trip}` | ⚠️ The deviation is **detected and reported** on the trip session. **Missing: the push that tells you about it** (Phase 12) — today you learn of it by reading the trip. |
 | 43 · 45 | Driver cancelled → backup · cancel confirmation | — | ⛔ Phase 9, blocked on section 8 #3. |
 
@@ -638,7 +639,7 @@ Status: ✅ fully served · ⚠️ served, something named missing · ⛔ no API
 |---|---|---|---|
 | 21 | **Profile** | `GET /auth/me` · `GET /account/stats` | ✅ The three numbers come from `user_stats`. **Every rate is `null` until it has been computed — show a dash, not a zero.** Role switching needs a product decision. |
 | 22 | Notifications | `GET /notifications` · `PATCH /notifications/read` · `GET`/`PATCH /notifications/preferences` | ✅ Inbox, unread badge and switches — section 4.14. Push needs a provider decision (FCM) before phones actually buzz; the inbox works without it. Trip chat is the next slice. |
-| 26 | **Privacy & blocked** | `GET`/`POST /safety/blocked-users` · `DELETE .../{user}` | ✅ Blocking works in **both directions** from the next search. 🔒 Nothing tells the blocked person, and the list is one-directional — who I blocked, never who blocked me. Privacy toggles themselves are yours/local. |
+| 26 | **Privacy & blocked** | `GET`/`POST /safety/blocked-users` · `GET .../preview` · `DELETE .../{user}` | ✅ Blocking works in **both directions** from the next search, and **cancels every upcoming booking the two share** — show the preview first. The id to block comes from `otherPartyUserId` on the booking once the trip has ended. 🔒 Nothing tells the blocked person, and the list is one-directional — who I blocked, never who blocked me. Privacy toggles themselves are yours/local. |
 | 27 | Help & legal | `GET /account/consents` for versions | ⚠️ Static content is yours; the consent versions in force come from the API. |
 | 35 | Account restricted | `GET /auth/me` → `user.suspension` · or the `ACCOUNT_SUSPENDED` (403) refusal's `error.fields` | ✅ Everything the screen shows now has a source: the reason as a sentence (`suspensionReason`, in the request's language), the **Reference** (`suspension.caseNumber`, e.g. `RF-482913`) and the **Expected update** (`suspension.reviewDueAt`). See the `user` object in 4.1. |
 
@@ -688,6 +689,7 @@ fails if this list and the running routes ever disagree in either direction.
 | `PATCH /account/devices/current/security` | 4.2 Account, devices, consents |
 | `DELETE /account/devices/{device}/session` | 4.2 Account, devices, consents |
 | `POST /account/initial-role` | 4.2 Account, devices, consents |
+| `POST /account/capabilities/driver` | 4.2 Account, devices, consents |
 | `GET /account/onboarding-state` | 4.2 Account, devices, consents |
 | `PATCH /account/preferences` | 4.2 Account, devices, consents |
 | `PUT /account/profile/basic` | 4.2 Account, devices, consents |
@@ -725,7 +727,8 @@ fails if this list and the running routes ever disagree in either direction.
 | `POST /commutes/{commute}/duplicate` | 4.5 Commutes (driver) |
 | `POST /commutes/{commute}/pause` | 4.5 Commutes (driver) |
 | `POST /commutes/{commute}/pickup-preview` | 4.5 Commutes (driver) |
-| `GET /commutes/{commute}/price-suggestion` | 4.5 Commutes (driver) |
+| `GET /commutes/{commute}/price` | 4.5 Commutes (driver) |
+| `GET /commutes/{commute}/cancel-preview` | 4.5 Commutes (driver) |
 | `POST /commutes/{commute}/publish` | 4.5 Commutes (driver) |
 | `POST /commutes/{commute}/resume` | 4.5 Commutes (driver) |
 | `POST /commutes/{commute}/return` | 4.5 Commutes (driver) |
@@ -734,6 +737,7 @@ fails if this list and the running routes ever disagree in either direction.
 | `POST /commutes/{commute}/seat-requests` | 4.5 Commutes (driver) |
 | `GET /commute-demands` | 4.6 Search, demands, saved searches |
 | `POST /commute-demands` | 4.6 Search, demands, saved searches |
+| `PATCH /commute-demands/{demand}` | 4.6 Search, demands, saved searches |
 | `DELETE /commute-demands/{demand}` | 4.6 Search, demands, saved searches |
 | `GET /matches` | 4.6 Search, demands, saved searches |
 | `GET /places` | 4.6 Search, demands, saved searches |
@@ -747,7 +751,11 @@ fails if this list and the running routes ever disagree in either direction.
 | `PATCH /bookings/{booking}/cancel` | 4.7 Seat requests and bookings |
 | `POST /bookings/{booking}/dispute` | 4.7 Seat requests and bookings |
 | `GET /driver/bookings` | 4.7 Seat requests and bookings |
-| `GET /driver/balance` | 4.16 Money |
+| `POST /driver/bookings/{booking}/cancel` | 4.7 Seat requests and bookings |
+| `GET /account/debt` | 4.16 Money |
+| `GET /account/debt/statements` | 4.16 Money |
+| `POST /account/debt/payments` | 4.16 Money |
+| `POST /account/debt/entries/{entry}/appeal` | 4.16 Money |
 | `GET /groups/{group}/statement` | 4.16 Money |
 | `GET /driver/seat-requests` | 4.7 Seat requests and bookings |
 | `POST /driver/seat-requests/{seatRequest}/approve` | 4.7 Seat requests and bookings |
@@ -784,6 +792,7 @@ fails if this list and the running routes ever disagree in either direction.
 | `POST /pickup-requests/{pickupRequest}/accept-alternative` | 4.8 Pickup points |
 | `GET /trips/{trip}` | 4.9 Live trip |
 | `GET /trips/{trip}/attendance` | 4.9 Live trip |
+| `GET /trips/{trip}/cancel-preview` | 4.9 Live trip |
 | `POST /trips/{trip}/cancel` | 4.9 Live trip |
 | `POST /trips/{trip}/cancel-active` | 4.9 Live trip |
 | `POST /trips/{trip}/check-in` | 4.9 Live trip |
@@ -796,12 +805,12 @@ fails if this list and the running routes ever disagree in either direction.
 | `PATCH /trips/{trip}/receive-requests` | 4.9 Live trip |
 | `POST /bookings/{booking}/end-early` | 4.9 Live trip |
 | `POST /bookings/{booking}/exit-without-fee` | 4.9 Live trip |
+| `POST /bookings/{booking}/early-drop` | 4.9 Live trip |
 | `GET /bookings/{booking}/alternatives` | 4.9 Live trip |
 | `POST /trips/{trip}/start` | 4.9 Live trip |
 | `POST /trips/{trip}/status` | 4.9 Live trip |
 | `GET /trips/{trip}/wait-timers` | 4.9 Live trip |
 | `POST /trips/{trip}/wait-timers` | 4.9 Live trip |
-| `POST /trips/{trip}/wait-timers/{timer}/extend` | 4.9 Live trip |
 | `GET /groups` | 4.10 Groups |
 | `GET /groups/{group}` | 4.10 Groups |
 | `GET /groups/{group}/absences` | 4.10 Groups |
@@ -826,6 +835,7 @@ fails if this list and the running routes ever disagree in either direction.
 | `GET /incidents/{incident}/evidence` | 4.12 Safety |
 | `POST /incidents/{incident}/evidence` | 4.12 Safety |
 | `GET /safety/blocked-users` | 4.12 Safety |
+| `GET /safety/blocked-users/preview` | 4.12 Safety |
 | `POST /safety/blocked-users` | 4.12 Safety |
 | `DELETE /safety/blocked-users/{user}` | 4.12 Safety |
 | `GET /safety/emergency-contacts` | 4.12 Safety |
@@ -989,6 +999,20 @@ Returns `user` (with `capabilities` filled in) and `nextStep`, which is `HOME` o
 Calling this before the profile is complete answers `403`; finish `PUT /account/profile/basic`
 first.
 
+#### `POST /account/capabilities/driver` — signed-in, active account, profile complete
+
+**"Become a Driver"** on an account that signed up as a passenger (F1-7, F2-10). No body, **no OTP**.
+
+- Adds the `DRIVER` capability to the **same account** and answers `{ user }` with `capabilities`
+  filled in. **Safe to send again** — a second call changes nothing.
+- It does **not** change `registeredRole` (what she signed up for stays as history) and does **not**
+  move `activeMode`: she stays on the home she is looking at. Switch her with `PATCH
+  /account/preferences { activeMode: "driver" }` when she wants the driver side.
+- On an account that never finished the role step it **is** the role step: `initialRoleSelected`
+  becomes `true` with `registeredRole: driver`.
+- 🔒 Same caution as above: this is not approval to drive. Publishing still needs the driver
+  application, the car review and `government_id`.
+
 #### `GET /account/onboarding-state` — signed-in
 
 Where an interrupted sign-up resumes. **Safe to call at launch**, before anything else is known,
@@ -1019,6 +1043,11 @@ UI state kept across devices. Every field is optional; send only what changed.
 | `driverWalkthroughSeen` | `true` once the driver walkthrough has been shown. |
 | `language` | `ar` · `en` — used for **notifications we send you**. The language of a *response* always follows that request's `Accept-Language` header instead. |
 | `theme` | `light` · `dark` · `system` |
+
+**Answer:** the preferences plus **`publishedCommutesCount`** — how many of the caller's commutes are
+published right now (`0` for a passenger). Switching both ways is free, no OTP. When a driver switches
+to `passenger` and this is above zero, remind him: **his published commutes keep running, and his
+passengers keep expecting him, until he pauses them** (F2-10).
 
 > 🔒 **This grants nothing.** `activeMode` picks a screen, not a permission. Setting it to `driver`
 > without the driver capability stores the preference and every driver action is still refused —
@@ -1136,7 +1165,7 @@ she has to be able to read it, and the reasons, **before** a review rather than 
 ```
 { "asDriver":    { "score": 100, "events": [] },
   "asPassenger": { "score": 92,  "events": [ { "kind": "PASSENGER_CANCELLED_LATE", ... } ] },
-  "windowDays": 180, "perfectScore": 100 }
+  "windowDays": 90, "perfectScore": 100 }
 ```
 
 | Field | Means |
@@ -1149,13 +1178,26 @@ she has to be able to read it, and the reasons, **before** a review rather than 
 
 Event kinds today: `DRIVER_CANCELLED_BOOKING` · `DRIVER_CANCELLED_DAY` ·
 `DRIVER_DISPLACED_PASSENGER` (one per passenger a pause or vehicle replacement displaced) ·
-`PASSENGER_NO_SHOW` · `PASSENGER_CANCELLED_LATE`. **Expect new kinds**; show an unknown one as a
-plain row.
+`DRIVER_ABANDONED_ACTIVE_TRIP` · `DRIVER_LATE_CAUSED_EXIT` · `DRIVER_LATE` (not set off 10 minutes
+after departure, once per morning somebody booked) · `PASSENGER_NO_SHOW` · `PASSENGER_CANCELLED_LATE`
+· `PASSENGER_LATE` (kept the car waiting, then boarded). **Expect new kinds**; show an unknown one as
+a plain row.
 
-> ⚠️ **The weights are placeholders pending a product decision.** v5 defers the fee brackets
-> outright and says nothing about score weights. Their proportion to each other is deliberate; their
-> absolute size is not policy anybody has agreed, so **do not build a UI that implies a threshold**
-> ("you are 8 points from suspension").
+The weights are the partners' (2026-10-31, Feature 03 X-3), points lost, each an admin setting:
+
+| Event | Driver | Passenger |
+|---|---|---|
+| No-show (for the driver: the car never came) | −10 | −5 |
+| Cancels < 10 h before departure | −5 | −2 |
+| Cancels 10–16 h before | −3 | nothing |
+| Cancels ≥ 16 h before | −1 | nothing |
+| Late | −2 | −1 |
+| Ends a trip already under way | −8 | — |
+
+Each event's `weight` is the one in force **when it happened** — a later change never rewrites it.
+
+> ⚠️ **Only a number for now: it suspends nobody and gates nothing** (decision D4). **Do not build a
+> UI that implies a threshold** ("you are 8 points from suspension").
 >
 > 🔒 **There is no endpoint for anybody else's.** The number is a judgement, and the path takes no
 > parameter at all. It is not on public profiles and v5 does not ask for it to be.
@@ -1192,40 +1234,49 @@ endpoint is the measure that exists.
 
 #### `GET /account/warnings` · `POST /account/warnings/{warning}/dispute` — signed-in
 
-The escalating warnings, and her answer to one (v5 §239). **This is a different mechanism from the
-reliability score above and you should present it as one.** The score is an aggregate that routes to
-a monthly review; these are the sentences a member is actually *told* — "1st warning", then a fee
-becomes possible.
+The escalating warnings, their fees, and her appeal against one (PAY-20 → PAY-22, SAFE-11). **This
+is a different mechanism from the reliability score above and you should present it as one.** The
+score is an aggregate that routes to a monthly review; these are what a member is actually *told* —
+"1st warning", then a fee with its amount.
 
-**Two counters, and v5 tells us not to confuse them.** They are not degrees of the same thing:
+**Three counters, never feeding each other** (decision B4). Each counts back only while events keep
+coming less than **90 days** apart; ninety days with none starts it again at the first rung. Fees are
+a share of the seat price the booking froze:
 
-| `kind` | What it is | Warnings before a fee |
-|---|---|---|
-| `LATE_BOARDING` | She kept the car waiting and then got in — `PICKED_UP`, **not** a no-show. | **2** (so the 3rd) |
-| `MISSED_COMMITMENT` | A recorded no-show, or a cancellation too close to departure for the seat to be filled. | **1** (so the 2nd) |
+| `kind` | What it is | 1st | 2nd | 3rd | 4th | 5th+ |
+|---|---|---|---|---|---|---|
+| `NO_SHOW` | The driver recorded her as not there. | warning | 30 % | 50 % | 75 % | 100 % |
+| `LATE_CANCEL` | She cancelled within **12 hours** of departure (or said "I can't make it" that late). | warning | 7.5 % | 12.5 % | 18.75 % | 25 % |
+| `LATE_BOARDING` | She boarded after the 5-minute grace — `PICKED_UP`, **not** a no-show. | warning | warning | 10 % | 20 % | 25 % |
+| `MISSED_COMMITMENT` | The old shared counter, before the split. History only; never written now. | | | | | |
 
 | Field | Means |
 |---|---|
-| `ordinal` | Which warning this was — **what she was told at the time**, never recomputed. |
+| `ordinal` | Which rung this was — **what she was told at the time**, never recomputed. |
 | `warningsBeforeFee` | Sent rather than hard-coded, so your copy stays true if the policy changes. |
-| `feeEligible` | 🔴 Whether a fee has become **possible**. ⚠️ **There is no amount and will not be one here** — v5: "amount not shown until Payments rules", and the cancellation policy is still deferred. Do not imply a number. |
+| `feeEligible` · `feePiastres` | Whether this rung carries money, and how much — frozen when it was recorded. |
+| `feeStatus` | `none` (a warning) · `pending` (a late cancel: charged at departure **unless somebody from the waiting list takes the seat**, then free) · `charged` (on her debt — see 4.16; it rides on her next trip) · `waived` · `reversed` (an appeal won after it was charged: credited back). |
+| `appealBy` | 🔴 The last moment to appeal: **48 hours** after she was told. |
 | `stillStands` | `false` once a reviewer overturned it. An overturned warning **stays listed** so she can show she was cleared, and stops counting. |
-| `canDispute` | One dispute per warning. |
+| `canDispute` | Once per warning, and only until `appealBy`. |
 | `meta.standing` | How many of each kind still stand — **use this**, not a count of the page, because an overturned warning is listed and does not count. |
 
 🔴 **A lateness is delivered after her drop-off, never during the trip.** v5 §10 is explicit, and the
 reason is not politeness: the message would otherwise reach a woman sitting in the car beside the
 people she kept waiting, with nowhere to go for the next forty minutes. So it is recorded at her
-pickup and **does not appear in this list** until her journey ends. A missed commitment is told as
-it happens — there is no journey to wait for.
+pickup and **does not appear in this list** until her journey ends. A no-show or a late cancel is told
+as it happens — there is no journey to wait for.
 
-The notification (`late_boarding_warning` / `missed_commitment_warning`) carries `warningId`, which
-is the **dispute link** v5 requires beside every displayed warning.
+The notifications carry `warningId` (the **appeal link**), `feePiastres` and `bookingId`: a warning
+is `late_boarding_warning` / `missed_commitment_warning`; a rung with money is `no_show_fee`,
+`late_boarding_fee` or `late_cancel_fee` (the late cancel's "unless your seat is taken"), then
+`late_cancel_fee_charged` or `late_cancel_fee_waived` at departure.
 
-🔒 **Raising a dispute does not pause the escalation.** If it did, every warning would be disputed as
-a matter of course. A reviewer decides; until then it stands. `POST` once per warning — a second
-attempt answers `422` with `error.fields.dispute: ["ALREADY_DISPUTED"]`, and a further appeal is a
-conversation with support.
+🔒 **Raising an appeal does not pause the escalation**, but it does stop any suspension for debt
+while staff decide (PAY-19). Staff decide in the dashboard: overturned → it stops counting and its
+fee comes off her debt (or becomes a credit if she had paid — PAY-10). `POST` once per warning — a
+second attempt answers `422` with `error.fields.dispute: ["ALREADY_DISPUTED"]`; after 48 hours,
+`["APPEAL_WINDOW_CLOSED"]`.
 
 > 🔒 Hers only. No parameter for whose warnings to read at any access level: a warning is an
 > accusation, and somebody else's is a private record of a morning she let people down.
@@ -1426,7 +1477,10 @@ missing, so gating it would leave them with a refusal and no explanation.
 | Field | Meaning |
 |---|---|
 | `plateNumber` | As entered. The normalised form we deduplicate on is internal and not returned. |
-| `seats` | **Total including the driver.** Bookable seats are one fewer — a 5-seat car offers 4. |
+| `seats` | What the driver entered: total including the driver. It does **not** limit a commute — `approvedSeats` does. |
+| `approvedSeats` | Set by RAFEEQ at the car review (F2-6, PROF-28): seats with working belts, at least 3. No commute or day may offer more, and the seat price is divided by it. `null` until reviewed — such a car cannot publish (`VEHICLE_SEATS_NOT_APPROVED`). |
+| `tier` | `standard` · `comfort`, set at the review (PROF-26). Comfort is priced at a higher km rate and shown as a badge. |
+| `hasAc` | Air conditioning, as checked by the reviewer. |
 | `isActive` | Only one vehicle per driver may be active at a time. |
 | `status` | `PENDING` · `APPROVED` · `REJECTED`. A commute can only be published on an approved, active vehicle. |
 | `documents[]` | `id`, `type`, `status`, `expiresAt`. **No path and no URL** — a document's storage path never appears in any payload. |
@@ -1480,9 +1534,18 @@ The caller's own commutes. Full shape in 4.5.
 #### `POST /commutes` — verified
 
 **Request:** `commuteType` (`recurring`/`one_time`), `vehicleId`, `direction`
-(`to_work`/`to_home`), `seatsTotal` (1–7), `pricePerSeatPiastres` (**5,000–12,000**),
-`maxDetourMinutes` (0–30), `maxWalkMinutes` (0–30), `audience` (`women_only`/`any_verified`),
-`minTrustLevel` (0–4), `allowsCustomPickup`.
+(`to_work`/`to_home`), `seatsTotal` (1–7, and **never more than the car's `approvedSeats`** —
+`422 COMMUTE_SEATS_EXCEED_APPROVED` with `error.fields.approvedSeats`),
+`audience` (`women_only`/`any_verified`), `minTrustLevel` (0–4), `allowsCustomPickup`.
+
+🔴 **No price field any more** (P-1, D-0016). RAFEEQ computes the seat price from the route length,
+the car's tier and its approved seats — see `GET /commutes/{commute}/price`. A
+`pricePerSeatPiastres` sent here, in `PATCH /commutes/{commute}` or in `perDay` is **refused** with
+`422 VALIDATION_FAILED` on that field — drop it from the form.
+
+🔴 **No detour or walking limit from the driver any more** (C-1, COM-31). `maxDetourMinutes` and
+`maxWalkMinutes` are RAFEEQ's admin settings for every commute; sending either is refused with
+`422 VALIDATION_FAILED`. Remove both controls from the form.
 
 Creates a **draft**. Route and schedule arrive through their own endpoints because each is a whole
 thing that has to be validated together. `allowsCustomPickup` defaults to **false** — a commute
@@ -1501,8 +1564,17 @@ now on, never to a day somebody already booked.** Route and schedule lock once p
 
 #### `PUT /commutes/{commute}/schedule` — verified
 
-**Request:** `daysMask`, `departureTime` (`HH:MM:SS`, **local wall clock**), `timezone`,
-`startDate`, `endDate` (**mandatory** — there are no infinite commutes).
+**Request:** `daysMask`, `promisedArrivalTime` **or** `departureTime` (`HH:MM:SS`, **local wall
+clock**), `timezone`, `startDate`, `endDate` (**mandatory** — there are no infinite commutes).
+
+🔴 **New (C-2, COM-15): send the arrival, not the departure.** Leave `departureTime` out and send
+`promisedArrivalTime`: RAFEEQ works out when the driver leaves from the route and that morning's
+traffic, for every day. Each time a rider is confirmed or leaves a day, the departure for that day is
+timed again and, if it moved, the driver gets a `departure_time_changed` notification
+(`data.scheduledTripId`, `data.commuteId`; the body says the new time). **Sixteen hours before a day
+it freezes.** Read each day's time from `departureLocal` on the trip, never from the form. A day sent
+with a `departureTime` keeps it exactly and is never moved — that is the old behaviour, still
+accepted. Neither field → `422` on `departureTime`.
 
 **New: each weekday can differ.** Two optional fields, and **sending neither behaves exactly as
 before** — one time, one price, one seat count for the whole week.
@@ -1510,12 +1582,12 @@ before** — one time, one price, one seat count for the whole week.
 | Field | Means |
 |---|---|
 | `promisedArrivalTime` | `HH:MM:SS` local. When you promise to arrive, applied to every day unless a day overrides it. ⚠️ **Arriving later than this counts against the driver's on-time rate**, outside a five-minute tolerance. Omit it and no promise is recorded — and nothing is scored. |
-| `perDay` | Per-day differences, **keyed by the day's bit**: `{"2": {"departureTime": "06:30:00", "pricePerSeatPiastres": 2500, "seatsTotal": 2}}` sets Sunday only. Each day accepts `departureTime`, `promisedArrivalTime`, `pricePerSeatPiastres`, `seatsTotal`. |
+| `perDay` | Per-day differences, **keyed by the day's bit**: `{"2": {"departureTime": "06:30:00", "seatsTotal": 2}}` sets Sunday only. Each day accepts `departureTime`, `promisedArrivalTime`, `seatsTotal` (≤ `approvedSeats`). **No per-day price**: the price is RAFEEQ's, the same every day of the commute. |
 
 ```
 PUT { daysMask: 62, departureTime: "07:05:00", startDate: "...", endDate: "...",
       promisedArrivalTime: "08:00:00",
-      perDay: { "2": { departureTime: "06:30:00", pricePerSeatPiastres: 2500 } } }
+      perDay: { "2": { departureTime: "06:30:00", seatsTotal: 2 } } }
 ```
 
 The bits are the same ones `daysMask` uses: **1** Sat · **2** Sun · **4** Mon · **8** Tue ·
@@ -1531,19 +1603,31 @@ one fewer seat on the day she takes her own child.
 >
 > Sending the whole thing again **replaces** the week; it never merges. A day you drop disappears.
 
-#### `GET /commutes/{commute}/price-suggestion` — verified
+#### `GET /commutes/{commute}/price` — verified
 
-The fair-price number for screen 24, with its reasoning.
+The seat price RAFEEQ computed (P-1 → P-3, PAY-42). **Read-only** — the driver cannot change it.
+Replaces the old `price-suggestion` slider.
 
 | Field | Meaning |
 |---|---|
-| `suggestedPiastres` | What to pre-select. **Advice, never a rule** — anything between the bounds is accepted. |
-| `minPiastres` / `maxPiastres` | The slider's ends. The ceiling is a legal boundary: a commute is shared cost, and a price far above the cost of driving would make this a taxi service. |
-| `runCostPiastres` | What the whole journey costs to drive, before splitting. Show it as "full route contribution". |
-| `assumedOccupancy` | How many passengers the split assumed. Show it beside the number so the driver sees the reasoning rather than trusting a figure. |
-| `distanceKm` | The measured route length, one decimal. |
+| `seatPricePiastres` | What a passenger pays for one seat. |
+| `driverSharePiastres` | What the driver keeps of each seat ("Seat EGP 110 · You keep EGP 100"). The difference is RAFEEQ's; **never show a percentage**. |
+| `distanceKm` | The road length the price was computed from, one decimal. |
+| `tier` · `approvedSeats` | The car review the price depends on. |
 
-`COMMUTE_INCOMPLETE` (422) if the route has not been saved yet.
+`COMMUTE_INCOMPLETE` (422) if the route has not been saved yet. `VEHICLE_SEATS_NOT_APPROVED` (409)
+while the car has not been reviewed — nothing for the driver to fix, he waits for the review.
+
+#### `GET /commutes/{commute}/cancel-preview?action=pause|delete|replace_vehicle` — verified
+
+What pausing, deleting or replacing the car would cost **before** she confirms (C-9, PAY-23). Each
+cancels **every** confirmed seat on an upcoming day — inside the 16-hour lock too — and each seat
+costs the driver-cancel fee by the notice she gives now (16h+: 0 · 10–16h: 10 % · under 10h: 25 %).
+`replace_vehicle` counts every commute of hers: one car serves them all.
+
+Same shape as `GET /trips/{trip}/cancel-preview` (4.9): `affectedSeats`, `feePiastres`, `reason`,
+`perTrip[]`. **Two confirmations; the second shows the amount.** An automatic pause (a suspended
+car, a lapsed licence, unpaid commission) costs nothing.
 
 #### `POST /commutes/{commute}/publish` — verified
 
@@ -1632,11 +1716,11 @@ Archives. Nothing is deleted: history stays, and only future days nobody has tak
 | `direction` | `to_work` · `to_home`. |
 | `vehicleId`, `seatsTotal` | `seatsTotal` is bookable seats, already excluding the driver. |
 | `pricePerSeatPiastres`, `currency` | Always `EGP` today. |
-| `maxDetourMinutes` / `maxWalkMinutes` | The driver's limits. |
+| `maxDetourMinutes` / `maxWalkMinutes` | **RAFEEQ's** limits, the same on every commute (C-1, COM-31): the whole trip may carry at most 10 min **and** at most 5 km of detour, and a passenger's point must be within 1.5 km of the route. Read-only — sending either when creating or revising a commute is refused with `422`. |
 | `audience`, `minTrustLevel` | Who may join. |
 | `allowsCustomPickup` | **Defaults to false.** |
 | `routePolyline`, `routeDistanceMeters`, `routeDurationSeconds` | Computed at publish; `null` on a draft. **Only ever returned to the commute's own driver.** |
-| `publishedAt`, `pausedAt`, `pausedReason`, `archivedAt` | `pausedReason` is `by_driver` · `vehicle_suspended` · `licence_expired` — the last two are automatic, so show the right copy. |
+| `publishedAt`, `pausedAt`, `pausedReason`, `archivedAt` | `pausedReason` is `by_driver` · `vehicle_suspended` · `licence_expired` · `commission_unpaid` — the last three are automatic, so show the right copy. `commission_unpaid` means a week's commission missed two Fridays (PAY-45): show the debt screen; after paying she resumes the commute herself. |
 | `missing[]` | What still has to be done before it can be published. Drive the wizard from this. |
 | `locations[]` | `{id, type, lat, lng, address, placeId, sequence}`; type is `origin` · `pickup` · `dropoff` · `destination`. |
 | `schedule` | `{daysMask, departureTime, timezone, startDate, endDate, generatedUntil}`. `generatedUntil` is **how far ahead bookable days currently exist**, rolled forward daily — not the end of the commute. |
@@ -1653,7 +1737,7 @@ Archives. Nothing is deleted: history stays, and only future days nobody has tak
 
 **Query:** `origin[lat,lng]`, `destination[lat,lng]`, `daysMask`, `arrivalWindowStart`,
 `arrivalWindowEnd` (`HH:MM:SS`), `maxWalkMinutes` (0–45), `maxDetourMinutes` (0–45),
-`seatsNeeded`, `audiencePreference`, `budgetMonthlyPiastres`, `flexibilityMinutes` (0–60),
+`seatsNeeded`, `audiencePreference`, `womenOnly`, `flexibilityMinutes` (0–60),
 `wantsReturnTrip`, `rules[]`.
 
 **Verification is NOT required here** — searching is how somebody decides whether Rafeeq is worth
@@ -1663,7 +1747,7 @@ receive a result they cannot then request.
 
 Returns an array of match results — see 4.6, which explains the score breakdown.
 
-#### `GET` / `POST` / `DELETE /commute-demands/{demand}` — active, profile complete
+#### `GET` / `POST` / `PATCH` / `DELETE /commute-demands/{demand}` — active, profile complete
 
 A saved request for when nothing matched. The platform tells the passenger when something turns up.
 
@@ -1673,10 +1757,20 @@ stops Rafeeq being an auction on people.
 
 | Field | Meaning |
 |---|---|
-| `status` | `ACTIVE` · `MATCHED` · `CANCELLED` · `EXPIRED`. |
-| `budgetMonthlyPiastres` | **A monthly ceiling.** Per-ride affordability is derived from it and the days requested — do not treat it as a per-seat figure. |
+| `status` | `ACTIVE` · `PAUSED` · `MATCHED` · `CANCELLED` · `EXPIRED`. |
 | `flexibilityMinutes` | How much the arrival window can bend. |
 | `wantsReturnTrip` | Recorded; return-leg matching itself is not built yet. |
+
+**`PATCH /commute-demands/{demand}`** (S-4, BOOK-06) — two shapes:
+
+- `{ "paused": true }` alone **pauses** it: nothing is notified until `{ "paused": false }`, which
+  matches it again at once. Nothing else changes.
+- The whole request again — exactly the `POST` body — **replaces** it (and is matched again), with
+  `paused` optional beside it.
+
+A cancelled demand, or somebody else's, answers `404`. 🔴 **The budget is gone** (S-2, decision C11):
+the price is RAFEEQ's, so there is nothing to budget against; an old client that still sends
+`budgetMonthlyPiastres` is ignored.
 | `expiresAt` | When it stops looking. |
 
 `DELETE` cancels rather than deletes — the row is why a notification was sent, and erasing it
@@ -1773,8 +1867,7 @@ deserves to see *why* one ranked above the other:
 | `detour` | 15 | How little the driver is inconvenienced. |
 | `audience` | 10 | Whether it matches the audience they asked for. **Never decides eligibility** — that is settled in the query. |
 | `comfort` | 10 | How many requested rules the commute actually has. Somebody who asked for nothing gets full marks, not zero. |
-| `price` | 5 | Against the **monthly** budget, divided by the rides that budget has to cover. |
-| `reliability` | 5 | From the driver's record. **A driver with no history gets full marks** — starting everyone at zero would mean they are never matched, so they never build the history that would let them be matched. |
+| `reliability` | 10 | From the driver's record. **A driver with no history gets full marks** — starting everyone at zero would mean they are never matched, so they never build the history that would let them be matched. |
 | `total` | 100 | The parts always add up to the whole. |
 
 ## 4.7 Seat requests and bookings
@@ -1832,7 +1925,7 @@ at 21:00 the night before), `BOOKING_ALREADY_REQUESTED` (one open request per co
 | `SEAT_REQUEST_POINTS_SAME` | The two pins are within 200 m of each other. |
 | `SEAT_REQUEST_POINTS_OUT_OF_ORDER` | This commute reaches her drop-off before her pickup — they are the wrong way round. |
 | `SEAT_REQUEST_SUGGESTION_UNKNOWN` | That `suggestionId` is not one this commute advertises. |
-| `PICKUP_DETOUR_TOO_LONG` | The **pair together** takes the driver further out of her way than her `maxDetourMinutes`. `error.fields` carries `addedMinutes`, `runTotalMinutes` and `maxDetourMinutes`. |
+| `PICKUP_DETOUR_TOO_LONG` | The **pair together** takes the driver further out of her way than RAFEEQ's whole-trip cap (10 min **and** 5 km, admin settings). `error.fields` carries `runTotalKm`, `maxDetourMeters`, `addedMinutes`, `runTotalMinutes` and `maxDetourMinutes`. |
 
 > 🔴 The detour is measured **by us**, for both points at once, against the route as published —
 > never accepted from the request. Use `POST /commutes/{commute}/pickup-preview` to show the cost
@@ -1867,7 +1960,7 @@ your own timer to hide it, and do not treat a late tap as a network failure.
 |---|---|
 | `already_passed` | The car is further along the route than her stop. **Nothing she can do** — say so, and offer her the alternatives list rather than a retry. |
 | `would_break_promise` | The detour no longer fits before the arrival the people aboard were promised. |
-| `detour_too_long` | Past the driver's own `maxDetourMinutes`, on a day with no promised arrival. |
+| `detour_too_long` | Past RAFEEQ's whole-trip detour cap, on a day with no promised arrival. |
 | `position_unknown` · `route_unknown` | We cannot place the car, so the answer is no. **Retrying may work** once a position arrives. |
 
 🔴 **It is measured, never timed.** v5 forbids a fixed limit twice over, and the reason shows in both
@@ -2323,8 +2416,23 @@ Releases the seat under the same lock that takes it. Which side cancelled is rea
 caller is**, never from the request — a passenger must not be able to record their own
 cancellation as the driver's, which would move the blame for a missed ride.
 
-**No fee is charged.** The cancellation policy is still an open question and a guessed fee would
-take money from a real person on an assumption. `cancellationFeePiastres` is always `0` today.
+**The decided fees apply** (`cancellationFeePiastres` on the booking stays `0`; the fee is on the
+ledger, 4.16):
+
+- **a passenger** within **12 hours** of departure → a late cancel on her own counter (see
+  `GET /account/warnings`): a warning first, then a share of the seat — held until departure and
+  **dropped if somebody from the waiting list takes the seat**. Earlier is free.
+- **a driver** → the driver-cancel fee by notice, per seat: **16h or more: 0 · 10–16h: 10 % ·
+  under 10h: 25 %**. A driver removing one passenger should use `POST /driver/bookings/{booking}/cancel`,
+  which asks for his reason.
+
+#### `POST /driver/bookings/{booking}/cancel` — active, profile complete, driver only
+
+The driver removing **one** passenger (C-5, COM-21) — for example one who refused a change he
+cannot do without. `{ "reason": "..." }` (required, 3–255; kept for support and his appeal, **never
+sent to her**). The booking becomes `CANCELLED_BY_DRIVER`, she is told and shown alternatives, the
+seat goes to the waiting list, and he pays the driver-cancel fee by notice (16h+: 0 · 10–16h: 10 %
+· under 10h: 25 % of her seat). `404` for anybody else's booking.
 
 #### `POST /bookings/{booking}/dispute` — active, profile complete
 
@@ -2376,13 +2484,14 @@ attendance decision acceptable, and it is the passenger's only move.
 | `status` | `PENDING` · `CONFIRMED` · `COMPLETED` · `CANCELLED_BY_PASSENGER` · `CANCELLED_BY_DRIVER` · `EXPIRED` · `NO_SHOW`. A booking is created **already `CONFIRMED`**: the driver has just approved a request she read, so leaving it pending would invent a second approval nobody performs. |
 | `seatsReserved` | |
 | `boardingCode` | 🔒 **Four digits, to check against the car at the kerb** — show it under the plate, as the design does. **Both the passenger and the driver see the same number**, so she can ask and the driver can confirm. One per journey, so it changes daily. `null` on bookings made before this shipped. 🔴 **It decides nothing**: `check-in` takes no code, attendance is the driver's tap (D18), and the Master Plan rejected a code for that job because "a PIN fails when somebody is running for the car". **Never block boarding, payment or a no-show on it** — a flat battery must not lock somebody out of a car she has verified by plate and sight. |
-| `price.totalPiastres` | What the seat costs. |
-| `price.platformFeePiastres` | The platform's share. |
-| `price.driverAmountPiastres` | What reaches the driver. |
-| `paymentType` | `cash` · `online`. |
+| `price.seatPricePiastres` | One seat. |
+| `price.totalPiastres` | What she pays: seat price × seats. |
+| `price.driverSharePiastres` · `price.driverShareTotalPiastres` | 🔒 What the driver keeps, per seat and in all — **present only for the commute's own driver**, absent for the passenger (P-3). The commission and its rate are never sent. |
+| `paymentType` | `cash`. `online` is refused with `422 PAYMENT_TYPE_NOT_AVAILABLE` until a payment provider exists (P-4). |
 | `paymentStatus` | `NOT_DUE` (nothing recorded yet) · `PENDING` · `PAID` · `FAILED` · `REFUNDED` · `DISPUTED`. **Cash:** the passenger pays in the car; the booking turns `PAID` about **two hours after the driver confirms they travelled** (the delay lets a wrong tap be noticed). A no-show stays `NOT_DUE`. `DISPUTED` as soon as the passenger contests the attendance record, until staff decide. |
 | `meetingPoint` | `{lat, lng, isExact}`, or **`null` for the standard point** — which is the run's origin. |
 | `cancelledAt`, `cancelledReason`, `cancellationFeePiastres` | The fee is always `0` today. |
+| `otherPartyUserId` | 🔒 **The other person's user id — the driver's to the passenger, the passenger's to the driver — only once the journey is over** (`COMPLETED` · `ENDED_EARLY` · `NO_SHOW` · `EXITED_DUE_TO_DRIVER_DELAY`); `null` before. It is what the trip summary's **Block** sends (`POST /safety/blocked-users`). Before the trip there is no reason for either of you to hold a handle on the other, so don't cache it from anywhere else. |
 | `trip` | The scheduled trip above, when loaded. |
 
 🔒 **All three money figures are frozen at approval and never recomputed.** A driver raising her
@@ -2390,13 +2499,9 @@ price, or the platform changing its percentage, moves nothing here. And the meet
 **fuzzed to ~110m until the booking is confirmed** — a pickup point is often somebody's front
 door, and a pending or cancelled booking has not earned it.
 
-✅ **The fee direction is decided (2026-10-06): the fee is deducted from the driver's price.**
-`totalPiastres = platformFee + driverAmount`; the passenger pays the published seat price and
-nothing on top. The rate is 3% by default and the operations team can change it, so **never
-hard-code a percentage** — render the figures you are given. ⚠️ **Screens 12 and 24 need new copy:**
-screen 12 must not show the fee as a line added to the seat price, and screen 24's *"You keep the
-full contribution; Rafeeq's fee is charged to passengers separately"* is wrong — the driver keeps
-the price minus the fee.
+✅ **The price model is decided (D-0016, D-0025, D-0026):** RAFEEQ computes the seat price; the
+commission is **added on top** of the driver's share, never taken from it. Render the figures you are
+given — never compute or show a percentage.
 
 ## 4.8 Pickup points
 
@@ -2415,7 +2520,7 @@ the person commits.
 |---|---|
 | `addedMinutes` / `addedKm` | What THIS point adds. Computed by us from the route, never taken from the requester. |
 | `runTotalMinutes` | The detour for the **whole run** including every already-approved pickup. This is the figure the limit is checked against. |
-| `maxDetourMinutes` | The driver's own limit. |
+| `maxDetourMinutes` | RAFEEQ's whole-trip cap in minutes (C-1). |
 | `withinLimit` | Whether a request would be accepted. Show the consequence before they ask. |
 
 #### `POST /seat-requests/{seatRequest}/pickup-request` — active, profile complete
@@ -2481,6 +2586,14 @@ Returns the trip session (4.9) and opens a `pending` attendance row per confirme
 
 **Request:** `status` — one of `EN_ROUTE`, `AT_PICKUP`, `IN_PROGRESS`.
 
+🔴 **`AT_PICKUP` is "I've arrived" for ONE passenger, and the server checks it by GPS (TRIP-10).**
+Send `{ status: "AT_PICKUP", bookingId, lat, lng }` — her booking on this run and where the car is
+now. Beyond 150 m (`trip.arrival_radius_meters`, an admin setting) of **her** pickup it is refused
+with **`409 NOT_AT_PICKUP`**, `error.fields.distanceMeters[0]` (how far the car still is) and
+`radiusMeters[0]`: show "You're 320 m away", not a generic error. Accepted, it also **starts her
+5-minute grace** — the same thing `POST /trips/{trip}/wait-timers` does (see below); there is no
+separate step. Arriving for the next passenger at the same gate works while already `AT_PICKUP`.
+
 The sequence: `PREPARING → EN_ROUTE ⇄ AT_PICKUP → IN_PROGRESS → COMPLETED`.
 
 A multi-pickup morning **cycles between `EN_ROUTE` and `AT_PICKUP`** and becomes `IN_PROGRESS`
@@ -2497,6 +2610,13 @@ Closes the session, completes the bookings, updates the counters, and clears the
 **No money moves** — there is a two-hour delay before collection so a driver who tapped the wrong
 name can notice (and Phase 8 is not built).
 
+#### `GET /trips/{trip}/cancel-preview` — driver only
+
+What "Cancel today" would cost him, before he confirms (C-9): `affectedSeats`, `feePiastres`,
+`reason` (`none` · `mid_notice` 10–16h · `short_notice` under 10h) and `perTrip[]` (`tripId`,
+`departureAt`, `seats`, `percent`, `feePiastres`). **Two confirmations; the second shows the
+amount.** It is the same arithmetic the cancellation then charges.
+
 #### `POST /trips/{trip}/cancel` — active, profile complete, driver only — "Cancel today" (screen 23)
 
 `{ "reason"?: "..." }` (optional, up to 255). Calls off **one day**; the commute and every other day
@@ -2504,7 +2624,9 @@ stand. `200` with the day (`ScheduledTrip`, `status: "CANCELLED"`, `seatsTaken: 
 
 - Every booking on the day becomes `CANCELLED_BY_DRIVER` and every passenger gets a
   `trip_day_cancelled` notification (4.14) with the driver's first name and the date — **never the
-  reason**, which may be personal and shows on a lock screen. Nothing is charged.
+  reason**, which may be personal and shows on a lock screen. The passengers pay nothing; the
+  driver pays the driver-cancel fee by notice per confirmed seat (16h+: 0 · 10–16h: 10 % · < 10h:
+  25 %) — **show it first** with `GET /trips/{trip}/cancel-preview`.
 - A pending one-day request for that date is expired.
 - `TRIP_NOT_CANCELLABLE` (409, `error.fields.status`) once the run has started, or if the day is
   already cancelled. A run already under way is stopped with `POST /trips/{trip}/cancel-active`
@@ -2517,7 +2639,10 @@ has the count for today).
 
 #### `POST /trips/{trip}/cancel-active` — active, profile complete, driver only — "Cancel Active Trip"
 
-`{ "reason": "..." }` — **required**, 3 to 255 characters. Stops a run that has **already set off**
+`{ "reason": "breakdown" | "accident" | "emergency" | "other", "note"?: "..." }` — `reason` is a
+**required category** (TRIP-22, since 2026-10-31; it was free text before), because the fee that
+follows depends on it: breakdown, accident and emergency are treated differently from any other
+reason. `note` is optional, up to 255 characters, in her own words. Stops a run that has **already set off**
 (v5 §123–125). `200` with the day, plus a `meta` the confirmation screen needs:
 
 ```json
@@ -2542,7 +2667,7 @@ stopping the journey rather than cancelling a booking, and never behind the same
 - A passenger who was aboard **keeps her attendance** (`PRESENT`/`LATE`): the part she rode still
   happened, and her booking is `ENDED_EARLY`, not cancelled. Do not show it as a cancellation.
 - Nobody is charged a cancellation fee either way — the fee and the record fall on the driver.
-- The driver's typed reason is **never** sent to passengers. Support reads it on the booking.
+- Neither the reason nor the note is **ever** sent to passengers. Support reads them on the booking.
 - Freed seats are offered to **nobody**: a seat on a run that has stopped is not a seat.
 - `TRIP_NOT_STARTED` (409) if the run never began — use `POST /trips/{trip}/cancel`.
   `TRIP_NOT_CANCELLABLE` (409, with `error.fields.status`) if it is `PREPARING` (it has not left yet,
@@ -2660,7 +2785,7 @@ car is not somebody to put a form in front of.
 |---|---|
 | **No driver confirmation** | By design. A flow needing the driver's agreement would need it from the person she may be getting away from. |
 | **Her booking becomes `ENDED_EARLY`** | A **new status**. Not `COMPLETED` (which would say she was carried where she agreed, and decides what she is charged) and not cancelled (which would say she never travelled, and lands on the cancellation history a future driver reads). |
-| **No fee** | `cancellationFeePiastres` is `0`. She was carried. |
+| **Full fare** | She chose to get out, so she pays the whole seat (PAY-27) and the booking is `PAID` at once; `cancellationFeePiastres` is `0`. |
 | **Location access ends at once** | `GET /trips/{trip}/location` answers `404` for her from that moment, and any live-share link she sent a friend is revoked. For most commutes where the car goes next is the driver's street. |
 | **She can still rate it** | She travelled part of the way, and this is the review it matters most to allow. |
 | **The driver is told** | `passenger_ended_early` — **without the reason.** It may be about her. |
@@ -2669,6 +2794,25 @@ Before she has been picked up this is the wrong call and answers
 `409 ATTENDANCE_NOT_CONFIRMABLE`: use `PATCH /bookings/{booking}/cancel`. v5 is explicit —
 "passenger pre-pickup cancel anytime; after pickup end early". The driver calling it gets `404`:
 putting somebody out of her car is Cancel Active Trip, with a reason and a safe stop.
+
+#### `POST /bookings/{booking}/early-drop` — active, profile complete, **passenger only**
+
+"Did you ask to get off here?" (TRIP-20, PAY-28). When the **driver** sets her down more than **1 km**
+before her agreed drop-off (measured from where the car is), her booking's `earlyDrop.askedAt` is set
+and she gets an `early_drop_check` notification with the distance. Ask her, then send
+`{ "askedToGetOff": true|false }` — once.
+
+- `true` → nothing changes: the full fare stands.
+- `false` → she pays nothing (the fare comes back as a **credit on her next ride**), the driver pays
+  her whole seat, and a `dropped_early` report opens for staff to check the GPS. He can appeal with
+  proof within 48 hours.
+
+`409 EARLY_DROP_NOT_ASKED` when there is no question on this booking or she already answered. If she
+never answers, nothing happens yet (that rule is still being decided).
+
+Every booking also carries `feeLinePiastres` / `feeLineReason` (PAY-16): her unpaid fees riding on
+this ride as a separate line the driver collects — or, negative, a credit she is discounted — and
+`earlyDrop { askedAt, distanceMeters, answer }`.
 
 #### `POST /bookings/{booking}/exit-without-fee` — active, profile complete, **passenger only**
 
@@ -2681,7 +2825,7 @@ ruined**. This moves all three to the driver.
 | | |
 |---|---|
 | **Her booking becomes `EXITED_DUE_TO_DRIVER_DELAY`** | A **new status**. Not `CANCELLED_BY_PASSENGER` (charges her, and reads as her decision for ever) and not `CANCELLED_BY_DRIVER` (reports a cancellation that never happened — the driver was *late*, which is a different failure with its own record). |
-| **No fee** | `cancellationFeePiastres` is `0`. |
+| **No fee for her** | `cancellationFeePiastres` is `0`. The **driver** pays 25 % of her seat (PAY-29) — half of it instead if the morning then expires as a no-show (PAY-26). |
 | **Nothing on her record** | The reliability event lands on the **driver** (`driver_late_caused_exit`). |
 | **The driver is told, WITH the reason** | `passenger_exited_driver_delay`. Unlike `passenger_ended_early`, where the reason is withheld because it may be about her, this one *is* about her driving — and a driver told she lost somebody without being told why cannot act on it. |
 | `reason` in the body | Optional. The server records its own finding regardless. |
@@ -2771,7 +2915,7 @@ and because a trip can now reach a status you have not handled.
 |---|---|---|
 | **+1 min** | `commute_not_started_reminder` | **Driver.** Worded as a reminder, not a warning — the commonest reason a run has not started is that she is already driving and has not tapped it. |
 | **+5 min** | `commute_not_started_warning` | **Each passenger holding a seat.** |
-| **+10 min** | A violation is stamped on the day for ops escalation. | Nobody. ⚠️ No surface reads it yet. |
+| **+10 min** | A violation is stamped on the day for ops escalation, and `DRIVER_LATE` goes on the driver's reliability record (once per morning somebody booked). | Each confirmed passenger: `commute_still_not_started` (since 2026-10-31). |
 | **+20 min** | The day becomes **`EXPIRED`** and every seat on it ends. | `commute_day_expired` to each passenger. |
 
 Each rung fires **once**, however many times the sweep runs.
@@ -2808,6 +2952,7 @@ moments.
 | `disputedAt` / `disputeReason` | Set when the passenger contested it. The status does **not** change — a dispute records that a record is contested and holds the money. |
 | `disputeResolution` | `upheld` · `overturned` · `refunded`, once a reviewer decides. `null` while open. |
 | `person` | The passenger (5.1), on the driver's list. |
+| `passengerUserId` | 🔒 Her user id, **only once her booking's journey is over** (the same rule as `otherPartyUserId` on the booking); `null` before. For the driver's trip summary: Block and Report. |
 
 **`PRESENT`, `LATE` and the no-show statuses are final.** The driver cannot change her mind — a
 passenger charged on Monday must not become absent on Friday, or the dispute window would protect
@@ -2815,13 +2960,19 @@ nothing. A mistake is corrected by the passenger disputing and a reviewer overtu
 
 #### `POST /trips/{trip}/wait-timers` — active, profile complete, driver only
 
-**Request:** `bookingId`. There is no `graceSeconds` field: how long the platform asks a driver to
-wait is policy, not something the app decides.
+**"I've arrived" for one passenger** (TRIP-10, TRIP-11). **Request:** `bookingId`, `lat`, `lng` —
+where the car is now. There is no `graceSeconds` field: how long the platform asks a driver to wait
+is policy, not something the app decides.
 
-#### `POST /trips/{trip}/wait-timers/{timer}/extend` — active, profile complete, driver only
-
-The "+2 min" button. **Allowed even after the grace has expired** — a driver who sees somebody
-running for the car at 5:10 should be able to give them two more minutes.
+- 🔴 **Refused with `409 NOT_AT_PICKUP`** unless the car is within 150 m of **this passenger's**
+  pickup; `error.fields.distanceMeters[0]` says how far it still is. The grace starts here and the
+  lateness and no-show fees start from the grace, so the server — not the app — decides "arrived".
+- **Her 5 minutes start from the later of the arrival and her pickup time.** A driver who arrives
+  early sees `graceStartsAt` in the future and the countdown waits for it.
+- Moves the run to `AT_PICKUP` when it is `EN_ROUTE` (the same as `POST /trips/{trip}/status`
+  with `AT_PICKUP`, which answers with the run instead of the timer).
+- 🛑 **There is no "+2 min" any more** (TRIP-11, decision B7): `POST .../wait-timers/{timer}/extend`
+  was removed on 2026-10-31. Every passenger gets the same grace. Remove the button.
 
 #### `GET /trips/{trip}/wait-timers` — active, profile complete, driver only
 
@@ -2830,11 +2981,12 @@ another after ninety seconds is a run somebody may ask about.
 
 | Field | Meaning |
 |---|---|
-| `startedAt` | When the waiting began. Extending does **not** move this. |
-| `expiresAt` | Grace plus everything added. Count down to this. |
+| `startedAt` | When the row was written (the arrival). |
+| `arrivedAt` / `arrivalDistanceMeters` | "I've arrived", as the server checked it: when, and how far from her pickup the car was. |
+| `graceStartsAt` | When her five minutes began: the later of the arrival and her pickup time. |
+| `expiresAt` | `graceStartsAt` + the grace. Count down to this. |
 | `remainingSeconds` | The server's answer now. **Negative once expired** — the screen keeps showing the timer with "grace ended", and how long ago it ended is what the driver decides on. |
 | `graceSeconds` | What was promised, **frozen on the row** when the timer started. A dispute about this morning is settled against the promise in force this morning, not against a number changed later. |
-| `extendedSeconds` | What the driver added on top. Separate from the grace so the record can say "she waited five minutes and then gave two more". |
 | `hasExpired` / `isRunning` | A timer that was answered is not running whatever the clock says. |
 | `outcome` | `null` while running, then `arrived` · `no_show` · `driver_left`. |
 
@@ -2961,16 +3113,26 @@ table from the boarding confirmation in 4.9, on purpose: only the check-in decid
 `GROUP_ATTENDANCE_NOT_DECLARABLE` (409) once it is too close to departure — after that the driver
 is already planning around the answer she was given.
 
+🔴 **`away` cancels her seat that day** (TRIP-26) under the ordinary cancel rules: free more than 12
+hours ahead, a late cancel within 12 (see the warnings under `GET /account/warnings`), nothing if the seat is refilled. Say so
+on the button before she taps it.
+
 #### `GET` / `POST` / `DELETE /groups/{group}/absences/{absence}` — active, profile complete, paginated
 
 Planned absence — "I'm away next week".
 
-**POST request:** `fromDate`, `toDate`, `reason`, `releasesSeat`.
+🔴 **This is the passenger PAUSE now** (R-7, BOOK-32, decision C5): up to a month, **or with no end
+date**. Her seat **always** goes back to the waiting list for those days, and she joins that waiting
+list herself — paused until the pause ends, then offered a seat like everybody else waiting. **There is
+no guaranteed return**; say so on the screen. Calling the pause off puts her back in the queue as an
+ordinary waiting member; it does not return the seats.
+
+**POST request:** `fromDate`, `toDate` (optional — leave it out for no end date), `reason`.
 
 | Field | Meaning |
 |---|---|
-| `fromDate` / `toDate` | Inclusive. |
-| `releasesSeat` | Whether the seat goes back to the pool for those days. |
+| `fromDate` / `toDate` | Inclusive. `toDate` is `null` for a pause with no end date. |
+| `releasesSeat` | Always `true`. Sending `false` is ignored. |
 | `person` | See 5.1. |
 
 `GROUP_ABSENCE_OVERLAPS` (409) and `GROUP_ABSENCE_TOO_LONG` (422).
@@ -3097,8 +3259,10 @@ Trusted contacts. **Request:** `name`, `phone`, `relationship`, `autoShareTrips`
 
 Rules you will hit:
 
-- **Capped at 5** (`EMERGENCY_CONTACT_LIMIT_REACHED`, 422, with the limit in `error.fields`). This
-  list is who receives somebody's location; an unbounded one is a way to broadcast their movements.
+- **Capped at 3** (SAFE-14; it was 5 until 2026-10-31) — `EMERGENCY_CONTACT_LIMIT_REACHED`, 422,
+  with the limit in `error.fields`. This list is who receives somebody's location; an unbounded one
+  is a way to broadcast their movements. Somebody who already kept 4 or 5 keeps them all; she just
+  cannot add another until she is below 3.
 - **The number is normalised**, so the same contact cannot be added twice in two formats
   (`EMERGENCY_CONTACT_DUPLICATE`, 409).
 - **Changing the number clears `verifiedAt`.** Carrying it across would mean a "verified" badge on a
@@ -3135,9 +3299,15 @@ empty list for a stranger is genuinely empty.
 | Category | |
 |---|---|
 | `harassment` · `identity_mismatch` | Treated as **critical** |
-| `unsafe_driving` | **high** |
-| `other` | **medium** |
-| `no_show` · `payment` · `lost_item` | **low** |
+| `unsafe_driving` · `dropped_early` · `women_only_misuse` | **high** |
+| `other` · `false_arrival` | **medium** |
+| `no_show` · `payment` · `lost_item` · `abusive_review` | **low** |
+
+The last four arrived with Feature 03 (X-7, 2026-10-31): `false_arrival` — the driver said she had
+arrived and was not there · `dropped_early` — put out of the car before the drop-off ·
+`women_only_misuse` · `abusive_review`. ⚠️ Today each is a report a person reads; what it then does
+to a fee (freezing a no-show fee, F-9, F-12) arrives with the fee work. **Audio evidence is not
+accepted** — Q-007 is still open.
 
 🔴 **There is no `severity` field and there must not be.** It is decided from the category by the
 server. A reporter cannot be asked to rate their own emergency — somebody who has just been harassed
@@ -3153,6 +3323,13 @@ shaken may not want to type at all.
 
 Rate-limited per user per hour, generously — a `429` carries `Retry-After`. `INCIDENT_NOT_REPORTABLE`
 (422) means the `bookingId` is not one of theirs.
+
+🔴 **Within 24 hours of the journey** (SAFE-08). With a `bookingId`, the report is refused with
+`REPORT_WINDOW_CLOSED` (409) once 24 hours have passed since that journey ended — when the run
+finished, or, for a morning that never ran, its departure time. A journey that is still to come or
+still under way can always be reported. Without a `bookingId` there is no window. The 24 is an admin
+setting (`safety.report_window_hours`); don't hard-code it — hide "Report" on trips older than a day
+and let the server have the last word.
 
 #### `GET /incidents` — paginated · `GET /incidents/{incident}`
 
@@ -3241,10 +3418,29 @@ wrong way.
 the list is one-directional: **who I blocked, never who blocked me.** Somebody blocking a person they
 are frightened of must not thereby inform them of it. Your UI must not leak it either.
 
-**Existing bookings are untouched.** A block is about the future; unwinding this week's arrangement is
-a cancellation, which is a separate act with consequences for the other people in the car.
+🔴 **Blocking cancels every upcoming booking the two of you share** (Feature 03 X-4, 2026-10-31) — every
+`CONFIRMED` seat on a day that has not set off, whichever of you is the driver. Each is cancelled **as
+the blocker**, through the ordinary cancellation, so the normal rules apply: her reliability record
+takes the usual mark and whatever fee the rules charge is charged (**0 today**). A run already under
+way is not touched. 🔒 The blocked person gets the ordinary `booking_cancelled` notification and
+**nothing else** — no reason is written on the booking (`cancelledReason` is `null`), because both
+sides can read it. Completed history is untouched.
 
 `CANNOT_BLOCK_SELF` (403) · `ALREADY_BLOCKED` (409).
+
+#### `GET /safety/blocked-users/preview?userId=` — before the confirm button
+
+What blocking this person would do, from the same query the block runs — so what you show is what
+happens.
+
+| Response field | Meaning |
+|---|---|
+| `bookingsToCancel` | `[{ bookingId, tripId, departureAt, role }]`, soonest first. `role` is **her** side of that booking (`passenger` · `driver`). Empty when there is nothing to cancel — then skip straight to the plain confirm. |
+| `feePiastres` | What the normal cancellation rules would charge her for them. **Always `0` today** (the fee ladders are not built yet); show it when it is not `0`. |
+| `reason` | Which rule the fee comes from, once there is one. `null` today. |
+
+Same refusals as the block, so the preview is no better a way to test whether an id exists:
+`CANNOT_BLOCK_SELF` (403) · `404` for an id that is nobody.
 
 #### `POST /trips/{trip}/live-share` — Share Live Trip
 
@@ -3362,7 +3558,7 @@ other person's rating or whether one exists.
 | Field | |
 |---|---|
 | `stars` | **Required**, 1–5, whole stars. There are no halves in the design. |
-| `comment` | Optional, ≤1000 characters. **Keep it optional in your UI too** — somebody who had an uncomfortable ride may well give three stars and not want to write about it, and requiring a reason is how a rating screen becomes a form people abandon. |
+| `comment` | Optional, ≤1000 characters — **but not on cancelled-seat feedback** (`kind: canceled_booking`, X-2, BOOK-41): that is **stars only**, and a `comment` or `tags` there answers `422` on the field. Hide the box on that screen. **Keep it optional in your UI too** — somebody who had an uncomfortable ride may well give three stars and not want to write about it, and requiring a reason is how a rating screen becomes a form people abandon. |
 | `tags` | Optional, any of six: `safe_driving` · `on_time` · `clean_car` · `great_company` · `comfortable` · `would_ride_again`. Repeats collapsed. |
 
 🔒 **There is no `userId` and no `direction` in the request, and there will not be.** Who the rating
@@ -3468,6 +3664,12 @@ do that are exactly the ones a rating system exists to surface.
 stranger gets a `404`, and so does a review that has not been revealed yet — all three
 indistinguishable from a wrong id. `REVIEW_ALREADY_REPORTED` (409) for a second attempt.
 
+#### `tier` on search — the Comfort filter
+
+`GET /search/commutes` takes `tier=comfort` to show only Comfort cars (S-1). Each result's car carries
+`tier` and `hasAc`; show the **Comfort badge** when `tier` is `comfort`. Every result's price is
+`seatPricePiastres` — the only money figure a passenger is sent.
+
 #### `minRating` on search — a hard filter
 
 `GET /search/commutes` now takes `minRating` (1–5). It **excludes**, it does not rank — a passenger
@@ -3500,11 +3702,14 @@ stars**.
 What the platform tells a member on its own initiative. Every message lands in the **inbox**
 (`in_app`) and, if the member allows it, is also **pushed** to each signed-in phone.
 
-> ⚠️ **Push is wired but not delivering yet.** No push provider (FCM/APNs) has been chosen, so the
-> server records each push as `no_push_provider` and nothing reaches the phone. **The inbox works
-> today** — poll `GET /notifications` and use `meta.unreadCount` for the badge. Send the device's push
-> token at sign-in as you already can (`device.pushToken`); it will be used as soon as a provider is
-> configured, with no client change.
+> ⚠️ **Push: FCM is built (D-0023), and switched on per server.** With `RAFEEQ_PUSH_DRIVER=fcm` and
+> the Firebase service account installed, every push goes through FCM HTTP v1 — `notification`
+> (title/body) plus `data` (the ids below, all strings). Until a server is switched over it records
+> each push as `no_push_provider` and nothing reaches the phone. **Send the device's FCM token** at
+> sign-in (`device.pushToken`) and refresh it through `PATCH /account/devices/current/security`
+> (`pushToken`); a token FCM reports as `UNREGISTERED` is forgotten, so send a fresh one whenever
+> Firebase gives you one. iPhone needs the APNs key uploaded into the Firebase project — no client
+> change. **The inbox works either way** — `GET /notifications`, `meta.unreadCount` for the badge.
 
 These four routes sit in the **signed-in** tier, not `active`: a member whose account was just put on
 hold must still be able to read the notice that says so.
@@ -3513,7 +3718,7 @@ hold must still be able to read the notice that says so.
 
 | Response field | Meaning |
 |---|---|
-| `type` | What happened — route on this. Today: `seat_requested` (driver) · `seat_approved` · `seat_declined` · `booking_cancelled` (to the other side) · `commute_paused_seat_cancelled` (the commute was paused, her booked days are cancelled and she is back on the waiting list; `data.commuteId`, `data.bookingId`) · `vehicle_replaced_seat_cancelled` (the same news for a replaced car; same `data`) · `seats_offered_by_driver` (a driver picked her off the waiting list and offered her seats — `data.commuteId`, `data.seatRequestId`; the first acceptance of each day still wins) · `trip_day_cancelled` (the driver called off a day — `data.tripId`, `data.bookingId`) · `match_found` (a saved request matched — `data.commuteId`) · `trip_started` · `chat_message` · `rating_due` (passenger, `data.bookingId`) · `rating_due_riders` (driver, once per run, `data.tripId`) · `rating_reminder` (last day of the window, once) · `sos_picked_up` · `report_resolved` · `report_closed` · `account_on_hold` · `account_reinstated`. **Expect new values**; show an unknown one as a plain message. |
+| `type` | What happened — route on this. Today: `seat_requested` (driver) · `seat_approved` · `seat_declined` · `booking_cancelled` (to the other side) · `commute_paused_seat_cancelled` (the commute was paused, her booked days are cancelled and she is back on the waiting list; `data.commuteId`, `data.bookingId`) · `vehicle_replaced_seat_cancelled` (the same news for a replaced car; same `data`) · `seats_offered_by_driver` (a driver picked her off the waiting list and offered her seats — `data.commuteId`, `data.seatRequestId`; the first acceptance of each day still wins) · `trip_day_cancelled` (the driver called off a day — `data.tripId`, `data.bookingId`) · `departure_time_changed` (driver: RAFEEQ moved his departure for one day — `data.scheduledTripId`, `data.commuteId`) · `match_found` (a saved request matched — `data.commuteId`) · `trip_started` · `chat_message` · `rating_due` (passenger, `data.bookingId`) · `rating_due_riders` (driver, once per run, `data.tripId`) · `rating_reminder` (last day of the window, once) · `sos_picked_up` · `report_resolved` · `report_closed` · `account_on_hold` · `account_reinstated` · **since 2026-10-31 (Feature 03 §8):** `trip_starts_in_hour` and `trip_starts_soon` (to the driver and every confirmed passenger, an hour and ten minutes before departure; `data.tripId`, plus `data.bookingId` for a passenger or `data.commuteId` for the driver) · `driver_heading_to_you` (the driver just finished the pickup before hers; `data.bookingId`, `data.tripId`) · `driver_arrived` (`data.bookingId`, `data.tripId`) · `commute_still_not_started` (the +10 minutes "not set off", after `commute_not_started_warning` at +5) · `driver_documents_approved` · `driver_documents_rejected` (`data.driverProfileId`; the reason is on the application, never in the push) · `licence_expiring` (once per expiry date, when the card turns "Expiring"). **Expect new values**; show an unknown one as a plain message. |
 | `category` | `booking` · `payment` · `trip` · `safety` · `marketing`. |
 | `title` / `body` | **Already in the member's language** — rendered when the message was sent, and stored as written. Show them as they are. They never contain a phone number, an address or a full name: a push body appears on a lock screen. |
 | `data` | Ids for the screen to open: `seatRequestId`, `commuteId`, `tripId`, `sosId`, `incidentId`. Never names. |
@@ -3663,42 +3868,84 @@ safety team, quoting the message, and returns `{ "incidentId" }` — the report 
 most: it is the one place two people talk with no relationship approved between them. On a request
 report the incident simply carries no booking.
 
-## 4.16 Money (screen 34, the group's `payments` tab)
+## 4.16 Money (screen 34, the group's `payments` tab, the Payments screen)
 
-> A driver's fee balance and a group's weekly statement. Online payment is not built — see 7.
+> What a member owes RAFEEQ and paying it, and a group's weekly statement. Online payment is not
+> built — see 7.
 >
 > **Screens** 34 · **Shapes** —
 
-🔴 **The fee comes out of the DRIVER's share, at 3%, and the passenger pays the seat price.** That
-was settled on 2026-10-06 and it closes the contradiction this file carried for weeks: an 8000 seat
-means the passenger owes **8000** and the driver keeps **7760**. If you built anything against the
-other reading — a passenger paying 8800 for an 8000 seat — change it.
+🔴 **The passenger pays the seat price; RAFEEQ's commission is on top of the driver's share**
+(PAY-48), frozen on each booking. On a **cash** trip the driver collects the whole seat at the
+roadside, so the commission becomes a **debt she owes RAFEEQ** — written the moment the passenger is
+dropped off.
 
-🔴 **And the consequence your screens exist to make visible:** on a **cash** trip the driver collects
-the whole 8000 at the roadside, so the 240 is not withheld from her — it becomes a **debt she owes
-the platform.** It accrues trip by trip and eventually stops her publishing. A driver who is only
-ever shown "earnings" and then cannot publish has been told nothing.
+🔴 **One person has up to two debts, never mixed** (PAY-08 → PAY-17):
 
-> ⚠️ **Nothing here moves money.** No payment methods, no card capture, no payouts, no refunds —
-> those wait on a payment provider being chosen (section 7). These two endpoints read what the cash
-> path has already recorded.
+| Side | What | Due | If unpaid |
+|---|---|---|---|
+| `driver` | weekly commission (and late fees) | **Friday 23:59 Cairo**; the week runs Saturday → Friday | after Friday: **+10 % once** for that week, no publishing and no new riders (`DRIVER_COMMISSION_OVERDUE`), booked rides continue · still unpaid after the **second** Friday: **driving suspended**, every upcoming trip cancelled with no fee, Passenger mode still works |
+| `passenger` | fees (no-show, late cancellation…) | rides on her **next trip** as a separate line the driver collects | unpaid **14 days**, or over **200 EGP**: **booking suspended**, every upcoming seat cancelled (`RIDING_SUSPENDED_FOR_DEBT` on any new request or seat offer) |
 
-#### `GET /driver/balance`
+There is **no amount cap** on driver debt any more (PAY-15): the old `debtCapPiastres` and
+`isBlockedFromPublishing` are gone, and so is the old `/driver/balance`.
 
-| Response field | Meaning |
+Paying is **"I paid"**: she sends an InstaPay transfer, then tells us its reference. **Nothing comes
+off until staff see the money** and confirm it; she is notified either way. Paying more than she
+owes leaves a credit on the same side (never paid out). A suspension for debt lifts by itself once
+it is paid (driver: nothing overdue; passenger: nothing owed).
+
+#### `GET /account/debt`
+
+| Field | Meaning |
 |---|---|
-| `outstandingFeePiastres` | What she owes the platform — fees from cash trips she has already been paid for in full. |
-| `debtCapPiastres` | The limit. **Read it; do not hard-code it** — it is a runtime setting staff can move. |
-| `remainingBeforeBlockPiastres` | The headroom, so you can draw a bar without doing the arithmetic. |
-| `isBlockedFromPublishing` | 🔴 Computed from the **current** cap, not from a stored flag. The flag is a projection a nightly job maintains; the cap is a setting. |
-| `existingRunsContinue` | Always `true`, and **say it on the screen.** Being over the cap stops her publishing something NEW; every run already booked goes ahead, because the passengers on it did nothing wrong. "Account blocked" would be both frightening and untrue. |
-| `blockReason` | Staff's note, when there is one. |
-| `lifetimeEarningsPiastres` · `lastSettledAt` | Her side of the ledger. |
+| `driver` | Her driver side, or `null` for somebody who has never been a driver. |
+| `passenger` | Her passenger side. Always there. |
+| `payments[]` | Her last ten "I paid"s, newest first: `id`, `side`, `amountPiastres`, `instapayReference`, `status` (`pending_confirmation` · `confirmed` · `rejected`), `hasReceipt`, `decisionNote` (why staff refused it), `createdAt`, `decidedAt`. 🔒 The receipt itself is never returned. |
+| `coupons[]` | Her last ten coupons (PAY-34): `id`, `side`, `valuePiastres`, `bookingId`, `createdAt`. Already taken off her debt. |
 
-A driver who has never completed a cash trip has no balance row, and this answers **zeros rather
-than 404** — "no such driver" is the wrong answer to "what do I owe".
+Each side:
 
-🔒 Hers alone. There is no endpoint at any access level that reads another driver's income or debt.
+| Field | Meaning |
+|---|---|
+| `owedPiastres` | What she owes now, never below zero. **The number the screen is opened to find.** |
+| `balancePiastres` | Signed: negative is a credit she is discounted next time. |
+| `overduePiastres` | Driver: owed from weeks whose Friday has passed. `0` on the passenger side. |
+| `lateFeePiastres` | Late fees inside what she owes. |
+| `dueAt` | Driver: the Friday 23:59 that matters now — the one she missed, or this week's. `null` for a passenger. |
+| `blocked` | Driver: unpaid past its Friday — no publishing, no new riders. Booked rides continue: **say so**. |
+| `suspended` · `suspendedAt` | Suspended for this debt. Show the banner with the amount, **Pay** and **Appeal**. |
+| `oldestUnpaidAt` | When the oldest unpaid money was added. A passenger's 14 days run from here. |
+
+#### `GET /account/debt/statements` — optional `?side=driver|passenger` (default `driver`), `?weekOf=YYYY-MM-DD`
+
+One week (Saturday → Friday, Cairo) of one side, line by line: `side`, `weekOf` (its Saturday),
+`dueAt`, `addedPiastres`, `takenOffPiastres` and `lines[]` — `type` (`commission` · `fee` ·
+`late_fee` · `fee_line` add to it; `payment` · `credit` · `coupon` · `write_off` take it down;
+`adjustment` either way), signed `amountPiastres`, `balanceAfterPiastres`, `reasonCode` (a stable
+code to translate), `bookingId`, `createdAt`.
+
+#### `POST /account/debt/payments`
+
+`side`, `amountPiastres` (at least 100), `instapayReference`, optional `receiptImage` (JPEG, PNG or
+WebP; send `multipart/form-data`). Answers **201** with the payment `pending_confirmation`.
+`409 DEBT_NOTHING_OWED` when that side owes nothing. Rate-limited with the reports.
+
+#### `POST /account/debt/entries/{entry}/appeal` — a driver appealing one of his fees
+
+`{ "reason": "..." }` (10–1000 — what happened and what evidence he has). `entry` is a `lines[].id`
+of type `fee` on his **driver** side. Once per fee, within **48 hours** of it appearing (SAFE-11).
+**201** with `{ id, debtEntryId, status: "pending", createdAt, resolvedAt }`; `422` with
+`error.fields.appeal`: `ALREADY_APPEALED` or `APPEAL_WINDOW_CLOSED`. Staff decide; overturned →
+the whole fee is credited back (PAY-10). While it waits he cannot be suspended for debt. A
+passenger appeals hers on its warning (`POST /account/warnings/{warning}/dispute`).
+
+Driver fees (each told once per act with the total and the 48 hours): cancelling before the trip
+by notice `driver_cancel_fee` (PAY-23) · ending a run that set off, 100 % per seat
+`driver_ended_trip_fee` (PAY-24, PAY-25) · never came, 50 % `driver_no_show_fee` (PAY-26) · a
+passenger left because he was late, 25 % `driver_late_fee` (PAY-29).
+
+🔒 Her own, always. There is no endpoint at any access level that reads another member's debt.
 
 #### `GET /groups/{group}/statement` — optional `?weekOf=YYYY-MM-DD`
 
@@ -3723,7 +3970,7 @@ it is not a passenger's business either.
 | `bookingId` · `tripDate` · `seats` | Which journey. |
 | `pricePiastres` | 🔴 What was **agreed**, read from the booking's snapshot — never recomputed from today's price. A driver who raises her price does not retroactively change what somebody already owed. |
 | `paymentType` | `cash` or `online`. |
-| `paymentStatus` | `NOT_DUE` · `PENDING` · `PAID` · `FAILED` · `REFUNDED` · `DISPUTED`. Cash becomes `PAID` two hours after attendance is confirmed. |
+| `paymentStatus` | `NOT_DUE` · `PENDING` · `PAID` · `FAILED` · `REFUNDED` · `DISPUTED` · `WAIVED` (nothing owed: the driver ended her run). Cash becomes `PAID` the moment she is dropped off. |
 | `wasNoShow` | Still owed — the seat was held and the car went (decision D18) — but flagged so you can show it differently from an ordinary ride. |
 
 `totals` carries `duePiastres`, `paidPiastres` and `outstandingPiastres` (stated, not left as
@@ -3869,6 +4116,12 @@ exist, and every live endpoint must be named here.
 
 | Date | Change |
 |---|---|
+| 2026-11-01 | ❓ **"Did you ask to get off here?" (TRIP-20, PAY-28)** — new `POST /bookings/{booking}/early-drop` and the `early_drop_check` notification; bookings now return `feeLinePiastres`, `feeLineReason` and `earlyDrop`. A `false_arrival` report puts her no-show on that booking under review (TRIP-17). Staff now settle the money of payment disputes (PAY-31, PAY-32) and women-only misuse (PAY-47, the man is suspended until he pays) from the safety desk. |
+| 2026-11-01 | 🚗 **Driver fees (PAY-23 → PAY-29, C-5 → C-10).** New: `POST /driver/bookings/{booking}/cancel` (remove one passenger), `GET /trips/{trip}/cancel-preview` and `GET /commutes/{commute}/cancel-preview` (the fee before he confirms), `POST /account/debt/entries/{entry}/appeal` (48h). Cancelling seats costs the driver by notice (16h+: 0 · 10–16h: 10 % · < 10h: 25 %) on one passenger, Cancel today, pause, delete, a new car and a block; ending a run that set off 100 %; never coming 50 %; a passenger leaving because he was late 25 %. After a breakdown, accident or emergency a passenger aboard pays the share of her route past 25 %; otherwise nothing — her booking's `paymentStatus` is the new `WAIVED`. `PATCH /bookings/{booking}/cancel` now applies the fees. End early is the full fare. |
+| 2026-11-01 | 💸 **Passenger fees (PAY-20 → PAY-22, TRIP-26, SAFE-11).** Three counters — `NO_SHOW`, `LATE_CANCEL`, `LATE_BOARDING` — each with its ladder and a 90-day reset; `MISSED_COMMITMENT` is history only. Warnings now carry `feePiastres`, `feeStatus`, `appealBy`. A late cancel's fee waits for departure and is dropped if the seat is refilled. Appeals close after 48 hours (`APPEAL_WINDOW_CLOSED`). `away` on the group attendance cancels that day. |
+| 2026-11-01 | 💳 **Debt and paying it (PAY-08 → PAY-17, PAY-34, PAY-45, PAY-46).** the old `/driver/balance` is gone; `GET /account/debt`, `GET /account/debt/statements` and `POST /account/debt/payments` replace it. Two sides per person (driver commission due Friday 23:59 Cairo; passenger fees on the next trip), no amount cap, +10 % once after the Friday, driving suspended after the second Friday, booking suspended after 14 days or over 200 EGP (`RIDING_SUSPENDED_FOR_DEBT`). Paying is "I paid" with an InstaPay reference that staff confirm. Section 4.16. |
+| 2026-10-31 | 🛡️ **Feature 03 safety, reliability and push (X-3, X-4, X-6, X-7, §8).** **Block:** new **`GET /safety/blocked-users/preview?userId=`** → `{bookingsToCancel, feePiastres, reason}`, and `POST /safety/blocked-users` now **cancels every upcoming booking the two share**, as the blocker (fee 0 today); the blocked person only sees a `booking_cancelled`. The id to block is **`otherPartyUserId`** on the booking (and `passengerUserId` on the driver's attendance rows) — `null` until the journey is over. **Reports:** four new categories (`false_arrival` · `dropped_early` · `women_only_misuse` · `abusive_review`) and a **24-hour window** after the journey ends — `409 REPORT_WINDOW_CLOSED`; no window without a `bookingId`; **no audio** yet (Q-007). **Trusted contacts: 3, not 5** (existing ones are kept). **Reliability:** 90-day window and the partners' weights (table in 4.2), new kinds `DRIVER_LATE` and `PASSENGER_LATE`; still gates nothing. **Push:** FCM HTTP v1 is built and switched on per server; eight new notification types (4.14). |
+| 2026-10-31 | 📍 **"I've arrived" is checked by GPS, per passenger (TRIP-10, TRIP-11), the "+2 min" is gone (TRIP-11, B7), and Cancel Active Trip takes a reason category (TRIP-22).** `POST /trips/{trip}/status` with `AT_PICKUP` now needs `bookingId`, `lat`, `lng`, and so does `POST /trips/{trip}/wait-timers`: both are refused with **`409 NOT_AT_PICKUP`** (`error.fields.distanceMeters`) unless the car is within 150 m of that passenger's pickup, and both start her grace — which now runs from the **later** of the arrival and her pickup time (`graceStartsAt`, `arrivedAt`, `arrivalDistanceMeters` on the timer; `extendedSeconds` is gone). 🛑 **The `.../wait-timers/{timer}/extend` endpoint was removed** — every passenger gets the same grace. `POST /trips/{trip}/cancel-active` takes `reason` as `breakdown` · `accident` · `emergency` · `other`, plus an optional `note`; free text in `reason` is now a 422. |
 | 2026-10-30 | 🛑 **`POST /trips/{trip}/cancel-active` — the driver stops a run that has already set off (v5 §123–125), and `GET /bookings/{booking}/alternatives` — "find another commute" (§126–128, §441).** Until now there was no lawful way to end a journey that had gone wrong: "cancel today" refuses once the car has moved — correctly — so a driver whose car broke down on the Mehwar could drive it anyway or abandon people while the system insisted the trip was in progress. **`reason` is required** on the new endpoint, because it carries the heaviest weight in the reliability ledger and she can appeal it. 🔴 **The two groups of passengers are not the same and your screens must not treat them so:** whoever was **in the car** ends `ENDED_EARLY` **keeping her attendance** — the part she rode happened — while whoever was **never collected** ends `CANCELLED_BY_DRIVER`; `meta.endedEarly` and `meta.cancelled` give you the counts, and each group gets a different notification. Nobody is charged either way; freed seats are offered to **nobody**. 🔴 **The alternatives list books NOTHING** — v5 says so twice — and `meta.origin.kind` tells you where the server searched from (`WHERE_THE_CAR_STOPPED` · `LAST_STOP_REACHED` · `AGREED_PICKUP` · `AGREED_PICKUP_UNVERIFIED`), which decides your caption. It is readable **while her booking is still `CONFIRMED`**, so she can look before she gives up a seat on a driver who has not come (§241). ⚠️ **Do not build a "where are you?" step** — v5 §129 forbids a safe-stop picker. ⚠️ **And a hole that is now closed:** `POST /trips/{trip}/status` accepted `CANCELLED` and the state machine allowed it from `PREPARING` and `EN_ROUTE`, so one ordinary request marked a run cancelled while every booking on it still read `CONFIRMED`, seats still counted as taken, and no passenger was told. It now refuses with `TRIP_INVALID_TRANSITION` and `error.fields.use` naming the right endpoint. |
 | 2026-10-30 | 🚗 **A car that is already moving can be asked for a seat — v5's active-ride request.** **Same endpoint**: send `scheduledTripId` for a run that has set off and you get one, with **no flag you send** (the circumstances decide, not the client). Two differences, both for the separate sheet v5 draws on the driver's side: **`requestedDuringRide: true`** on the seat-request shape, and **`expiresAt` three minutes out** — v5 says this is the **only countdown left in the product**. The clock is real on the server: approval reads `expiresAt`, so a late tap answers `409 SEAT_REQUEST_NOT_PENDING` with `error.fields.expiredAt`. Two new refusals: `SEAT_UNAVAILABLE` + `duringRide: ["NOT_ACCEPTING"]` when the driver turned the toggle off for that morning, and **`PICKUP_UNREACHABLE`** + `error.fields.reachability` — `already_passed` (**nothing she can do**, offer alternatives rather than a retry) · `would_break_promise` · `detour_too_long` · `position_unknown`/`route_unknown` (**a retry may work**). 🔴 **Reachability is measured, never timed** — v5 forbids a fixed limit twice, because a clock would refuse her on a run crawling five minutes from her gate and accept her on one that had passed her street. ⚠️ And an existing waiting-list **offer** now behaves the same way: it stays open after the run sets off while she is still reachable, and closes **`INELIGIBLE`** once the car has passed — "she stopped qualifying", not "the seat stopped existing". |
 | 2026-10-30 | ⚠️ **The two escalating warning counters: `GET /account/warnings` and `POST /account/warnings/{warning}/dispute`.** Present them as **separate from the reliability score** — the score is the aggregate a monthly review reads, these are the sentences a member is actually told. And v5 tells us not to confuse the two counters with each other: **`LATE_BOARDING`** (she kept the car waiting and boarded — `PICKED_UP`, not a no-show) gets **2** warnings before a fee is possible; **`MISSED_COMMITMENT`** (a no-show, or a cancellation too late to refill the seat) gets **1**. 🔴 **A lateness is delivered after her drop-off and never during the trip** (v5 §10) — so it is recorded at her pickup and **does not appear in this list** until her journey ends; the message would otherwise reach a woman sitting in the car beside the people she kept waiting. The notification carries `warningId`, the **dispute link** v5 requires. ⚠️ **`feeEligible` is a flag and there is no amount** — v5 defers it to the Payments rules, so do not imply a number. Use **`meta.standing`** rather than counting the page: an overturned warning stays listed (so she can show she was cleared) and does not count. 🔒 Disputing does **not** pause the escalation — a reviewer decides — and it is once per warning. |
@@ -3910,7 +4163,7 @@ exist, and every live endpoint must be named here.
 | 2026-10-13 | ✅ **Additive — choosing a role is now its own step, and `capabilities` tells you what an account may do.** Three new endpoints: `POST /account/initial-role`, `GET /account/onboarding-state`, `PATCH /account/preferences`. `registeredRole` on `PUT /account/profile/basic` is **now optional** — keep sending it and you still go straight to `HOME`, exactly as today; omit it and you get the new `nextStep: ROLE_SELECTION`. **Nothing you have built breaks.** New on `user`: `capabilities[]` and `initialRoleSelected` — drive the UI from `capabilities`, because `registeredRole` is now history and can legitimately disagree with it. 🔴 `ROLE_SELECTION` is returned by the profile endpoint **only**; a cold start with no role answers `BASIC_PROFILE` by design (Feature 01 §5), so re-submitting the profile is the way forward and not a loop. |
 | 2026-10-13 | 🔴 **BREAKING — the local PIN is gone, and `nextStep` changed with it.** Feature 01 v3 §10 removes the PIN, biometric login and account switching from the MVP, so screens 2, 3 and 4 go too. **`nextStep` now has four values: `PHONE_OTP` · `RESTRICTED_ACCOUNT` · `BASIC_PROFILE` · `HOME`.** The old `CREATE_PIN` and `LOCAL_SECURITY_SETUP_OR_HOME` existed only to serve the PIN; `COMPLETE_PROFILE` is renamed `BASIC_PROFILE` and `ACCOUNT_SUSPENDED` is renamed `RESTRICTED_ACCOUNT` (the **error code** `ACCOUNT_SUSPENDED` is unchanged). Also gone: `pinLength` on auth responses, `hasLocalPin` on the device payload and request, and `purpose: "pin_reset"` (now `422`). `hasLocalPin` sent by a client is **ignored, not refused**, so you can remove it from the app on your own schedule. `biometricEnabled` survives as a display-only preference. |
 | 2026-10-07 | **Fixed: `GET /search/commutes` 500 "Latitude out of range"** (your bug report). The seeded commutes carried a malformed route; they are repaired, and a commute whose stored route cannot be read is now **skipped** instead of failing the whole search. **A `500` no longer carries internal exception text** in `error.message` — it is the generic localised sentence. **Home `topMatches` now fills:** saving a request (`POST /commute-demands`) matches it against commutes already running, not only against ones published later (no `match_found` notice for those — the person has just seen them). Test accounts were re-seated on upcoming trips, so `nextJourney` is populated again. |
-| 2026-10-06 | **Money — 2 endpoints** (`GET /driver/balance`, `GET /groups/{group}/statement`). Section 4.16. 🔴 **The fee comes out of the driver at 3% and the passenger pays the seat price** — settled, and it closes the contradiction this file carried: an 8000 seat means the passenger owes 8000 and the driver keeps 7760. On a cash trip the fee becomes a **debt the driver owes**, which eventually stops her publishing. Nothing here moves money; capture, payouts and refunds still wait on a provider. |
+| 2026-10-06 | **Money — 2 endpoints** (the old `/driver/balance`, `GET /groups/{group}/statement`). Section 4.16. 🔴 **The fee comes out of the driver at 3% and the passenger pays the seat price** — settled, and it closes the contradiction this file carried: an 8000 seat means the passenger owes 8000 and the driver keeps 7760. On a cash trip the fee becomes a **debt the driver owes**, which eventually stops her publishing. Nothing here moves money; capture, payouts and refunds still wait on a provider. |
 | 2026-10-06 | **Correction:** the new English summary said 116 endpoints against a real 124 — the header was right and the summary was not. Fixed, and a test now checks every endpoint count in the prose rather than only the one in the header, which is how the two disagreed. |
 | 2026-10-06 | **This file is now entirely in English.** The Arabic summary became an English one with the same content; no section was dropped. Two stale claims fixed while translating: the summary still listed ratings as not served, and section 7 still said the profile review list and review reporting were to come — all three have been live since 2026-10-02. |
 | 2026-10-06 | **Added to 2.1: the local PIN, concretely** — client-side guidance, explicitly not a contract. Store the refresh token encrypted under a key DERIVED from the PIN rather than storing the PIN or a hash of it, so there is nothing on the device to run guesses against. Plus the states usually missed: `pinLength` comes from the server, a dead refresh token must not be reported as a wrong PIN, and a reinstall deliberately starts without a PIN. Nothing was removed. |

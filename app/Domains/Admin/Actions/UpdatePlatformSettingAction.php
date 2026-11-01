@@ -29,10 +29,10 @@ final readonly class UpdatePlatformSettingAction
 {
     /**
      * Pairs that must stay in order, checked against the value the OTHER key will have.
-     * A minimum price above the maximum would make every commute unpublishable.
+     * A Comfort km rate below the Standard one would make the badge a discount (PAY-42).
      */
     private const array ORDERED_PAIRS = [
-        ['commute.min_price_piastres', 'commute.max_price_piastres'],
+        ['pricing.km_rate_standard_piastres', 'pricing.km_rate_comfort_piastres'],
         ['profile.full_name_min_length', 'profile.full_name_max_length'],
     ];
 

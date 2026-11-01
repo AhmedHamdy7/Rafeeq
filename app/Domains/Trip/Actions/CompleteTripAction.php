@@ -15,6 +15,7 @@ use App\Domains\Group\Models\CommuteGroup;
 use App\Domains\Identity\Models\UserStat;
 use App\Domains\Notification\Enums\NotificationType;
 use App\Domains\Notification\Support\Notifier;
+use App\Domains\Payment\Actions\SettleBookingAction;
 use App\Domains\Shared\Exceptions\DomainException;
 use App\Domains\Shared\Support\ErrorCode;
 use App\Domains\Trip\Enums\AttendanceStatus;
@@ -39,13 +40,14 @@ use Illuminate\Support\Facades\DB;
  * THAT across jobs would mean a window where the trip is complete and its bookings are
  * not, which every list in the product reads.
  *
+ * 🔴 **Money, for everybody still aboard.** A seat is PAID the moment its passenger is set
+ * down (PAY-07, decision D-0004), and completing the run sets down everybody still in the car — so
+ * each of them is settled here, in the same transaction ({@see SettleBookingAction}). Somebody
+ * dropped off earlier was settled then; somebody whose attendance nobody recorded is not settled
+ * at all (see below).
+ *
  * What is deliberately NOT here:
  *
- * - **Money.** No earnings are released and no fee is collected, and not only because
- *   Phase 8 is unbuilt: the Master Plan's §15.6 puts a two-hour delay between attendance
- *   being confirmed and anything being charged, precisely so a driver who tapped the
- *   wrong name can notice. Collecting here would be the mistake that safeguard exists
- *   to prevent.
  * - **Deciding who did not travel.** See `finaliseAttendance()`.
  */
 final readonly class CompleteTripAction
@@ -53,6 +55,7 @@ final readonly class CompleteTripAction
     public function __construct(
         private RecordTripLocationAction $locations,
         private RecordMemberWarningAction $warnings,
+        private SettleBookingAction $settle,
     ) {}
 
     public function execute(TripSession $session): TripSession
@@ -82,6 +85,7 @@ final readonly class CompleteTripAction
             $bookings = $this->finaliseAttendance($trip->id);
 
             $this->completeBookings($bookings);
+            $this->settleTravelled($bookings);
             $this->askForRatings($trip, $bookings);
             $this->recordStatistics($session, $trip->commute_offer_id, $bookings);
 
@@ -114,7 +118,7 @@ final readonly class CompleteTripAction
      * people absent, and each of them would carry it on a record strangers read.
      *
      * So `pending` means exactly what it says — nobody recorded whether this person
-     * travelled. No money moves on it (Phase 8 collects on `present`), and no absence is
+     * travelled. No money moves on it (only `present` and `late` are settled), and no absence is
      * held against anybody. A no-show has to be an act: the wait timer's outcome, or the
      * driver marking it.
      *
@@ -176,6 +180,27 @@ final readonly class CompleteTripAction
                 $booking->driver_profile_id,
                 from: BookingStatus::Confirmed,
             );
+        }
+    }
+
+    /**
+     * PAID on drop-off (PAY-07) for everybody this run sets down: those whose attendance says they
+     * travelled. `pending` and no-shows are not money here — see `finaliseAttendance()`.
+     *
+     * @param  Collection<int, Booking>  $bookings
+     */
+    private function settleTravelled(Collection $bookings): void
+    {
+        $travelled = Attendance::query()
+            ->whereIn('booking_id', $bookings->pluck('id'))
+            ->whereIn('status', [AttendanceStatus::Present, AttendanceStatus::Late])
+            ->pluck('booking_id')
+            ->all();
+
+        foreach ($bookings as $booking) {
+            if (in_array($booking->id, $travelled, true)) {
+                $this->settle->execute($booking);
+            }
         }
     }
 

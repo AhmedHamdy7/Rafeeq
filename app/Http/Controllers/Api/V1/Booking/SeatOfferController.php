@@ -66,6 +66,8 @@ final class SeatOfferController extends Controller
         ErrorCode::SeatOfferClosed,
         ErrorCode::AlreadyBooked,
         ErrorCode::BookingBreaksFrozenPromise,
+        // PAY-46: suspended for debt until she pays.
+        ErrorCode::RidingSuspendedForDebt,
     )]
     public function accept(AcceptSeatOfferRequest $request, string $offer, AcceptSeatOfferAction $action): JsonResponse
     {

@@ -46,7 +46,7 @@ return [
 
     // Driver application. The duplicate message is deliberately vague about
     // WHICH detail matched — see the note on the error code.
-    'DRIVER_DEBT_LIMIT_REACHED' => 'You owe Rafeeq more in fees from cash trips than the limit allows, so you cannot publish right now. Your existing rides continue. Settle the balance to publish again.',
+    'DRIVER_COMMISSION_OVERDUE' => 'Your commission for a past week is still unpaid, so you cannot publish a commute or accept new riders until it is paid. Your booked rides continue. Pay through InstaPay from the Payments screen.',
     'DRIVER_NOT_ELIGIBLE' => 'You cannot apply to drive yet.',
     'DRIVER_APPLICATION_LOCKED' => 'Your application is being reviewed and cannot be changed. Withdraw it first if you need to make a correction.',
     'DRIVER_APPLICATION_INCOMPLETE' => 'Some required details or documents are still missing.',
@@ -62,9 +62,12 @@ return [
     'COMMUTE_ROUTE_INVALID' => 'Please check the route: the origin and destination must differ, and pickup points must be along the way.',
     'COMMUTE_SEATS_CONFLICT' => 'You already have more passengers booked than that number of seats.',
     'COMMUTE_VEHICLE_UNAVAILABLE' => 'That vehicle is not approved and active, so it cannot be used for a commute.',
+    'COMMUTE_SEATS_EXCEED_APPROVED' => 'That is more seats than were approved on your car.',
+    'VEHICLE_SEATS_NOT_APPROVED' => 'Your car has not been reviewed yet, so it has no approved seats. You can publish once the review is done.',
 
     // Seat requests and bookings.
     'SEAT_UNAVAILABLE' => 'The seats on that day have just been taken.',
+    'PAYMENT_TYPE_NOT_AVAILABLE' => 'Only cash is available for now. Choose cash to send your request.',
     // Somebody was quicker. Not a fault of hers, and the wording should not imply one.
     'SEAT_OFFER_CLOSED' => 'That seat has already gone to someone else.',
     'BOOKING_RULES_NOT_AGREED' => 'Please agree to the group rules before requesting a seat.',
@@ -77,6 +80,8 @@ return [
     'BOOKING_WAITLIST_FULL' => 'The waiting list for this commute is full.',
     'BOOKING_NOT_CANCELLABLE' => 'That booking can no longer be cancelled.',
     'BOOKING_OWN_COMMUTE' => 'You cannot book a seat on your own commute.',
+    'SEAT_REQUEST_WOMEN_ONLY' => 'This commute is for women only.',
+    'COMMUTE_DEMAND_NOT_EDITABLE' => 'This saved commute has ended. Save a new one instead.',
     'BOOKING_RECURRING_DAYS_NOT_OFFERED' => 'This commute does not run on all of the days you asked for.',
 
     // Custom pickup points.
@@ -115,6 +120,7 @@ return [
     'ATTENDANCE_DISPUTE_WINDOW_CLOSED' => 'The window to dispute this trip has closed. Please contact support.',
     'WAIT_TIMER_ALREADY_RUNNING' => 'A wait timer is already running for this passenger.',
     'WAIT_TIMER_NOT_RUNNING' => 'There is no wait timer running for this passenger.',
+    'NOT_AT_PICKUP' => "You're not at this passenger's pickup point yet. Get closer and tap again.",
 
     /*
      * Ratings. Double-blind, so the wording must not hint at whether the other person has
@@ -136,6 +142,7 @@ return [
     'CANNOT_BLOCK_SELF' => 'You cannot block yourself.',
     'ALREADY_BLOCKED' => 'You have already blocked this person.',
     'INCIDENT_NOT_REPORTABLE' => 'That trip cannot be reported.',
+    'REPORT_WINDOW_CLOSED' => 'The time to report that trip has passed. Contact support if something serious happened.',
     'INCIDENT_EVIDENCE_LIMIT_REACHED' => 'You have attached as many files to this report as we allow.',
     'INCIDENT_CLOSED' => 'This report has been closed, so nothing more can be added to it. Please file a new report.',
     'LIVE_SHARE_ALREADY_ENDED' => 'That share link has already been stopped.',
@@ -160,4 +167,12 @@ return [
     'ESCORT_ALREADY_ARMED' => 'Escort mode is already on for this corridor.',
     'ESCORT_NOT_ACTIVE' => 'Escort mode is not running on this corridor any more. Reload before acting.',
     'PICKUP_UNREACHABLE' => 'The driver can no longer reach your pickup point on this journey.',
+
+    // Debt and settlement.
+    'RIDING_SUSPENDED_FOR_DEBT' => 'Booking is paused because a fee is still unpaid. Pay it from the Payments screen, or appeal, to book again.',
+    'FEE_APPEAL_NOT_OPEN' => 'This appeal has already been decided.',
+    'EARLY_DROP_NOT_ASKED' => 'There is no question to answer about this drop-off.',
+    'DEBT_NOTHING_OWED' => 'You do not owe anything right now, so there is nothing to pay.',
+    'DEBT_PAYMENT_NOT_PENDING' => 'This payment has already been confirmed or rejected.',
+    'COUPON_NOT_ALLOWED' => 'A coupon needs a fee that was actually collected from the other person on the ride, and only one coupon per fee.',
 ];

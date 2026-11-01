@@ -1,13 +1,20 @@
 <?php
 
+use App\Domains\Admin\Actions\ResolveFeeAppealAction;
+use App\Domains\Admin\Models\AdminUser;
 use App\Domains\Booking\Models\Booking;
 use App\Domains\Commute\Models\ScheduledTrip;
 use App\Domains\Driver\Models\Vehicle;
 use App\Domains\Identity\Models\User;
 use App\Domains\Notification\Models\Notification;
+use App\Domains\Payment\Actions\ChargePendingFeesAction;
+use App\Domains\Payment\Enums\DebtSide;
+use App\Domains\Payment\Support\DebtLedger;
 use App\Domains\Trip\Actions\RecordMemberWarningAction;
+use App\Domains\Trip\Enums\WarningFeeStatus;
 use App\Domains\Trip\Enums\WarningKind;
 use App\Domains\Trip\Models\MemberWarning;
+use App\Domains\Trip\Models\TripWaitTimer;
 use Illuminate\Support\Facades\Storage;
 
 /**
@@ -55,9 +62,12 @@ function boardedLate(string $driverToken, string $tripId, string $bookingId): vo
 {
     underway($driverToken, $tripId);
 
-    test()->flushHeaders()->withToken($driverToken)
-        ->postJson("/api/v1/trips/{$tripId}/wait-timers", ['bookingId' => $bookingId])
-        ->assertStatus(201);
+    $timerId = test()->flushHeaders()->withToken($driverToken)
+        ->postJson("/api/v1/trips/{$tripId}/wait-timers", ['bookingId' => $bookingId, ...atPickupOf($bookingId)])
+        ->assertStatus(201)->json('data.id');
+
+    // Her grace had started: the car was waiting past her pickup time when she got in.
+    TripWaitTimer::query()->whereKey($timerId)->update(['grace_starts_at' => now()->subMinute()]);
 
     checkIn($driverToken, $tripId, ['bookingId' => $bookingId])->assertOk();
 }
@@ -178,44 +188,49 @@ it('records and delivers one warning per morning', function () {
 */
 
 /**
- * 🔴 v5's numbers: a lateness gets two warnings before a fee becomes possible.
+ * 🔴 PAY-22: a lateness gets two warnings, then 10 %, 20 %, 25 % of the seat price.
  */
-it('makes a fee possible on the third lateness and not before', function () {
-    $bookings = Booking::factory()->count(3)->create(['passenger_user_id' => $this->pax->id]);
+it('charges a lateness from the third, up the ladder to its cap', function () {
+    $bookings = Booking::factory()->count(6)->create(['passenger_user_id' => $this->pax->id]);
 
     $recorded = [];
 
     foreach ($bookings as $booking) {
         $recorded[] = app(RecordMemberWarningAction::class)
-            ->record($this->pax, WarningKind::LateBoarding, $booking);
+            ->record($this->pax, WarningKind::LateBoarding, $booking, now()->toDateString());
     }
 
-    expect(array_map(fn ($w) => $w->ordinal, $recorded))->toBe([1, 2, 3])
-        ->and(array_map(fn ($w) => $w->fee_eligible, $recorded))->toBe([false, false, true]);
+    $price = $bookings[0]->price_snapshot_piastres;
+
+    expect(array_map(fn ($w) => $w->ordinal, $recorded))->toBe([1, 2, 3, 4, 5, 6])
+        ->and(array_map(fn ($w) => $w->fee_basis_points, $recorded))->toBe([0, 0, 1000, 2000, 2500, 2500])
+        ->and($recorded[2]->fee_piastres)->toBe(intdiv($price * 10, 100))
+        ->and($recorded[2]->fee_status)->toBe(WarningFeeStatus::Charged)
+        ->and(DebtLedger::owedBy($this->pax, DebtSide::Passenger))->toBe(intdiv($price * 10, 100) + intdiv($price * 20, 100) + 2 * intdiv($price * 25, 100));
 });
 
 /**
- * 🔴 And v5's other numbers, which it tells us not to confuse with the first: a missed commute gets
- * ONE warning before a fee becomes possible. They are not degrees of the same thing.
+ * 🔴 PAY-20: a no-show gets ONE warning, then 30 %, 50 %, 75 %, 100 %.
  */
-it('makes a fee possible on the second missed commute', function () {
-    $bookings = Booking::factory()->count(2)->create(['passenger_user_id' => $this->pax->id]);
+it('charges a no-show from the second, up to the whole seat', function () {
+    $bookings = Booking::factory()->count(5)->create(['passenger_user_id' => $this->pax->id]);
 
     $recorded = [];
 
     foreach ($bookings as $booking) {
         $recorded[] = app(RecordMemberWarningAction::class)
-            ->record($this->pax, WarningKind::MissedCommitment, $booking);
+            ->record($this->pax, WarningKind::NoShow, $booking, now()->toDateString());
     }
 
-    expect(array_map(fn ($w) => $w->fee_eligible, $recorded))->toBe([false, true]);
+    expect(array_map(fn ($w) => $w->fee_basis_points, $recorded))->toBe([0, 3000, 5000, 7500, 10000])
+        ->and($recorded[4]->fee_piastres)->toBe($bookings[4]->price_snapshot_piastres);
 });
 
 /**
- * 🔴 The counters do not feed each other. Two latenesses and a missed commute is a first missed
- * commute, not a third strike.
+ * 🔴 Decision B4: three counters, none feeding another. Two latenesses and a no-show is a first
+ * no-show, not a third strike.
  */
-it('counts the two kinds separately', function () {
+it('counts the kinds separately', function () {
     $bookings = Booking::factory()->count(3)->create(['passenger_user_id' => $this->pax->id]);
 
     $action = app(RecordMemberWarningAction::class);
@@ -223,24 +238,40 @@ it('counts the two kinds separately', function () {
     $action->record($this->pax, WarningKind::LateBoarding, $bookings[0]);
     $action->record($this->pax, WarningKind::LateBoarding, $bookings[1]);
 
-    $missed = $action->record($this->pax, WarningKind::MissedCommitment, $bookings[2]);
+    $missed = $action->record($this->pax, WarningKind::NoShow, $bookings[2]);
 
     expect($missed->ordinal)->toBe(1)
-        ->and($missed->fee_eligible)->toBeFalse();
+        ->and($missed->fee_piastres)->toBe(0);
+});
+
+/**
+ * 🔴 PAY-20: ninety days without one starts the counter again.
+ */
+it('starts a counter again after 90 days without an event', function () {
+    $bookings = Booking::factory()->count(3)->create(['passenger_user_id' => $this->pax->id]);
+    $action = app(RecordMemberWarningAction::class);
+
+    $action->record($this->pax, WarningKind::NoShow, $bookings[0], now()->subDays(200)->toDateString());
+    $second = $action->record($this->pax, WarningKind::NoShow, $bookings[1], now()->subDays(150)->toDateString());
+    $fresh = $action->record($this->pax, WarningKind::NoShow, $bookings[2], now()->toDateString());
+
+    expect($second->ordinal)->toBe(2)
+        ->and($fresh->ordinal)->toBe(1)
+        ->and($fresh->fee_piastres)->toBe(0);
 });
 
 /**
  * A no-show is told immediately: there is no journey to wait for, because the whole point is that
  * she is not on it.
  */
-it('tells her about a missed commute as it is recorded', function () {
+it('tells her about a no-show as it is recorded', function () {
     underway($this->driverToken, $this->tripId);
 
     test()->flushHeaders()->withToken($this->driverToken)
         ->postJson("/api/v1/trips/{$this->tripId}/no-show", ['bookingId' => $this->bookingId])
         ->assertOk();
 
-    $warning = MemberWarning::query()->where('kind', WarningKind::MissedCommitment->value)->sole();
+    $warning = MemberWarning::query()->where('kind', WarningKind::NoShow->value)->sole();
 
     expect($warning->delivered_at)->not->toBeNull()
         ->and(Notification::query()->where('user_id', $this->pax->id)
@@ -248,16 +279,101 @@ it('tells her about a missed commute as it is recorded', function () {
 });
 
 /**
- * A late cancellation lands on the same counter — the seat was just as empty either way.
+ * PAY-21: within 12 hours of departure a cancellation is a late cancel, on its own counter.
  */
-it('counts a late cancellation as a missed commute', function () {
+it('counts a cancellation within 12 hours as a late cancel', function () {
+    runLeavingIn($this->tripId, 11 * 60);
+
+    test()->flushHeaders()->withToken($this->paxToken)
+        ->patchJson("/api/v1/bookings/{$this->bookingId}/cancel", ['reason' => 'Overslept'])
+        ->assertOk();
+
+    expect(warningsFor($this->pax->id, WarningKind::LateCancel))->toBe(1)
+        ->and(warningsFor($this->pax->id, WarningKind::NoShow))->toBe(0);
+});
+
+/**
+ * 🔴 PAY-21, R-8: the late-cancel fee waits for departure, and costs nothing if somebody from the
+ * waiting list takes the seat.
+ */
+it('holds a late-cancel fee until departure, and drops it if the seat is refilled', function () {
+    $earlier = Booking::factory()->create(['passenger_user_id' => $this->pax->id]);
+    app(RecordMemberWarningAction::class)->record($this->pax, WarningKind::LateCancel, $earlier, now()->toDateString());
+
     runLeavingIn($this->tripId, 60);
 
     test()->flushHeaders()->withToken($this->paxToken)
         ->patchJson("/api/v1/bookings/{$this->bookingId}/cancel", ['reason' => 'Overslept'])
         ->assertOk();
 
-    expect(warningsFor($this->pax->id, WarningKind::MissedCommitment))->toBe(1);
+    $warning = MemberWarning::query()->where('booking_id', $this->bookingId)->sole();
+
+    expect($warning->ordinal)->toBe(2)
+        ->and($warning->fee_status)->toBe(WarningFeeStatus::Pending)
+        ->and(DebtLedger::owedBy($this->pax, DebtSide::Passenger))->toBe(0);
+
+    // Somebody else takes the seat, then the car leaves.
+    Booking::factory()->create(['scheduled_trip_id' => $this->tripId]);
+    ScheduledTrip::query()->whereKey($this->tripId)->update(['departure_at' => now()->subMinute()]);
+
+    app(ChargePendingFeesAction::class)->execute();
+
+    expect($warning->refresh()->fee_status)->toBe(WarningFeeStatus::Waived)
+        ->and(DebtLedger::owedBy($this->pax, DebtSide::Passenger))->toBe(0);
+});
+
+it('charges the late-cancel fee at departure when the seat stayed empty', function () {
+    $earlier = Booking::factory()->create(['passenger_user_id' => $this->pax->id]);
+    app(RecordMemberWarningAction::class)->record($this->pax, WarningKind::LateCancel, $earlier, now()->toDateString());
+
+    runLeavingIn($this->tripId, 60);
+
+    test()->flushHeaders()->withToken($this->paxToken)
+        ->patchJson("/api/v1/bookings/{$this->bookingId}/cancel", ['reason' => 'Overslept'])
+        ->assertOk();
+
+    ScheduledTrip::query()->whereKey($this->tripId)->update(['departure_at' => now()->subMinute()]);
+
+    app(ChargePendingFeesAction::class)->execute();
+    app(ChargePendingFeesAction::class)->execute();
+
+    $warning = MemberWarning::query()->where('booking_id', $this->bookingId)->sole();
+    $price = Booking::query()->findOrFail($this->bookingId)->price_snapshot_piastres;
+
+    // The second rung of the no-show ladder is 30 %; a late cancel is a quarter of it: 7.5 %.
+    expect($warning->fee_status)->toBe(WarningFeeStatus::Charged)
+        ->and($warning->fee_basis_points)->toBe(750)
+        ->and(DebtLedger::owedBy($this->pax, DebtSide::Passenger))->toBe(intdiv($price * 750, 10_000));
+});
+
+/**
+ * 🔴 PAY-10: an appeal that wins before she paid removes the fee; the ladder forgets the warning.
+ */
+it('takes the fee off her debt when staff overturn her appeal', function () {
+    $bookings = Booking::factory()->count(2)->create(['passenger_user_id' => $this->pax->id]);
+    $action = app(RecordMemberWarningAction::class);
+    $action->record($this->pax, WarningKind::NoShow, $bookings[0]);
+    $charged = $action->record($this->pax, WarningKind::NoShow, $bookings[1]);
+
+    expect(DebtLedger::owedBy($this->pax, DebtSide::Passenger))->toBe($charged->fee_piastres);
+
+    test()->withToken($this->paxToken)
+        ->postJson("/api/v1/account/warnings/{$charged->getKey()}/dispute", ['reason' => 'I was at the pickup point on time.'])
+        ->assertOk();
+
+    app(ResolveFeeAppealAction::class)->execute($charged, AdminUser::factory()->create(), overturn: true, note: 'GPS shows she was there.');
+
+    expect($charged->refresh()->fee_status)->toBe(WarningFeeStatus::Reversed)
+        ->and(DebtLedger::owedBy($this->pax, DebtSide::Passenger))->toBe(0);
+});
+
+it('refuses an appeal after 48 hours', function () {
+    $warning = MemberWarning::factory()->create(['user_id' => $this->pax->id, 'delivered_at' => now()->subHours(49)]);
+
+    test()->withToken($this->paxToken)
+        ->postJson("/api/v1/account/warnings/{$warning->getKey()}/dispute", ['reason' => 'too late'])
+        ->assertStatus(422)
+        ->assertJsonPath('error.fields.dispute.0', 'APPEAL_WINDOW_CLOSED');
 });
 
 /**
@@ -305,7 +421,8 @@ it('explains each warning rather than publishing a bare count', function () {
         ->assertJsonPath('data.0.stillStands', true)
         ->assertJsonPath('data.0.canDispute', true)
         ->assertJsonPath('meta.standing.LATE_BOARDING', 1)
-        ->assertJsonPath('meta.standing.MISSED_COMMITMENT', 0);
+        ->assertJsonPath('meta.standing.NO_SHOW', 0)
+        ->assertJsonPath('meta.standing.LATE_CANCEL', 0);
 });
 
 /**
@@ -393,17 +510,16 @@ it('stops counting an overturned warning without deleting it', function () {
 });
 
 /**
- * ⚠️ No amount, anywhere. v5: *"amount not shown until Payments rules"* — and the cancellation
- * policy is still deferred, so a number would be inventing the one thing v5 is most careful not to
- * state.
+ * The amount, now that the ladders are decided (PAY-20 → PAY-22): frozen on the warning.
  */
-it('publishes no fee amount', function () {
+it('shows the fee a warning carries', function () {
     MemberWarning::factory()->feeEligible()->create(['user_id' => $this->pax->id]);
 
     $payload = test()->withToken($this->paxToken)
         ->getJson('/api/v1/account/warnings')->assertOk()->json('data.0');
 
     expect($payload['feeEligible'])->toBeTrue()
-        ->and(array_keys($payload))->not->toContain('feePiastres')
-        ->and(json_encode($payload))->not->toContain('iastres');
+        ->and($payload['feePiastres'])->toBe(800)
+        ->and($payload['feeStatus'])->toBe('charged')
+        ->and($payload['appealBy'])->not->toBeNull();
 });

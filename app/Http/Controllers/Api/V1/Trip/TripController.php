@@ -8,13 +8,17 @@ use App\Domains\Booking\Support\DuringRideRequests;
 use App\Domains\Commute\Actions\CancelTripDayAction;
 use App\Domains\Commute\Models\CommuteOffer;
 use App\Domains\Commute\Models\ScheduledTrip;
+use App\Domains\Payment\Support\DriverFees;
 use App\Domains\Shared\Exceptions\DomainException;
 use App\Domains\Shared\Support\ErrorCode;
+use App\Domains\Shared\ValueObjects\Coordinate;
 use App\Domains\Trip\Actions\AdvanceTripAction;
+use App\Domains\Trip\Actions\ArriveAtPickupAction;
 use App\Domains\Trip\Actions\AutoFinishTripsAction;
 use App\Domains\Trip\Actions\CancelActiveTripAction;
 use App\Domains\Trip\Actions\CompleteTripAction;
 use App\Domains\Trip\Actions\StartTripAction;
+use App\Domains\Trip\Enums\ActiveTripCancelReason;
 use App\Domains\Trip\Enums\TripSessionStatus;
 use App\Domains\Trip\Support\PickupReachability;
 use App\Http\Controllers\Controller;
@@ -89,22 +93,52 @@ final class TripController extends Controller
      * One endpoint taking the target state rather than four verbs, because the sequence
      * is a state machine and the interesting logic is which transitions are legal. Four
      * endpoints would be four places to get that wrong.
+     *
+     * 🔴 `AT_PICKUP` is "I've arrived" for ONE passenger and is checked by GPS (TRIP-10): it
+     * names the booking and where the car is, and is refused with `409 NOT_AT_PICKUP` beyond
+     * `trip.arrival_radius_meters` of her pickup. It also starts her grace — see
+     * {@see ArriveAtPickupAction}.
      */
     #[ApiErrors(
         ErrorCode::TripNotStarted,
         ErrorCode::TripInvalidTransition,
+        ErrorCode::NotAtPickup,
+        ErrorCode::WaitTimerAlreadyRunning,
         ErrorCode::NotFound,
     )]
-    public function advance(AdvanceTripRequest $request, string $trip, AdvanceTripAction $action): JsonResponse
-    {
-        $session = AdvanceTripAction::sessionFor($this->driven($request, $trip));
+    public function advance(
+        AdvanceTripRequest $request,
+        string $trip,
+        AdvanceTripAction $action,
+        ArriveAtPickupAction $arrive,
+    ): JsonResponse {
+        $scheduled = $this->driven($request, $trip);
+        $session = AdvanceTripAction::sessionFor($scheduled);
+        $next = TripSessionStatus::from($request->string('status')->lower()->value());
 
-        $updated = $action->execute(
-            $session,
-            TripSessionStatus::from($request->string('status')->lower()->value()),
-        );
+        if ($next !== TripSessionStatus::AtPickup) {
+            $updated = $action->execute($session, $next);
 
-        return ApiResponse::success(new TripSessionResource($updated->load('scheduledTrip')));
+            return ApiResponse::success(new TripSessionResource($updated->load('scheduledTrip')));
+        }
+
+        // The state machine first, so a run that cannot be AT_PICKUP says so before any GPS is read.
+        if ($session->current_status !== TripSessionStatus::AtPickup) {
+            AdvanceTripAction::assertCanTransitionTo($session, TripSessionStatus::AtPickup);
+        }
+
+        $booking = Booking::query()
+            ->whereKey($request->string('bookingId')->value())
+            ->where('scheduled_trip_id', $scheduled->id)
+            ->first()
+            ?? throw DomainException::of(ErrorCode::NotFound);
+
+        $arrive->execute($session, $booking, new Coordinate(
+            (float) $request->validated('lat'),
+            (float) $request->validated('lng'),
+        ));
+
+        return ApiResponse::success(new TripSessionResource($session->refresh()->load('scheduledTrip')));
     }
 
     /**
@@ -154,10 +188,30 @@ final class TripController extends Controller
     }
 
     /**
+     * GET /v1/trips/{trip}/cancel-preview — what "Cancel today" would cost before he confirms (C-9,
+     * PAY-23): `{ affectedSeats, feePiastres, reason, perTrip[] }` for this one day. `reason` is
+     * `none`, `mid_notice` (10–16h) or `short_notice` (< 10h).
+     */
+    #[ApiErrors(ErrorCode::NotFound)]
+    public function cancelPreview(Request $request, string $trip): JsonResponse
+    {
+        $day = $this->driven($request, $trip);
+
+        $bookings = Booking::query()
+            ->where('scheduled_trip_id', $day->getKey())
+            ->where('status', BookingStatus::Confirmed->value)
+            ->with('scheduledTrip')
+            ->get();
+
+        return ApiResponse::success(DriverFees::preview($bookings));
+    }
+
+    /**
      * POST /v1/trips/{trip}/cancel — "Cancel today" (screen 23): one day off, the commute stands.
      *
-     * Every passenger on the day is told and their booking ends as cancelled by the driver; see
-     * the Action for what else closes with it.
+     * Every passenger on the day is told and their booking ends as cancelled by the driver; he pays
+     * the driver-cancel fee by timing per confirmed seat (PAY-23, C-6) — preview it first. See the
+     * Action for what else closes with it.
      */
     #[ApiErrors(ErrorCode::TripNotCancellable, ErrorCode::NotFound)]
     public function cancel(CancelTripDayRequest $request, string $trip, CancelTripDayAction $action): JsonResponse
@@ -191,7 +245,12 @@ final class TripController extends Controller
     ): JsonResponse {
         $session = AdvanceTripAction::sessionFor($this->driven($request, $trip));
 
-        $outcome = $action->execute($session, $request->user(), $request->validated('reason'));
+        $outcome = $action->execute(
+            $session,
+            $request->user(),
+            ActiveTripCancelReason::from($request->validated('reason')),
+            $request->validated('note'),
+        );
 
         return ApiResponse::success(
             new ScheduledTripResource($outcome['trip']),

@@ -7,6 +7,7 @@ use App\Domains\Commute\Models\CommuteOffer;
 use App\Domains\Commute\Models\CommuteSchedule;
 use App\Domains\Commute\Models\ScheduledTrip;
 use App\Domains\Commute\Support\DepartureTimeCalculator;
+use App\Domains\Commute\Support\SeatPricing;
 use Illuminate\Database\Eloquent\Factories\Factory;
 
 /**
@@ -36,7 +37,8 @@ class ScheduledTripFactory extends Factory
             'departure_local' => "{$tripDate} {$schedule->departure_time}",
             'seats_total' => $offer->seats_total,
             'seats_taken' => 0,
-            'price_snapshot_piastres' => $offer->price_per_seat_piastres,
+            // Priced exactly as the generator prices a day, so a factory day and a real one agree.
+            ...SeatPricing::quote((int) $offer->route_distance_meters, $offer->vehicle)->toTripColumns(),
             'status' => ScheduledTripStatus::Scheduled,
             'booking_deadline_at' => now()->subDay()->setTime(21, 0),
         ];

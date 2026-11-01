@@ -245,12 +245,20 @@ it('refuses to release a booking that is not hers', function () {
  * optional.
  */
 it('still takes a seat with an empty body', function () {
-    $offer = offerOnNewCommute($this->paxToken, $this->newDriver, $this->newCommuteId, $this->newTrip->id);
+    // Another day: the same morning would overlap the seat she holds, and that is a switch (R-3).
+    $otherDay = ScheduledTrip::query()
+        ->where('commute_offer_id', $this->newCommuteId)
+        ->whereDate('trip_date', '!=', $this->oldTrip->trip_date)
+        ->orderBy('trip_date')->firstOrFail();
+
+    $offer = offerOnNewCommute($this->paxToken, $this->newDriver, $this->newCommuteId, $otherDay->id);
 
     test()->withToken($this->paxToken)
         ->postJson("/api/v1/seat-offers/{$offer->id}/accept", [])
         ->assertOk();
 
     // She now holds both, which is legitimate: they are different days on different commutes.
+    expect(Booking::query()->where('passenger_user_id', Booking::findOrFail($this->oldBookingId)->passenger_user_id)
+        ->where('status', BookingStatus::Confirmed->value)->count())->toBe(2);
     expect(Booking::findOrFail($this->oldBookingId)->status)->toBe(BookingStatus::Confirmed);
 });

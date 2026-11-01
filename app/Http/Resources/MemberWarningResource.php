@@ -2,6 +2,7 @@
 
 namespace App\Http\Resources;
 
+use App\Domains\Payment\Support\FeeSettings;
 use App\Domains\Trip\Models\MemberWarning;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
@@ -35,18 +36,26 @@ final class MemberWarningResource extends JsonResource
             'ordinal' => (int) $this->ordinal,
 
             /*
-             * How many warnings of this kind come before a fee becomes possible — two for a
-             * lateness, one for a missed commute. Sent rather than hard-coded in the app so the
+             * How many warnings of this kind come before a fee — two for a lateness, one for a
+             * no-show or a late cancel. Sent rather than hard-coded in the app so the
              * copy stays true if the policy ever changes.
              */
             'warningsBeforeFee' => $this->kind->warningsBeforeFee(),
 
-            /*
-             * ⚠️ Whether a fee has become POSSIBLE, never an amount. v5: "amount not shown until
-             * Payments rules", and the cancellation policy is still deferred — so there is no
-             * number to show and a client must not imply one.
-             */
+            // Whether this rung carries money (PAY-20 → PAY-22).
             'feeEligible' => (bool) $this->fee_eligible,
+
+            // The fee, frozen when it was recorded: a share of the seat price, in piastres. 0 for a warning.
+            'feePiastres' => (int) $this->fee_piastres,
+
+            /*
+             * `none` (a warning) · `pending` (a late cancel: charged at departure unless the seat
+             * is refilled) · `charged` · `waived` · `reversed` (an upheld appeal, credited back).
+             */
+            'feeStatus' => $this->fee_status->value,
+
+            // SAFE-11: the last moment to appeal it — 48 hours after she was told.
+            'appealBy' => $this->delivered_at?->addHours(FeeSettings::appealHours())->toIso8601String(),
 
             'occurredOn' => $this->occurred_on->toDateString(),
             'deliveredAt' => $this->delivered_at?->toIso8601String(),
@@ -69,7 +78,9 @@ final class MemberWarningResource extends JsonResource
              * "appeal once" — a second attempt at the same decision is a conversation with support,
              * not another form.
              */
-            'canDispute' => $this->disputed_at === null,
+            'canDispute' => $this->disputed_at === null
+                && $this->delivered_at !== null
+                && $this->delivered_at->addHours(FeeSettings::appealHours())->isFuture(),
         ];
     }
 }

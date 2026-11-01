@@ -10,11 +10,13 @@ use App\Domains\Driver\Enums\DriverProfileStatus;
 use App\Domains\Driver\Models\DriverProfile;
 use App\Domains\Geo\Contracts\GeoQueryEngine;
 use App\Domains\Geo\Support\CachingGeoEngine;
+use App\Domains\Geo\Support\GoogleRoutesGeoEngine;
 use App\Domains\Geo\Support\StraightLineGeoEngine;
 use App\Domains\Identity\Contracts\OtpSender;
 use App\Domains\Identity\Support\LogOtpSender;
 use App\Domains\Notification\Contracts\PushSender;
 use App\Domains\Notification\Support\ChatSettings;
+use App\Domains\Notification\Support\FcmPushSender;
 use App\Domains\Notification\Support\LogPushSender;
 use App\Domains\Safety\Support\SafetySettings;
 use App\Domains\Shared\Support\RateLimits;
@@ -51,9 +53,11 @@ class AppServiceProvider extends ServiceProvider
         // Resolving by name keeps that decision to one config line and one
         // new class; `LogOtpSender` refuses to run in production itself, so
         // an unconfigured deploy fails loudly instead of losing every code.
-        // Push (Chapter 11). Only the development transport exists until a provider is chosen
-        // and its credentials exist; see LogPushSender for why it does not refuse production.
+        // Push (Chapter 11, D-0023). `fcm` is FCM HTTP v1 with the service-account JSON named by
+        // FIREBASE_CREDENTIALS; anything else is the development transport — see LogPushSender
+        // for why it does not refuse production.
         $this->app->bind(PushSender::class, fn () => match (config('rafeeq.notifications.push_driver')) {
+            'fcm' => FcmPushSender::fromConfig(),
             default => new LogPushSender,
         });
 
@@ -70,10 +74,19 @@ class AppServiceProvider extends ServiceProvider
          * change here and nowhere else. The caching decorator wraps whichever
          * engine is configured, because a provider is billed per call and the
          * same commute is looked up over and over.
+         *
+         * `straight_line` stays the default and the only engine tests use: it needs no key and no
+         * network. `google` falls back to it on any provider failure, so a Google outage degrades
+         * estimates rather than taking publishing or booking down.
          */
         $this->app->singleton(GeoQueryEngine::class, fn () => new CachingGeoEngine(
             match (config('rafeeq.geo.engine')) {
                 'straight_line' => new StraightLineGeoEngine,
+                'google' => new GoogleRoutesGeoEngine(
+                    apiKey: config('services.google_maps.key'),
+                    endpoint: (string) config('rafeeq.geo.google.endpoint'),
+                    timeoutSeconds: (int) config('rafeeq.geo.google.timeout_seconds'),
+                ),
                 default => throw new InvalidArgumentException(
                     'Unsupported geo engine ['.config('rafeeq.geo.engine').'].'
                 ),

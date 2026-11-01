@@ -3,6 +3,7 @@
 namespace App\Domains\Notification\Enums;
 
 use App\Domains\Notification\Support\Notifier;
+use App\Domains\Trip\Support\DriverArrivalNotice;
 
 /**
  * Everything the platform tells a member on its own initiative (Chapter 11).
@@ -142,6 +143,41 @@ enum NotificationType: string
      */
     case MissedCommitmentWarning = 'missed_commitment_warning';
 
+    // ---- Passenger fees (PAY-20 → PAY-22) — the rung past the warnings ------------
+    // `:amount` in EGP, `:date` the day, `:hours` the appeal window. `data.warningId` is the appeal.
+
+    /** A no-show with a fee on it (PAY-20). */
+    case NoShowFee = 'no_show_fee';
+
+    /** A lateness with a fee on it (PAY-22). Told after drop-off, like the warning. */
+    case LateBoardingFee = 'late_boarding_fee';
+
+    /** A late cancel: the fee that will be charged unless the seat is refilled (PAY-21). */
+    case LateCancelFee = 'late_cancel_fee';
+
+    /** The day departed and the seat stayed empty: the late-cancel fee is now charged. */
+    case LateCancelFeeCharged = 'late_cancel_fee_charged';
+
+    /** Somebody from the waiting list took the seat: the late-cancel fee is dropped (R-8). */
+    case LateCancelFeeWaived = 'late_cancel_fee_waived';
+
+    // ---- Driver fees (PAY-23 → PAY-29) — one message per act, the total of its seats ---------
+
+    /** He cancelled seats — one passenger, a day, a pause, a delete, a new car, a block (PAY-23). */
+    case DriverCancelFee = 'driver_cancel_fee';
+
+    /** He ended a run that had set off (PAY-24, PAY-25). */
+    case DriverEndedTripFee = 'driver_ended_trip_fee';
+
+    /** He never came and the run expired (PAY-26). */
+    case DriverNoShowFee = 'driver_no_show_fee';
+
+    /** A passenger left or switched because he was late (PAY-29). */
+    case DriverLateFee = 'driver_late_fee';
+
+    /** "Did you ask to get off here?" — set down `:distance` km before her point (TRIP-20). */
+    case EarlyDropCheck = 'early_drop_check';
+
     /**
      * Her appeal against a reliability event was approved (Feature 03 v5 §115).
      *
@@ -178,6 +214,13 @@ enum NotificationType: string
      * a place in a queue and nothing more.
      */
     case CommutePausedSeatCancelled = 'commute_paused_seat_cancelled';
+
+    /**
+     * Her confirmed seats were cancelled because the driver deleted the commute (Feature 03 C-8,
+     * COM-35). Every upcoming day goes, and unlike a pause she is NOT on a waiting list — there is
+     * no commute left — so the wording points her to look for another one.
+     */
+    case CommuteDeletedSeatCancelled = 'commute_deleted_seat_cancelled';
 
     /**
      * The driver picked her off the waiting list and offered her seats (Feature 03 v5's explicit
@@ -251,6 +294,104 @@ enum NotificationType: string
      */
     case VehicleReplacedSeatCancelled = 'vehicle_replaced_seat_cancelled';
 
+    // ---- Debt and weekly settlement (PAY-08 → PAY-19, PAY-34) ------------------
+    // `:amount` is in EGP, written by `DebtNotices::egp()` — never piastres on a lock screen.
+
+    /** Thursday: "EGP X due tomorrow" (PAY-11). */
+    case DebtDueTomorrow = 'debt_due_tomorrow';
+
+    /** Every day after a missed Friday, until it is paid (PAY-12). */
+    case DebtOverdue = 'debt_overdue';
+
+    /** The Friday passed: +10 % once, and no new commutes or riders until paid (PAY-12, PAY-13). */
+    case DebtLateFeeAdded = 'debt_late_fee_added';
+
+    /** The last reminder before the week-2 suspension (PAY-45). */
+    case DebtSuspensionWarning = 'debt_suspension_warning';
+
+    /** Staff saw the InstaPay transfer arrive and took it off the debt (PAY-09, ADM-03). */
+    case DebtPaymentConfirmed = 'debt_payment_confirmed';
+
+    /** Staff could not find the transfer; nothing came off the debt. */
+    case DebtPaymentRejected = 'debt_payment_rejected';
+
+    /** A coupon from RAFEEQ, for a ride where the other side was at fault (PAY-34). */
+    case CouponIssued = 'coupon_issued';
+
+    /**
+     * Commission unpaid through a second Friday: suspended from DRIVING, every upcoming trip
+     * cancelled (PAY-45). Filed under safety, like an account hold: a change to what she may do is
+     * never something a member can switch off. She keeps Passenger mode.
+     */
+    case DrivingSuspendedForDebt = 'driving_suspended_for_debt';
+
+    /**
+     * A fee unpaid 14 days, or her debt over 200 EGP: riding suspended, every upcoming seat
+     * cancelled, booking blocked until she pays (PAY-17, PAY-46). Safety, like the driver's.
+     */
+    case RidingSuspendedForDebt = 'riding_suspended_for_debt';
+    /*
+     * ---- The pushes Feature 03 files §8 found missing ----------------------------------------
+     */
+
+    /**
+     * About an hour before the day's departure, to the driver and every confirmed passenger.
+     *
+     * One message for both sides, worded so it is true for both: the departure time is the day's,
+     * and each of them has somewhere to be at it. Sent once, stamped on the day.
+     */
+    case TripStartsInHour = 'trip_starts_in_hour';
+
+    /** The same, ten minutes out — the "put your shoes on" one. */
+    case TripStartsSoon = 'trip_starts_soon';
+
+    /**
+     * The driver just finished the pickup before hers in route order — collected that passenger,
+     * or recorded her as a no-show — so this passenger is next (Feature 03 files T-3).
+     *
+     * 🔴 Never to the first pickup: she is told the run started ({@see self::TripStarted}), and a
+     * second message saying the same thing a second later is how notifications get ignored.
+     */
+    case DriverHeadingToYou = 'driver_heading_to_you';
+
+    /**
+     * The driver says she is at this passenger's meeting point, and the grace has started.
+     *
+     * Sent from one method, {@see DriverArrivalNotice}, when the driver's GPS-checked arrival at her
+     * pickup starts her grace (TRIP-10).
+     */
+    case DriverArrived = 'driver_arrived';
+
+    /**
+     * The second "your driver has not set off" — at the +10 rung, after
+     * {@see self::CommuteNotStartedWarning} at +5 (Feature 03 files §8: "late +5 / +10 min").
+     *
+     * Carries the number of minutes so the wording follows the setting rather than promising "10".
+     */
+    case CommuteStillNotStarted = 'commute_still_not_started';
+
+    /**
+     * Her driver application was approved. Filed under safety with the account notices: whether she
+     * may drive is a change to her access, and that must reach her whatever she switched off.
+     */
+    case DriverDocumentsApproved = 'driver_documents_approved';
+
+    /**
+     * Her driver application was sent back. 🔒 Without the reviewer's reason in the body — that is
+     * on the application screen she is sent to; a lock screen is not the place for it.
+     */
+    case DriverDocumentsRejected = 'driver_documents_rejected';
+
+    /** Her driving licence expires inside the warning window (PROF-15's "Expiring"). Once per expiry date. */
+    case LicenceExpiring = 'licence_expiring';
+
+    /**
+     * To the driver: RAFEEQ moved his departure for one day because a rider joined or left
+     * (C-2, COM-15) — "Leave at 07:10 on 2026-11-03". Only on days where he gave an arrival time
+     * and not a fixed departure, and never inside the 16-hour lock.
+     */
+    case DepartureTimeChanged = 'departure_time_changed';
+
     public function category(): NotificationCategory
     {
         return match ($this) {
@@ -258,7 +399,20 @@ enum NotificationType: string
             self::ReportResolved,
             self::ReportClosed,
             self::AccountOnHold,
-            self::AccountReinstated => NotificationCategory::Safety,
+            self::AccountReinstated,
+            self::DrivingSuspendedForDebt,
+            self::RidingSuspendedForDebt,
+            self::DriverDocumentsApproved,
+            self::DriverDocumentsRejected,
+            self::LicenceExpiring => NotificationCategory::Safety,
+
+            self::DebtDueTomorrow,
+            self::DebtOverdue,
+            self::DebtLateFeeAdded,
+            self::DebtSuspensionWarning,
+            self::DebtPaymentConfirmed,
+            self::DebtPaymentRejected,
+            self::CouponIssued => NotificationCategory::Payment,
 
             self::SeatRequested,
             self::SeatApproved,
@@ -266,6 +420,7 @@ enum NotificationType: string
             self::BookingCancelled,
             self::SeatOffered,
             self::CommutePausedSeatCancelled,
+            self::CommuteDeletedSeatCancelled,
             self::VehicleReplacedSeatCancelled,
             self::SeatsOfferedByDriver,
             self::SeatCounteroffered,
@@ -276,6 +431,7 @@ enum NotificationType: string
             self::ChangeProposalRejected,
             self::WaitlistClearedByChange,
             self::TripDayCancelled,
+            self::DepartureTimeChanged,
             self::MatchFound => NotificationCategory::Booking,
 
             self::TripStarted,
@@ -288,12 +444,27 @@ enum NotificationType: string
             self::CommuteDayExpired,
             self::LateBoardingWarning,
             self::MissedCommitmentWarning,
+            self::NoShowFee,
+            self::LateBoardingFee,
+            self::LateCancelFee,
+            self::LateCancelFeeCharged,
+            self::LateCancelFeeWaived,
+            self::DriverCancelFee,
+            self::DriverEndedTripFee,
+            self::DriverNoShowFee,
+            self::DriverLateFee,
+            self::EarlyDropCheck,
             self::AppealApproved,
             self::AppealDeclined,
             self::ChatMessage,
             self::RatingDue,
             self::RatingDueRiders,
-            self::RatingReminder => NotificationCategory::Trip,
+            self::RatingReminder,
+            self::TripStartsInHour,
+            self::TripStartsSoon,
+            self::DriverHeadingToYou,
+            self::DriverArrived,
+            self::CommuteStillNotStarted => NotificationCategory::Trip,
         };
     }
 }

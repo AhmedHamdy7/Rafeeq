@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Api\V1\Driver;
 
+use App\Domains\Booking\Actions\DisplaceConfirmedBookingsAction;
 use App\Domains\Commute\Actions\ChangeCommuteStatusAction;
 use App\Domains\Commute\Actions\CreateCommuteOfferAction;
 use App\Domains\Commute\Actions\DuplicateCommuteOfferAction;
@@ -10,16 +11,19 @@ use App\Domains\Commute\Actions\ReviseCommuteOfferAction;
 use App\Domains\Commute\Actions\SaveCommuteRouteAction;
 use App\Domains\Commute\Actions\SaveCommuteScheduleAction;
 use App\Domains\Commute\Enums\CommuteLocationType;
+use App\Domains\Commute\Enums\CommuteOfferStatus;
 use App\Domains\Commute\Enums\CommutePausedReason;
 use App\Domains\Commute\Models\CommuteOffer;
-use App\Domains\Commute\Support\FairPriceSuggestion;
+use App\Domains\Commute\Support\SeatPricing;
 use App\Domains\Driver\Models\DriverProfile;
 use App\Domains\Geo\Contracts\GeoQueryEngine;
+use App\Domains\Payment\Support\DriverFees;
 use App\Domains\Shared\Exceptions\DomainException;
 use App\Domains\Shared\Support\ErrorCode;
 use App\Domains\Shared\ValueObjects\Coordinate;
 use App\Http\Controllers\Controller;
 use App\Http\OpenApi\ApiErrors;
+use App\Http\Requests\Commute\CancelPreviewRequest;
 use App\Http\Requests\Commute\ReviseCommuteRequest;
 use App\Http\Requests\Commute\SaveCommuteRouteRequest;
 use App\Http\Requests\Commute\SaveCommuteScheduleRequest;
@@ -71,6 +75,8 @@ final class CommuteController extends Controller
         ErrorCode::DriverNotEligible,
         ErrorCode::LicenceExpired,
         ErrorCode::CommuteVehicleUnavailable,
+        ErrorCode::CommuteSeatsExceedApproved,
+        ErrorCode::VehicleSeatsNotApproved,
         ErrorCode::NotFound,
     )]
     public function store(StoreCommuteRequest $request, CreateCommuteOfferAction $action): JsonResponse
@@ -90,6 +96,8 @@ final class CommuteController extends Controller
         ErrorCode::CommuteNotEditable,
         ErrorCode::CommuteSeatsConflict,
         ErrorCode::CommuteVehicleUnavailable,
+        ErrorCode::CommuteSeatsExceedApproved,
+        ErrorCode::VehicleSeatsNotApproved,
         ErrorCode::NotFound,
     )]
     public function update(ReviseCommuteRequest $request, string $commute, ReviseCommuteOfferAction $action): JsonResponse
@@ -126,6 +134,8 @@ final class CommuteController extends Controller
     #[ApiErrors(
         ErrorCode::CommuteNotEditable,
         ErrorCode::CommuteIncomplete,
+        ErrorCode::CommuteSeatsExceedApproved,
+        ErrorCode::VehicleSeatsNotApproved,
         ErrorCode::NotFound,
     )]
     public function saveSchedule(SaveCommuteScheduleRequest $request, string $commute, SaveCommuteScheduleAction $action): JsonResponse
@@ -145,8 +155,10 @@ final class CommuteController extends Controller
         ErrorCode::CommuteIncomplete,
         ErrorCode::CommuteInvalidTransition,
         ErrorCode::CommuteVehicleUnavailable,
+        ErrorCode::CommuteSeatsExceedApproved,
+        ErrorCode::VehicleSeatsNotApproved,
         ErrorCode::DriverNotEligible,
-        ErrorCode::DriverDebtLimitReached,
+        ErrorCode::DriverCommissionOverdue,
         ErrorCode::LicenceExpired,
         ErrorCode::NotFound,
     )]
@@ -188,8 +200,10 @@ final class CommuteController extends Controller
     #[ApiErrors(
         ErrorCode::CommuteInvalidTransition,
         ErrorCode::CommuteVehicleUnavailable,
+        ErrorCode::CommuteSeatsExceedApproved,
+        ErrorCode::VehicleSeatsNotApproved,
         ErrorCode::DriverNotEligible,
-        ErrorCode::DriverDebtLimitReached,
+        ErrorCode::DriverCommissionOverdue,
         ErrorCode::LicenceExpired,
         ErrorCode::NotFound,
     )]
@@ -223,6 +237,8 @@ final class CommuteController extends Controller
         ErrorCode::DriverNotEligible,
         ErrorCode::LicenceExpired,
         ErrorCode::CommuteVehicleUnavailable,
+        ErrorCode::CommuteSeatsExceedApproved,
+        ErrorCode::VehicleSeatsNotApproved,
         ErrorCode::ValidationFailed,
         ErrorCode::NotFound,
     )]
@@ -254,6 +270,8 @@ final class CommuteController extends Controller
         ErrorCode::DriverNotEligible,
         ErrorCode::LicenceExpired,
         ErrorCode::CommuteVehicleUnavailable,
+        ErrorCode::CommuteSeatsExceedApproved,
+        ErrorCode::VehicleSeatsNotApproved,
         ErrorCode::ValidationFailed,
         ErrorCode::NotFound,
     )]
@@ -269,7 +287,12 @@ final class CommuteController extends Controller
 
     /**
      * DELETE /v1/commutes/{commute} — archives it. Nothing is deleted: the
-     * history stays, and only future days nobody has taken are cancelled.
+     * history stays.
+     *
+     * Every upcoming day is cancelled, booked ones included (Feature 03 C-8). Each
+     * passenger who loses a seat is told once (`commute_deleted_seat_cancelled`), and
+     * every open request or waiting-list place on it closes as `COMMUTE_ARCHIVED`.
+     * A run already under way is not touched. No fee is charged yet.
      */
     #[ApiErrors(ErrorCode::CommuteInvalidTransition, ErrorCode::NotFound)]
     public function destroy(Request $request, string $commute, ChangeCommuteStatusAction $action): JsonResponse
@@ -282,70 +305,80 @@ final class CommuteController extends Controller
     }
 
     /**
-     * GET /v1/commutes/{commute}/price-suggestion — "the fair suggested price".
+     * GET /v1/commutes/{commute}/price — the seat price RAFEEQ computes for this commute (P-1).
      *
-     * Screen 24 shows it beside the fare slider ("EGP 50 · Suggested EGP 70–95 · EGP 120")
-     * while the driver is choosing what to charge. The formula is ERD §23.3's and nothing
-     * else: what the journey costs to drive, split by the assumed occupancy.
+     * Read-only. It replaces the old "fair suggested price" slider: the driver no longer chooses a
+     * price (D-0016), so what he is shown is the price itself — the seat price passengers pay and
+     * the share he keeps ("Seat EGP 110 · You keep EGP 100", P-3). The commission RATE is never
+     * sent; the commission per seat is the difference and nobody needs it spelled out.
      *
-     * 🔴 Why the platform says a number at all: a commute is shared cost, not a fare, and
-     * a driver with no reference either undercharges and quietly subsidises strangers or
-     * overcharges and turns their own car into an unlicensed taxi. Only one of those two is
-     * their problem to notice.
+     * 🔴 Quoted at TODAY's settings. A published commute's days each carry their own frozen price
+     * (PAY-44), so this answers "what would a day generated now cost", and on a published commute
+     * the two agree unless an admin moved a rate since the days were generated.
      *
-     * Advice, never a rule — the response carries the bounds so the client can show the
-     * slider, and validation still accepts anything between them.
-     *
-     * Its own endpoint rather than a field on the commute, because it needs the route's
-     * length: a field would mean a routing call on every commute fetch, including the
-     * list.
+     * The length is the published route's when there is one, and otherwise measured here through
+     * the same routing call publishing makes — origin, the pickups in order, destination — so the
+     * preview and the price the days get cannot disagree about the road.
      */
-    #[ApiErrors(ErrorCode::CommuteIncomplete, ErrorCode::NotFound)]
-    public function priceSuggestion(Request $request, string $commute, GeoQueryEngine $geo): JsonResponse
+    #[ApiErrors(ErrorCode::CommuteIncomplete, ErrorCode::VehicleSeatsNotApproved, ErrorCode::NotFound)]
+    public function price(Request $request, string $commute, GeoQueryEngine $geo): JsonResponse
     {
-        $offer = $this->owned($request, $commute)->load('locations');
+        $offer = $this->owned($request, $commute)->load(['locations', 'vehicle']);
 
+        $metres = $offer->route_distance_meters ?? $this->measureRoute($offer, $geo);
+
+        if ($offer->vehicle->approved_seats === null) {
+            // The price is divided by the approved seats; a car nobody has reviewed has none.
+            throw DomainException::of(ErrorCode::VehicleSeatsNotApproved, fields: [
+                'vehicleId' => [$offer->vehicle->getKey()],
+            ]);
+        }
+
+        $quote = SeatPricing::quote((int) $metres, $offer->vehicle);
+
+        return ApiResponse::success([
+            // What a passenger pays for one seat, in piastres.
+            'seatPricePiastres' => $quote->seatPricePiastres,
+            // What you keep of each seat, in piastres. The difference is RAFEEQ's commission.
+            'driverSharePiastres' => $quote->driverSharePiastres,
+            // The route length the price was computed from.
+            'distanceKm' => round($quote->routeDistanceMeters / 1000, 1),
+            // The car's review, which the price depends on.
+            'tier' => $quote->tier->value,
+            'approvedSeats' => (int) $quote->approvedSeats,
+        ]);
+    }
+
+    /**
+     * The draft's road length, measured the way publishing measures it.
+     *
+     * Saving a route clears `route_distance_meters` so a draft being edited does not spend a
+     * provider call per keystroke; one call when the driver asks what a seat costs is the right
+     * place to pay for it.
+     */
+    private function measureRoute(CommuteOffer $offer, GeoQueryEngine $geo): int
+    {
         $origin = $offer->locations->firstWhere('type', CommuteLocationType::Origin);
         $destination = $offer->locations->firstWhere('type', CommuteLocationType::Destination);
 
         if ($origin === null || $destination === null) {
-            /*
-             * The route is step one of the wizard and the price is step four, so this
-             * should not happen in order — but the endpoint takes an id, and a commute
-             * with no route has no length to price.
-             */
+            // The endpoint takes an id, and a commute with no route has no length to price.
             throw DomainException::of(ErrorCode::CommuteIncomplete, fields: [
                 'missing' => ['route'],
             ]);
         }
 
-        /*
-         * Measured here rather than read from `route_distance_meters`, which is null until
-         * publish: saving a route deliberately clears it so a draft being edited does not
-         * spend a provider call per keystroke. One call at the moment the driver asks
-         * what to charge is the right place to pay for it.
-         */
-        $route = $geo->routeBetween(
+        $via = [];
+
+        foreach ($offer->locations->where('type', CommuteLocationType::Pickup)->sortBy('sequence') as $pickup) {
+            $via[] = new Coordinate((float) $pickup->lat, (float) $pickup->lng);
+        }
+
+        return $geo->routeBetween(
             new Coordinate((float) $origin->lat, (float) $origin->lng),
             new Coordinate((float) $destination->lat, (float) $destination->lng),
-        );
-
-        $suggestion = FairPriceSuggestion::forDistance($route->distance);
-
-        return ApiResponse::success([
-            'suggestedPiastres' => $suggestion->suggestedPiastres,
-            'minPiastres' => $suggestion->minPiastres,
-            'maxPiastres' => $suggestion->maxPiastres,
-
-            /*
-             * Shown as "Full route contribution" on screen 24, with the occupancy it was
-             * split by — so the driver can see the reasoning rather than a bare number
-             * they have to trust.
-             */
-            'runCostPiastres' => $suggestion->runCostPiastres,
-            'assumedOccupancy' => $suggestion->assumedOccupancy,
-            'distanceKm' => round($route->distance->kilometres(), 1),
-        ]);
+            $via,
+        )->distance->metres;
     }
 
     private function profile(Request $request): DriverProfile
@@ -358,6 +391,33 @@ final class CommuteController extends Controller
      * Scoped to the caller's own commutes, answering 404 for anyone else's — a
      * 403 would confirm the id exists (Bible §6, IDOR).
      */
+    /**
+     * GET /v1/commutes/{commute}/cancel-preview?action=pause|delete|replace_vehicle — what it would
+     * cost before she confirms (C-9, PAY-23). Every confirmed seat on an upcoming day is cancelled,
+     * inside the 16-hour lock too, and each costs the driver-cancel fee by the notice she gives
+     * now. `replace_vehicle` counts every commute of hers, because one car serves them all.
+     *
+     * Answers `{ affectedSeats, feePiastres, reason, perTrip[] }`: `reason` is `none`, `mid_notice`
+     * (10–16h) or `short_notice` (< 10h); `perTrip[]` is each day's `tripId`, `departureAt`,
+     * `seats`, `percent` and `feePiastres`. Show the amount on the second confirmation.
+     */
+    #[ApiErrors(ErrorCode::NotFound)]
+    public function cancelPreview(CancelPreviewRequest $request, string $commute): JsonResponse
+    {
+        $offer = $this->owned($request, $commute);
+
+        $offers = $request->validated('action') === 'replace_vehicle'
+            ? CommuteOffer::query()
+                ->where('driver_profile_id', $request->user()->id)
+                ->whereNot('status', CommuteOfferStatus::Archived->value)
+                ->get()
+            : collect([$offer]);
+
+        $bookings = $offers->flatMap(fn (CommuteOffer $one) => DisplaceConfirmedBookingsAction::futureConfirmedBookings($one));
+
+        return ApiResponse::success(DriverFees::preview($bookings));
+    }
+
     private function owned(Request $request, string $commuteId): CommuteOffer
     {
         return CommuteOffer::query()

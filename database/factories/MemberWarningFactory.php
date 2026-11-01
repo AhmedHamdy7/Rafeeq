@@ -4,6 +4,7 @@ namespace Database\Factories;
 
 use App\Domains\Booking\Models\Booking;
 use App\Domains\Identity\Models\User;
+use App\Domains\Trip\Enums\WarningFeeStatus;
 use App\Domains\Trip\Enums\WarningKind;
 use App\Domains\Trip\Models\MemberWarning;
 use Illuminate\Database\Eloquent\Factories\Factory;
@@ -49,6 +50,9 @@ class MemberWarningFactory extends Factory
         return $this->state(fn (array $attributes) => [
             'ordinal' => 3,
             'fee_eligible' => true,
+            'fee_basis_points' => 1000,
+            'fee_piastres' => 800,
+            'fee_status' => WarningFeeStatus::Charged,
         ]);
     }
 }

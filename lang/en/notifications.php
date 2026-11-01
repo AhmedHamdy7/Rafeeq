@@ -91,6 +91,10 @@ return [
      * and naming the real cause would tell her passengers something about her documents that is
      * none of their business. "Has been paused" is true however it happened.
      */
+    'commute_deleted_seat_cancelled' => [
+        'title' => 'Your commute was cancelled',
+        'body' => ':name has deleted this commute, so :days booked day(s) were cancelled. Search for another commute on your route.',
+    ],
     'commute_paused_seat_cancelled' => [
         'title' => 'Your commute was paused',
         'body' => ':name’s commute has been paused, so :days booked day(s) were cancelled. You are back on the waiting list.',
@@ -119,6 +123,10 @@ return [
     'change_proposal_revised' => [
         'title' => 'The proposed change was updated',
         'body' => ':name changed what she is proposing, so any answer you gave no longer counts. Please review it again.',
+    ],
+    'departure_time_changed' => [
+        'title' => 'Your departure time changed',
+        'body' => 'Riders changed on :date, so leave at :time to arrive on time.',
     ],
     'change_proposal_applied' => [
         'title' => 'The change is now in effect',
@@ -225,6 +233,46 @@ return [
         'title' => 'Missed commute recorded (warning :ordinal)',
         'body' => 'Your seat on :date was not used and was too late to be filled. The 1st is a warning; a 2nd may lead to a fee. Tap to review or dispute.',
     ],
+    'no_show_fee' => [
+        'title' => 'No-show fee: EGP :amount',
+        'body' => 'You were recorded as not there on :date. EGP :amount is added to your next ride. Disagree? Appeal within :hours hours.',
+    ],
+    'late_boarding_fee' => [
+        'title' => 'Late pickup fee: EGP :amount',
+        'body' => 'You boarded after the 5-minute grace on :date. EGP :amount is added to your next ride. Disagree? Appeal within :hours hours.',
+    ],
+    'late_cancel_fee' => [
+        'title' => 'Late cancellation: EGP :amount unless your seat is taken',
+        'body' => 'You cancelled :date within 12 hours of departure. If somebody from the waiting list takes your seat, it costs nothing. Appeal within :hours hours.',
+    ],
+    'late_cancel_fee_charged' => [
+        'title' => 'Late cancellation fee: EGP :amount',
+        'body' => 'Nobody took your seat on :date, so EGP :amount is added to your next ride. Disagree? Appeal within :hours hours.',
+    ],
+    'late_cancel_fee_waived' => [
+        'title' => 'No fee for your cancellation',
+        'body' => 'Somebody from the waiting list took your seat on :date, so your late cancellation costs nothing.',
+    ],
+    'driver_cancel_fee' => [
+        'title' => 'Cancellation fee: EGP :amount',
+        'body' => 'Cancelling confirmed seats close to departure adds EGP :amount to this week’s commission. Had an emergency? Appeal with evidence within :hours hours.',
+    ],
+    'driver_ended_trip_fee' => [
+        'title' => 'Trip ended early: EGP :amount',
+        'body' => 'Ending a run that had set off adds EGP :amount to this week’s commission. Breakdown or accident? Appeal with evidence within :hours hours.',
+    ],
+    'driver_no_show_fee' => [
+        'title' => 'Missed trip: EGP :amount',
+        'body' => 'Your run never started, so EGP :amount is added to this week’s commission. Appeal with evidence within :hours hours.',
+    ],
+    'driver_late_fee' => [
+        'title' => 'Late start: EGP :amount',
+        'body' => 'A passenger left because you were late, so EGP :amount is added to this week’s commission. Appeal within :hours hours.',
+    ],
+    'early_drop_check' => [
+        'title' => 'Did you ask to get off here?',
+        'body' => 'You were set down :distance km before your drop-off. Tell us if you asked for it — if you did not, you pay nothing for this ride.',
+    ],
     'appeal_approved' => [
         'title' => 'Your appeal was approved',
         'body' => 'The record from :date no longer counts towards your reliability. It stays visible so you can see it was cleared.',
@@ -232,5 +280,77 @@ return [
     'appeal_declined' => [
         'title' => 'Your appeal was reviewed',
         'body' => 'After review, the record from :date still stands. Contact support if you would like to discuss it.',
+    ],
+    'debt_due_tomorrow' => [
+        'title' => 'EGP :amount due tomorrow',
+        'body' => 'Your commission for this week is due by Friday 23:59. Pay with InstaPay from the Payments screen.',
+    ],
+    'debt_overdue' => [
+        'title' => 'EGP :amount is overdue',
+        'body' => 'Pay with InstaPay to publish commutes and accept new riders again. Your booked rides continue.',
+    ],
+    'debt_late_fee_added' => [
+        'title' => 'Commission overdue: EGP :fee late fee added',
+        'body' => 'You now owe EGP :amount. Until it is paid you cannot publish commutes or accept new riders.',
+    ],
+    'debt_suspension_warning' => [
+        'title' => 'Pay EGP :amount by Friday to keep driving',
+        'body' => 'If it is still unpaid after Friday 23:59, your upcoming trips will be cancelled and driving suspended.',
+    ],
+    'debt_payment_confirmed' => [
+        'title' => 'Payment received',
+        'body' => 'EGP :amount has been taken off what you owe. Thank you.',
+    ],
+    'debt_payment_rejected' => [
+        'title' => 'We could not find your payment',
+        'body' => 'Check the InstaPay reference and send it again, or contact support.',
+    ],
+    'coupon_issued' => [
+        'title' => 'You have a coupon',
+        'body' => 'EGP :amount off what you owe next, for a ride that did not go as it should.',
+    ],
+    'driving_suspended_for_debt' => [
+        'title' => 'Driving suspended',
+        'body' => 'Your commission was not paid by the second Friday, so your upcoming trips were cancelled. Pay EGP :amount to drive again. You can still ride as a passenger.',
+    ],
+    'riding_suspended_for_debt' => [
+        'title' => 'Riding suspended',
+        'body' => 'A fee has stayed unpaid, so your upcoming trips were cancelled and booking is paused. Pay EGP :amount to ride again, or appeal from the app.',
+    ],
+
+    /*
+     * Feature 03 files §8 — the pushes that were missing (W6). Each deep-links through `data`.
+     */
+    'trip_starts_in_hour' => [
+        'title' => 'Your commute leaves in about an hour',
+        'body' => 'Departure is at :time. Open the trip for the details.',
+    ],
+    'trip_starts_soon' => [
+        'title' => 'Your commute leaves in :minutes minutes',
+        'body' => 'Departure is at :time.',
+    ],
+    'driver_heading_to_you' => [
+        'title' => ':name is on the way to you',
+        'body' => 'You are the next pickup. Be ready at your meeting point.',
+    ],
+    'driver_arrived' => [
+        'title' => ':name has arrived',
+        'body' => 'Your driver is at your meeting point.',
+    ],
+    'commute_still_not_started' => [
+        'title' => 'Your driver is :minutes minutes late',
+        'body' => ':name’s commute was due to leave at :time and still has not started.',
+    ],
+    'driver_documents_approved' => [
+        'title' => 'You are a verified driver',
+        'body' => 'Your documents were approved. You can publish your commute now.',
+    ],
+    'driver_documents_rejected' => [
+        'title' => 'Your documents need a change',
+        'body' => 'Open the app to see what to fix and send it again.',
+    ],
+    'licence_expiring' => [
+        'title' => 'Your driving licence expires soon',
+        'body' => 'It expires on :date. Upload the renewed licence to keep driving.',
     ],
 ];

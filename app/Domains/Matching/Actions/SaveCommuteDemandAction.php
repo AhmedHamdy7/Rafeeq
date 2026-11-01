@@ -30,28 +30,8 @@ final readonly class SaveCommuteDemandAction
     {
         $demand = new CommuteDemand;
 
-        $demand->fill([
-            'passenger_user_id' => $passenger->id,
-            'origin_point' => $criteria->origin,
-            'destination_point' => $criteria->destination,
-            'origin_lat' => $criteria->origin->lat,
-            'origin_lng' => $criteria->origin->lng,
-            'dest_lat' => $criteria->destination->lat,
-            'dest_lng' => $criteria->destination->lng,
-            'origin_label' => $labels['origin'] ?? null,
-            'destination_label' => $labels['destination'] ?? null,
-            'commute_type' => $criteria->days->value === 0 ? 'one_time' : 'recurring',
-            'days_mask' => $criteria->days->value,
-            'preferred_arrival_start' => $criteria->arrivalWindowStart,
-            'preferred_arrival_end' => $criteria->arrivalWindowEnd,
-            'max_walk_minutes' => $criteria->maxWalk->minutes,
-            'max_detour_minutes' => $criteria->maxDetourMinutes,
-            'budget_monthly_piastres' => $criteria->budgetMonthlyPiastres,
-            'flexibility_minutes' => $criteria->flexibilityMinutes,
-            'wants_return_trip' => $criteria->wantsReturnTrip,
-            'audience_preference' => ($criteria->audiencePreference?->value)
-                ?? CommuteAudience::AnyVerified->value,
-        ]);
+        $demand->fill(['passenger_user_id' => $passenger->id]);
+        $this->fillCriteria($demand, $criteria, $labels);
 
         // Not fillable: a request must not be able to set its own status, and the
         // expiry is a platform policy rather than the passenger's choice.
@@ -66,12 +46,75 @@ final readonly class SaveCommuteDemandAction
         return $demand;
     }
 
+    /**
+     * Edit or pause a saved request (S-4, BOOK-06, decision C12).
+     *
+     * A new set of criteria replaces the old one and is matched again against the commutes already
+     * running. Pausing keeps everything and stops notifications; resuming matches it again at once,
+     * because she paused it to stop being told, not to miss what was published meanwhile.
+     */
+    public function update(CommuteDemand $demand, ?SearchCriteria $criteria, ?array $labels, ?bool $paused): CommuteDemand
+    {
+        $rematch = false;
+
+        if ($criteria !== null) {
+            $this->fillCriteria($demand, $criteria, $labels);
+            $rematch = true;
+        }
+
+        if ($paused === true && $demand->status === CommuteDemandStatus::Active) {
+            $demand->status = CommuteDemandStatus::Paused->value;
+        }
+
+        if ($paused === false && $demand->status === CommuteDemandStatus::Paused) {
+            $demand->status = CommuteDemandStatus::Active->value;
+            $rematch = true;
+        }
+
+        $demand->save();
+
+        if ($rematch && $demand->status === CommuteDemandStatus::Active) {
+            DB::afterCommit(fn () => MatchNewDemand::dispatch($demand->id));
+        }
+
+        return $demand->refresh();
+    }
+
     public function cancel(CommuteDemand $demand): CommuteDemand
     {
         $demand->status = CommuteDemandStatus::Cancelled->value;
         $demand->save();
 
         return $demand;
+    }
+
+    /**
+     * The criteria columns, shared by creating and editing so the two can never drift.
+     *
+     * @param  array{origin?: string|null, destination?: string|null}|null  $labels
+     */
+    private function fillCriteria(CommuteDemand $demand, SearchCriteria $criteria, ?array $labels): void
+    {
+        $demand->fill([
+            'origin_point' => $criteria->origin,
+            'destination_point' => $criteria->destination,
+            'origin_lat' => $criteria->origin->lat,
+            'origin_lng' => $criteria->origin->lng,
+            'dest_lat' => $criteria->destination->lat,
+            'dest_lng' => $criteria->destination->lng,
+            'origin_label' => $labels['origin'] ?? null,
+            'destination_label' => $labels['destination'] ?? null,
+            'commute_type' => $criteria->days->value === 0 ? 'one_time' : 'recurring',
+            'days_mask' => $criteria->days->value,
+            'preferred_arrival_start' => $criteria->arrivalWindowStart,
+            'preferred_arrival_end' => $criteria->arrivalWindowEnd,
+            'max_walk_minutes' => $criteria->maxWalk->minutes,
+            'max_detour_minutes' => $criteria->maxDetourMinutes,
+            'flexibility_minutes' => $criteria->flexibilityMinutes,
+            'wants_return_trip' => $criteria->wantsReturnTrip,
+            'audience_preference' => ($criteria->audiencePreference?->value)
+                ?? CommuteAudience::AnyVerified->value,
+        ]);
     }
 
     /**

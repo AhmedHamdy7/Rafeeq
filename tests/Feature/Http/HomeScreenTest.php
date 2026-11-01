@@ -234,7 +234,9 @@ it('picks the soonest journey rather than the newest booking', function () {
 
     $earlyTrip = ScheduledTrip::query()->where('commute_offer_id', $this->commuteId)
         ->orderBy('departure_at')->first();
+    // A later DAY too: the same morning would overlap the seat she already holds (R-3).
     $lateTrip = ScheduledTrip::query()->where('commute_offer_id', $laterCommute)
+        ->whereDate('trip_date', '!=', $earlyTrip->trip_date)
         ->orderBy('departure_at')->first();
 
     approveSeat($this->driverToken, requestSeat($paxToken, $this->commuteId, [
@@ -346,7 +348,7 @@ it('names the commute a match points at, not just that one was found', function 
         ->and($card['destinationLabel'])->toBe('Smart Village B6')
         ->and($card['departureTimeLocal'])->toStartWith('07:05')
         ->and($card['timezone'])->toBe('Africa/Cairo')
-        ->and($card['pricePerSeatPiastres'])->toBe(8000);
+        ->and($card['seatPricePiastres'])->toBe(CommuteOffer::query()->whereKey($this->commuteId)->value('seat_price_piastres'));
 });
 
 it('shows the saved corridors without running every saved search', function () {
@@ -524,9 +526,10 @@ it('keeps reporting the money the bookings were approved at', function () {
     $before = test()->withToken($this->driverToken)->getJson('/api/v1/driver/home')
         ->assertOk()->json('data.nextRun.collectPiastres');
 
-    test()->withToken($this->driverToken)
-        ->patchJson("/api/v1/commutes/{$this->commuteId}", ['pricePerSeatPiastres' => 11000])
-        ->assertOk();
+    // The day is repriced afterwards (an admin moved a rate and the day was regenerated).
+    ScheduledTrip::query()->whereKey($this->tripId)->update([
+        'seat_price_piastres' => 99500, 'driver_share_piastres' => 90000, 'commission_piastres' => 9500,
+    ]);
 
     expect(test()->withToken($this->driverToken)->getJson('/api/v1/driver/home')
         ->assertOk()->json('data.nextRun.collectPiastres'))->toBe($before);
@@ -717,17 +720,26 @@ it('labels each passenger with what they said, and counts the same answers', fun
 
     test()->withToken($paxToken)->postJson("/api/v1/groups/{$group->id}/attendance", [
         'tripId' => $this->tripId,
-        'status' => GroupAttendanceStatus::Away->value,
+        'status' => GroupAttendanceStatus::Coming->value,
     ])->assertStatus(201);
 
     $run = test()->withToken($this->driverToken)->getJson('/api/v1/driver/home')
         ->assertOk()->json('data.nextRun');
 
-    expect($run['passengers'][0]['attendanceStatus'])->toBe('away')
-        ->and($run['attendance']['away'])->toBe(1)
-        ->and($run['attendance']['coming'])->toBe(0)
+    expect($run['passengers'][0]['attendanceStatus'])->toBe('coming')
+        ->and($run['attendance']['coming'])->toBe(1)
+        ->and($run['attendance']['away'])->toBe(0)
         // The driver has still not answered.
         ->and($run['attendance']['awaiting'])->toBe(1);
+
+    // 🔴 "I can't make it" cancels her seat that day (TRIP-26), so she leaves the list.
+    test()->withToken($paxToken)->postJson("/api/v1/groups/{$group->id}/attendance", [
+        'tripId' => $this->tripId,
+        'status' => GroupAttendanceStatus::Away->value,
+    ])->assertStatus(201);
+
+    expect(test()->withToken($this->driverToken)->getJson('/api/v1/driver/home')
+        ->assertOk()->json('data.nextRun.passengers'))->toBe([]);
 });
 
 it('counts the driver in the group total, which is what makes the fraction add up', function () {

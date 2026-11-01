@@ -15,6 +15,8 @@ use App\Domains\Notification\Enums\NotificationType;
 use App\Domains\Notification\Support\Notifier;
 use App\Domains\Outbox\Enums\OutboxEventType;
 use App\Domains\Outbox\Support\Outbox;
+use App\Domains\Payment\Support\DriverFees;
+use App\Domains\Payment\Support\FeeSettings;
 use App\Domains\Reliability\Enums\ReliabilityEventKind;
 use App\Domains\Reliability\Support\ReliabilityLedger;
 use App\Domains\Shared\Exceptions\DomainException;
@@ -35,11 +37,10 @@ use Illuminate\Support\Facades\DB;
  * `decrement()` is used for the same reason `increment()` is on the way in: one
  * atomic statement rather than a read and a write with a gap.
  *
- * 🔒 Money is NOT touched. Chapter 6 says nothing about fees and MASTER_PLAN §19
- * lists the cancellation policy as open question #7, deferred to Phase 8 — the
- * chapter itself is called "very general" on it there. So a cancellation releases
- * the seat and records what happened, and charges nothing. Inventing a fee would
- * take money from a real person on the strength of an assumption.
+ * 🔴 The fees are the decided ones (PAY-21, PAY-23): a passenger's late cancel goes on her
+ * late-cancel counter ({@see RecordMemberWarningAction}); a driver's cancellation costs him a share
+ * of each seat by the notice he gave ({@see DriverFees}). `cancellation_fee_piastres` on the booking
+ * is the old configured fee and stays 0.
  */
 final readonly class CancelBookingAction
 {
@@ -72,13 +73,20 @@ final readonly class CancelBookingAction
      */
     public function byDriver(Booking $booking, string $driverUserId, ?string $reason = null): Booking
     {
-        return $this->cancel(
-            $booking,
-            BookingStatus::CancelledByDriver,
-            BookingActorType::Driver,
-            $driverUserId,
-            $reason,
-        );
+        return DB::transaction(function () use ($booking, $driverUserId, $reason): Booking {
+            $cancelled = $this->cancel(
+                $booking,
+                BookingStatus::CancelledByDriver,
+                BookingActorType::Driver,
+                $driverUserId,
+                $reason,
+            );
+
+            // PAY-23 (C-5): the driver-cancel fee by the notice he gave, on his side.
+            DriverFees::chargeCancellation($cancelled);
+
+            return $cancelled;
+        });
     }
 
     /**
@@ -98,17 +106,53 @@ final readonly class CancelBookingAction
      *
      * @param  DisplacementReason  $reason  stored on the booking, so support can answer "why did my
      *                                      Tuesday disappear" without reconstructing it
+     * @param  bool  $chargeDriver  whether the driver chose it, and so pays the fee by timing
      */
-    public function byDisplacement(Booking $booking, string $driverUserId, DisplacementReason $reason): Booking
+    public function byDisplacement(Booking $booking, string $driverUserId, DisplacementReason $reason, bool $chargeDriver = false): Booking
+    {
+        return DB::transaction(function () use ($booking, $driverUserId, $reason, $chargeDriver): Booking {
+            $cancelled = $this->cancel(
+                $booking,
+                BookingStatus::CancelledByDriver,
+                BookingActorType::Driver,
+                $driverUserId,
+                $reason->value,
+                notify: false,
+                offerToWaitlist: false,
+            );
+
+            /*
+             * PAY-23 (C-7, C-8, C-10): when HE chose it — paused, deleted, replaced the car — the
+             * driver-cancel fee by timing, per seat. Not when the platform did it (a suspended
+             * vehicle, a lapsed licence, unpaid commission): nobody chose those.
+             */
+            if ($chargeDriver) {
+                DriverFees::chargeCancellation($cancelled);
+            }
+
+            return $cancelled;
+        });
+    }
+
+    /**
+     * Her account was suspended for debt or conduct, so every upcoming seat she holds goes — even
+     * inside the 16-hour lock (PAY-46, decision D-0018; Feature 03 backend file L-12).
+     *
+     * Recorded as cancelled on HER side, because her standing is why, but by the SYSTEM: she did
+     * not choose it, so it costs her no cancellation fee and puts nothing on her reliability record
+     * (the suspension is the consequence; a second one for the same thing would be double).
+     *
+     * 🔴 The freed seat IS offered to the waiting list, unlike a displacement: the commute is
+     * running, and the driver pays nothing for a seat he did not give up (PAY-46).
+     */
+    public function bySuspension(Booking $booking, string $reason = 'account_suspended'): Booking
     {
         return $this->cancel(
             $booking,
-            BookingStatus::CancelledByDriver,
-            BookingActorType::Driver,
-            $driverUserId,
-            $reason->value,
-            notify: false,
-            offerToWaitlist: false,
+            BookingStatus::CancelledByPassenger,
+            BookingActorType::System,
+            null,
+            $reason,
         );
     }
 
@@ -122,7 +166,8 @@ final readonly class CancelBookingAction
      */
     private function tellTheOtherSide(Booking $booking, ScheduledTrip $trip, BookingActorType $actorType): void
     {
-        $byPassenger = $actorType === BookingActorType::Passenger;
+        // A system cancellation on her side (a suspension) reads to the driver like hers.
+        $byPassenger = $actorType !== BookingActorType::Driver;
 
         $recipient = User::query()->find($byPassenger ? $booking->driver_profile_id : $booking->passenger_user_id);
         $actor = User::query()->find($byPassenger ? $booking->passenger_user_id : $booking->driver_profile_id);
@@ -145,7 +190,8 @@ final readonly class CancelBookingAction
      * - **A driver ending one named passenger's seat** is the most pointed act here and lands on
      *   her driver record.
      * - **A displacement** — a paused commute, a replaced vehicle — lands on her record too, per
-     *   displaced passenger, but at a smaller weight: she did not choose any of them individually.
+     *   displaced passenger, on the same notice ladder as any driver cancellation (Feature 03 files
+     *   X-3: < 10h / 10–16h / ≥ 16h) — from the passenger's kerb it is the same morning lost.
      * - **A passenger cancelling her own seat** lands on her passenger record ONLY if she did it
      *   close enough to departure that the driver could not fill it. Cancelling a week out costs
      *   nobody anything and is recorded as nothing at all — a reliability score that punished
@@ -160,7 +206,13 @@ final readonly class CancelBookingAction
         ScheduledTrip $trip,
         BookingStatus $to,
         ?string $reason,
+        BookingActorType $actorType,
     ): void {
+        // Nobody chose a system cancellation (a suspension), so it is on nobody's record.
+        if ($actorType === BookingActorType::System) {
+            return;
+        }
+
         if ($to === BookingStatus::CancelledByDriver) {
             $kind = $reason === DisplacementReason::CommutePaused->value
                 || $reason === DisplacementReason::VehicleReplaced->value
@@ -187,33 +239,33 @@ final readonly class CancelBookingAction
             return;
         }
 
-        if ($to !== BookingStatus::CancelledByPassenger) {
+        if ($to !== BookingStatus::CancelledByPassenger || $trip->departure_at === null) {
             return;
         }
 
-        // Far enough out that the seat can be sold again: nothing is recorded.
-        if ($trip->departure_at === null
-            || now()->diffInHours($trip->departure_at, absolute: false) > ReliabilityLedger::lateCancellationHours()) {
-            return;
-        }
+        $hoursAhead = now()->diffInHours($trip->departure_at, absolute: false);
 
-        ReliabilityLedger::record(
-            $booking->passenger_user_id,
-            ReliabilityEventKind::PassengerCancelledLate,
-            booking: $booking,
-            commuteOfferId: $trip->commute_offer_id,
-        );
+        // The reliability record looks only at the last 10 hours: far enough out, the seat can be
+        // sold again and nothing is recorded.
+        if ($hoursAhead <= ReliabilityLedger::lateCancellationHours()) {
+            ReliabilityLedger::record(
+                $booking->passenger_user_id,
+                ReliabilityEventKind::PassengerCancelledLate,
+                booking: $booking,
+                commuteOfferId: $trip->commute_offer_id,
+            );
+        }
 
         /*
-         * 🔴 And the escalating warning (Feature 03 v5 §239's second counter: "first warning,
-         * second fee"). The same event feeds both mechanisms on purpose — the score is the
-         * aggregate a monthly review reads, this is the sentence she is told now.
+         * 🔴 And the late-cancel counter, on its own wider window: within 12 hours of departure
+         * (PAY-21; decision B4 split it from the no-show counter). A warning first, then a quarter
+         * of the no-show fee at the same rung — held `pending` until departure and dropped if the
+         * seat is refilled from the waiting list meanwhile (R-8).
          *
-         * Delivered immediately rather than held back: unlike a lateness, there is no journey she
-         * is sitting in, because the whole point is that she is not on it.
+         * Told at once: unlike a lateness, there is no journey she is sitting in.
          */
-        if ($booking->passenger !== null) {
-            $this->warnings->record($booking->passenger, WarningKind::MissedCommitment, $booking);
+        if ($hoursAhead < FeeSettings::lateCancelHours() && $booking->passenger !== null) {
+            $this->warnings->record($booking->passenger, WarningKind::LateCancel, $booking);
         }
     }
 
@@ -221,7 +273,7 @@ final readonly class CancelBookingAction
         Booking $booking,
         BookingStatus $to,
         BookingActorType $actorType,
-        string $actorId,
+        ?string $actorId,
         ?string $reason,
         bool $notify = true,
         bool $offerToWaitlist = true,
@@ -262,6 +314,7 @@ final readonly class CancelBookingAction
                  * only one that decided by configuration rather than by who was at fault.
                  */
                 'cancellation_fee_piastres' => $to === BookingStatus::CancelledByPassenger
+                    && $actorType === BookingActorType::Passenger
                     ? (int) config('rafeeq.booking.cancellation_fee_piastres')
                     : 0,
             ])->save();
@@ -309,7 +362,7 @@ final readonly class CancelBookingAction
              * Which record, and whether at all, depends on who cancelled and when — see
              * {@see recordAgainstReliability()}.
              */
-            $this->recordAgainstReliability($booking, $trip, $to, $reason);
+            $this->recordAgainstReliability($booking, $trip, $to, $reason, $actorType);
 
             /*
              * 🔴 Announced on the day's channel, in this transaction.

@@ -4,6 +4,7 @@ namespace App\Livewire\Admin;
 
 use App\Domains\Admin\Actions\HandleIncidentAction;
 use App\Domains\Admin\Actions\RespondToSosAction;
+use App\Domains\Admin\Actions\SettleIncidentMoneyAction;
 use App\Domains\Admin\Enums\AdminPermission;
 use App\Domains\Admin\Models\AdminUser;
 use App\Domains\Admin\Support\SafetyCaseQueue;
@@ -12,6 +13,7 @@ use App\Domains\Safety\Models\Incident;
 use App\Domains\Safety\Models\SosEvent;
 use App\Domains\Shared\Exceptions\DomainException;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\Rule;
 use Livewire\Attributes\Layout;
 use Livewire\Component;
@@ -112,12 +114,21 @@ class SafetyCases extends Component
         session()->flash('status', __('admin.safety.taken'));
     }
 
-    public function decide(string $id, HandleIncidentAction $action): void
+    public function decide(string $id, HandleIncidentAction $action, SettleIncidentMoneyAction $money): void
     {
         $this->authorizeTo(AdminPermission::SafetyResolve);
 
         $this->validate([
-            'step' => ['required', 'string', Rule::in(['escalate', 'resolve', 'close'])],
+            /*
+             * The money steps (F-11, F-12) resolve the case too, after moving the money:
+             * `payment_passenger_lied`, `payment_driver_lied`, `payment_fee_line_not_received` on a
+             * payment report; `women_only_confirmed` on a women-only report.
+             */
+            'step' => ['required', 'string', Rule::in([
+                'escalate', 'resolve', 'close',
+                'payment_passenger_lied', 'payment_driver_lied', 'payment_fee_line_not_received',
+                'women_only_confirmed',
+            ])],
             // 255: `incidents.resolution` and `admin_actions.reason` are both that wide, and
             // a message cut off mid-sentence in front of the reporter is worse than a limit.
             'reply' => ['required', 'string', 'min:10', 'max:255'],
@@ -127,11 +138,22 @@ class SafetyCases extends Component
         $admin = $this->admin();
 
         try {
-            match ($this->step) {
-                'escalate' => $action->escalate($report, $admin, $this->reply),
-                'resolve' => $action->resolve($report, $admin, $this->reply),
-                'close' => $action->close($report, $admin, $this->reply),
-            };
+            // One transaction: the money and the decision land together or not at all.
+            DB::transaction(function () use ($action, $money, $report, $admin): void {
+                if (str_starts_with($this->step, 'payment_')) {
+                    $money->paymentDispute($report, $admin, substr($this->step, strlen('payment_')));
+                }
+
+                if ($this->step === 'women_only_confirmed') {
+                    $money->womenOnlyMisuse($report, $admin);
+                }
+
+                match ($this->step) {
+                    'escalate' => $action->escalate($report, $admin, $this->reply),
+                    'close' => $action->close($report, $admin, $this->reply),
+                    default => $action->resolve($report, $admin, $this->reply),
+                };
+            });
         } catch (DomainException $e) {
             $this->addError('reply', __('errors.'.$e->errorCode->value));
 
@@ -142,7 +164,7 @@ class SafetyCases extends Component
 
         $this->reset('openReport', 'step', 'reply');
 
-        session()->flash('status', __('admin.safety.decided_'.$done));
+        session()->flash('status', __('admin.safety.decided_'.(in_array($done, ['escalate', 'close'], true) ? $done : 'resolve')));
 
         $this->keepThePageInRange();
     }

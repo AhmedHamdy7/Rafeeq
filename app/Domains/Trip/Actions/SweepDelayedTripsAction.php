@@ -12,6 +12,8 @@ use App\Domains\Commute\Models\ScheduledTrip;
 use App\Domains\Identity\Models\User;
 use App\Domains\Notification\Enums\NotificationType;
 use App\Domains\Notification\Support\Notifier;
+use App\Domains\Payment\Support\DriverFees;
+use App\Domains\Payment\Support\FeeSettings;
 use App\Domains\Reliability\Enums\ReliabilityEventKind;
 use App\Domains\Reliability\Support\ReliabilityLedger;
 use App\Domains\Trip\Enums\AttendanceStatus;
@@ -36,11 +38,13 @@ use Illuminate\Support\Facades\DB;
  * break in ninety days, when retention prunes the row and the sweep warns everybody again about a
  * morning from last season.
  *
- * ⚠️ **No reliability event at the violation rung, and that is a decision rather than an omission.**
- * The score measures harm to people; harm here is per passenger, and the per-booking events at
- * expiry carry it. A flat penalty at +10 would charge a driver for not driving a Thursday nobody had
- * booked — and would charge four penalties for one failure on a day with three riders. Whether she
- * was late at all is already measured, separately, by her on-time rate.
+ * 🔴 **One lateness event at the violation rung** (Feature 03 files X-3: driver lateness −2), and
+ * only on a morning somebody booked. Once per morning, not per passenger: lateness is one act, and
+ * the per-passenger harm of a morning that never happens at all is carried by the per-booking
+ * events at expiry. A Thursday nobody booked costs her nothing — nobody was kept waiting.
+ *
+ * The violation rung is also the second "your driver has not set off" to the passengers
+ * (Feature 03 files §8: late +5 / +10), after the warning at +5.
  */
 final readonly class SweepDelayedTripsAction
 {
@@ -87,6 +91,7 @@ final readonly class SweepDelayedTripsAction
 
             if ($lateBy >= self::violationMinutes() && $trip->delay_violation_at === null) {
                 $trip->forceFill(['delay_violation_at' => $now])->save();
+                $this->recordViolation($trip, (int) $lateBy);
                 $counts['violations']++;
             }
 
@@ -158,6 +163,25 @@ final readonly class SweepDelayedTripsAction
 
             foreach ($bookings as $booking) {
                 $this->endSeat($booking, $locked);
+            }
+
+            /*
+             * 🔴 PAY-26 (Feature 03 backend file F-8): a driver who never came pays half of every
+             * seat confirmed that morning — including the ones whose passenger had already given
+             * up waiting, whose 25 % lateness fee is voided in favour of this (PAY-29).
+             */
+            $gaveUp = Booking::query()
+                ->where('scheduled_trip_id', $locked->getKey())
+                ->where('status', BookingStatus::ExitedDueToDriverDelay->value)
+                ->whereNotIn('id', $bookings->pluck('id'))
+                ->get();
+
+            foreach ($gaveUp as $booking) {
+                DriverFees::void($booking, DriverFees::LATE, 'became_driver_no_show');
+            }
+
+            foreach ($bookings->concat($gaveUp) as $booking) {
+                DriverFees::charge($booking, DriverFees::NO_SHOW, FeeSettings::driverNoShowPercent(), 'PAY-26');
             }
 
             $locked->forceFill([
@@ -239,6 +263,56 @@ final readonly class SweepDelayedTripsAction
                 'bookingId' => (string) $booking->getKey(),
                 'tripId' => (string) $trip->getKey(),
             ]);
+        }
+    }
+
+    /**
+     * The +10 rung: the driver's lateness goes on her record, and every passenger is told again.
+     *
+     * Called only from the branch that stamps `delay_violation_at`, so it runs once per morning
+     * whatever the sweep does next — which is what makes a ledger entry with no booking safe here
+     * ({@see ReliabilityLedger::record()} leaves that to the caller).
+     *
+     * Nothing at all on a morning nobody booked: no passenger to tell, and nobody kept waiting.
+     */
+    private function recordViolation(ScheduledTrip $trip, int $lateBy): void
+    {
+        $bookings = Booking::query()
+            ->where('scheduled_trip_id', $trip->getKey())
+            ->where('status', BookingStatus::Confirmed->value)
+            ->with('passenger')
+            ->orderBy('id')
+            ->get();
+
+        if ($bookings->isEmpty()) {
+            return;
+        }
+
+        $driverId = $trip->commuteOffer?->driver_profile_id;
+
+        if ($driverId !== null) {
+            ReliabilityLedger::record(
+                (string) $driverId,
+                ReliabilityEventKind::DriverLate,
+                scheduledTripId: (string) $trip->getKey(),
+                commuteOfferId: (string) $trip->commute_offer_id,
+            );
+        }
+
+        $driverName = $trip->commuteOffer?->driverProfile?->user?->public_first_name ?? '';
+
+        foreach ($bookings as $booking) {
+            if ($booking->passenger instanceof User) {
+                Notifier::send($booking->passenger, NotificationType::CommuteStillNotStarted, params: [
+                    'name' => $driverName,
+                    'time' => $trip->departure_local?->format('H:i') ?? '',
+                    // How late it actually is, not the setting: a sweep that ran late says so.
+                    'minutes' => (string) max($lateBy, self::violationMinutes()),
+                ], data: [
+                    'bookingId' => (string) $booking->getKey(),
+                    'tripId' => (string) $trip->getKey(),
+                ]);
+            }
         }
     }
 

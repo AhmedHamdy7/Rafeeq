@@ -116,6 +116,8 @@ it('generates a document describing every /v1 route', function () {
         'POST /v1/account/consents',
         'PUT /v1/account/profile/basic',
         'POST /v1/account/initial-role',
+        // Adding driving to a passenger account later (F1-7, F2-10).
+        'POST /v1/account/capabilities/driver',
         'GET /v1/account/onboarding-state',
         'PATCH /v1/account/preferences',
         'GET /v1/account/comfort-preferences',
@@ -159,6 +161,7 @@ it('generates a document describing every /v1 route', function () {
         'GET /v1/commutes',
         'POST /v1/commutes',
         'GET /v1/commutes/{commute}',
+        'PATCH /v1/commute-demands/{demand}',
         'PATCH /v1/commutes/{commute}',
         'DELETE /v1/commutes/{commute}',
         'PUT /v1/commutes/{commute}/route',
@@ -168,12 +171,16 @@ it('generates a document describing every /v1 route', function () {
         'POST /v1/commutes/{commute}/resume',
         'POST /v1/commutes/{commute}/duplicate',
         'POST /v1/commutes/{commute}/return',
-        'GET /v1/commutes/{commute}/price-suggestion',
+        // The automatic seat price, read-only (P-1); it replaced `price-suggestion`.
+        'GET /v1/commutes/{commute}/price',
+        // C-9: the fee pausing, deleting or replacing the car would cost.
+        'GET /v1/commutes/{commute}/cancel-preview',
         'GET /v1/home',
         'GET /v1/driver/home',
         'GET /v1/trips/{trip}',
         'POST /v1/trips/{trip}/start',
         'POST /v1/trips/{trip}/status',
+        'GET /v1/trips/{trip}/cancel-preview',
         'POST /v1/trips/{trip}/cancel',
         'POST /v1/trips/{trip}/cancel-active',
         'POST /v1/trips/{trip}/complete',
@@ -188,12 +195,13 @@ it('generates a document describing every /v1 route', function () {
          */
         'POST /v1/bookings/{booking}/end-early',
         'POST /v1/bookings/{booking}/exit-without-fee',
+        // TRIP-20: her answer to "Did you ask to get off here?"
+        'POST /v1/bookings/{booking}/early-drop',
         'POST /v1/trips/{trip}/drop-off',
         'POST /v1/trips/{trip}/still-driving',
         'PATCH /v1/trips/{trip}/receive-requests',
         'GET /v1/trips/{trip}/wait-timers',
         'POST /v1/trips/{trip}/wait-timers',
-        'POST /v1/trips/{trip}/wait-timers/{timer}/extend',
         'POST /v1/trips/{trip}/location',
         'GET /v1/trips/{trip}/location',
         'POST /v1/sos',
@@ -203,6 +211,7 @@ it('generates a document describing every /v1 route', function () {
         'PATCH /v1/safety/emergency-contacts/{contact}',
         'DELETE /v1/safety/emergency-contacts/{contact}',
         'GET /v1/safety/blocked-users',
+        'GET /v1/safety/blocked-users/preview',
         'POST /v1/safety/blocked-users',
         'DELETE /v1/safety/blocked-users/{user}',
         /*
@@ -260,11 +269,17 @@ it('generates a document describing every /v1 route', function () {
         'POST /v1/driver/seat-requests/{seatRequest}/approve',
         'POST /v1/driver/seat-requests/{seatRequest}/reject',
         'GET /v1/driver/bookings',
+        // C-5: the driver removing one passenger, with the fee by notice.
+        'POST /v1/driver/bookings/{booking}/cancel',
         /*
-         * The money (Phase 8). Neither of these MOVES any — payment methods, capture, payouts and
-         * refunds all wait on a provider being chosen.
+         * The money. Her debt to RAFEEQ, its weekly statement and "I paid" (PAY-08 → PAY-17), and
+         * the group's week. Online capture, payouts and refunds still wait on a provider.
          */
-        'GET /v1/driver/balance',
+        'GET /v1/account/debt',
+        'GET /v1/account/debt/statements',
+        'POST /v1/account/debt/payments',
+        // A driver's appeal against one of his fees (SAFE-11).
+        'POST /v1/account/debt/entries/{entry}/appeal',
         'GET /v1/groups/{group}/statement',
 
         'POST /v1/commutes/{commute}/pickup-preview',

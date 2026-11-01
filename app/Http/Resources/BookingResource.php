@@ -4,6 +4,7 @@ namespace App\Http\Resources;
 
 use App\Domains\Booking\Enums\BookingStatus;
 use App\Domains\Booking\Models\Booking;
+use App\Domains\Safety\Support\OtherParty;
 use App\Domains\Trip\Support\DriverDelay;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
@@ -21,8 +22,10 @@ use Illuminate\Http\Resources\Json\JsonResource;
  * hundred metres, which is enough to show the right neighbourhood on a map and not
  * enough to knock on a door.
  *
- * The money is shown broken into its three frozen parts, because a passenger is
- * entitled to see what they are paying and what of it reaches the driver.
+ * 🔒 The money depends on who is looking (P-3, PAY-39). The passenger is sent the
+ * seat price and her total — nothing else. The commute's driver is sent those and
+ * the share he keeps. Nobody is sent RAFEEQ's commission or its rate: the app is
+ * public, so a figure in a passenger payload is a figure anybody can read.
  *
  * @mixin Booking
  */
@@ -59,13 +62,25 @@ final class BookingResource extends JsonResource
             'boardingCode' => $this->boarding_code,
 
             /*
-             * Frozen at approval and never recomputed. A driver raising their price
-             * tomorrow, or the platform changing its percentage, moves nothing here.
+             * Frozen at approval from the day's own automatic price (PAY-44) and never
+             * recomputed: an admin moving a rate tomorrow moves nothing here.
+             *
+             * - `seatPricePiastres`: one seat. `totalPiastres`: what she pays, seat × seats.
+             * - `driverSharePiastres` / `driverShareTotalPiastres`: what the driver keeps, per
+             *   seat and in all — 🔒 present ONLY for the commute's own driver.
              */
             'price' => [
-                'totalPiastres' => $this->price_snapshot_piastres,
-                'platformFeePiastres' => $this->platform_fee_snapshot_piastres,
-                'driverAmountPiastres' => $this->driver_amount_snapshot_piastres,
+                // Exact: the total was written as seat price × seats.
+                'seatPricePiastres' => intdiv((int) $this->price_snapshot_piastres, max(1, (int) $this->seats_reserved)),
+                'totalPiastres' => (int) $this->price_snapshot_piastres,
+                'driverSharePiastres' => $this->when(
+                    SeatPriceView::viewerDrives($request, $this->driver_profile_id),
+                    fn (): int => intdiv((int) $this->driver_amount_snapshot_piastres, max(1, (int) $this->seats_reserved)),
+                ),
+                'driverShareTotalPiastres' => $this->when(
+                    SeatPriceView::viewerDrives($request, $this->driver_profile_id),
+                    fn (): int => (int) $this->driver_amount_snapshot_piastres,
+                ),
             ],
 
             'paymentType' => $this->payment_type->value,
@@ -84,9 +99,38 @@ final class BookingResource extends JsonResource
              */
             'dropoffPoint' => $this->dropoffPoint(),
 
+            /*
+             * The other person's user id — the driver's to the passenger, the passenger's to the
+             * driver — so the trip summary can offer Block and Report (Feature 03 files X-4).
+             *
+             * 🔒 Null until the journey is over (`COMPLETED`, `ENDED_EARLY`, `NO_SHOW`,
+             * `EXITED_DUE_TO_DRIVER_DELAY`); see OtherParty for why not before.
+             */
+            'otherPartyUserId' => OtherParty::idFor($this->resource, $request->user()),
+
             'cancelledAt' => $this->cancelled_at?->toIso8601String(),
             'cancelledReason' => $this->cancelled_reason,
             'cancellationFeePiastres' => $this->cancellation_fee_piastres,
+
+            /*
+             * PAY-16 (L-11): her unpaid fees ride on this ride as a separate line, on top of the
+             * fare. The driver collects it in cash and it becomes part of his debt; his screen shows
+             * it is not his. Negative is a credit she is discounted (a coupon, a refund). 0: none.
+             */
+            'feeLinePiastres' => (int) $this->fee_line_piastres,
+            // What it is for, as a stable code (`no_show`, `late_cancel`, `credit`, …), or null.
+            'feeLineReason' => $this->fee_line_reason,
+
+            /*
+             * TRIP-20: set down more than 1 km before her drop-off without asking → `askedAt` is
+             * set and she answers `POST /bookings/{booking}/early-drop`. `answer`: null, `yes`, `no`.
+             */
+            'earlyDrop' => [
+                'askedAt' => $this->early_drop_asked_at?->toIso8601String(),
+                'distanceMeters' => $this->early_drop_distance_meters === null ? null : (int) $this->early_drop_distance_meters,
+                'answer' => $this->early_drop_answer,
+            ],
+
             'createdAt' => $this->created_at->toIso8601String(),
 
             /*

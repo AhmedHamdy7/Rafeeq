@@ -60,27 +60,34 @@ final readonly class DisplaceConfirmedBookingsAction
     /**
      * Every future confirmed seat on this one commute.
      *
+     * @param  bool  $chargeDriver  he chose it (paused, deleted, replaced the car): the driver-cancel
+     *                              fee by timing per seat (PAY-23). Not when the platform did it.
      * @return int how many bookings were cancelled
      */
-    public function forCommute(CommuteOffer $offer, DisplacementReason $reason): int
+    public function forCommute(CommuteOffer $offer, DisplacementReason $reason, bool $chargeDriver = false): int
     {
-        return DB::transaction(function () use ($offer, $reason): int {
-            $bookings = $this->futureConfirmedBookings($offer);
+        return DB::transaction(function () use ($offer, $reason, $chargeDriver): int {
+            $bookings = self::futureConfirmedBookings($offer);
 
             if ($bookings->isEmpty()) {
                 return 0;
             }
 
             foreach ($bookings as $booking) {
-                $this->cancel->byDisplacement($booking, $offer->driver_profile_id, $reason);
+                $this->cancel->byDisplacement($booking, $offer->driver_profile_id, $reason, $chargeDriver);
             }
 
             /*
              * Her request goes back on the list once, however many days she lost. A recurring
              * membership is ONE request covering five bookings; flipping it per booking would write
              * the same row five times and notify her five times for one decision.
+             *
+             * Not for a deleted commute (C-8): there is no list left to wait on, so her request is
+             * closed `commute_archived` with everybody else's — see ChangeCommuteStatusAction.
              */
-            $this->preserveOnWaitlist($offer, $bookings->pluck('seat_request_id')->filter()->unique(), $reason);
+            if ($reason->rejoinsWaitlist()) {
+                $this->preserveOnWaitlist($offer, $bookings->pluck('seat_request_id')->filter()->unique(), $reason);
+            }
 
             /*
              * Any seat offer still open on these days is closed. They were offers to join a commute
@@ -104,9 +111,9 @@ final readonly class DisplaceConfirmedBookingsAction
      *
      * @return int how many bookings were cancelled
      */
-    public function forDriver(DriverProfile $profile, DisplacementReason $reason): int
+    public function forDriver(DriverProfile $profile, DisplacementReason $reason, bool $chargeDriver = false): int
     {
-        return DB::transaction(function () use ($profile, $reason): int {
+        return DB::transaction(function () use ($profile, $reason, $chargeDriver): int {
             $offers = CommuteOffer::query()
                 ->where('driver_profile_id', $profile->user_id)
                 ->whereNot('status', CommuteOfferStatus::Archived->value)
@@ -118,7 +125,7 @@ final readonly class DisplaceConfirmedBookingsAction
             $cancelled = 0;
 
             foreach ($offers as $offer) {
-                $cancelled += $this->forCommute($offer, $reason);
+                $cancelled += $this->forCommute($offer, $reason, $chargeDriver);
             }
 
             return $cancelled;
@@ -126,7 +133,8 @@ final readonly class DisplaceConfirmedBookingsAction
     }
 
     /**
-     * Seats that exist, on days that have not started.
+     * Seats that exist, on days that have not started. Public so the fee preview (C-9) counts the
+     * very rows the cancellation will.
      *
      * `Scheduled` and not `Preparing`/`EnRoute`/`InProgress`: the moment a driver begins a run it
      * stops being a plan and becomes a journey people are relying on, and v5 sends her to Cancel
@@ -135,7 +143,7 @@ final readonly class DisplaceConfirmedBookingsAction
      *
      * @return Collection<int, Booking>
      */
-    private function futureConfirmedBookings(CommuteOffer $offer)
+    public static function futureConfirmedBookings(CommuteOffer $offer)
     {
         return Booking::query()
             ->whereIn('scheduled_trip_id', ScheduledTrip::query()
@@ -192,8 +200,8 @@ final readonly class DisplaceConfirmedBookingsAction
                 'displaced_reason' => $reason->value,
                 /*
                  * Cleared, because a waiting list has no deadline. v5: "Offers have no fixed timer
-                 * while seat/eligibility persists" — and an `expires_at` inherited from the 48-hour
-                 * approval window would quietly drop her off the list she was just promised.
+                 * while seat/eligibility persists" — and an `expires_at` inherited from a during-ride
+                 * request's three minutes would quietly drop her off the list she was just promised.
                  */
                 'expires_at' => null,
             ])->save();
@@ -244,6 +252,7 @@ final readonly class DisplaceConfirmedBookingsAction
         $type = match ($reason) {
             DisplacementReason::CommutePaused => NotificationType::CommutePausedSeatCancelled,
             DisplacementReason::VehicleReplaced => NotificationType::VehicleReplacedSeatCancelled,
+            DisplacementReason::CommuteDeleted => NotificationType::CommuteDeletedSeatCancelled,
         };
 
         // Loaded before the loop: strict mode turns a lazy load inside one into an exception, and

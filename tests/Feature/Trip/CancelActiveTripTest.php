@@ -11,6 +11,7 @@ use App\Domains\Identity\Models\User;
 use App\Domains\Notification\Models\Notification;
 use App\Domains\Reliability\Enums\ReliabilityEventKind;
 use App\Domains\Reliability\Models\ReliabilityEvent;
+use App\Domains\Trip\Enums\ActiveTripCancelReason;
 use App\Domains\Trip\Enums\AttendanceStatus;
 use App\Domains\Trip\Enums\TripSessionStatus;
 use App\Domains\Trip\Models\Attendance;
@@ -70,7 +71,7 @@ function setOff(string $driverToken, string $tripId): void
     underway($driverToken, $tripId);
 }
 
-function cancelActive(string $token, string $tripId, array $payload = ['reason' => 'Engine gave out on the Mehwar'])
+function cancelActive(string $token, string $tripId, array $payload = ['reason' => 'breakdown', 'note' => 'Engine gave out on the Mehwar'])
 {
     return test()->withToken($token)->postJson("/api/v1/trips/{$tripId}/cancel-active", $payload);
 }
@@ -140,7 +141,7 @@ it('settles the attendance of somebody nobody decided about, rather than leaving
         ->toBe(AttendanceStatus::Cancelled);
 });
 
-it('charges the driver, not the passenger, at the heaviest weight in the ledger', function () {
+it('charges the driver, not the passenger, as ending a trip for another reason', function () {
     setOff($this->driverToken, $this->trip->id);
 
     cancelActive($this->driverToken, $this->trip->id)->assertOk();
@@ -150,8 +151,10 @@ it('charges the driver, not the passenger, at the heaviest weight in the ledger'
     expect($event->kind)->toBe(ReliabilityEventKind::DriverAbandonedActiveTrip)
         ->and($event->user_id)->toBe(Booking::query()->findOrFail($this->bookingId)->driver_profile_id)
         // Snapshotted, so a later config change never rewrites what her record said.
-        ->and($event->weight)->toBe((int) config('rafeeq.reliability.weights.driver_abandoned_active_trip'))
-        ->and($event->weight)->toBeGreaterThan((int) config('rafeeq.reliability.weights.driver_cancelled_booking'));
+        // Feature 03 files X-3: "ends a trip for other reason" −8 — until F-13's reason list lands,
+        // every such ending is weighed as "other reason".
+        ->and($event->weight)->toBe(8)
+        ->and($event->weight)->toBeGreaterThan((int) config('rafeeq.reliability.weights.driver_cancel_short_notice'));
 });
 
 /**
@@ -207,11 +210,11 @@ it('tells the woman waiting something different from the woman it set down', fun
 it('keeps her reason on the record and out of the message', function () {
     setOff($this->driverToken, $this->trip->id);
 
-    cancelActive($this->driverToken, $this->trip->id, ['reason' => 'My son was taken to hospital'])->assertOk();
+    cancelActive($this->driverToken, $this->trip->id, ['reason' => 'emergency', 'note' => 'My son was taken to hospital'])->assertOk();
 
     $notice = Notification::query()->where('type', 'active_trip_cancelled')->sole();
 
-    expect(Booking::query()->findOrFail($this->bookingId)->cancelled_reason)->toBe('My son was taken to hospital')
+    expect(Booking::query()->findOrFail($this->bookingId)->cancelled_reason)->toBe('emergency: My son was taken to hospital')
         ->and(json_encode($notice->getAttributes()))->not->toContain('hospital');
 });
 
@@ -221,6 +224,29 @@ it('demands a reason, because an appeal reviewed against a blank one is a review
     cancelActive($this->driverToken, $this->trip->id, [])
         ->assertStatus(422)
         ->assertJsonPath('error.fields.reason.0', fn (string $message) => $message !== '');
+
+    expect(Booking::query()->findOrFail($this->bookingId)->status)->toBe(BookingStatus::Confirmed);
+});
+
+/**
+ * F-13 / TRIP-22: the reason is a category, because the fee that follows depends on it — a
+ * breakdown, an accident or an emergency is priced differently from any other reason.
+ */
+it('takes the reason as a category and keeps it on the run', function (string $reason) {
+    setOff($this->driverToken, $this->trip->id);
+
+    cancelActive($this->driverToken, $this->trip->id, ['reason' => $reason])->assertOk();
+
+    expect(TripSession::sole()->cancel_reason)->toBe(ActiveTripCancelReason::from($reason))
+        ->and(Booking::query()->findOrFail($this->bookingId)->cancelled_reason)->toBe($reason);
+})->with(['breakdown', 'accident', 'emergency', 'other']);
+
+it('refuses a reason that is not one of the four', function () {
+    setOff($this->driverToken, $this->trip->id);
+
+    cancelActive($this->driverToken, $this->trip->id, ['reason' => 'Engine gave out on the Mehwar'])
+        ->assertStatus(422)
+        ->assertJsonValidationErrors(['reason'], 'error.fields');
 
     expect(Booking::query()->findOrFail($this->bookingId)->status)->toBe(BookingStatus::Confirmed);
 });

@@ -167,44 +167,126 @@ return [
      */
     'rate_limits_enabled' => env('RAFEEQ_RATE_LIMITS', 'on') !== 'off',
 
-    'payment' => [
-        /*
-         * How long after the driver confirms somebody travelled before the money is recorded as
-         * collected (Master Plan §15.6: "two hours before any money moves"). Long enough for a
-         * driver who tapped the wrong name to notice and for a passenger to object first.
-         */
-        'collection_delay_minutes' => 120,
+    /*
+     * The debt-only ledger and the weekly settlement (PAY-08 → PAY-19, PAY-34, PAY-45, PAY-46;
+     * decisions D-0004 → D-0007, D-0009, D-0017, D-0018). Every number here is an admin setting
+     * (ADM-06) — see `DebtSettings`.
+     *
+     * Gone with this block: `payment.collection_delay_minutes` (a seat is PAID the moment she is
+     * dropped off, PAY-07, not two hours later) and `payment.max_driver_debt_piastres` (there is no
+     * cap on driver debt, PAY-15 / D-0006 — the weekly deadline replaced it).
+     */
+    /*
+    |--------------------------------------------------------------------------
+    | Fees (PAY-20 → PAY-29, PAY-47; Feature 03 backend file F-1 → F-13)
+    |--------------------------------------------------------------------------
+    |
+    | Every percentage is of the seat price the booking froze (all its seats). Every fee goes to
+    | RAFEEQ (PAY-33), lands on the ledger with its reason, is told to the person with the amount
+    | and "appeal within 48h", and is credited back if the appeal wins (PAY-10).
+    |
+    | 🔴 Three passenger counters, kept apart (decision B4): no-show, late cancel, lateness. Each
+    | counts back while events keep coming less than `counter_reset_days` apart; a gap that long
+    | starts it again at the first rung.
+    */
+    'fees' => [
+        'counter_reset_days' => 90,
+
+        // PAY-20, the no-show ladder: 1st a warning, then these.
+        'no_show_step_2_percent' => 30,
+        'no_show_step_3_percent' => 50,
+        'no_show_step_4_percent' => 75,
+        'no_show_step_5_percent' => 100,
 
         /*
-         * The most a driver may owe the platform in uncollected fees from cash trips before they
-         * may not publish (Bible §8.1: `payment.max_driver_debt_piastres = 20000`, 200 EGP; open
-         * question #6 in MASTER_PLAN §19 — the documented figure until decided otherwise).
-         * Existing bookings continue; only publishing stops.
+         * PAY-21: a cancellation within this many hours of departure is a late cancel; earlier is
+         * free. Its fee is this share of the no-show step at the same rung (a quarter: 7.5 %,
+         * 12.5 %, 18.75 %, 25 %) — and nothing at all if the seat is refilled from the waiting list
+         * before departure.
          */
-        'max_driver_debt_piastres' => 20_000,
+        'late_cancel_hours' => 12,
+        'late_cancel_share_percent' => 25,
+
+        // PAY-22, the lateness ladder: 1st and 2nd warnings, then these.
+        'lateness_step_3_percent' => 10,
+        'lateness_step_4_percent' => 20,
+        'lateness_step_5_percent' => 25,
+
+        // SAFE-11: every appeal within this many hours of the fee or decision appearing.
+        'appeal_hours' => 48,
+
+        /*
+         * PAY-23, the driver cancelling before the trip — one passenger, the day, a pause, a delete,
+         * a vehicle replacement, a block — per affected confirmed seat, by the notice he gave:
+         * `driver_cancel_free_hours` or more → nothing; down to `driver_cancel_short_hours` → the
+         * mid fee; less → the short fee.
+         */
+        'driver_cancel_free_hours' => 16,
+        'driver_cancel_short_hours' => 10,
+        'driver_cancel_mid_percent' => 10,
+        'driver_cancel_short_percent' => 25,
+
+        // PAY-24, PAY-25, PAY-28: ending a run that set off, or dropping her early without asking.
+        'driver_active_cancel_percent' => 100,
+
+        /*
+         * PAY-24: after a breakdown, accident or emergency, a passenger who travelled more than this
+         * share of her own route pays that share of the fare; at or below it, nothing.
+         */
+        'pro_rata_free_percent' => 25,
+
+        // PAY-26: the driver never started and the run expired.
+        'driver_no_show_percent' => 50,
+
+        // PAY-29: per passenger who left or switched because he was late.
+        'driver_late_percent' => 25,
+
+        // TRIP-20: a drop-off this far before her agreed point, without her asking, is checked.
+        'early_drop_meters' => 1000,
+
+        // PAY-31, PAY-32: a lie about paying, once staff establish it, costs this share.
+        'payment_lie_passenger_percent' => 150,
+        'payment_lie_driver_percent' => 50,
+
+        // PAY-47: a man confirmed to have booked a women-only commute owes this share of the seat.
+        'women_only_misuse_percent' => 100,
+    ],
+
+    'debt' => [
+        // Paying a week's commission after its Friday adds this much, once (PAY-13: 180 → 198).
+        'late_fee_percent' => 10,
+
+        /*
+         * How many Friday deadlines a week's debt may miss before the driver is suspended from
+         * driving (PAY-45: "still unpaid at the end of week 2"). The first missed Friday blocks
+         * publishing and new riders (PAY-12); this one cancels everything.
+         */
+        'weeks_before_suspension' => 2,
+
+        // A passenger's fee unpaid this many days without riding suspends her (PAY-17).
+        'passenger_suspension_days' => 14,
+
+        // …or her debt going OVER this (PAY-17: 200 EGP).
+        'passenger_suspension_limit_piastres' => 20_000,
+
+        // A coupon is this share of the fee actually collected from the other side (PAY-34).
+        'coupon_percent' => 50,
+
+        /*
+         * The Cairo hour the day's debt reminder goes out — the Thursday "due tomorrow", the daily
+         * "overdue" after Friday, and the warning before suspension (Feature 03 backend file §8).
+         */
+        'reminder_hour' => 18,
     ],
 
     'booking' => [
         /*
-         * The platform's share of each seat, as a percentage.
-         *
-         * ✅ Decided 2026-10-06 (MASTER_PLAN §19 open question #5, Screen Map §8.1): the fee is
-         * DEDUCTED from the driver's price — `price = platform_fee + driver_amount`, the rider
-         * pays the published price and nothing on top — at 3%, flat, and staff may change it
-         * from the dashboard's Settings page (whole percents).
-         *
-         * Building on the documented number is safe because every booking
-         * freezes its own snapshot at approval: changing this later moves
-         * nothing that already exists (pitfall #42).
+         * DEPLOY-ONLY. Whether a seat may be requested with `paymentType: online` (P-4, PAY-01).
+         * The beta is cash only: there is no payment provider, so an online booking would be a
+         * promise of a collection nobody makes. Turned on in the release that ships a provider —
+         * a code change anyway, which is why this is not an admin setting.
          */
-        'platform_fee_percent' => 3.0,
-
-        /*
-         * How long a seat request waits for an answer before expiring. A request
-         * nobody answered is worse than a refusal: the passenger cannot look
-         * elsewhere while it holds their one active request per commute.
-         */
-        'request_expiry_hours' => 48,
+        'online_payments_enabled' => false,
 
         /*
          * How long a request to join a run that is ALREADY MOVING waits for an answer
@@ -316,7 +398,8 @@ return [
          * leaving — and calling it an absence would keep a seat nominally held by
          * someone who is not coming back this term.
          */
-        'max_absence_days' => 60,
+        // One month (R-7, BOOK-32); longer than that is a pause with no end date.
+        'max_absence_days' => 31,
     ],
 
     'matching' => [
@@ -385,9 +468,27 @@ return [
     ],
 
     'commute' => [
-        // Chapter 4 §3: "maximum pickup points configurable".
-        'max_pickup_points' => 4,
-        'max_dropoff_points' => 2,
+        /*
+         * 🔴 The matching limits (COM-31, decision C8 of 2026-10-31). These used to be the driver's
+         * own `maxDetourMinutes` / `maxWalkMinutes` per commute; they are now the platform's, and
+         * only an admin moves them (ADM-06). A driver who could choose a thirty-minute detour was
+         * choosing to make his first passenger late for work.
+         *
+         * - `max_pickup_points` / `max_dropoff_points`: the most distinct stops of each kind one
+         *   commute takes — the driver's suggested points when he draws the route, and the riders'
+         *   own points on any one day. Chapter 4 said 4 + 2; the partners decided 3 + 3.
+         * - `match_radius_meters`: how far a passenger's pickup or drop-off may sit from the
+         *   driver's route.
+         * - `max_trip_detour_minutes` / `max_trip_detour_meters`: the detour the WHOLE trip may
+         *   carry — every rider's points together, measured against the driver's straight run from
+         *   start to end. Both must hold ("10 minutes or 5 km, whichever is less"). This cap is what
+         *   stops "leave at 08:00" turning into "leave at 06:00" as riders join (C-2).
+         */
+        'max_pickup_points' => 3,
+        'max_dropoff_points' => 3,
+        'match_radius_meters' => 1500,
+        'max_trip_detour_minutes' => 10,
+        'max_trip_detour_meters' => 5000,
 
         /*
          * 🔴 How many hours before departure a day's arrangements freeze (Feature 03 v5).
@@ -417,20 +518,6 @@ return [
          * so a driver knows their passenger list before they sleep.
          */
         'booking_deadline_hour' => 21,
-
-        /*
-         * A commute is shared cost, not a fare. The ceiling is what stops the platform
-         * being used as an unlicensed taxi service, so it is a legal boundary rather
-         * than a preference.
-         *
-         * 50–120 EGP, per ERD §23.3 and screen 24's own slider, which runs from EGP 50
-         * to EGP 120. These were 5–500, which is not a shared-cost range: at the bottom
-         * it let somebody price a fifty-kilometre commute at five pounds, and at the top
-         * it allowed five hundred — a fare, and the exact thing the ceiling exists to
-         * prevent. Three sources said 50–120 and the config was the outlier.
-         */
-        'min_price_piastres' => 5_000,
-        'max_price_piastres' => 12_000,
 
         // Chapter 4 §4: "no infinite commutes" — an end date is mandatory, and
         // this bounds how far out it may be.
@@ -532,8 +619,16 @@ return [
          */
         'wait_grace_seconds' => 300,
 
-        // The most a driver may add on top, in one extension.
-        'wait_extension_seconds' => 120,
+        /*
+         * 🔴 How close the driver must be to a passenger's pickup for "I've arrived" to be accepted
+         * (TRIP-10, decision C14: 150 m). Fees hang off the grace that arrival starts — lateness,
+         * no-show — so a driver must not be able to tap "arrived" two kilometres away and then
+         * charge somebody for not being at the kerb.
+         *
+         * (`wait_extension_seconds` lived here. The "+2 min" extension was removed — TRIP-11, B7:
+         * every passenger gets the same grace, and nobody can stretch or shorten it.)
+         */
+        'arrival_radius_meters' => 150,
 
         /*
          * How long a passenger has to say "that is not right" about a trip they were
@@ -668,11 +763,26 @@ return [
      */
     'notifications' => [
         /*
-         * Which push transport sends to phones. Only `log` exists today: choosing FCM/APNs needs
-         * a project and credentials that do not exist yet. Until then every message still lands
-         * in the member's in-app inbox, and each push row records `no_push_provider`.
+         * Which push transport sends to phones (D-0023: FCM, with the APNs key uploaded to the
+         * Firebase project for iPhone).
+         *
+         *   - `log` (the default): nothing reaches a phone. Every message still lands in the
+         *     member's in-app inbox, and each push row records `no_push_provider`. What tests and
+         *     every development machine run.
+         *   - `fcm`: FCM HTTP v1, credentials in `services.fcm` (FcmPushSender).
          */
         'push_driver' => env('RAFEEQ_PUSH_DRIVER', 'log'),
+
+        /*
+         * "Your commute leaves in an hour" / "…in 10 minutes" (Feature 03 files §8), to the driver
+         * and every confirmed passenger. Minutes before the day's departure.
+         *
+         * Sent by `trips:send-reminders` every minute, once each, stamped on the day. When a seat
+         * is confirmed inside the final window, only the final reminder is sent — two buzzes a
+         * minute apart about the same departure is noise.
+         */
+        'trip_reminder_early_minutes' => 60,
+        'trip_reminder_final_minutes' => 10,
     ],
 
     /*
@@ -726,10 +836,26 @@ return [
          * How many emergency contacts one person may keep.
          *
          * A limit because this list is who gets told where somebody is, and an unbounded one is a
-         * way to broadcast a person's movements to a crowd. Five is more than anybody needs and
-         * fewer than an abuser could use.
+         * way to broadcast a person's movements to a crowd.
+         *
+         * Three, by partner decision (Feature 03 files X-6, SAFE-14: "up to 3"). It was five.
+         * Lowering it removes nobody: the cap is checked only when a contact is ADDED, so somebody
+         * who already keeps four or five keeps them all and simply cannot add another until she is
+         * below three. Taking a trusted contact away from a person without asking would be the
+         * worse failure.
          */
-        'max_emergency_contacts' => 5,
+        'max_emergency_contacts' => 3,
+
+        /*
+         * How long after a journey a problem with it can still be reported, in hours (SAFE-08:
+         * "reported within 24h", Feature 03 files X-7).
+         *
+         * Measured from the END of that journey — when the run finished, or, for a morning that
+         * never ran, from when it should have left. Only a report tied to a booking has a journey
+         * to measure from; a report about somebody impersonating a Rafeeq driver has none and is
+         * always accepted. See ReportIncidentAction.
+         */
+        'report_window_hours' => 24,
 
         /*
          * How many reports one person may file in an hour.
@@ -792,33 +918,40 @@ return [
     ],
 
     /*
-     * "The fair suggested price" on the publish screen (ERD §23.3):
+     * The automatic seat price (P-1 → P-5; PAY-41 → PAY-44, PAY-48; D-0016, D-0025, D-0026).
      *
-     *     per seat = (km × cost per km) ÷ assumed occupancy, rounded to the step
+     *     base       = route km × km rate (Standard or Comfort, from the car's tier)
+     *     share      = base ÷ max(approved seats, min_seat_divisor)          never rounded
+     *     commission = max(commission_rate × share, min_commission)
+     *     seat price = share + commission, rounded to the nearest step; a price exactly halfway
+     *                  rounds DOWN, unless rounding down would leave RAFEEQ under the minimum,
+     *                  in which case it rounds UP. The rounding difference is RAFEEQ's.
      *
-     * Every one of these is a policy figure the dashboard must be able to move
-     * (standard #11), and `cost_per_km_piastres` most of all — it tracks the fuel price,
-     * so it changes on somebody else's schedule, and the ERD notes the dashboard has a
-     * "fuel index update" broadcast that tells drivers when it does. A suggestion built
-     * on a hard-coded fuel cost would quietly advise people to undercharge the week
-     * petrol goes up.
+     * Every figure is an admin setting (ADM-06) read through
+     * {@see \App\Domains\Commute\Support\PricingSettings}, and each generated trip day freezes the
+     * values it was priced with (PAY-44) — so moving one here reaches only days generated after.
+     *
+     * 🔴 The commission is ADDED ON TOP of the driver's share, not taken out of it (PAY-48). The
+     * driver of a full 3-seat car on a 40 km Standard route keeps 300 EGP whatever the rate is.
      */
     'pricing' => [
-        'cost_per_km_piastres' => 750,
+        // PAY-42: 7.5 EGP a kilometre for a Standard car.
+        'km_rate_standard_piastres' => 750,
 
-        /*
-         * How many passengers the cost is split between when suggesting a price.
-         *
-         * An assumption by necessity: the suggestion is made while the driver is still
-         * filling in the form, before anybody has booked. Splitting by seats actually
-         * sold would change the advice every time somebody joined — and the price is
-         * frozen per booking anyway, because a fixed price per seat is a decision
-         * (ERD §23.2: the amount does not move with the number of passengers).
-         */
-        'assumed_occupancy' => 3,
+        // PAY-42, PROF-26: 10 EGP a kilometre for a car with the Comfort badge.
+        'km_rate_comfort_piastres' => 1_000,
 
-        // Suggestions land on round numbers, because they are meant to be typed in.
+        // PAY-41: 10% in the beta, 15% at the public launch. Whole percents.
+        'commission_rate_percent' => 10,
+
+        // PAY-48: RAFEEQ takes at least 8 EGP a seat, so a short trip still earns something.
+        'min_commission_piastres' => 800,
+
+        // PAY-43: seat prices land on 5 EGP steps.
         'rounding_step_piastres' => 500,
+
+        // D-0025 (b): the share is divided by the approved seats, but never by fewer than 3.
+        'min_seat_divisor' => 3,
     ],
 
     'geo' => [
@@ -832,6 +965,32 @@ return [
          * publishing down entirely would be a broken one.
          */
         'engine' => env('RAFEEQ_GEO_ENGINE', 'straight_line'),
+
+        /*
+         * DEPLOY-ONLY. Google Routes API v2 (`RAFEEQ_GEO_ENGINE=google`). The key itself lives in
+         * `config/services.php` (`GOOGLE_MAPS_API_KEY`), never here.
+         *
+         * `timeout_seconds` is short on purpose: every caller falls back to the straight-line
+         * estimate when Google does not answer, so waiting longer only makes a driver stare at a
+         * spinner for an answer that will be the fallback anyway.
+         */
+        'google' => [
+            'endpoint' => env('GOOGLE_ROUTES_ENDPOINT', 'https://routes.googleapis.com/directions/v2:computeRoutes'),
+            'timeout_seconds' => 5,
+        ],
+
+        /*
+         * Traffic-aware durations ("arrive by 09:00 on a Sunday") are cached per local weekday and
+         * per slice of the clock, because Cairo's traffic repeats by the week and not by the date:
+         * 08:40 on one Sunday is the same road as 08:40 on the next. The slice is how coarse that
+         * is; the lifetime is deliberately far shorter than `route_cache_days`, because a duration
+         * goes stale (pitfall #20) and a distance does not.
+         */
+        'traffic_bucket_minutes' => 15,
+        'traffic_cache_hours' => 72,
+        // The zone the slice above is read in. Commutes are Cairo commutes (`commute_schedules`
+        // defaults to it), and the bucket must follow the wall clock across DST, not UTC.
+        'traffic_timezone' => 'Africa/Cairo',
 
         /*
          * How long a cached route stays usable. The DISTANCE between two places
@@ -882,43 +1041,54 @@ return [
     */
     'reliability' => [
         /*
-         * 🔴 **These weights are PLACEHOLDERS pending a product decision**, in exactly the sense
-         * `booking.cancellation_fee_piastres` is. v5 defers the fee brackets outright — "exact
-         * brackets/amounts are not decided" — and says nothing at all about score weights.
+         * 🔴 **The weights decided by the partners on 2026-10-31** (Feature 03 files X-3, decisions
+         * D3/D4, Q-067). They replace the placeholders this block used to ship. Points LOST per
+         * event; a member starts at 100.
          *
-         * What is defensible here is their PROPORTION, not their size:
+         *   | Event                                   | Driver | Passenger |
+         *   |-----------------------------------------|--------|-----------|
+         *   | No-show                                 | −10    | −5        |
+         *   | Cancel < 10h before (or a late cancel)  | −5     | −2        |
+         *   | Cancel 10–16h before                    | −3     | —         |
+         *   | Cancel ≥ 16h before                     | −1     | 0         |
+         *   | Lateness                                | −2     | −1        |
+         *   | Ends a trip for "other reason"          | −8     | —         |
          *
-         *   - cancelling one named passenger's seat is the most pointed act, so it costs most: she
-         *     looked at one person's booking and ended it.
-         *   - being swept up in a pause or a vehicle replacement costs least per person, because
-         *     she did not choose any of them individually and a lapsed licence is not the same act.
-         *     It is recorded PER PASSENGER, so pausing on a full car still costs more than pausing
-         *     on an empty one — the harm is per woman rearranging her morning.
-         *   - a passenger's no-show costs her about what a cancellation costs a driver: both are
-         *     one person failing to turn up for an arrangement somebody planned around.
+         * ⚠️ **Only a number for now: it suspends nobody and gates nothing** (D4). Nothing in the
+         * codebase reads the score to refuse anything; it is shown to its owner and to the monthly
+         * review. Each is an admin setting (ReliabilitySettings), and the weight in force is
+         * SNAPSHOTTED onto every event, so changing one never rewrites somebody's history.
          *
-         * ⚠️ Nobody should be suspended on these numbers until a human has agreed them. They are a
-         * working shape so the ledger can be built and tested, not a policy.
+         * Which event kind takes which weight is in ReliabilityEventKind::weight(). A driver's
+         * cancellation weight depends on the notice she gave, measured from the event to the day's
+         * departure: the boundaries are `late_cancellation_hours` (10) and the schedule lock
+         * (`commute.schedule_lock_hours`, 16) — the same lock after which nothing on the day may
+         * change without every passenger's yes.
          */
         'weights' => [
+            // A driver who never came for her: the morning expired, or she gave up waiting.
+            'driver_no_show' => 10,
+            // Recorded by the driver who was there.
+            'passenger_no_show' => 5,
+            'driver_cancel_short_notice' => 5,
+            'driver_cancel_mid_notice' => 3,
+            'driver_cancel_long_notice' => 1,
             /*
-             * The heaviest, and the proportion is about where it leaves people rather than how
-             * deliberate it was: every other cancellation reaches a woman who is still at home,
-             * while this one can end with her part-way to work on a road she did not choose.
+             * The passenger's only cancellation weight. Her 10–16h cancellation is "—" and her
+             * ≥ 16h one is 0 in the table, so neither is recorded at all — see
+             * `late_cancellation_hours` below.
              */
-            'driver_abandoned_active_trip' => 12,
-            'driver_cancelled_booking' => 8,
-            'driver_cancelled_day' => 6,
-            'driver_displaced_passenger' => 3,
+            'passenger_cancel_short_notice' => 2,
+            // The driver still had not set off at the violation rung (+10 min), once per morning.
+            'driver_late' => 2,
+            // She kept the car waiting and boarded (attendance LATE).
+            'passenger_late' => 1,
             /*
-             * A passenger gave up on a journey the car never came for (v5 §241). Weighted with a
-             * targeted cancellation rather than below it: from the passenger's morning the two are
-             * the same event — she has no lift and has to find one now — and the only difference is
-             * that this one left her standing in the street to find out.
+             * The driver stopped a run that had set off (Cancel Active Trip). The table weighs only
+             * the "other reason" ending; the reason list arrives with F-13 (another workstream),
+             * and until it does every such ending is weighed as "other reason".
              */
-            'driver_late_caused_exit' => 8,
-            'passenger_no_show' => 8,
-            'passenger_cancelled_late' => 4,
+            'driver_ended_trip' => 8,
         ],
 
         /*
@@ -926,19 +1096,20 @@ return [
          * persist after reinstatement" — and a cancellation from two years ago is part of somebody's
          * history without being part of whether she can be relied on this month.
          *
-         * Six months: long enough that a pattern shows, short enough that one bad week in winter
-         * is not still costing her a seat in summer.
+         * Ninety days (X-3; it was 180): the same window SAFE-20's "no fees in 90 days" uses, so
+         * the two numbers a member is judged on look back over the same stretch of her life.
          */
-        'window_days' => 180,
+        'window_days' => 90,
 
         /*
-         * How close to departure a passenger's OWN cancellation starts to count against her.
+         * The short-notice boundary: a cancellation fewer than this many hours before departure is
+         * "< 10h" in the weights table.
          *
-         * Cancelling a week out costs nobody anything — the seat goes back to the waiting list and
-         * somebody takes it — so it is recorded as nothing at all. Inside this window the driver is
-         * unlikely to fill it, and somebody has driven to a kerb for nobody.
+         * For a PASSENGER it is also the line below which her own cancellation is recorded at all
+         * (her 10–16h and ≥ 16h weights are nothing). Cancelling a week out costs nobody anything —
+         * the seat goes back to the waiting list and somebody takes it.
          */
-        'late_cancellation_hours' => 12,
+        'late_cancellation_hours' => 10,
     ],
 
     /*
@@ -983,6 +1154,18 @@ return [
         'vehicle_maximum_seats' => 8,
 
         'maximum_vehicles_per_driver' => 3,
+
+        /*
+         * The fewest approved seats an admin may give a car at verification (PROF-28: "at least
+         * 3"). An admin setting — see VehicleSettings.
+         */
+        'min_approved_seats' => 3,
+
+        /*
+         * DEPLOY-ONLY. The most approved seats the review form accepts. A guard-rail against a
+         * slip of the keyboard (30 for 3), not a policy: no car in the product sells more.
+         */
+        'max_approved_seats' => 7,
 
         /*
          * A licence must still be valid this far into the future before an

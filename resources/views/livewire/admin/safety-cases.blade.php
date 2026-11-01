@@ -212,6 +212,19 @@
                     <button type="button" class="rq-btn rq-btn--quiet" wire:click="openDecision('{{ $report->id }}', 'close')">
                         {{ __('admin.safety.close') }}
                     </button>
+                    {{-- The money outcomes (F-11, F-12): each moves the money, then resolves the case. --}}
+                    @if ($report->category->value === 'payment' && $report->booking_id !== null)
+                        @foreach (['payment_passenger_lied', 'payment_driver_lied', 'payment_fee_line_not_received'] as $moneyStep)
+                            <button type="button" class="rq-btn rq-btn--quiet" wire:click="openDecision('{{ $report->id }}', '{{ $moneyStep }}')">
+                                {{ __('admin.safety.'.$moneyStep) }}
+                            </button>
+                        @endforeach
+                    @endif
+                    @if ($report->category->value === 'women_only_misuse' && $report->booking_id !== null)
+                        <button type="button" class="rq-btn rq-btn--quiet" wire:click="openDecision('{{ $report->id }}', 'women_only_confirmed')">
+                            {{ __('admin.safety.women_only_confirmed') }}
+                        </button>
+                    @endif
                     @if ($report->reported_user_id !== null && auth('admin')->user()?->can('member.view'))
                         {{-- Where "freeze this account" happens: a hold has its own case number and review time. --}}
                         <a class="rq-btn rq-btn--quiet" href="{{ route('admin.members', ['member' => $report->reported_user_id]) }}" wire:navigate>
@@ -227,13 +240,13 @@
                             (`IncidentResource::resolution`), so the prompt says so. For escalate it
                             is internal and only the audit trail keeps it.
                         --}}
-                        <p class="rq-note" style="margin:0 0 6px">{{ __('admin.safety.hint_'.$step) }}</p>
+                        <p class="rq-note" style="margin:0 0 6px">{{ __('admin.safety.hint_'.(in_array($step, ['escalate', 'close'], true) ? $step : 'resolve')) }}</p>
                         <textarea class="rq-field" wire:model="reply" rows="3" required></textarea>
                         @error('reply') <p class="rq-error">{{ $message }}</p> @enderror
                         @error('step') <p class="rq-error">{{ $message }}</p> @enderror
                         <div class="rq-actions">
                             <button type="submit" class="rq-btn {{ $step === 'escalate' ? 'rq-btn--danger' : 'rq-btn--primary' }}" wire:loading.attr="disabled">
-                                {{ __('admin.safety.confirm_'.$step) }}
+                                {{ __('admin.safety.confirm_'.(in_array($step, ['escalate', 'close'], true) ? $step : 'resolve')) }}
                             </button>
                             <button type="button" class="rq-btn rq-btn--quiet" wire:click="$set('openReport', null)">
                                 {{ __('admin.queue.cancel') }}
