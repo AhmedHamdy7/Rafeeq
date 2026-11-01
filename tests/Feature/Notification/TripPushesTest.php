@@ -151,7 +151,8 @@ it('tells her once that the driver has arrived', function () {
     underway($this->driverToken, $this->tripId);
 
     test()->withToken($this->driverToken)
-        ->postJson("/api/v1/trips/{$this->tripId}/wait-timers", ['bookingId' => $her['bookingId']])
+        // "I've arrived" is checked by GPS at her pickup (TRIP-10), so the driver says where he is.
+        ->postJson("/api/v1/trips/{$this->tripId}/wait-timers", ['bookingId' => $her['bookingId'], ...atPickupOf($her['bookingId'])])
         ->assertStatus(201);
 
     expect(typed($her['user'], 'driver_arrived'))->toBe(1);
