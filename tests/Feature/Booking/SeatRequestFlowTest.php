@@ -11,6 +11,7 @@ use App\Domains\Driver\Models\Vehicle;
 use App\Domains\Group\Enums\GroupMemberRole;
 use App\Domains\Group\Models\CommuteGroup;
 use App\Domains\Group\Models\GroupMember;
+use App\Domains\Shared\ValueObjects\DaysMask;
 use Illuminate\Database\QueryException;
 use Illuminate\Support\Facades\Storage;
 
@@ -166,6 +167,7 @@ it('takes a recurring request as an application when every day it asks for is fu
     requestSeat($this->paxToken, $this->commuteId, [
         'commitment' => 'recurring',
         'scheduledTripId' => null,
+        'requestedDaysMask' => DaysMask::weekdaysSunToThu()->value,
     ])->assertStatus(201)
         ->assertJsonPath('data.status', 'PENDING')
         ->assertJsonPath('data.kind', 'waitlist_application');
@@ -177,6 +179,7 @@ it('keeps a recurring request a seat request while any day it asks for has room'
     requestSeat($this->paxToken, $this->commuteId, [
         'commitment' => 'recurring',
         'scheduledTripId' => null,
+        'requestedDaysMask' => DaysMask::weekdaysSunToThu()->value,
     ])->assertStatus(201)
         ->assertJsonPath('data.kind', 'seat_request');
 });
@@ -377,19 +380,17 @@ it('closes a one-day request once its day has passed', function () {
     $this->travelTo($tripDate->copy()->addDays(2));
     expect(RespondToSeatRequestAction::closeDatePassed())->toBe(1);
 
-    test()->withToken($this->paxToken)->getJson('/api/v1/seat-requests')
-        ->assertOk()
-        ->assertJsonPath('data.0.id', $requestId)
-        ->assertJsonPath('data.0.status', 'CLOSED_DATE_PASSED');
-
-    // Out of her one open request on this commute, so she can ask again.
-    expect(SeatRequest::sole()->status)->toBe(SeatRequestStatus::ClosedDatePassed);
+    // Out of her one open request on this commute, so she can ask again. (Read from the row: two
+    // days on, her access token has long expired.)
+    expect(SeatRequest::sole()->id)->toBe($requestId)
+        ->and(SeatRequest::sole()->status)->toBe(SeatRequestStatus::ClosedDatePassed);
 });
 
 it('leaves a recurring request open when one of its days passes', function () {
     requestSeat($this->paxToken, $this->commuteId, [
         'commitment' => 'recurring',
         'scheduledTripId' => $this->tripId,
+        'requestedDaysMask' => DaysMask::weekdaysSunToThu()->value,
     ])->assertStatus(201);
 
     $this->travelTo(ScheduledTrip::query()->whereKey($this->tripId)->sole()->trip_date->copy()->addDays(2));

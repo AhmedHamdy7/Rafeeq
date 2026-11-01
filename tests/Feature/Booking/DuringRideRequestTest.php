@@ -395,6 +395,11 @@ it('never closes an offer on a run that has not started', function () {
     $requestId = requestSeat($waiting, $this->commuteId, ['scheduledTripId' => $otherDay->getKey()])
         ->assertStatus(201)->json('data.id');
 
+    // A full day takes it as a waiting-list application (R-1); the driver puts her on the list.
+    test()->withToken($this->driverToken)
+        ->postJson("/api/v1/driver/seat-requests/{$requestId}/waitlist")
+        ->assertOk();
+
     $otherDay->forceFill(['seats_taken' => 0])->save();
 
     app(OfferSeatToWaitlistAction::class)

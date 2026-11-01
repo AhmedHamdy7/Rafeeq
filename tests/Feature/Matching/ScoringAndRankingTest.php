@@ -133,13 +133,14 @@ it('does not penalise a passenger who asked for nothing', function () {
  */
 it('gives a driver with no history the benefit of the doubt', function () {
     expect(DriverProfile::sole()->on_time_rate)->toBeNull()
-        ->and(search($this->paxToken)->assertOk()->json('data.0.score.reliability'))->toBe(5);
+        ->and(search($this->paxToken)->assertOk()->json('data.0.score.reliability'))->toBe(10);
 });
 
 it('scores reliability from the driver record once there is one', function () {
     DriverProfile::sole()->forceFill(['on_time_rate' => 40])->save();
 
-    expect(search($this->paxToken)->assertOk()->json('data.0.score.reliability'))->toBe(2);
+    // Out of ten now that the price's five points moved to reliability (S-2).
+    expect(search($this->paxToken)->assertOk()->json('data.0.score.reliability'))->toBe(4);
 });
 
 it('scores the audience preference without ever deciding eligibility with it', function () {

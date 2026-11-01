@@ -234,7 +234,9 @@ it('picks the soonest journey rather than the newest booking', function () {
 
     $earlyTrip = ScheduledTrip::query()->where('commute_offer_id', $this->commuteId)
         ->orderBy('departure_at')->first();
+    // A later DAY too: the same morning would overlap the seat she already holds (R-3).
     $lateTrip = ScheduledTrip::query()->where('commute_offer_id', $laterCommute)
+        ->whereDate('trip_date', '!=', $earlyTrip->trip_date)
         ->orderBy('departure_at')->first();
 
     approveSeat($this->driverToken, requestSeat($paxToken, $this->commuteId, [
