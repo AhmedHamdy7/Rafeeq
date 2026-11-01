@@ -90,6 +90,18 @@ return [
         'confirm_reject' => 'Confirm rejection',
         'approved' => 'Approved :name as a driver.',
         'rejected' => 'Rejected :name.',
+
+        // The car review (F2-7): what the reviewer decides about each car before approving.
+        'car' => [
+            'entered_seats' => 'Driver entered :count seats (including the driver)',
+            'approved_seats' => 'Approved seats (working belts, passengers only)',
+            'tier' => 'Tier',
+            'tier_standard' => 'Standard',
+            'tier_comfort' => 'Comfort badge',
+            'has_ac' => 'Air conditioning works',
+            'required' => 'Set the approved seats for every car before approving.',
+            'seats_out_of_range' => 'Approved seats must be between :min and :max.',
+        ],
     ],
 
     'home' => [

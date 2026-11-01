@@ -652,6 +652,18 @@ tests/Support/FakeOtpSender.php
 
 ## سجل التقدّم (الأحدث فوق)
 
+- **2026-11-01** — **السعر بقى أوتوماتيك، والعربية بقى ليها مقاعد معتمدة وفئة، والراكب يقدر يبقى سواق من غير ما يعيد التسجيل.** (W1 — Feature 03 §1، F2-6/F2-7، F1-7/F2-10)
+
+  **السعر (P-1 → P-5، PAY-41 → PAY-44، PAY-48، D-0016/D-0025/D-0026):** السواق مابقاش يبعت `pricePerSeatPiastres` لا للـ commute ولا لـ `perDay`. السيرفر بيحسب: طول الطريق × سعر الكيلو (Standard / Comfort من فئة العربية) ÷ `max(approvedSeats, 3)` = نصيب السواق؛ العمولة = `max(النسبة × النصيب، الحد الأدنى 8 ج.م)` **فوق** النصيب، مش منه؛ والمجموع بيتقرّب لأقرب 5 ج.م (النص لتحت، إلا لو ده هيخلّي رفيق تاخد أقل من الحد الأدنى). كل رقم setting في `pricing.*` ومسجّل في الـ catalogue. السعر بيتجمّد على كل يوم رحلة (`seat_price_piastres`، `driver_share_piastres`، `commission_piastres` + المدخلات). `FeeSplit` و`FairPriceSuggestion` اتشالوا، و`price-suggestion` بقى `GET /commutes/{commute}/price` read-only.
+
+  🔒 **مين يشوف إيه (P-3):** الراكبة بتشوف `seatPricePiastres` بس. السواق بتاع الـ commute بيشوف كمان `driverSharePiastres`. النسبة مابتطلعش لحد خالص. `BookingResource` وباقي الـ shapes بقت بتقرّر حسب **مين بيبص** (`SeatPriceView`) لأن نفس الـ payload بيقراه الطرفين.
+
+  **العربية (F2-6، F2-7، PROF-26، PROF-28):** `approved_seats` (≥ 3، null لحد المراجعة)، `tier` (`standard`/`comfort`)، `has_ac` — الأدمن بيحطهم في مراجعة العربية في `/admin/drivers`. عربية من غير `approvedSeats` ماتقدرش تنشر (`VEHICLE_SEATS_NOT_APPROVED`)، وأي commute أو يوم مايعرضش مقاعد أكتر منها (`COMMUTE_SEATS_EXCEED_APPROVED`). البحث فيه `tier=comfort` والنتيجة فيها الـ badge (S-1).
+
+  **الكاش بس (P-4):** `paymentType: online` بيترفض بـ `422 PAYMENT_TYPE_NOT_AVAILABLE` بدل ما يتقبل وعمره ما يتحصّل.
+
+  **راكب → سواق (F1-7، F2-10، E6):** `initial-role` كان أصلًا بيضيف الـ capability، بس أضفنا `POST /account/capabilities/driver` المخصوص: idempotent، من غير OTP، مابيغيّرش `registered_role` ولا الـ mode اللي هي فيه. و`PATCH /account/preferences` بقى بيرجّع `publishedCommutesCount` عشان السواق اللي بيحوّل لراكب يتفكّر إن رحلاته المنشورة لسه شغالة.
+
 - **2026-10-30** — **إلغاء رحلة ماشية، والبدايل — وقايمة اختبارات تانية ماكانتش في الحسبان.**
 
   البداية كانت سؤال: «F03 خلصت؟». رجعت للدوكيومنت نفسه بدل ما أعيد تأكيد كلامي، ولقيت **تلات حاجات**.

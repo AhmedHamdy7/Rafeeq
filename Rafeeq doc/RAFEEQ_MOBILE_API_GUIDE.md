@@ -14,7 +14,7 @@
 >
 > **Base URL:** `{host}/api/v1` · **Auth:** bearer token · **Format:** JSON only.
 
-**Last updated:** 2026-10-30 · **170 endpoints live** · Phases 0–7, 9 and 11 complete · 10, 12 and 13 all but a decision each
+**Last updated:** 2026-10-30 · **171 endpoints live** · Phases 0–7, 9 and 11 complete · 10, 12 and 13 all but a decision each
 
 ---
 
@@ -22,7 +22,7 @@
 
 ### What is ready
 
-**170 endpoints live** and tested, across the 47 designed screens:
+**171 endpoints live** and tested, across the 47 designed screens:
 
 | | Count | Covers |
 |---|---|---|
@@ -604,7 +604,7 @@ Status: ✅ fully served · ⚠️ served, something named missing · ⛔ no API
 | # | Screen | Endpoints | Status |
 |---|---|---|---|
 | 23 | **Driver home** | **`GET /driver/home`** | ✅ One call: today's run, countdown, attendance counts, seats open, what to collect and what she keeps, approved passengers with their meeting points, pending requests with the full count, and her stats. A passenger who is not a driver gets an **empty** payload, not a 404 — the role switch lives on this screen. **"Cancel today"** → `POST /trips/{trip}/cancel` (4.9). |
-| 24 | Publish route | `POST /commutes` · `PUT /commutes/{commute}/route` · `PUT /commutes/{commute}/schedule` · `GET /commutes/{commute}/price-suggestion` | ✅ The suggestion returns the number, the slider bounds, and the reasoning behind it. **Price bounds are 5,000–12,000 piastres (EGP 50–120)** — matching your slider. |
+| 24 | Publish route | `POST /commutes` · `PUT /commutes/{commute}/route` · `PUT /commutes/{commute}/schedule` · `GET /commutes/{commute}/price` | ✅ The price is computed by RAFEEQ (read-only): show `seatPricePiastres` and `driverSharePiastres`. **Remove the price slider and tiers** (P-1). |
 | 25 | Publish review | `GET /commutes/{commute}` · `POST /commutes/{commute}/publish` | ✅ |
 | 31 | Vehicle capture | `POST /driver/vehicles` · `POST /driver/vehicles/{vehicle}/documents` | ⚠️ **Missing: a second vehicle photo** (one `photo_path` column), **`Seat belts (all seats)` is not modelled anywhere**, and **`Air conditioning` is modelled per COMMUTE** (`rules.ac`), not per vehicle as your screen has it. Section 8. |
 
@@ -688,6 +688,7 @@ fails if this list and the running routes ever disagree in either direction.
 | `PATCH /account/devices/current/security` | 4.2 Account, devices, consents |
 | `DELETE /account/devices/{device}/session` | 4.2 Account, devices, consents |
 | `POST /account/initial-role` | 4.2 Account, devices, consents |
+| `POST /account/capabilities/driver` | 4.2 Account, devices, consents |
 | `GET /account/onboarding-state` | 4.2 Account, devices, consents |
 | `PATCH /account/preferences` | 4.2 Account, devices, consents |
 | `PUT /account/profile/basic` | 4.2 Account, devices, consents |
@@ -725,7 +726,7 @@ fails if this list and the running routes ever disagree in either direction.
 | `POST /commutes/{commute}/duplicate` | 4.5 Commutes (driver) |
 | `POST /commutes/{commute}/pause` | 4.5 Commutes (driver) |
 | `POST /commutes/{commute}/pickup-preview` | 4.5 Commutes (driver) |
-| `GET /commutes/{commute}/price-suggestion` | 4.5 Commutes (driver) |
+| `GET /commutes/{commute}/price` | 4.5 Commutes (driver) |
 | `POST /commutes/{commute}/publish` | 4.5 Commutes (driver) |
 | `POST /commutes/{commute}/resume` | 4.5 Commutes (driver) |
 | `POST /commutes/{commute}/return` | 4.5 Commutes (driver) |
@@ -989,6 +990,20 @@ Returns `user` (with `capabilities` filled in) and `nextStep`, which is `HOME` o
 Calling this before the profile is complete answers `403`; finish `PUT /account/profile/basic`
 first.
 
+#### `POST /account/capabilities/driver` — signed-in, active account, profile complete
+
+**"Become a Driver"** on an account that signed up as a passenger (F1-7, F2-10). No body, **no OTP**.
+
+- Adds the `DRIVER` capability to the **same account** and answers `{ user }` with `capabilities`
+  filled in. **Safe to send again** — a second call changes nothing.
+- It does **not** change `registeredRole` (what she signed up for stays as history) and does **not**
+  move `activeMode`: she stays on the home she is looking at. Switch her with `PATCH
+  /account/preferences { activeMode: "driver" }` when she wants the driver side.
+- On an account that never finished the role step it **is** the role step: `initialRoleSelected`
+  becomes `true` with `registeredRole: driver`.
+- 🔒 Same caution as above: this is not approval to drive. Publishing still needs the driver
+  application, the car review and `government_id`.
+
 #### `GET /account/onboarding-state` — signed-in
 
 Where an interrupted sign-up resumes. **Safe to call at launch**, before anything else is known,
@@ -1019,6 +1034,11 @@ UI state kept across devices. Every field is optional; send only what changed.
 | `driverWalkthroughSeen` | `true` once the driver walkthrough has been shown. |
 | `language` | `ar` · `en` — used for **notifications we send you**. The language of a *response* always follows that request's `Accept-Language` header instead. |
 | `theme` | `light` · `dark` · `system` |
+
+**Answer:** the preferences plus **`publishedCommutesCount`** — how many of the caller's commutes are
+published right now (`0` for a passenger). Switching both ways is free, no OTP. When a driver switches
+to `passenger` and this is above zero, remind him: **his published commutes keep running, and his
+passengers keep expecting him, until he pauses them** (F2-10).
 
 > 🔒 **This grants nothing.** `activeMode` picks a screen, not a permission. Setting it to `driver`
 > without the driver capability stores the preference and every driver action is still refused —
@@ -1426,7 +1446,10 @@ missing, so gating it would leave them with a refusal and no explanation.
 | Field | Meaning |
 |---|---|
 | `plateNumber` | As entered. The normalised form we deduplicate on is internal and not returned. |
-| `seats` | **Total including the driver.** Bookable seats are one fewer — a 5-seat car offers 4. |
+| `seats` | What the driver entered: total including the driver. It does **not** limit a commute — `approvedSeats` does. |
+| `approvedSeats` | Set by RAFEEQ at the car review (F2-6, PROF-28): seats with working belts, at least 3. No commute or day may offer more, and the seat price is divided by it. `null` until reviewed — such a car cannot publish (`VEHICLE_SEATS_NOT_APPROVED`). |
+| `tier` | `standard` · `comfort`, set at the review (PROF-26). Comfort is priced at a higher km rate and shown as a badge. |
+| `hasAc` | Air conditioning, as checked by the reviewer. |
 | `isActive` | Only one vehicle per driver may be active at a time. |
 | `status` | `PENDING` · `APPROVED` · `REJECTED`. A commute can only be published on an approved, active vehicle. |
 | `documents[]` | `id`, `type`, `status`, `expiresAt`. **No path and no URL** — a document's storage path never appears in any payload. |
@@ -1480,9 +1503,14 @@ The caller's own commutes. Full shape in 4.5.
 #### `POST /commutes` — verified
 
 **Request:** `commuteType` (`recurring`/`one_time`), `vehicleId`, `direction`
-(`to_work`/`to_home`), `seatsTotal` (1–7), `pricePerSeatPiastres` (**5,000–12,000**),
+(`to_work`/`to_home`), `seatsTotal` (1–7, and **never more than the car's `approvedSeats`** —
+`422 COMMUTE_SEATS_EXCEED_APPROVED` with `error.fields.approvedSeats`),
 `maxDetourMinutes` (0–30), `maxWalkMinutes` (0–30), `audience` (`women_only`/`any_verified`),
 `minTrustLevel` (0–4), `allowsCustomPickup`.
+
+🔴 **No price field any more** (P-1, D-0016). RAFEEQ computes the seat price from the route length,
+the car's tier and its approved seats — see `GET /commutes/{commute}/price`. A
+`pricePerSeatPiastres` sent here or in `perDay` is ignored.
 
 Creates a **draft**. Route and schedule arrive through their own endpoints because each is a whole
 thing that has to be validated together. `allowsCustomPickup` defaults to **false** — a commute
@@ -1510,12 +1538,12 @@ before** — one time, one price, one seat count for the whole week.
 | Field | Means |
 |---|---|
 | `promisedArrivalTime` | `HH:MM:SS` local. When you promise to arrive, applied to every day unless a day overrides it. ⚠️ **Arriving later than this counts against the driver's on-time rate**, outside a five-minute tolerance. Omit it and no promise is recorded — and nothing is scored. |
-| `perDay` | Per-day differences, **keyed by the day's bit**: `{"2": {"departureTime": "06:30:00", "pricePerSeatPiastres": 2500, "seatsTotal": 2}}` sets Sunday only. Each day accepts `departureTime`, `promisedArrivalTime`, `pricePerSeatPiastres`, `seatsTotal`. |
+| `perDay` | Per-day differences, **keyed by the day's bit**: `{"2": {"departureTime": "06:30:00", "seatsTotal": 2}}` sets Sunday only. Each day accepts `departureTime`, `promisedArrivalTime`, `seatsTotal` (≤ `approvedSeats`). **No per-day price**: the price is RAFEEQ's, the same every day of the commute. |
 
 ```
 PUT { daysMask: 62, departureTime: "07:05:00", startDate: "...", endDate: "...",
       promisedArrivalTime: "08:00:00",
-      perDay: { "2": { departureTime: "06:30:00", pricePerSeatPiastres: 2500 } } }
+      perDay: { "2": { departureTime: "06:30:00", seatsTotal: 2 } } }
 ```
 
 The bits are the same ones `daysMask` uses: **1** Sat · **2** Sun · **4** Mon · **8** Tue ·
@@ -1531,19 +1559,20 @@ one fewer seat on the day she takes her own child.
 >
 > Sending the whole thing again **replaces** the week; it never merges. A day you drop disappears.
 
-#### `GET /commutes/{commute}/price-suggestion` — verified
+#### `GET /commutes/{commute}/price` — verified
 
-The fair-price number for screen 24, with its reasoning.
+The seat price RAFEEQ computed (P-1 → P-3, PAY-42). **Read-only** — the driver cannot change it.
+Replaces the old `price-suggestion` slider.
 
 | Field | Meaning |
 |---|---|
-| `suggestedPiastres` | What to pre-select. **Advice, never a rule** — anything between the bounds is accepted. |
-| `minPiastres` / `maxPiastres` | The slider's ends. The ceiling is a legal boundary: a commute is shared cost, and a price far above the cost of driving would make this a taxi service. |
-| `runCostPiastres` | What the whole journey costs to drive, before splitting. Show it as "full route contribution". |
-| `assumedOccupancy` | How many passengers the split assumed. Show it beside the number so the driver sees the reasoning rather than trusting a figure. |
-| `distanceKm` | The measured route length, one decimal. |
+| `seatPricePiastres` | What a passenger pays for one seat. |
+| `driverSharePiastres` | What the driver keeps of each seat ("Seat EGP 110 · You keep EGP 100"). The difference is RAFEEQ's; **never show a percentage**. |
+| `distanceKm` | The road length the price was computed from, one decimal. |
+| `tier` · `approvedSeats` | The car review the price depends on. |
 
-`COMMUTE_INCOMPLETE` (422) if the route has not been saved yet.
+`COMMUTE_INCOMPLETE` (422) if the route has not been saved yet. `VEHICLE_SEATS_NOT_APPROVED` (409)
+while the car has not been reviewed — nothing for the driver to fix, he waits for the review.
 
 #### `POST /commutes/{commute}/publish` — verified
 
@@ -2376,10 +2405,10 @@ attendance decision acceptable, and it is the passenger's only move.
 | `status` | `PENDING` · `CONFIRMED` · `COMPLETED` · `CANCELLED_BY_PASSENGER` · `CANCELLED_BY_DRIVER` · `EXPIRED` · `NO_SHOW`. A booking is created **already `CONFIRMED`**: the driver has just approved a request she read, so leaving it pending would invent a second approval nobody performs. |
 | `seatsReserved` | |
 | `boardingCode` | 🔒 **Four digits, to check against the car at the kerb** — show it under the plate, as the design does. **Both the passenger and the driver see the same number**, so she can ask and the driver can confirm. One per journey, so it changes daily. `null` on bookings made before this shipped. 🔴 **It decides nothing**: `check-in` takes no code, attendance is the driver's tap (D18), and the Master Plan rejected a code for that job because "a PIN fails when somebody is running for the car". **Never block boarding, payment or a no-show on it** — a flat battery must not lock somebody out of a car she has verified by plate and sight. |
-| `price.totalPiastres` | What the seat costs. |
-| `price.platformFeePiastres` | The platform's share. |
-| `price.driverAmountPiastres` | What reaches the driver. |
-| `paymentType` | `cash` · `online`. |
+| `price.seatPricePiastres` | One seat. |
+| `price.totalPiastres` | What she pays: seat price × seats. |
+| `price.driverSharePiastres` · `price.driverShareTotalPiastres` | 🔒 What the driver keeps, per seat and in all — **present only for the commute's own driver**, absent for the passenger (P-3). The commission and its rate are never sent. |
+| `paymentType` | `cash`. `online` is refused with `422 PAYMENT_TYPE_NOT_AVAILABLE` until a payment provider exists (P-4). |
 | `paymentStatus` | `NOT_DUE` (nothing recorded yet) · `PENDING` · `PAID` · `FAILED` · `REFUNDED` · `DISPUTED`. **Cash:** the passenger pays in the car; the booking turns `PAID` about **two hours after the driver confirms they travelled** (the delay lets a wrong tap be noticed). A no-show stays `NOT_DUE`. `DISPUTED` as soon as the passenger contests the attendance record, until staff decide. |
 | `meetingPoint` | `{lat, lng, isExact}`, or **`null` for the standard point** — which is the run's origin. |
 | `cancelledAt`, `cancelledReason`, `cancellationFeePiastres` | The fee is always `0` today. |
@@ -2390,13 +2419,9 @@ price, or the platform changing its percentage, moves nothing here. And the meet
 **fuzzed to ~110m until the booking is confirmed** — a pickup point is often somebody's front
 door, and a pending or cancelled booking has not earned it.
 
-✅ **The fee direction is decided (2026-10-06): the fee is deducted from the driver's price.**
-`totalPiastres = platformFee + driverAmount`; the passenger pays the published seat price and
-nothing on top. The rate is 3% by default and the operations team can change it, so **never
-hard-code a percentage** — render the figures you are given. ⚠️ **Screens 12 and 24 need new copy:**
-screen 12 must not show the fee as a line added to the seat price, and screen 24's *"You keep the
-full contribution; Rafeeq's fee is charged to passengers separately"* is wrong — the driver keeps
-the price minus the fee.
+✅ **The price model is decided (D-0016, D-0025, D-0026):** RAFEEQ computes the seat price; the
+commission is **added on top** of the driver's share, never taken from it. Render the figures you are
+given — never compute or show a percentage.
 
 ## 4.8 Pickup points
 
@@ -3467,6 +3492,12 @@ do that are exactly the ones a rating system exists to surface.
 🔒 Only the **subject** of a review may report it. The reviewer gets a `404` (they wrote it), a
 stranger gets a `404`, and so does a review that has not been revealed yet — all three
 indistinguishable from a wrong id. `REVIEW_ALREADY_REPORTED` (409) for a second attempt.
+
+#### `tier` on search — the Comfort filter
+
+`GET /search/commutes` takes `tier=comfort` to show only Comfort cars (S-1). Each result's car carries
+`tier` and `hasAc`; show the **Comfort badge** when `tier` is `comfort`. Every result's price is
+`seatPricePiastres` — the only money figure a passenger is sent.
 
 #### `minRating` on search — a hard filter
 

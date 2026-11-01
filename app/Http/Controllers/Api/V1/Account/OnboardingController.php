@@ -2,6 +2,9 @@
 
 namespace App\Http\Controllers\Api\V1\Account;
 
+use App\Domains\Commute\Enums\CommuteOfferStatus;
+use App\Domains\Commute\Models\CommuteOffer;
+use App\Domains\Identity\Actions\AddDriverCapabilityAction;
 use App\Domains\Identity\Actions\EnrollInitialRoleAction;
 use App\Domains\Identity\Actions\UpdatePreferencesAction;
 use App\Domains\Identity\Enums\RegisteredRole;
@@ -50,6 +53,19 @@ final class OnboardingController extends Controller
     }
 
     /**
+     * POST /v1/account/capabilities/driver — "Become a driver" on a passenger account (F1-7, F2-10).
+     *
+     * Idempotent, no OTP: the same account gains the driver capability, keeps its sign-up role and
+     * stays in the mode it is in. Approval to actually drive is still the driver application.
+     */
+    public function addDriverCapability(Request $request, AddDriverCapabilityAction $action): JsonResponse
+    {
+        $user = $action->execute($request->user());
+
+        return ApiResponse::success(['user' => new UserResource($user)]);
+    }
+
+    /**
      * GET /v1/account/onboarding-state — where an interrupted sign-up resumes.
      *
      * Safe to call at launch before anything else is known. It reads what was saved and answers
@@ -71,6 +87,19 @@ final class OnboardingController extends Controller
     {
         $preference = $action->execute($request->user(), $request->validated());
 
-        return ApiResponse::success(new PreferenceResource($preference));
+        /*
+         * F2-10, PROF-06: a driver switching to the passenger side has to be reminded that his
+         * published commutes keep running, and passengers keep expecting him, until he pauses them.
+         * So the count rides along on every answer, not only on the switch: the app reads one field
+         * instead of guessing when it is present. Inside `data`, because `meta` is reserved for
+         * pagination in this API.
+         */
+        return ApiResponse::success([
+            ...(new PreferenceResource($preference))->resolve($request),
+            'publishedCommutesCount' => CommuteOffer::query()
+                ->where('driver_profile_id', $request->user()->getKey())
+                ->where('status', CommuteOfferStatus::Published->value)
+                ->count(),
+        ]);
     }
 }

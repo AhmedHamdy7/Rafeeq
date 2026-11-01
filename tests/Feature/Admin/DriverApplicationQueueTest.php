@@ -4,9 +4,13 @@ use App\Domains\Admin\Enums\AdminPermission;
 use App\Domains\Admin\Enums\AdminRole;
 use App\Domains\Admin\Models\AdminAction;
 use App\Domains\Driver\Enums\DriverProfileStatus;
+use App\Domains\Driver\Enums\VehicleTier;
+use App\Domains\Driver\Enums\VerificationLogAction;
 use App\Domains\Driver\Models\DriverProfile;
 use App\Domains\Driver\Models\Vehicle;
+use App\Domains\Driver\Models\VerificationLog;
 use App\Livewire\Admin\DriverApplications;
+use Illuminate\Database\Eloquent\MassAssignmentException;
 use Illuminate\Support\Facades\Storage;
 use Livewire\Livewire;
 
@@ -44,7 +48,7 @@ it('shows the applications that are waiting', function () {
 it('approves a driver and their vehicle together', function () {
     actingAsAdmin($this->reviewer);
 
-    Livewire::test(DriverApplications::class)
+    reviewCarOnPage(Livewire::test(DriverApplications::class))
         ->call('approve', $this->application->user_id)
         ->assertHasNoErrors();
 
@@ -58,6 +62,64 @@ it('approves a driver and their vehicle together', function () {
     expect($entry->admin_id)->toBe($this->reviewer->id)
         ->and($entry->old_value)->toBe(['status' => 'pending_review'])
         ->and($entry->new_value)->toBe(['status' => 'approved']);
+});
+
+/*
+|--------------------------------------------------------------------------
+| The car review (F2-6, F2-7; PROF-26, PROF-28)
+|--------------------------------------------------------------------------
+*/
+
+it('sets the approved seats, the Comfort badge and the AC on the car, and logs it', function () {
+    actingAsAdmin($this->reviewer);
+
+    reviewCarOnPage(Livewire::test(DriverApplications::class), seats: 4, tier: 'comfort', hasAc: true)
+        ->call('approve', $this->application->user_id)
+        ->assertHasNoErrors();
+
+    $vehicle = Vehicle::sole();
+
+    expect($vehicle->approved_seats)->toBe(4)
+        ->and($vehicle->tier)->toBe(VehicleTier::Comfort)
+        ->and($vehicle->has_ac)->toBeTrue();
+
+    $log = VerificationLog::query()->where('entity_type', 'vehicle')->sole();
+
+    expect($log->action)->toBe(VerificationLogAction::ReviewCar)
+        ->and($log->new_value)->toBe(['approved_seats' => 4, 'tier' => 'comfort', 'has_ac' => true]);
+});
+
+/**
+ * 🔴 A car without approved seats cannot publish and cannot be priced, so approving the driver
+ * without them would hand him an account that can do nothing.
+ */
+it('refuses to approve until every car has approved seats', function () {
+    actingAsAdmin($this->reviewer);
+
+    Livewire::test(DriverApplications::class)
+        ->call('approve', $this->application->user_id)
+        ->assertHasErrors('queue');
+
+    expect($this->application->refresh()->status)->toBe(DriverProfileStatus::PendingReview)
+        ->and(Vehicle::sole()->approved_seats)->toBeNull();
+});
+
+it('refuses fewer approved seats than the minimum, and leaves the car untouched', function () {
+    actingAsAdmin($this->reviewer);
+
+    // PROF-28: at least 3.
+    reviewCarOnPage(Livewire::test(DriverApplications::class), seats: 2)
+        ->call('approve', $this->application->user_id)
+        ->assertHasErrors('queue');
+
+    expect($this->application->refresh()->status)->toBe(DriverProfileStatus::PendingReview)
+        ->and(Vehicle::sole()->approved_seats)->toBeNull();
+});
+
+it('never lets the review fields be mass-assigned', function () {
+    // Not fillable, so no driver form can reach them: the tier and the approved seats ARE the price.
+    expect(fn () => Vehicle::sole()->fill(['approved_seats' => 7]))->toThrow(MassAssignmentException::class)
+        ->and(fn () => Vehicle::sole()->fill(['tier' => 'comfort']))->toThrow(MassAssignmentException::class);
 });
 
 it('rejects with a reason and records it', function () {
@@ -85,7 +147,7 @@ it('refuses to approve a licence that expired while waiting', function () {
 
     $this->application->forceFill(['licence_expiry' => now()->subDay()->toDateString()])->save();
 
-    Livewire::test(DriverApplications::class)
+    reviewCarOnPage(Livewire::test(DriverApplications::class))
         ->call('approve', $this->application->user_id)
         // A readable refusal rather than a blank page: this is a real "no", not a bug.
         ->assertHasErrors('queue');
@@ -112,7 +174,7 @@ it('lets operations decide, since approving drivers is their job', function () {
 
     actingAsAdmin($operations);
 
-    Livewire::test(DriverApplications::class)
+    reviewCarOnPage(Livewire::test(DriverApplications::class))
         ->call('approve', $this->application->user_id)
         ->assertHasNoErrors();
 

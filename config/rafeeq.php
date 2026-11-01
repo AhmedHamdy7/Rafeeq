@@ -186,6 +186,14 @@ return [
 
     'booking' => [
         /*
+         * DEPLOY-ONLY. Whether a seat may be requested with `paymentType: online` (P-4, PAY-01).
+         * The beta is cash only: there is no payment provider, so an online booking would be a
+         * promise of a collection nobody makes. Turned on in the release that ships a provider —
+         * a code change anyway, which is why this is not an admin setting.
+         */
+        'online_payments_enabled' => false,
+
+        /*
          * How long a seat request waits for an answer before expiring. A request
          * nobody answered is worse than a refusal: the passenger cannot look
          * elsewhere while it holds their one active request per commute.

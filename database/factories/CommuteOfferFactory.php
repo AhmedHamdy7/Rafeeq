@@ -34,7 +34,6 @@ class CommuteOfferFactory extends Factory
             'status' => CommuteOfferStatus::Draft,
             'direction' => CommuteDirection::ToWork,
             'seats_total' => 3,
-            'price_per_seat_piastres' => 8000,
             'max_detour_minutes' => 10,
             'max_walk_minutes' => 10,
             'audience' => CommuteAudience::WomenOnly,
@@ -50,6 +49,10 @@ class CommuteOfferFactory extends Factory
             'route_polyline' => '}_p~iF~ps|U_ulL',
             'route_distance_meters' => 32000,
             'route_duration_seconds' => 2880,
+            // The automatic price for 32 km in the factory's Standard, 3-seat car (PAY-42):
+            // share 80 EGP, commission max(8, 8) = 8, 88 → 90.
+            'seat_price_piastres' => 9000,
+            'driver_share_piastres' => 8000,
             'bbox_min_lat' => 30.02,
             'bbox_max_lat' => 30.08,
             'bbox_min_lng' => 31.20,
