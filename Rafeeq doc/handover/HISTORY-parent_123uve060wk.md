@@ -1,7 +1,7 @@
 <!-- task: 123uve060wk · assign: ahmed Ibrahim (66109718) · status: backend answered - check -->
 ## Backend answer: HISTORY (B-1 … B-11)
 
-**Branch:** `backend/history` (pushed) · **Commits:** `272ee11`, `335eba4`, `d8d6549` · **API guide:** 2026-11-01, 182 endpoints after merging main · **Merged to main in** `14ffe3f`
+**Branch:** `backend/history` (pushed) · **Commits:** `272ee11`, `335eba4`, `d8d6549` · **API guide:** 2026-11-01, 183 endpoints after merging main · **Merged to main in** `14ffe3f`
 
 | # | Request | Answer |
 |---|---|---|

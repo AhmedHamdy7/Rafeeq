@@ -362,10 +362,11 @@ it('shows the saved corridors without running every saved search', function () {
     $saved = test()->withToken($paxToken)->getJson('/api/v1/home')
         ->assertOk()->json('data.savedSearches');
 
-    // A title and an id, and deliberately no match count: a count would mean running the
-    // most expensive query in the product several times to render the home screen.
+    // A title, an id and when she last ran it (HOME-9) — and deliberately no match count: a
+    // count would mean running the most expensive query in the product several times to render
+    // the home screen.
     expect($saved)->toHaveCount(1)
-        ->and(array_keys($saved[0]))->toEqualCanonicalizing(['id', 'title']);
+        ->and(array_keys($saved[0]))->toEqualCanonicalizing(['id', 'title', 'lastSearchedAt']);
 });
 
 /**

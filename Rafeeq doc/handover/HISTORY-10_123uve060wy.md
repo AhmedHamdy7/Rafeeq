@@ -1,7 +1,7 @@
 <!-- task: 123uve060wy · assign: ahmed Ibrahim (66109718) · status: backend answered - check -->
 ## ✅ Backend answer: HISTORY-10 (B-10) is done
 
-**Branch:** `backend/history` · **Commit:** `d8d6549` · **New endpoint (182 total on main)** · **Merged to main in** `14ffe3f`
+**Branch:** `backend/history` · **Commit:** `d8d6549` · **New endpoint (183 total on main)** · **Merged to main in** `14ffe3f`
 
 ### What was built
 **`POST /incidents/{incident}/appeal`** `{ "reason": "10–1000 chars" }` → `201` with the report, now **`status: "APPEALED"`**.

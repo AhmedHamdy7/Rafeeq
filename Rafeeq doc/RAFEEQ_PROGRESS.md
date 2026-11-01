@@ -652,7 +652,7 @@ tests/Support/FakeOtpSender.php
 
 ## سجل التقدّم (الأحدث فوق)
 
-- **2026-11-01** — **بلاغاتي: استئناف القرار، وفلتر بالحجز، وتأكيد تفاصيل البلاغ (HISTORY-8، HISTORY-10، HISTORY-11). endpoint جديد — المجموع 182 بعد الدمج.**
+- **2026-11-01** — **بلاغاتي: استئناف القرار، وفلتر بالحجز، وتأكيد تفاصيل البلاغ (HISTORY-8، HISTORY-10، HISTORY-11). endpoint جديد — المجموع 183 بعد الدمج.**
 
   **HISTORY-10:** `POST /incidents/{incident}/appeal { reason }` — قاعدة D-0021: استئناف واحد، وتاني **بس بدليل جديد**، وبعدها نهائي، وكل واحد خلال **48 ساعة من القرار** (نفس إعداد `fees.appeal_hours` عشان كل الاستئنافات تمشي على رقم واحد). "دليل جديد" السيرفر بيتأكد منه بنفسه: عدد الملفات لازم يزيد عن وقت الاستئناف الأول (`incident_appeals.evidence_count`). البلاغ بيرجع **`APPEALED`** (حالة مفتوحة جديدة)، من غير ما يكون مع حد، وبـ SLA جديد على نفس سلّم الخطورة — عشان مايرجعش لنفس المراجع، ومايظهرش متأخر من أول لحظة. الرفض `422` بـ `error.fields.appeal`: `NOT_DECIDED` · `NO_APPEALS_LEFT` · `APPEAL_WINDOW_CLOSED` · `NEW_EVIDENCE_REQUIRED`. وبقى ممكن ترفع دليل على بلاغ اتقرر طول ما الاستئناف لسه متاح. كل قوائم "المفتوح" عند الأدمن (الطابور، العداد، بلاغات العضو) بقت بتقرا من `IncidentStatus::open()` بدل 4 نسخ مكتوبة باليد، والأدمن بيشوف سبب الاستئناف في صفحة الحالات.
 
@@ -669,6 +669,18 @@ tests/Support/FakeOtpSender.php
   **HISTORY-1:** كل حجز في `GET /my-bookings` و`GET /bookings/{booking}` بقى بيرجع `commuteId` و`originLabel` و`destinationLabel` و`driver` (شكل `person` — **الاسم الأول بس**، من غير اسم كامل ولا تليفون ولا user id). نقطة الركوب والنزول هما `meetingPoint`/`dropoffPoint` الموجودين، وبيفضلوا متقرّبين (~110م ومن غير label) لو الحجز مش مؤكد أو اتلغى. الحقول بتظهر بس لما الكنترولر يحمّل العلاقات (`BookingResource::historyRelations()`)، عشان باقي الـ endpoints اللي بترجع حجوزات ماتعملش query لكل صف.
 
   **HISTORY-9:** تصنيف جديد `safety_concern` بأولوية **high** (مهلة 4 ساعات)، بدل ما التطبيق يبعت `other` اللي أولويته medium. و`false_arrival` شغال فعلًا (medium). الاختبارات: `BookingHistoryFieldsTest`، `TripReportsTest`.
+- **2026-11-01** — **الـ Home بتاع الراكبة بقى بيغطّي كل حالاتها (HOME-1 → HOME-10، F3P-01 → F3P-11)، وكله إضافي.**
+
+  **أنهي رحلة على الكارت (HOME-1):** الأول اللي بتحصل دلوقتي (الرحلة بدأت، أو ميعاد التحرك عدّى والسواق مابدأش — النهارده بس)، بعدين رحلة **خلصت عليها النهارده** (السواق لغاها، اتقفلت لأنه ما جاش، هي خرجت بسبب التأخير، أو اكتملت ولسه ماقيّمتش) لحد آخر اليوم بتوقيت القاهرة، بعدين أقرب رحلة جاية زي ما كان، وفي الآخر رحلة مكتملة مستنية تقييمها جوّه مهلة التقييم — **بس لو مفيش حاجة جاية**، عشان تقييم من أربع أيام مايخبّيش ركوبة بكرة.
+
+  **`phase` (HOME-2):** السيرفر بيسمّي الحالة: `scheduled` · `driver_en_route` · `driver_arrived` · `on_board` · `driver_delayed` · `cancelled_by_driver` · `expired` · `exited` · `completed`. **كله متقري من اللي الرحلة سجّلته فعلًا** — الوصول من `trip_wait_timers.arrived_at` (وصول السواق المتأكد بالـ GPS)، الركوب من `attendance.checked_in_at`، والخروج من حالة الحجز. اليوم اللي اتقفل لأن السواق ما بدأش مكتوب على الحجز `exited_due_to_driver_delay` بسبب `trip_expired`، والكارت بيقول `expired` مش "إنتي خرجتي".
+
+  **الكارت (HOME-3 → HOME-7):** `daysMask`، و`pickup` (المكان بنفس قاعدة `meetingPoint`، **ووقتها** = التحرك + المسافة لنقطتها — نفس اللحظة اللي مهلة الانتظار بتتحسب منها؛ اتنقل الحساب لـ `PickupTime` عشان الاتنين مايختلفوش)، و`dropoff` بالوصول الموعود لليوم، و`live` (الـ ETA من آخر نقطة العربية وصلتلها + مدد المقاطع المقاسة، عمره ما يبقى في الماضي، ومفيش ETA لو مفيش itinerary — مفيش أرقام مخترعة)، و`canLeaveWithoutFee` بنفس حكم `POST /bookings/{booking}/exit-without-fee`، و`endedAt` + أول اتنين من `GET /bookings/{booking}/alternatives` (كاش 5 دقايق لأن الـ Home بيتعمله polling)، و`completedAt` + `canRate` بنفس قواعد `GET /ratings/pending`.
+
+  **تحت الكارت (HOME-8 → HOME-10):** `demandAlert` (الطلب اللي عنده أكتر matches **ماتفتحتش**)، و**endpoint جديد `POST /matches/{match}/opened`** — `clicked_at` كان في السكيمة من الأول ومحدش بيكتبه، فمن غيره العدد عمره ما كان هينزل. و`topMatches[]` خدت `demandTitle` و`seatsAvailable` و`driver.completedTrips` (جوّه الـ Home بس، `GET /matches` زي ما هو)، و`savedSearches[]` خدت `lastSearchedAt` من سجل البحث بنفس الـ signature، و`unreadNotifications` بنفس عدّاد الإنبوكس. **182 endpoint.**
+
+  **مفتوح لعمر:** نوافذ "لحد ما تشوفها" متقدّرة بالوقت مش متتبّعة؛ والـ polling كل 30 ثانية.
+
 - **2026-11-01** — **توثيق السواق بقى بأي ترتيب، والسيلفي إجباري، ورخصة العربية وشّين، وكل قرار بإشعار (F2-1، F2-2، F2-4، F2-14، F2-15).**
 
   **أي ترتيب (F2-1، PROF-13، E1):** الطلب والرخصة والعربية ومستنداتها **مابقوش محتاجين بطاقة متوافق عليها** — اتشال `verified:government_id` من كل مسارات `/driver/application` و`/driver/vehicles`، و`identity_not_verified` مابقاش blocker. الـ submit هو اللي بيجمع الخمسة: البطاقة والسيلفي لازم يكونوا **اتبعتوا** (pending أو approved) و`missing[]` بيسمّيهم. النشر لسه وراه البطاقة.

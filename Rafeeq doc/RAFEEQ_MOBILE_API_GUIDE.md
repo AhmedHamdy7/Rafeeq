@@ -14,7 +14,7 @@
 >
 > **Base URL:** `{host}/api/v1` · **Auth:** bearer token · **Format:** JSON only.
 
-**Last updated:** 2026-11-01 · **182 endpoints live** · Phases 0–7, 9 and 11 complete · 10, 12 and 13 all but a decision each
+**Last updated:** 2026-11-01 · **183 endpoints live** · Phases 0–7, 9 and 11 complete · 10, 12 and 13 all but a decision each
 
 ---
 
@@ -22,7 +22,7 @@
 
 ### What is ready
 
-**182 endpoints live** and tested, across the 47 designed screens:
+**183 endpoints live** and tested, across the 47 designed screens:
 
 | | Count | Covers |
 |---|---|---|
@@ -587,7 +587,7 @@ Status: ✅ fully served · ⚠️ served, something named missing · ⛔ no API
 
 | # | Screen | Endpoints | Status |
 |---|---|---|---|
-| 9 | **Home** | **`GET /home`** | ✅ One call: greeting, verification banner, next journey, top matches, saved corridors. The check-in button belongs to screen 36. |
+| 9 | **Home** | **`GET /home`** | ✅ One call: greeting, bell badge, verification banner, next journey with its `phase` (every state F3P-01 → F3P-11: live progress, driver delayed, ended with alternatives, completed → rate), demand alert, top matches, saved corridors. **Leave Without Fee** → `POST /bookings/{booking}/exit-without-fee`; tapping a match → `POST /matches/{match}/opened`. The check-in button belongs to screen 36. |
 | 10 | Discover | `GET /search/commutes` | ⚠️ Vehicle, score and breakdown, walk and detour, commitment, seats, rules, rating and badges — all there. **Missing: `why[]`**, the match-reason chips. |
 | 11 | Filters | local + `POST /saved-searches` | ⚠️ The **minimum-rating** filter has no data behind it until ratings exist (Phase 10). |
 | 12 | **Match details** | `GET /search/commutes` | ⚠️ Rating and badges ✅. **Missing: the price breakdown** (route contribution ÷ passengers + platform fee) — blocked on an open money decision, section 8 — and **reviews** (Phase 10). |
@@ -741,6 +741,7 @@ fails if this list and the running routes ever disagree in either direction.
 | `PATCH /commute-demands/{demand}` | 4.6 Search, demands, saved searches |
 | `DELETE /commute-demands/{demand}` | 4.6 Search, demands, saved searches |
 | `GET /matches` | 4.6 Search, demands, saved searches |
+| `POST /matches/{match}/opened` | 4.6 Search, demands, saved searches |
 | `GET /places` | 4.6 Search, demands, saved searches |
 | `GET /saved-searches` | 4.6 Search, demands, saved searches |
 | `POST /saved-searches` | 4.6 Search, demands, saved searches |
@@ -1845,7 +1846,16 @@ Commutes found for the caller's demands, newest first.
 | `originLabel` / `destinationLabel` | Where it goes. Origin and destination only — the intermediate stops are other passengers' meeting points. |
 | `departureTimeLocal` / `timezone` | Local wall clock plus zone. |
 | `pricePerSeatPiastres`, `audience`, `driver`, `vehicle` | As on a search result, with the same restraint. |
-| `deliveredAt` / `clickedAt` | Set once notifications exist (Phase 12). `null` today. |
+| `deliveredAt` / `clickedAt` | `deliveredAt` is set once notifications exist (Phase 12). `clickedAt` is when she first opened the match — see below. |
+
+#### `POST /matches/{match}/opened` — active, profile complete
+
+**Call it when she taps a match** (a `topMatches[]` row on Home, or a row of `GET /matches`). No body.
+Stamps `clickedAt` the first time and returns the match; a second call changes nothing. `404` for a
+match that is not on one of her own demands.
+
+🔴 **This is what makes Home's `demandAlert.newMatchesCount` go down.** "New" means "not opened yet";
+without this call every match stays new forever.
 
 #### `GET` / `POST` / `DELETE /saved-searches/{search}` — active, profile complete
 
@@ -3236,12 +3246,23 @@ they explain.
 |---|---|
 | `greetingName` | Their public first name. |
 | `verification` | `{level, of, percentage, isComplete}` — the same numbers as the Verification Centre, so the banner cannot disagree with the screen behind it. |
-| `nextJourney` | The soonest journey that has not finished, or **`null`**. Contains the full booking (4.7) plus `originLabel`, `destinationLabel`, `departureAt`, `departureLocal`, `departsInMinutes`, `isToday`, `attendance`, `isTrial`, `driver` (5.1), `vehicle`. |
+| `unreadNotifications` | The bell badge: the same number as `GET /notifications` → `meta.unreadCount`, so Home is one request. |
+| `nextJourney` | The journey the card is about, or **`null`** (F3P-01). Contains the full booking (4.7) plus `originLabel`, `destinationLabel`, `departureAt`, `departureLocal`, `departsInMinutes`, `isToday`, `attendance`, `isTrial`, `driver` (5.1), `vehicle`, and the state fields below. **Which journey**, the first that exists: ① the one **happening now** (run started, or departure passed and the driver has not started — today only); ② one that **ended on her today** — cancelled by the driver, expired, she left for a driver delay, or completed and not yet rated — until the end of that day (Cairo); ③ the **soonest upcoming** one (what this always was); ④ a **completed ride still waiting for her stars**, inside the rating window, only when nothing is upcoming. A ride she cancelled herself is not shown. |
+| `nextJourney.phase` | **The state the card switches on**, decided by the server: `scheduled` (F3P-02/03; also a `PENDING` booking) · `driver_en_route` (F3P-04, the run has started) · `driver_arrived` (F3P-05, the driver's GPS-checked "I've arrived" for her) · `on_board` (F3P-06, she is checked in and not yet dropped off) · `driver_delayed` (F3P-07, departure has passed and the run has not started) · `cancelled_by_driver` (F3P-08) · `expired` (F3P-09, the driver never started and the day was closed) · `exited` (F3P-10, she pressed Leave Without Fee) · `completed` (F3P-11). `status` and `trip.status` are unchanged — switch on `phase`, not on them. |
+| `nextJourney.daysMask` | The days she rides — her requested days, or the commute's days. Sat 1 … Fri 64. |
+| `nextJourney.pickup` | `{label, at, local, lat, lng, isExact}` — "Your agreed pickup · Rehab Gate 2 · 07:05". `label`/`lat`/`lng`/`isExact` are `meetingPoint`'s (fuzzed, label `null`, until confirmed). **`at` is her pickup time** — departure plus the drive to her stop — and is the same instant her arrival grace counts from. `meetingPoint` stays. |
+| `nextJourney.dropoff` | `{label, promisedArrivalAt, promisedArrivalLocal}`. The promise is the day's; `null` when the driver promised no arrival. |
+| `nextJourney.live` | `{pickupEtaAt, arrivalEtaAt, progressPercent, driverArrivedAt, boardedAt}`, **only** while `phase` is `driver_en_route` / `driver_arrived` / `on_board`; `null` otherwise. `pickupEtaAt` + `progressPercent` (to her pickup) on en-route; `driverArrivedAt` and `progressPercent: 100` on arrived; `arrivalEtaAt` + `progressPercent` (to her drop-off) + `boardedAt` on board. ETAs are counted from the last stop the car reached plus the itinerary's measured leg times, never in the past; `null` when no itinerary was built. `progressPercent` stops at 99 until the car is recorded there. **Poll `/home` every 30 s while `live` is not null**, and not otherwise. |
+| `nextJourney.canLeaveWithoutFee` | Show **Leave Without Fee** only when `true`. It calls `POST /bookings/{booking}/exit-without-fee` (4.9) — the same server finding, so it is never refused when this is `true`. Also `true` mid-run when the car has passed her stop without collecting her. |
+| `nextJourney.endedAt` | When it was cancelled / expired / she exited; `null` otherwise. With `cancellationFeePiastres` (`0` → "no fee to you" / "no penalty"). |
+| `nextJourney.alternatives[]` | Up to 2, **only** on `cancelled_by_driver` / `expired` / `exited`, else `[]`: `{commuteId, tripId, departureAt, departureLocal, originLabel, destinationLabel, seatsAvailable, driver{publicFirstName}}`. The first two of `GET /bookings/{booking}/alternatives` (refreshed every 5 min); suggestions, nothing booked. "Find Alternative" opens that endpoint for the full list. |
+| `nextJourney.completedAt` · `canRate` | F3P-11: when she was set down, and whether **Rate** shows (`false` once she rated or the window closed). Rating is `POST /bookings/{booking}/rating` (4.13). |
 | `nextJourney.attendance` | `{coming, away, awaiting, total}` — **four counts, not "2 of 3"**. Somebody who said they are away and somebody who has not answered are not the same person to a driver deciding whether to wait, so the server does not collapse them. `total` includes the driver. |
 | `nextJourney.vehicle` | `make`, `model`, `colour`, `seats`, and `plateNumber` **only when the booking is confirmed**. |
 | `nextJourney.meetingPoint` | `null` means the standard point — which is the run's own origin, already in `originLabel`. A non-null value is a specifically agreed pickup. |
-| `topMatches[]` | Up to 3, **ordered by score** rather than recency. Same shape as `GET /matches`. |
-| `savedSearches[]` | Up to 5 — `{id, title}`. **No match count**: that would mean running the most expensive query in the product several times per home load. |
+| `demandAlert` | "**3** new commutes match your demand" — `{demandId, newMatchesCount, originLabel, destinationLabel, daysMask, arrivalTimeLocal, arrivalWindowEndLocal}` for the active demand with the most **unopened** matches, or `null` (no card). Opened = `POST /matches/{match}/opened`. Hide it on F3P-01 yourself if the design says so; the server sends it whenever there is news. |
+| `topMatches[]` | Up to 3, **ordered by score** rather than recency. Same shape as `GET /matches`, plus three Home-only fields: `demandTitle` ("New Cairo → Smart Village", `null` if the demand has no labels → "Matches your demand"), `seatsAvailable` (on the commute's soonest open day; `null` if none), `driver.completedTrips` (`0` → "New driver"). |
+| `savedSearches[]` | Up to 5 — `{id, title, lastSearchedAt}`. `lastSearchedAt` is when she last ran that exact search ("You searched this on Tuesday"), `null` if not since saving. **No match count**: that would mean running the most expensive query in the product several times per home load. |
 
 #### `GET /driver/home` — signed-in
 
@@ -4250,10 +4271,11 @@ exist, and every live endpoint must be named here.
 
 | Date | Change |
 |---|---|
-| 2026-11-01 | 🧾 **My reports (HISTORY-8, HISTORY-10, HISTORY-11).** New **`POST /incidents/{incident}/appeal`** `{ reason }` — one appeal, a second only with a new file, 48 hours from the decision (D-0021); the report becomes **`APPEALED`** and goes back to the queue; refusals are `422` with `error.fields.appeal` (`NOT_DECIDED` · `NO_APPEALS_LEFT` · `APPEAL_WINDOW_CLOSED` · `NEW_EVIDENCE_REQUIRED`). Reports now carry `appeal { count, appealableUntil, needsNewEvidence }`, and evidence can be added to a decided report while it can still be appealed. `GET /incidents?bookingId=` filters to one journey. Confirmed: `id` and `createdAt` on every report, newest first, a late report is `409 REPORT_WINDOW_CLOSED`; `evidenceCount` on the list was always `0` and is fixed. 182 endpoints. |
+| 2026-11-01 | 🧾 **My reports (HISTORY-8, HISTORY-10, HISTORY-11).** New **`POST /incidents/{incident}/appeal`** `{ reason }` — one appeal, a second only with a new file, 48 hours from the decision (D-0021); the report becomes **`APPEALED`** and goes back to the queue; refusals are `422` with `error.fields.appeal` (`NOT_DECIDED` · `NO_APPEALS_LEFT` · `APPEAL_WINDOW_CLOSED` · `NEW_EVIDENCE_REQUIRED`). Reports now carry `appeal { count, appealableUntil, needsNewEvidence }`, and evidence can be added to a decided report while it can still be appealed. `GET /incidents?bookingId=` filters to one journey. Confirmed: `id` and `createdAt` on every report, newest first, a late report is `409 REPORT_WINDOW_CLOSED`; `evidenceCount` on the list was always `0` and is fixed. 183 endpoints after merging main. |
 | 2026-11-01 | ⭐ **Rating edits (HISTORY-5 → HISTORY-7).** `PATCH /ratings/{rating}` changes only the fields sent: `"comment": null` clears it, a left-out `comment`/`tags`/`stars` is unchanged (before, a left-out comment was wiped and `stars` was required). Confirmed and pinned: stars-only `canceled_booking` feedback → `201`, a comment or tags on it → `422 VALIDATION_FAILED` on the field; rateable = `COMPLETED`, `ENDED_EARLY`, and the passenger's feedback on `CANCELLED_BY_DRIVER` — every other status `422 TRIP_NOT_RATEABLE`. No delete endpoint (B-3). |
 | 2026-11-01 | 🧾 **Trips history (HISTORY-2, HISTORY-4).** `GET /my-bookings?scope=past` (finished, newest journey first) and `?scope=upcoming` (open, soonest first), paged on the filtered list; no `scope` is unchanged. Every booking on `/my-bookings` and `/bookings/{booking}` carries `myRating` — your own rating or `null`, never the other side's. A rating's `editableUntil` now matches what `PATCH` accepts: `null` once the deadline passed, and kept on visible `canceled_booking` feedback. |
 | 2026-11-01 | 🧾 **Trips history (HISTORY-1, HISTORY-9).** Every booking on `GET /my-bookings` and `GET /bookings/{booking}` now carries `commuteId`, `originLabel`, `destinationLabel` and `driver` (a `person`, first name only); the pickup and drop-off are the existing `meetingPoint`/`dropoffPoint`, fuzzed unless confirmed. New report category **`safety_concern`**, ranked **high**; `false_arrival` is live. |
+| 2026-11-01 | 🏠 **Home covers every passenger state (HOME-1 → HOME-10), additively.** `nextJourney` now also returns a journey that **ended on her today** (cancelled by the driver, expired, exited, completed-not-rated) and a past ride awaiting her rating when nothing is upcoming. New on it: **`phase`** (`scheduled` · `driver_en_route` · `driver_arrived` · `on_board` · `driver_delayed` · `cancelled_by_driver` · `expired` · `exited` · `completed`), `daysMask`, `pickup{label, at, local, lat, lng, isExact}`, `dropoff{label, promisedArrivalAt, promisedArrivalLocal}`, `live{…}` (poll every 30 s while not null), `canLeaveWithoutFee` (→ `POST /bookings/{booking}/exit-without-fee`), `endedAt`, `alternatives[]` (≤ 2), `completedAt`, `canRate`. New on `/home`: `unreadNotifications`, `demandAlert`; on `topMatches[]`: `demandTitle`, `seatsAvailable`, `driver.completedTrips`; on `savedSearches[]`: `lastSearchedAt`. **One new endpoint, `POST /matches/{match}/opened`** — call it when she taps a match, or `demandAlert.newMatchesCount` never goes down. Nothing existing changed meaning. |
 | 2026-11-01 | 🚗 **Driver verification: any order, selfie required, registration sides, and per-item notices (F2-1, F2-2, F2-4, F2-14, F2-15).** The application, licence and vehicle endpoints **no longer need an approved ID** — the five items go in any order as drafts; `identity_not_verified` is gone from `GET /driver/eligibility`. Submit needs all five sent (`missing[]` can now list `government_id` and `selfie`); staff approval needs the ID **and selfie** approved. New vehicle document types `registration_front` / `registration_back` (the single `registration` still counts); insurance and inspection never block. Notifications (driver only): `driver_item_approved`, `driver_item_rejected` (`itemKey`, `rejectionReason`), `driver_verified` (once; **replaces** `driver_documents_approved`), `driver_item_expiring` (**replaces** `licence_expiring`) (4.4, 4.14). |
 | 2026-11-01 | 🗑️ **Account deletion, the store-review sign-in, and the SMS transport (F1-4, F1-1, F1-6).** New: `GET /account/deletion` (may she delete, and why not) and `DELETE /account` — refused with `409 ACCOUNT_HAS_DEBT` / `409 ACCOUNT_HAS_TRIP_IN_FEE_WINDOW`; otherwise her trips are cancelled for free, every session ends, and she is anonymised (4.2). Public web page `{host}/delete-account` for Google Play. Server-side only: one store-review number with a fixed code works in production (`RAFEEQ_REVIEW_PHONE` / `RAFEEQ_REVIEW_OTP`, nothing for the app to build), and a real SMS transport is ready for the provider (`RAFEEQ_OTP_DRIVER=http`). |
 | 2026-11-01 | ❓ **"Did you ask to get off here?" (TRIP-20, PAY-28)** — new `POST /bookings/{booking}/early-drop` and the `early_drop_check` notification; bookings now return `feeLinePiastres`, `feeLineReason` and `earlyDrop`. A `false_arrival` report puts her no-show on that booking under review (TRIP-17). Staff now settle the money of payment disputes (PAY-31, PAY-32) and women-only misuse (PAY-47, the man is suspended until he pays) from the safety desk. |
