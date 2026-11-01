@@ -55,12 +55,32 @@ final class RatingResource extends JsonResource
              * Until when this may still be changed, or null once it cannot. Null covers both
              * reasons — the clock ran out, or it became visible — because the client's behaviour is
              * the same either way and distinguishing them would hint at the other person's.
+             *
+             * 🔴 The same two conditions `SubmitRatingAction::update()` enforces, read off the same
+             * facts (HISTORY-4: the app shows Edit only while this is set). It used to differ twice:
+             * a deadline that had passed was still returned, so Edit showed and the PATCH failed; and
+             * cancelled-seat feedback, which is visible at once AND editable, came back null, so a
+             * rating the server would let her fix had no Edit at all.
              */
-            'editableUntil' => $this->isVisible() ? null : $this->edit_deadline_at?->toIso8601String(),
+            'editableUntil' => $this->editableUntil(),
 
             'editedAt' => $this->edited_at?->toIso8601String(),
             'createdAt' => $this->created_at->toIso8601String(),
         ];
+    }
+
+    private function editableUntil(): ?string
+    {
+        // Visibility locks only a rating that has a counterpart to read — see SubmitRatingAction.
+        if ($this->isVisible() && $this->kind->isDoubleBlind()) {
+            return null;
+        }
+
+        if ($this->edit_deadline_at === null || $this->edit_deadline_at->isPast()) {
+            return null;
+        }
+
+        return $this->edit_deadline_at->toIso8601String();
     }
 
     /**

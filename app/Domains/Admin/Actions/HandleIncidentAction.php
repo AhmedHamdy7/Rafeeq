@@ -57,7 +57,8 @@ final readonly class HandleIncidentAction
             $incident->assigned_admin_id = $admin->id;
 
             // Escalated stays escalated: changing who holds it is not a step down.
-            if ($incident->status === IncidentStatus::Open) {
+            // An appealed case is taken the same way a new one is (HISTORY-10).
+            if ($incident->status === IncidentStatus::Open || $incident->status === IncidentStatus::Appealed) {
                 $incident->status = IncidentStatus::UnderReview;
             }
 

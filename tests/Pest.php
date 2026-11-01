@@ -13,12 +13,15 @@ use App\Domains\Driver\Enums\VehicleTier;
 use App\Domains\Driver\Models\DriverProfile;
 use App\Domains\Driver\Models\Vehicle;
 use App\Domains\Identity\Contracts\OtpSender;
+use App\Domains\Identity\Enums\Gender;
+use App\Domains\Identity\Models\User;
 use App\Domains\Payment\Enums\DebtEntryType;
 use App\Domains\Payment\Enums\DebtSide;
 use App\Domains\Payment\Models\DebtEntry;
 use App\Domains\Payment\Support\DebtLedger;
 use App\Domains\Payment\Support\SettlementWeek;
 use App\Domains\Shared\ValueObjects\DaysMask;
+use App\Domains\Shared\ValueObjects\PhoneNumber;
 use App\Domains\Verification\Actions\ReviewVerificationAction;
 use App\Domains\Verification\Enums\VerificationStatus;
 use App\Domains\Verification\Enums\VerificationType;
@@ -381,12 +384,21 @@ function passenger(string $phone, string $gender = 'woman', string $device = 'pa
 
     $token = signIn(phone: $phone, devicePublicId: $device)['session']['accessToken'];
 
+    // `prefer_not_to_say` is refused on new input (F1-2), so a legacy account is made the way
+    // one exists today: an older row the API no longer writes.
+    $legacy = $gender === Gender::PreferNotToSay->value;
+
     test()->withToken($token)->putJson('/api/v1/account/profile/basic', [
         'fullName' => 'سارة محمود',
-        'gender' => $gender,
+        'gender' => $legacy ? Gender::Woman->value : $gender,
         'registeredRole' => 'passenger',
         'dateOfBirth' => '1995-03-10',
     ])->assertOk();
+
+    if ($legacy) {
+        User::query()->where('phone_e164', PhoneNumber::fromRaw($phone)->e164)
+            ->update(['gender' => Gender::PreferNotToSay->value]);
+    }
 
     return $token;
 }

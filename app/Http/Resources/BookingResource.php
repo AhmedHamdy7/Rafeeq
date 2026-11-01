@@ -6,6 +6,8 @@ use App\Domains\Booking\Enums\BookingStatus;
 use App\Domains\Booking\Models\Booking;
 use App\Domains\Booking\Support\PickupEta;
 use App\Domains\Geo\Contracts\GeoQueryEngine;
+use App\Domains\Identity\Models\User;
+use App\Domains\Rating\Models\Rating;
 use App\Domains\Safety\Support\OtherParty;
 use App\Domains\Trip\Support\DriverDelay;
 use Carbon\CarbonImmutable;
@@ -46,6 +48,42 @@ final class BookingResource extends JsonResource
             'id' => $this->id,
             'tripId' => $this->scheduled_trip_id,
             'commuteGroupId' => $this->commute_group_id,
+
+            /*
+             * HISTORY-1: where the journey went and who drove, on every booking of the passenger's
+             * own lists — so a History card on a recurring commute is not ten identical rows of a
+             * date and a price. The same facts `GET /home` already gives `nextJourney`.
+             *
+             * Each one appears only when the caller loaded what it is read from, rather than being
+             * fetched here. A booking resource that lazy-loaded a commute, its locations and a
+             * driver's stats per row would turn every list in the API that returns bookings into a
+             * query per row; the lists that want the history fields ask for them.
+             */
+            'commuteId' => $this->when(
+                $this->resource->relationLoaded('scheduledTrip') && $this->scheduledTrip !== null,
+                fn (): ?string => $this->scheduledTrip->commute_offer_id,
+            ),
+            'originLabel' => $this->when(
+                $this->routeLoaded(),
+                fn (): ?string => JourneyCard::route($this->scheduledTrip->commuteOffer)['originLabel'],
+            ),
+            'destinationLabel' => $this->when(
+                $this->routeLoaded(),
+                fn (): ?string => JourneyCard::route($this->scheduledTrip->commuteOffer)['destinationLabel'],
+            ),
+
+            /*
+             * The driver, as a `person` (§5.1): public first name, badges and numbers.
+             *
+             * 🔒 Never a full name, a phone or a user id — `PersonSummary` is the one place that
+             * line is drawn. Blocking needs the id, and that is `otherPartyUserId` below, which has
+             * its own rule about when it may appear.
+             */
+            'driver' => $this->when(
+                $this->resource->relationLoaded('driverProfile'),
+                fn (): ?array => $this->driverCard($request),
+            ),
+
             'status' => strtoupper($this->status->value),
             'seatsReserved' => $this->seats_reserved,
 
@@ -174,6 +212,19 @@ final class BookingResource extends JsonResource
                 fn (): ?string => PickupEta::local($this->scheduledTrip, $this->pickupEta()),
             ),
 
+            /*
+             * HISTORY-4: what the CALLER wrote about this journey, in the shape
+             * `POST /bookings/{booking}/rating` answers with — or null when they have not rated.
+             *
+             * 🔒 Only ever the caller's own. Never the other person's, never whether one exists:
+             * double-blind is unchanged, and the relation is loaded constrained to the viewer (see
+             * `historyRelations()`), so the other rating is not even in memory here.
+             */
+            'myRating' => $this->when(
+                $this->resource->relationLoaded('ratings'),
+                fn (): ?array => $this->myRating($request),
+            ),
+
             'trip' => new ScheduledTripResource($this->whenLoaded('scheduledTrip')),
         ];
     }
@@ -199,9 +250,83 @@ final class BookingResource extends JsonResource
         return $this->pickupEtaValue;
     }
 
+    /**
+     * What `pickupEta` reads (DISCOVER-14): the day's stops and its commute, loaded once for a
+     * page rather than one query per row.
+     *
+     * @return array<int, string>
+     */
+    public static function pickupEtaRelations(): array
+    {
+        return ['scheduledTrip.navigationStops', 'scheduledTrip.commuteOffer'];
+    }
+
     private bool $pickupEtaResolved = false;
 
     private ?CarbonImmutable $pickupEtaValue = null;
+
+    /**
+     * Relations every booking list that shows a History card loads (HISTORY-1). Kept beside the
+     * fields they feed, so a controller asking for them cannot forget the one the driver's badges
+     * need and silently get a badge row that is always empty.
+     *
+     * 🔒 `ratings` is loaded CONSTRAINED to the viewer's own (HISTORY-4). The other person's rating
+     * is not filtered out of the payload afterwards — it is never read from the database in the first
+     * place, so no later edit to this class can leak it before the reveal (pitfall #26).
+     *
+     * @return array<int|string, mixed>
+     */
+    public static function historyRelations(User $viewer): array
+    {
+        return [
+            'scheduledTrip.commuteOffer.locations',
+            'driverProfile.user.stats',
+            'driverProfile.user.verifications',
+            'ratings' => fn ($query) => $query->where('reviewer_user_id', $viewer->id)->with('tags'),
+        ];
+    }
+
+    /**
+     * @return array<string, mixed>|null
+     */
+    private function myRating(Request $request): ?array
+    {
+        $viewerId = $request->user()?->id;
+
+        // Matched again on the reviewer, on top of the constrained load: a caller who loaded
+        // `ratings` unconstrained must still get nothing but their own.
+        $own = $this->ratings->first(fn (Rating $rating): bool => $rating->reviewer_user_id === $viewerId);
+
+        return $own === null ? null : (new RatingResource($own))->toArray($request);
+    }
+
+    private function routeLoaded(): bool
+    {
+        return $this->resource->relationLoaded('scheduledTrip')
+            && $this->scheduledTrip !== null
+            && $this->scheduledTrip->relationLoaded('commuteOffer')
+            && $this->scheduledTrip->commuteOffer !== null
+            && $this->scheduledTrip->commuteOffer->relationLoaded('locations');
+    }
+
+    /**
+     * @return array<string, mixed>|null
+     */
+    private function driverCard(Request $request): ?array
+    {
+        $driver = $this->driverProfile;
+
+        if ($driver === null || ! $driver->relationLoaded('user') || $driver->user === null) {
+            return null;
+        }
+
+        return [
+            ...PersonSummary::for($driver->user, $request->user(), asDriver: true),
+            // From the driver profile, as on `nextJourney`: the profile's counter is the one
+            // publishing keeps current (see MatchResultResource).
+            'completedTrips' => (int) $driver->completed_trips_count,
+        ];
+    }
 
     /**
      * @return array<string, mixed>|null

@@ -10,4 +10,7 @@ enum SafetyEventType: string
     case IncidentCreated = 'incident_created';
     case EscortArmed = 'escort_armed';
     case AdminIntervention = 'admin_intervention';
+
+    /** The reporter appealed the decision on her report (HISTORY-10). */
+    case IncidentAppealed = 'incident_appealed';
 }

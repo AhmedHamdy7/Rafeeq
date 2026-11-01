@@ -42,6 +42,7 @@ final class AdminActionLog
         'verification.request_info',
         'driver.reject',
         'account.suspend',
+        'account.suspension_appeal_decide',
         'account.reactivate',
         'commute.unpublish',
         'booking.refund',

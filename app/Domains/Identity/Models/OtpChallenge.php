@@ -33,6 +33,7 @@ class OtpChallenge extends Model
             'purpose' => OtpPurpose::class,
             'status' => OtpStatus::class,
             'expires_at' => 'datetime',
+            'locked_until' => 'datetime',
             'verified_at' => 'datetime',
             'attempt_count' => 'integer',
             'max_attempts' => 'integer',

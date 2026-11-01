@@ -1,5 +1,6 @@
 <?php
 
+use App\Domains\Driver\Enums\Transmission;
 use App\Domains\Driver\Enums\VehicleVerificationStatus;
 use App\Domains\Driver\Models\Vehicle;
 use App\Domains\Driver\Models\VehicleDocument;
@@ -262,4 +263,29 @@ it('replaces a re-uploaded document instead of leaving a reviewer two', function
         // the disk as well as the table. An orphan is a document no purge job
         // will ever find.
         ->and(app(DocumentStorage::class)->disk()->allFiles())->toHaveCount($before + 1);
+});
+
+/**
+ * Follow-up F2-5: `transmission` is `manual` or `automatic`, nothing else.
+ */
+it('takes the transmission as manual or automatic', function () {
+    $vehicle = addVehicle($this->token, ['transmission' => 'automatic'])->assertStatus(201)->json('data');
+
+    expect($vehicle['transmission'])->toBe('automatic')
+        ->and(Vehicle::sole()->transmission)->toBe(Transmission::Automatic);
+
+    test()->withToken($this->token)
+        ->patchJson("/api/v1/driver/vehicles/{$vehicle['id']}", ['transmission' => 'manual'])
+        ->assertOk()
+        ->assertJsonPath('data.transmission', 'manual');
+});
+
+it('refuses any other transmission', function (string $value) {
+    addVehicle($this->token, ['transmission' => $value])
+        ->assertStatus(422)
+        ->assertJsonStructure(['error' => ['fields' => ['transmission']]]);
+})->with(['cvt', 'Automatic', 'auto']);
+
+it('still takes a car with no transmission given', function () {
+    addVehicle($this->token)->assertStatus(201)->assertJsonPath('data.transmission', null);
 });

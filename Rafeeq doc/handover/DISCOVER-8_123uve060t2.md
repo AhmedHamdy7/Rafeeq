@@ -1,7 +1,7 @@
 <!-- task: 123uve060t2 · assign: ahmed Ibrahim (66109718) · status: backend answered - check -->
 ## ✅ Backend done: DISCOVER-8 Recent searches: place labels + delete one
 
-Branch `claude/backend-discover-d822cb`, commit `70bd6b8`. **Merged to `main`** in `257cd97`. Guide 2026-11-01 (184 endpoints). Tests: `tests/Feature/Search/DiscoverGapsTest.php`.
+Branch `claude/backend-discover-d822cb`, commit `70bd6b8`. **Merged to `main`** in `257cd97`. Guide 2026-11-01 (186 endpoints). Tests: `tests/Feature/Search/DiscoverGapsTest.php`.
 
 - Send optional `origin[label]`, `origin[placeId]`, `destination[label]`, `destination[placeId]` with `GET /search/commutes`. They change nothing in the search and are stored on the recent search. Without a label, the nearest catalogue place within 500 m names the end, else it stays `null`.
 - New: **`DELETE /me/recent-searches/{search}`** → `{ "deleted": true }`; somebody else's id → `404`. Clear All (`DELETE /me/recent-searches`) is unchanged.

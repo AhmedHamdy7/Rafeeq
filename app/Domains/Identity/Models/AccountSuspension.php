@@ -12,6 +12,7 @@ use Illuminate\Database\Eloquent\Concerns\HasUlids;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 
 /**
  * A time staff put an account on hold. See the migration for why it is its own table.
@@ -29,6 +30,7 @@ class AccountSuspension extends Model
     {
         return [
             'reason_code' => SuspensionReason::class,
+            'is_permanent' => 'boolean',
             'suspended_at' => 'datetime',
             'review_due_at' => 'datetime',
             'lifted_at' => 'datetime',
@@ -53,6 +55,14 @@ class AccountSuspension extends Model
     public function liftedBy(): BelongsTo
     {
         return $this->belongsTo(AdminUser::class, 'lifted_by_admin_id');
+    }
+
+    /**
+     * Her appeals against this hold, oldest first (F1-3). At most two.
+     */
+    public function appeals(): HasMany
+    {
+        return $this->hasMany(SuspensionAppeal::class)->orderBy('attempt');
     }
 
     /**

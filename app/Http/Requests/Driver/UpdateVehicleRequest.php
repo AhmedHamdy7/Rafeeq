@@ -3,6 +3,7 @@
 namespace App\Http\Requests\Driver;
 
 use App\Domains\Driver\Enums\FuelType;
+use App\Domains\Driver\Enums\Transmission;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
 
@@ -45,7 +46,7 @@ final class UpdateVehicleRequest extends FormRequest
                 'max:'.config('rafeeq.driver.vehicle_maximum_seats'),
             ],
 
-            'transmission' => ['sometimes', 'nullable', 'string', 'max:20'],
+            'transmission' => ['sometimes', 'nullable', 'string', Rule::enum(Transmission::class)],
             'fuelType' => ['sometimes', 'nullable', 'string', Rule::enum(FuelType::class)],
         ];
     }

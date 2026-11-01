@@ -3,6 +3,7 @@
 namespace App\Http\Requests\Driver;
 
 use App\Domains\Driver\Enums\FuelType;
+use App\Domains\Driver\Enums\Transmission;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
 
@@ -18,8 +19,9 @@ use Illuminate\Validation\Rule;
  * - `plateNumber` is stored as typed and normalised separately into
  *   `plate_normalized`, which carries the platform-wide unique index — so
  *   `ABC 123` and `abc123` cannot both be registered.
- * - `transmission` is free text rather than an enum: the ERD column has no
- *   documented value set, and inventing one risks refusing a real car.
+ * - `transmission` is `manual` or `automatic` (follow-up F2-5). It was free
+ *   text while the ERD column had no documented value set; the car form now
+ *   offers exactly these two.
  */
 final class StoreVehicleRequest extends FormRequest
 {
@@ -51,7 +53,7 @@ final class StoreVehicleRequest extends FormRequest
                 'max:'.config('rafeeq.driver.vehicle_maximum_seats'),
             ],
 
-            'transmission' => ['nullable', 'string', 'max:20'],
+            'transmission' => ['nullable', 'string', Rule::enum(Transmission::class)],
             'fuelType' => ['nullable', 'string', Rule::enum(FuelType::class)],
         ];
     }

@@ -31,4 +31,13 @@ enum IncidentCategory: string
 
     /** A rating or its comment that is abusive rather than an opinion of the journey. */
     case AbusiveReview = 'abusive_review';
+
+    /**
+     * "Safety concern" — the first reason on the report form (HISTORY-9).
+     *
+     * 🔴 Its own category rather than `other`, because the app was sending `other` for it and the
+     * queue ranks `other` medium: a passenger who picks "safety" means something a person should
+     * read the same morning, and the form's wording must not quietly put it behind that.
+     */
+    case SafetyConcern = 'safety_concern';
 }

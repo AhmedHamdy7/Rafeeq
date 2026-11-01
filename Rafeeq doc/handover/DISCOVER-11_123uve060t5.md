@@ -1,7 +1,7 @@
 <!-- task: 123uve060t5 · assign: ahmed Ibrahim (66109718) · status: backend answered - check -->
 ## ✅ Backend done: DISCOVER-11 GET /matches: full match-result shape
 
-Branch `claude/backend-discover-d822cb`, commit `70bd6b8`. **Merged to `main`** in `257cd97`. Guide 2026-11-01 (184 endpoints). Tests: `tests/Feature/Search/DiscoverGapsTest.php`.
+Branch `claude/backend-discover-d822cb`, commit `70bd6b8`. **Merged to `main`** in `257cd97`. Guide 2026-11-01 (186 endpoints). Tests: `tests/Feature/Search/DiscoverGapsTest.php`.
 
 Each `/matches` row keeps every field it had and adds the search result's shape: `tripId`, `tripDate`, `departureAt`, `departureLocal`, `promisedArrivalAt/Local`, `daysMask`, `seatsAvailable`, `womenOnly`, `meetingPoint`, `dropOffPoint`, `rules`, `otherDays[]`, `myStatus`, `overlapsBooking`. `driver` is now the full `person` (+ `ratingCount`, `completedTrips`); `vehicle` adds `colour`, `tier`, `hasAc`.
 

@@ -1,7 +1,7 @@
 <!-- task: 123uve060rt · assign: Omar Aly (94558637) · status: backend answered - check -->
 ## Backend DISCOVER: summary
 
-All 15 subtasks are done in one change, **merged to `main` in `257cd97`** (branch `claude/backend-discover-d822cb`, commit `70bd6b8`). Everything is additive. 2 new endpoints (guide now at 184): `GET /commutes/{commute}/public` and `DELETE /me/recent-searches/{search}`. Each subtask has its own handover to ahmed Ibrahim (Flutter).
+All 15 subtasks are done in one change, **merged to `main` in `257cd97`** (branch `claude/backend-discover-d822cb`, commit `70bd6b8`). Everything is additive. 2 new endpoints (guide now at 186): `GET /commutes/{commute}/public` and `DELETE /me/recent-searches/{search}`. Each subtask has its own handover to ahmed Ibrahim (Flutter).
 
 | # | Item | |
 |---|---|---|

@@ -78,7 +78,11 @@ final class CompleteBasicProfileRequest extends FormRequest
 
             // Used for commute preferences and community safety settings, and
             // never returned by any endpoint, including this one.
-            'gender' => ['required', Rule::enum(Gender::class)],
+            //
+            // 🔴 `woman` or `man` only (AUTH-10, follow-up F1-2). `prefer_not_to_say` is
+            // refused on new input; rows that already hold it keep working, cannot ask
+            // for a women-only seat, and answer this endpoint again to set it.
+            'gender' => ['required', Rule::enum(Gender::class)->only(Gender::answerable())],
 
             // Which capability the person came for: `passenger`, `driver` or
             // `both`. Optional — send it here to finish in one step and go

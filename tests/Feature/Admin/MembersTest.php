@@ -4,6 +4,8 @@ use App\Domains\Admin\Enums\AdminPermission;
 use App\Domains\Admin\Enums\AdminRole;
 use App\Domains\Admin\Models\AdminAction;
 use App\Domains\Admin\Models\PlatformSetting;
+use App\Domains\Commute\Enums\CommutePausedReason;
+use App\Domains\Commute\Models\CommuteOffer;
 use App\Domains\Commute\Models\ScheduledTrip;
 use App\Domains\Driver\Models\Vehicle;
 use App\Domains\Identity\Enums\AccountStatus;
@@ -186,6 +188,7 @@ it('links the hold to a report only if the report is about this member', functio
  * wrote to the file.
  */
 it('tells the member why, under which reference, and when — but not the staff note', function () {
+    completeBasicProfile($this->token);
     actingAsAdmin($this->ops);
     holdThroughDashboard($this->member, note: 'Reporter is her ex-colleague, check for a grudge.');
 
@@ -193,8 +196,10 @@ it('tells the member why, under which reference, and when — but not the staff 
 
     $me = test()->withToken($this->token)->getJson('/api/v1/auth/me')->assertOk();
 
+    // AUTH-19 (F1-3): a suspension stays in the app — Home, with the banner.
     $me->assertJsonPath('data.user.accountStatus', 'SUSPENDED')
-        ->assertJsonPath('data.nextStep', 'RESTRICTED_ACCOUNT')
+        ->assertJsonPath('data.nextStep', 'HOME')
+        ->assertJsonPath('data.user.suspension.permanent', false)
         ->assertJsonPath('data.user.suspension.caseNumber', $hold->case_number)
         ->assertJsonPath('data.user.suspension.reasonCode', 'safety_report')
         ->assertJsonPath('data.user.suspension.reviewDueAt', $hold->review_due_at->toIso8601String())
@@ -216,7 +221,8 @@ it('carries the reference on the refusal, so the app can show screen 35 mid-flow
     actingAsAdmin($this->ops);
     holdThroughDashboard($this->member);
 
-    test()->withToken($this->token)->getJson('/api/v1/search/commutes?'.http_build_query(searchCriteria()))
+    // A write — a suspension leaves reads open (AUTH-19), so the refusal shows on the first write.
+    test()->withToken($this->token)->putJson('/api/v1/account/profile/basic', ['fullName' => 'Mariam', 'gender' => 'woman'])
         ->assertStatus(403)
         ->assertJsonPath('error.code', 'ACCOUNT_SUSPENDED')
         ->assertJsonPath('error.fields.caseNumber.0', AccountSuspension::sole()->case_number)
@@ -243,7 +249,7 @@ it('still lets somebody on hold raise an SOS', function () {
  * 🔴 Search used to check only that the driver PROFILE was approved. A driver whose ACCOUNT
  * was on hold stayed in results, collecting seat requests nobody could answer.
  */
-it('takes a driver on hold out of search, and puts them back when lifted', function () {
+it('takes a driver on hold out of search, and lifting the hold resumes nothing', function () {
     $driverToken = approvedDriver(phone: '01012345678', devicePublicId: 'driver-1');
     $commuteId = readyCommute($driverToken, Vehicle::sole()->id);
     test()->withToken($driverToken)->postJson("/api/v1/commutes/{$commuteId}/publish")->assertOk();
@@ -268,6 +274,12 @@ it('takes a driver on hold out of search, and puts them back when lifted', funct
         ->set('note', 'Reports reviewed, both unfounded, lifting the hold.')
         ->call('reinstate')
         ->assertHasNoErrors();
+
+    // D-0018: the hold paused her commute; lifting it gives her the account back, not the
+    // commute — she resumes it herself.
+    expect(CommuteOffer::query()->findOrFail($commuteId)->paused_reason)->toBe(CommutePausedReason::AccountSuspended);
+
+    test()->withToken($driverToken)->postJson("/api/v1/commutes/{$commuteId}/resume")->assertOk();
 
     expect(search($paxToken)->assertOk()->json('data'))->not->toBeEmpty();
 });

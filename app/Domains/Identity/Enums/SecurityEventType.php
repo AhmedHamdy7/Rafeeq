@@ -50,6 +50,10 @@ enum SecurityEventType: string
     case DriverRejected = 'driver_rejected';
     case DriverSuspended = 'driver_suspended';
 
+    // ---- OTP lock (F1-5) ------------------------------------------------
+    // Three wrong codes locked the number for this purpose (AUTH-08).
+    case OtpLocked = 'otp_locked';
+
     /**
      * The default severity for this kind of event. A caller may still raise
      * it (a failed OTP is routine; the tenth in a minute is not), but never
@@ -70,7 +74,9 @@ enum SecurityEventType: string
             // A refused upload is either a mistake or a probe, and the two are
             // indistinguishable at the moment it happens.
             self::DocumentRejected,
-            self::DriverSuspended => SecurityRiskLevel::Medium,
+            self::DriverSuspended,
+            // Somebody spent every guess on a number. A typo does that rarely; a probe always.
+            self::OtpLocked => SecurityRiskLevel::Medium,
 
             // Two people claiming the same national id or licence is the
             // signature of identity fraud, and Chapter 3 §16 says such an
