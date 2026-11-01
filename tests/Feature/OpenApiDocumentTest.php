@@ -173,11 +173,14 @@ it('generates a document describing every /v1 route', function () {
         'POST /v1/commutes/{commute}/return',
         // The automatic seat price, read-only (P-1); it replaced `price-suggestion`.
         'GET /v1/commutes/{commute}/price',
+        // C-9: the fee pausing, deleting or replacing the car would cost.
+        'GET /v1/commutes/{commute}/cancel-preview',
         'GET /v1/home',
         'GET /v1/driver/home',
         'GET /v1/trips/{trip}',
         'POST /v1/trips/{trip}/start',
         'POST /v1/trips/{trip}/status',
+        'GET /v1/trips/{trip}/cancel-preview',
         'POST /v1/trips/{trip}/cancel',
         'POST /v1/trips/{trip}/cancel-active',
         'POST /v1/trips/{trip}/complete',
@@ -192,6 +195,8 @@ it('generates a document describing every /v1 route', function () {
          */
         'POST /v1/bookings/{booking}/end-early',
         'POST /v1/bookings/{booking}/exit-without-fee',
+        // TRIP-20: her answer to "Did you ask to get off here?"
+        'POST /v1/bookings/{booking}/early-drop',
         'POST /v1/trips/{trip}/drop-off',
         'POST /v1/trips/{trip}/still-driving',
         'PATCH /v1/trips/{trip}/receive-requests',
@@ -264,6 +269,8 @@ it('generates a document describing every /v1 route', function () {
         'POST /v1/driver/seat-requests/{seatRequest}/approve',
         'POST /v1/driver/seat-requests/{seatRequest}/reject',
         'GET /v1/driver/bookings',
+        // C-5: the driver removing one passenger, with the fee by notice.
+        'POST /v1/driver/bookings/{booking}/cancel',
         /*
          * The money. Her debt to RAFEEQ, its weekly statement and "I paid" (PAY-08 → PAY-17), and
          * the group's week. Online capture, payouts and refunds still wait on a provider.
@@ -271,6 +278,8 @@ it('generates a document describing every /v1 route', function () {
         'GET /v1/account/debt',
         'GET /v1/account/debt/statements',
         'POST /v1/account/debt/payments',
+        // A driver's appeal against one of his fees (SAFE-11).
+        'POST /v1/account/debt/entries/{entry}/appeal',
         'GET /v1/groups/{group}/statement',
 
         'POST /v1/commutes/{commute}/pickup-preview',

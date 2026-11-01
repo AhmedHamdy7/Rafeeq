@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Api\V1\Account;
 
+use App\Domains\Payment\Support\FeeSettings;
 use App\Domains\Shared\Exceptions\DomainException;
 use App\Domains\Shared\Support\ErrorCode;
 use App\Domains\Trip\Enums\WarningKind;
@@ -54,6 +55,13 @@ final class WarningController extends Controller
                 'LATE_BOARDING' => MemberWarning::query()
                     ->standing((string) $request->user()->id, WarningKind::LateBoarding)
                     ->whereNotNull('delivered_at')->count(),
+                'NO_SHOW' => MemberWarning::query()
+                    ->standing((string) $request->user()->id, WarningKind::NoShow)
+                    ->whereNotNull('delivered_at')->count(),
+                'LATE_CANCEL' => MemberWarning::query()
+                    ->standing((string) $request->user()->id, WarningKind::LateCancel)
+                    ->whereNotNull('delivered_at')->count(),
+                // The old shared counter, before decision B4 split it. History only.
                 'MISSED_COMMITMENT' => MemberWarning::query()
                     ->standing((string) $request->user()->id, WarningKind::MissedCommitment)
                     ->whereNotNull('delivered_at')->count(),
@@ -92,6 +100,13 @@ final class WarningController extends Controller
         if ($target->disputed_at !== null) {
             throw DomainException::of(ErrorCode::ValidationFailed, fields: [
                 'dispute' => ['ALREADY_DISPUTED'],
+            ]);
+        }
+
+        // SAFE-11: within 48 hours of being told.
+        if ($target->delivered_at->addHours(FeeSettings::appealHours())->isPast()) {
+            throw DomainException::of(ErrorCode::ValidationFailed, fields: [
+                'dispute' => ['APPEAL_WINDOW_CLOSED'],
             ]);
         }
 

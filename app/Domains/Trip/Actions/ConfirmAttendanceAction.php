@@ -216,7 +216,7 @@ final readonly class ConfirmAttendanceAction
             if ($booking->passenger !== null) {
                 $kind = match ($status) {
                     AttendanceStatus::Late => WarningKind::LateBoarding,
-                    AttendanceStatus::PassengerNoShow => WarningKind::MissedCommitment,
+                    AttendanceStatus::PassengerNoShow => WarningKind::NoShow,
                     default => null,
                 };
 

@@ -15,11 +15,14 @@ use App\Domains\Matching\Support\SearchRateLimit;
 use App\Domains\Shared\Exceptions\DomainException;
 use App\Domains\Shared\Support\ErrorCode;
 use App\Domains\Trip\Actions\AdvanceTripAction;
+use App\Domains\Trip\Actions\AnswerEarlyDropAction;
 use App\Domains\Trip\Actions\EndBookingEarlyAction;
 use App\Domains\Trip\Actions\ExitForDriverDelayAction;
 use App\Domains\Trip\Support\CallEntitlement;
 use App\Http\Controllers\Controller;
 use App\Http\OpenApi\ApiErrors;
+use App\Http\Requests\Booking\AnswerEarlyDropRequest;
+use App\Http\Requests\Booking\CancelBookingAsDriverRequest;
 use App\Http\Resources\BookingResource;
 use App\Http\Resources\MatchResultResource;
 use App\Http\Responses\ApiResponse;
@@ -87,9 +90,9 @@ final class BookingController extends Controller
     /**
      * PATCH /v1/bookings/{booking}/cancel — from whichever side is asking.
      *
-     * The seat is released under the same lock that takes it. No fee is charged:
-     * the cancellation policy is still an open question, and a guessed fee would
-     * take money from a real person on the strength of an assumption.
+     * The seat is released under the same lock that takes it. The decided fees apply: a
+     * passenger within 12 hours of departure goes on her late-cancel counter (PAY-21); a driver
+     * pays the driver-cancel fee by notice (PAY-23).
      */
     #[ApiErrors(ErrorCode::BookingNotCancellable, ErrorCode::NotFound)]
     public function cancel(Request $request, string $booking, CancelBookingAction $action): JsonResponse
@@ -105,6 +108,27 @@ final class BookingController extends Controller
             : $action->byDriver($target, $request->user()->id, $reason);
 
         return ApiResponse::success(new BookingResource($cancelled));
+    }
+
+    /**
+     * POST /v1/driver/bookings/{booking}/cancel — the driver removing one passenger (C-5, COM-21).
+     *
+     * A driver cancellation: the booking becomes `CANCELLED_BY_DRIVER`, she is told and offered
+     * alternatives, the seat goes to the waiting list, and he pays the driver-cancel fee by the
+     * notice he gives (PAY-23). His `reason` stays on the booking for support; it is not sent to her.
+     */
+    #[ApiErrors(ErrorCode::BookingNotCancellable, ErrorCode::NotFound)]
+    public function cancelAsDriver(CancelBookingAsDriverRequest $request, string $booking, CancelBookingAction $action): JsonResponse
+    {
+        $target = Booking::query()
+            ->whereKey($booking)
+            ->where('driver_profile_id', $request->user()->id)
+            ->first()
+            ?? throw DomainException::of(ErrorCode::NotFound);
+
+        return ApiResponse::success(new BookingResource(
+            $action->byDriver($target, $request->user()->id, $request->validated('reason')),
+        ));
     }
 
     /**
@@ -316,6 +340,28 @@ final class BookingController extends Controller
                 'matched' => count($suggested['results']),
             ],
         );
+    }
+
+    /**
+     * POST /v1/bookings/{booking}/early-drop — her answer to "Did you ask to get off here?"
+     * (TRIP-20, PAY-28). Passenger only, once, and only when `earlyDrop.askedAt` is set.
+     *
+     * `askedToGetOff: true` → the full fare stands. `false` → she pays nothing (the fare comes back
+     * as a credit on her next ride), the driver pays her whole seat, and a `dropped_early` report
+     * opens for staff.
+     */
+    #[ApiErrors(ErrorCode::EarlyDropNotAsked, ErrorCode::NotFound)]
+    public function earlyDrop(AnswerEarlyDropRequest $request, string $booking, AnswerEarlyDropAction $action): JsonResponse
+    {
+        $target = Booking::query()
+            ->whereKey($booking)
+            ->where('passenger_user_id', $request->user()->id)
+            ->first()
+            ?? throw DomainException::of(ErrorCode::NotFound);
+
+        return ApiResponse::success(new BookingResource(
+            $action->execute($request->user(), $target, $request->boolean('askedToGetOff')),
+        ));
     }
 
     private function visible(Request $request, string $bookingId): Booking

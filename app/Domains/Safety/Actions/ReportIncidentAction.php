@@ -13,6 +13,8 @@ use App\Domains\Safety\Support\SafetyEventLog;
 use App\Domains\Safety\Support\SafetySettings;
 use App\Domains\Shared\Exceptions\DomainException;
 use App\Domains\Shared\Support\ErrorCode;
+use App\Domains\Trip\Enums\WarningKind;
+use App\Domains\Trip\Models\MemberWarning;
 use Illuminate\Support\Facades\DB;
 
 /**
@@ -134,6 +136,23 @@ final readonly class ReportIncidentAction
                     'hasDescription' => ($attributes['description'] ?? null) !== null,
                 ],
             );
+
+            /*
+             * TRIP-17: "he said he had arrived and he was not there" puts her no-show on that
+             * booking under review — an open appeal against it, so no suspension for debt while
+             * staff check the GPS, and overturning it takes the fee off (PAY-10).
+             */
+            if ($category === IncidentCategory::FalseArrival && $booking !== null) {
+                MemberWarning::query()
+                    ->where('booking_id', $booking->id)
+                    ->where('user_id', $reporter->id)
+                    ->where('kind', WarningKind::NoShow->value)
+                    ->whereNull('disputed_at')
+                    ->update([
+                        'disputed_at' => now(),
+                        'dispute_reason' => 'false_arrival report '.$incident->id,
+                    ]);
+            }
 
             return $incident;
         });

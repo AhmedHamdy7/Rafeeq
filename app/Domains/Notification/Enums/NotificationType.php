@@ -143,6 +143,41 @@ enum NotificationType: string
      */
     case MissedCommitmentWarning = 'missed_commitment_warning';
 
+    // ---- Passenger fees (PAY-20 → PAY-22) — the rung past the warnings ------------
+    // `:amount` in EGP, `:date` the day, `:hours` the appeal window. `data.warningId` is the appeal.
+
+    /** A no-show with a fee on it (PAY-20). */
+    case NoShowFee = 'no_show_fee';
+
+    /** A lateness with a fee on it (PAY-22). Told after drop-off, like the warning. */
+    case LateBoardingFee = 'late_boarding_fee';
+
+    /** A late cancel: the fee that will be charged unless the seat is refilled (PAY-21). */
+    case LateCancelFee = 'late_cancel_fee';
+
+    /** The day departed and the seat stayed empty: the late-cancel fee is now charged. */
+    case LateCancelFeeCharged = 'late_cancel_fee_charged';
+
+    /** Somebody from the waiting list took the seat: the late-cancel fee is dropped (R-8). */
+    case LateCancelFeeWaived = 'late_cancel_fee_waived';
+
+    // ---- Driver fees (PAY-23 → PAY-29) — one message per act, the total of its seats ---------
+
+    /** He cancelled seats — one passenger, a day, a pause, a delete, a new car, a block (PAY-23). */
+    case DriverCancelFee = 'driver_cancel_fee';
+
+    /** He ended a run that had set off (PAY-24, PAY-25). */
+    case DriverEndedTripFee = 'driver_ended_trip_fee';
+
+    /** He never came and the run expired (PAY-26). */
+    case DriverNoShowFee = 'driver_no_show_fee';
+
+    /** A passenger left or switched because he was late (PAY-29). */
+    case DriverLateFee = 'driver_late_fee';
+
+    /** "Did you ask to get off here?" — set down `:distance` km before her point (TRIP-20). */
+    case EarlyDropCheck = 'early_drop_check';
+
     /**
      * Her appeal against a reliability event was approved (Feature 03 v5 §115).
      *
@@ -409,6 +444,16 @@ enum NotificationType: string
             self::CommuteDayExpired,
             self::LateBoardingWarning,
             self::MissedCommitmentWarning,
+            self::NoShowFee,
+            self::LateBoardingFee,
+            self::LateCancelFee,
+            self::LateCancelFeeCharged,
+            self::LateCancelFeeWaived,
+            self::DriverCancelFee,
+            self::DriverEndedTripFee,
+            self::DriverNoShowFee,
+            self::DriverLateFee,
+            self::EarlyDropCheck,
             self::AppealApproved,
             self::AppealDeclined,
             self::ChatMessage,

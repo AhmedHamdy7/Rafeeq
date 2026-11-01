@@ -1,10 +1,14 @@
 <?php
 
+use App\Domains\Booking\Enums\BookingStatus;
+use App\Domains\Booking\Models\Booking;
 use App\Domains\Commute\Models\ScheduledTrip;
 use App\Domains\Driver\Models\Vehicle;
 use App\Domains\Group\Enums\GroupAttendanceStatus;
 use App\Domains\Group\Models\CommuteGroup;
 use App\Domains\Group\Models\GroupAttendance;
+use App\Domains\Trip\Enums\WarningKind;
+use App\Domains\Trip\Models\MemberWarning;
 use Illuminate\Support\Facades\Storage;
 
 /**
@@ -14,7 +18,8 @@ use Illuminate\Support\Facades\Storage;
  * ⚠️ NOT the check-in. `group_attendance` is what somebody said in advance;
  * `attendance` (Phase 9) is whether they actually got in the car, and that one drives
  * billing. The ERD warns about the confusion twice, so these tests assert the
- * distinction rather than assuming it.
+ * distinction rather than assuming it — with one exception decided later: "away" cancels the
+ * seat (TRIP-26).
  */
 beforeEach(function () {
     Storage::fake('documents');
@@ -135,14 +140,36 @@ it('refuses a declaration from somebody outside the group', function () {
 });
 
 /**
- * ⚠️ Declaring you are coming is not boarding, and must not touch seats or money.
+ * ⚠️ Declaring you are coming is not boarding, and touches nothing.
  */
-it('changes nothing about the seat count or the booking', function () {
+it('changes nothing about the seat when she says she is coming', function () {
+    $before = $this->trip->refresh()->seats_taken;
+
+    declareAttendance($this->paxToken, $this->groupId, $this->trip->id, 'coming')->assertStatus(201);
+
+    expect($this->trip->refresh()->seats_taken)->toBe($before);
+});
+
+/**
+ * 🔴 TRIP-26 (Feature 03 backend file T-5): "I can't make it" cancels that day under the ordinary
+ * cancel rules. Days ahead, that is free.
+ */
+it('cancels her seat that day when she says she is away, for free days ahead', function () {
     $before = $this->trip->refresh()->seats_taken;
 
     declareAttendance($this->paxToken, $this->groupId, $this->trip->id, 'away')->assertStatus(201);
 
-    // "I'm away" is information for the driver. Releasing the seat is a planned
-    // absence, which is a different and deliberate decision.
-    expect($this->trip->refresh()->seats_taken)->toBe($before);
+    $booking = Booking::query()->where('scheduled_trip_id', $this->trip->id)->sole();
+
+    expect($this->trip->refresh()->seats_taken)->toBe($before - 1)
+        ->and($booking->status)->toBe(BookingStatus::CancelledByPassenger)
+        ->and(MemberWarning::query()->exists())->toBeFalse();
+});
+
+it('makes "away" within 12 hours a late cancel', function () {
+    $this->trip->forceFill(['departure_at' => now()->addHours(5)])->save();
+
+    declareAttendance($this->paxToken, $this->groupId, $this->trip->id, 'away')->assertStatus(201);
+
+    expect(MemberWarning::query()->sole()->kind)->toBe(WarningKind::LateCancel);
 });

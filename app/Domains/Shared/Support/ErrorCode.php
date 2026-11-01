@@ -293,6 +293,10 @@ enum ErrorCode: string
     case CouponNotAllowed = 'COUPON_NOT_ALLOWED';
     // A passenger suspended for debt may not book until she pays (PAY-17, PAY-46).
     case RidingSuspendedForDebt = 'RIDING_SUSPENDED_FOR_DEBT';
+    // Dashboard only: the appeal was already decided, or was never made.
+    case FeeAppealNotOpen = 'FEE_APPEAL_NOT_OPEN';
+    // The early-drop question was not asked on this booking, or she already answered (TRIP-20).
+    case EarlyDropNotAsked = 'EARLY_DROP_NOT_ASKED';
 
     // ---- Admin dashboard (Chapter 12) ----------------------------------
     case AdminCredentialsInvalid = 'ADMIN_CREDENTIALS_INVALID';
@@ -565,7 +569,9 @@ enum ErrorCode: string
             // a fee that cannot back a coupon.
             self::DebtNothingOwed,
             self::DebtPaymentNotPending,
-            self::CouponNotAllowed => 409,
+            self::CouponNotAllowed,
+            self::FeeAppealNotOpen,
+            self::EarlyDropNotAsked => 409,
         };
     }
 

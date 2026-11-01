@@ -233,6 +233,46 @@ return [
         'title' => 'Missed commute recorded (warning :ordinal)',
         'body' => 'Your seat on :date was not used and was too late to be filled. The 1st is a warning; a 2nd may lead to a fee. Tap to review or dispute.',
     ],
+    'no_show_fee' => [
+        'title' => 'No-show fee: EGP :amount',
+        'body' => 'You were recorded as not there on :date. EGP :amount is added to your next ride. Disagree? Appeal within :hours hours.',
+    ],
+    'late_boarding_fee' => [
+        'title' => 'Late pickup fee: EGP :amount',
+        'body' => 'You boarded after the 5-minute grace on :date. EGP :amount is added to your next ride. Disagree? Appeal within :hours hours.',
+    ],
+    'late_cancel_fee' => [
+        'title' => 'Late cancellation: EGP :amount unless your seat is taken',
+        'body' => 'You cancelled :date within 12 hours of departure. If somebody from the waiting list takes your seat, it costs nothing. Appeal within :hours hours.',
+    ],
+    'late_cancel_fee_charged' => [
+        'title' => 'Late cancellation fee: EGP :amount',
+        'body' => 'Nobody took your seat on :date, so EGP :amount is added to your next ride. Disagree? Appeal within :hours hours.',
+    ],
+    'late_cancel_fee_waived' => [
+        'title' => 'No fee for your cancellation',
+        'body' => 'Somebody from the waiting list took your seat on :date, so your late cancellation costs nothing.',
+    ],
+    'driver_cancel_fee' => [
+        'title' => 'Cancellation fee: EGP :amount',
+        'body' => 'Cancelling confirmed seats close to departure adds EGP :amount to this week’s commission. Had an emergency? Appeal with evidence within :hours hours.',
+    ],
+    'driver_ended_trip_fee' => [
+        'title' => 'Trip ended early: EGP :amount',
+        'body' => 'Ending a run that had set off adds EGP :amount to this week’s commission. Breakdown or accident? Appeal with evidence within :hours hours.',
+    ],
+    'driver_no_show_fee' => [
+        'title' => 'Missed trip: EGP :amount',
+        'body' => 'Your run never started, so EGP :amount is added to this week’s commission. Appeal with evidence within :hours hours.',
+    ],
+    'driver_late_fee' => [
+        'title' => 'Late start: EGP :amount',
+        'body' => 'A passenger left because you were late, so EGP :amount is added to this week’s commission. Appeal within :hours hours.',
+    ],
+    'early_drop_check' => [
+        'title' => 'Did you ask to get off here?',
+        'body' => 'You were set down :distance km before your drop-off. Tell us if you asked for it — if you did not, you pay nothing for this ride.',
+    ],
     'appeal_approved' => [
         'title' => 'Your appeal was approved',
         'body' => 'The record from :date no longer counts towards your reliability. It stays visible so you can see it was cleared.',
