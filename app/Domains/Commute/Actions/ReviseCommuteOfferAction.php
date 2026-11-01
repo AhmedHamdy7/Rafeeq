@@ -128,8 +128,6 @@ final readonly class ReviseCommuteOfferAction
         $map = [
             'vehicleId' => 'vehicle_id',
             'seatsTotal' => 'seats_total',
-            'maxDetourMinutes' => 'max_detour_minutes',
-            'maxWalkMinutes' => 'max_walk_minutes',
             'audience' => 'audience',
             'minTrustLevel' => 'min_trust_level',
             'allowsCustomPickup' => 'allows_custom_pickup',

@@ -41,8 +41,9 @@ final class ReviseCommuteRequest extends FormRequest
             // Do not send. The seat price is set by RAFEEQ; sending one is refused.
             'pricePerSeatPiastres' => ['prohibited'],
 
-            'maxDetourMinutes' => ['sometimes', 'integer', 'min:0', 'max:30'],
-            'maxWalkMinutes' => ['sometimes', 'integer', 'min:0', 'max:30'],
+            // RAFEEQ's limits, not yours (C-1, COM-31): sending either is refused.
+            'maxDetourMinutes' => ['prohibited'],
+            'maxWalkMinutes' => ['prohibited'],
 
             // Narrowing the audience does not remove passengers who already
             // joined; it applies to who can find and request a seat from now on.

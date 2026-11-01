@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Api\V1\Booking;
 use App\Domains\Booking\Actions\RequestSeatAction;
 use App\Domains\Booking\Support\PickupDetour;
 use App\Domains\Commute\Models\CommuteOffer;
+use App\Domains\Commute\Support\RouteSettings;
 use App\Domains\Geo\Contracts\GeoQueryEngine;
 use App\Domains\Identity\Models\User;
 use App\Domains\Matching\Support\HardFilters;
@@ -73,11 +74,14 @@ final class PickupPreviewController extends Controller
              * discovering it in a refusal.
              */
             'runTotalMinutes' => $detour->runTotalMinutes,
-            'maxDetourMinutes' => $offer->max_detour_minutes,
+            // RAFEEQ's whole-trip cap (C-1, COM-31): minutes AND kilometres, both must hold.
+            'maxDetourMinutes' => RouteSettings::maxTripDetourMinutes(),
+            'runTotalKm' => $detour->runTotalKm,
+            'maxDetourKm' => round(RouteSettings::maxTripDetourMeters() / 1000, 1),
 
             // Stated rather than left for the client to compare two numbers and get the
             // boundary case wrong.
-            'withinLimit' => $detour->isWithin($offer->max_detour_minutes),
+            'withinLimit' => $detour->isWithin(),
         ]);
     }
 

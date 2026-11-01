@@ -14,7 +14,7 @@
 >
 > **Base URL:** `{host}/api/v1` · **Auth:** bearer token · **Format:** JSON only.
 
-**Last updated:** 2026-10-30 · **171 endpoints live** · Phases 0–7, 9 and 11 complete · 10, 12 and 13 all but a decision each
+**Last updated:** 2026-10-30 · **170 endpoints live** · Phases 0–7, 9 and 11 complete · 10, 12 and 13 all but a decision each
 
 ---
 
@@ -22,7 +22,7 @@
 
 ### What is ready
 
-**171 endpoints live** and tested, across the 47 designed screens:
+**170 endpoints live** and tested, across the 47 designed screens:
 
 | | Count | Covers |
 |---|---|---|
@@ -391,7 +391,7 @@ quarter of an hour.
    → 200  a ranked list; each row has commuteId, score + its breakdown, driver summary, vehicle
 
 8  POST /commutes/{commute}/pickup-preview   { lat, lng }
-   → 200  { addedMinutes, runTotalMinutes, maxDetourMinutes, withinLimit }
+   → 200  { addedMinutes, runTotalMinutes, maxDetourMinutes, runTotalKm, maxDetourKm, withinLimit }
 ```
 
 Step 8 creates nothing. It exists so the passenger can see the detour **before** committing to a
@@ -474,7 +474,7 @@ to open.
 ```
 19 POST /trips/{trip}/check-in   { bookingId }      (driver)  → 200
    POST /trips/{trip}/no-show    { bookingId }      (driver)  → 200
-   POST /trips/{trip}/wait-timers { bookingId }     (driver)  → 201
+   POST /trips/{trip}/wait-timers { bookingId, lat, lng }  (driver, within 150 m of her pickup)  → 201
    POST /bookings/{booking}/dispute { reason }      (passenger, 24 hours)  → 201
 ```
 
@@ -628,7 +628,7 @@ Status: ✅ fully served · ⚠️ served, something named missing · ⛔ no API
 | 17 | **Active trip** | `GET /trips/{trip}` · `GET /trips/{trip}/location` · channel `private-trip.{sessionId}` | ✅ Status, timings, `isUnderway`, `lastLocationAt`, the live position, and **route deviation** (`deviationDetectedAt`). |
 | 36 | **Pre-trip check-in** | `GET`/`POST /groups/{group}/attendance` | ✅ This screen is the **declared** attendance, not boarding confirmation. `I'm coming` = `coming`, `Can't make it` = `away`. **Missing: `5 min late`** — a third declared state that does not exist yet. Section 8. |
 | 40 | No-show | `POST /trips/{trip}/no-show` · `POST /bookings/{booking}/dispute` | ✅ The driver records it; the passenger has 24 hours to contest it. |
-| 41 | **Driver wait timer** | `GET`/`POST /trips/{trip}/wait-timers` · `POST .../extend` | ⚠️ **There is deliberately no endpoint that stops a timer** — "She's here" is the check-in and "Mark no-show & depart" is the no-show, and both close it. **Missing: `Stop 2 of 3`** (needs an ordered pickup sequence) and `notified twice`, Call, Message (Phase 12). |
+| 41 | **Driver wait timer** | `GET`/`POST /trips/{trip}/wait-timers` (the POST is "I've arrived", GPS-checked; **no "+2 min" any more**) | ⚠️ **There is deliberately no endpoint that stops a timer** — "She's here" is the check-in and "Mark no-show & depart" is the no-show, and both close it. **Missing: `Stop 2 of 3`** (needs an ordered pickup sequence) and `notified twice`, Call, Message (Phase 12). |
 | 39 | **Route changed** | `GET /trips/{trip}` | ⚠️ The deviation is **detected and reported** on the trip session. **Missing: the push that tells you about it** (Phase 12) — today you learn of it by reading the trip. |
 | 43 · 45 | Driver cancelled → backup · cancel confirmation | — | ⛔ Phase 9, blocked on section 8 #3. |
 
@@ -802,7 +802,6 @@ fails if this list and the running routes ever disagree in either direction.
 | `POST /trips/{trip}/status` | 4.9 Live trip |
 | `GET /trips/{trip}/wait-timers` | 4.9 Live trip |
 | `POST /trips/{trip}/wait-timers` | 4.9 Live trip |
-| `POST /trips/{trip}/wait-timers/{timer}/extend` | 4.9 Live trip |
 | `GET /groups` | 4.10 Groups |
 | `GET /groups/{group}` | 4.10 Groups |
 | `GET /groups/{group}/absences` | 4.10 Groups |
@@ -1505,13 +1504,16 @@ The caller's own commutes. Full shape in 4.5.
 **Request:** `commuteType` (`recurring`/`one_time`), `vehicleId`, `direction`
 (`to_work`/`to_home`), `seatsTotal` (1–7, and **never more than the car's `approvedSeats`** —
 `422 COMMUTE_SEATS_EXCEED_APPROVED` with `error.fields.approvedSeats`),
-`maxDetourMinutes` (0–30), `maxWalkMinutes` (0–30), `audience` (`women_only`/`any_verified`),
-`minTrustLevel` (0–4), `allowsCustomPickup`.
+`audience` (`women_only`/`any_verified`), `minTrustLevel` (0–4), `allowsCustomPickup`.
 
 🔴 **No price field any more** (P-1, D-0016). RAFEEQ computes the seat price from the route length,
 the car's tier and its approved seats — see `GET /commutes/{commute}/price`. A
 `pricePerSeatPiastres` sent here, in `PATCH /commutes/{commute}` or in `perDay` is **refused** with
 `422 VALIDATION_FAILED` on that field — drop it from the form.
+
+🔴 **No detour or walking limit from the driver any more** (C-1, COM-31). `maxDetourMinutes` and
+`maxWalkMinutes` are RAFEEQ's admin settings for every commute; sending either is refused with
+`422 VALIDATION_FAILED`. Remove both controls from the form.
 
 Creates a **draft**. Route and schedule arrive through their own endpoints because each is a whole
 thing that has to be validated together. `allowsCustomPickup` defaults to **false** — a commute
@@ -1530,8 +1532,17 @@ now on, never to a day somebody already booked.** Route and schedule lock once p
 
 #### `PUT /commutes/{commute}/schedule` — verified
 
-**Request:** `daysMask`, `departureTime` (`HH:MM:SS`, **local wall clock**), `timezone`,
-`startDate`, `endDate` (**mandatory** — there are no infinite commutes).
+**Request:** `daysMask`, `promisedArrivalTime` **or** `departureTime` (`HH:MM:SS`, **local wall
+clock**), `timezone`, `startDate`, `endDate` (**mandatory** — there are no infinite commutes).
+
+🔴 **New (C-2, COM-15): send the arrival, not the departure.** Leave `departureTime` out and send
+`promisedArrivalTime`: RAFEEQ works out when the driver leaves from the route and that morning's
+traffic, for every day. Each time a rider is confirmed or leaves a day, the departure for that day is
+timed again and, if it moved, the driver gets a `departure_time_changed` notification
+(`data.scheduledTripId`, `data.commuteId`; the body says the new time). **Sixteen hours before a day
+it freezes.** Read each day's time from `departureLocal` on the trip, never from the form. A day sent
+with a `departureTime` keeps it exactly and is never moved — that is the old behaviour, still
+accepted. Neither field → `422` on `departureTime`.
 
 **New: each weekday can differ.** Two optional fields, and **sending neither behaves exactly as
 before** — one time, one price, one seat count for the whole week.
@@ -1662,7 +1673,7 @@ Archives. Nothing is deleted: history stays, and only future days nobody has tak
 | `direction` | `to_work` · `to_home`. |
 | `vehicleId`, `seatsTotal` | `seatsTotal` is bookable seats, already excluding the driver. |
 | `pricePerSeatPiastres`, `currency` | Always `EGP` today. |
-| `maxDetourMinutes` / `maxWalkMinutes` | The driver's limits. |
+| `maxDetourMinutes` / `maxWalkMinutes` | **RAFEEQ's** limits, the same on every commute (C-1, COM-31): the whole trip may carry at most 10 min **and** at most 5 km of detour, and a passenger's point must be within 1.5 km of the route. Read-only — sending either when creating or revising a commute is refused with `422`. |
 | `audience`, `minTrustLevel` | Who may join. |
 | `allowsCustomPickup` | **Defaults to false.** |
 | `routePolyline`, `routeDistanceMeters`, `routeDurationSeconds` | Computed at publish; `null` on a draft. **Only ever returned to the commute's own driver.** |
@@ -1862,7 +1873,7 @@ at 21:00 the night before), `BOOKING_ALREADY_REQUESTED` (one open request per co
 | `SEAT_REQUEST_POINTS_SAME` | The two pins are within 200 m of each other. |
 | `SEAT_REQUEST_POINTS_OUT_OF_ORDER` | This commute reaches her drop-off before her pickup — they are the wrong way round. |
 | `SEAT_REQUEST_SUGGESTION_UNKNOWN` | That `suggestionId` is not one this commute advertises. |
-| `PICKUP_DETOUR_TOO_LONG` | The **pair together** takes the driver further out of her way than her `maxDetourMinutes`. `error.fields` carries `addedMinutes`, `runTotalMinutes` and `maxDetourMinutes`. |
+| `PICKUP_DETOUR_TOO_LONG` | The **pair together** takes the driver further out of her way than RAFEEQ's whole-trip cap (10 min **and** 5 km, admin settings). `error.fields` carries `runTotalKm`, `maxDetourMeters`, `addedMinutes`, `runTotalMinutes` and `maxDetourMinutes`. |
 
 > 🔴 The detour is measured **by us**, for both points at once, against the route as published —
 > never accepted from the request. Use `POST /commutes/{commute}/pickup-preview` to show the cost
@@ -1897,7 +1908,7 @@ your own timer to hide it, and do not treat a late tap as a network failure.
 |---|---|
 | `already_passed` | The car is further along the route than her stop. **Nothing she can do** — say so, and offer her the alternatives list rather than a retry. |
 | `would_break_promise` | The detour no longer fits before the arrival the people aboard were promised. |
-| `detour_too_long` | Past the driver's own `maxDetourMinutes`, on a day with no promised arrival. |
+| `detour_too_long` | Past RAFEEQ's whole-trip detour cap, on a day with no promised arrival. |
 | `position_unknown` · `route_unknown` | We cannot place the car, so the answer is no. **Retrying may work** once a position arrives. |
 
 🔴 **It is measured, never timed.** v5 forbids a fixed limit twice over, and the reason shows in both
@@ -2441,7 +2452,7 @@ the person commits.
 |---|---|
 | `addedMinutes` / `addedKm` | What THIS point adds. Computed by us from the route, never taken from the requester. |
 | `runTotalMinutes` | The detour for the **whole run** including every already-approved pickup. This is the figure the limit is checked against. |
-| `maxDetourMinutes` | The driver's own limit. |
+| `maxDetourMinutes` | RAFEEQ's whole-trip cap in minutes (C-1). |
 | `withinLimit` | Whether a request would be accepted. Show the consequence before they ask. |
 
 #### `POST /seat-requests/{seatRequest}/pickup-request` — active, profile complete
@@ -2507,6 +2518,14 @@ Returns the trip session (4.9) and opens a `pending` attendance row per confirme
 
 **Request:** `status` — one of `EN_ROUTE`, `AT_PICKUP`, `IN_PROGRESS`.
 
+🔴 **`AT_PICKUP` is "I've arrived" for ONE passenger, and the server checks it by GPS (TRIP-10).**
+Send `{ status: "AT_PICKUP", bookingId, lat, lng }` — her booking on this run and where the car is
+now. Beyond 150 m (`trip.arrival_radius_meters`, an admin setting) of **her** pickup it is refused
+with **`409 NOT_AT_PICKUP`**, `error.fields.distanceMeters[0]` (how far the car still is) and
+`radiusMeters[0]`: show "You're 320 m away", not a generic error. Accepted, it also **starts her
+5-minute grace** — the same thing `POST /trips/{trip}/wait-timers` does (see below); there is no
+separate step. Arriving for the next passenger at the same gate works while already `AT_PICKUP`.
+
 The sequence: `PREPARING → EN_ROUTE ⇄ AT_PICKUP → IN_PROGRESS → COMPLETED`.
 
 A multi-pickup morning **cycles between `EN_ROUTE` and `AT_PICKUP`** and becomes `IN_PROGRESS`
@@ -2543,7 +2562,10 @@ has the count for today).
 
 #### `POST /trips/{trip}/cancel-active` — active, profile complete, driver only — "Cancel Active Trip"
 
-`{ "reason": "..." }` — **required**, 3 to 255 characters. Stops a run that has **already set off**
+`{ "reason": "breakdown" | "accident" | "emergency" | "other", "note"?: "..." }` — `reason` is a
+**required category** (TRIP-22, since 2026-10-31; it was free text before), because the fee that
+follows depends on it: breakdown, accident and emergency are treated differently from any other
+reason. `note` is optional, up to 255 characters, in her own words. Stops a run that has **already set off**
 (v5 §123–125). `200` with the day, plus a `meta` the confirmation screen needs:
 
 ```json
@@ -2568,7 +2590,7 @@ stopping the journey rather than cancelling a booking, and never behind the same
 - A passenger who was aboard **keeps her attendance** (`PRESENT`/`LATE`): the part she rode still
   happened, and her booking is `ENDED_EARLY`, not cancelled. Do not show it as a cancellation.
 - Nobody is charged a cancellation fee either way — the fee and the record fall on the driver.
-- The driver's typed reason is **never** sent to passengers. Support reads it on the booking.
+- Neither the reason nor the note is **ever** sent to passengers. Support reads them on the booking.
 - Freed seats are offered to **nobody**: a seat on a run that has stopped is not a seat.
 - `TRIP_NOT_STARTED` (409) if the run never began — use `POST /trips/{trip}/cancel`.
   `TRIP_NOT_CANCELLABLE` (409, with `error.fields.status`) if it is `PREPARING` (it has not left yet,
@@ -2841,13 +2863,19 @@ nothing. A mistake is corrected by the passenger disputing and a reviewer overtu
 
 #### `POST /trips/{trip}/wait-timers` — active, profile complete, driver only
 
-**Request:** `bookingId`. There is no `graceSeconds` field: how long the platform asks a driver to
-wait is policy, not something the app decides.
+**"I've arrived" for one passenger** (TRIP-10, TRIP-11). **Request:** `bookingId`, `lat`, `lng` —
+where the car is now. There is no `graceSeconds` field: how long the platform asks a driver to wait
+is policy, not something the app decides.
 
-#### `POST /trips/{trip}/wait-timers/{timer}/extend` — active, profile complete, driver only
-
-The "+2 min" button. **Allowed even after the grace has expired** — a driver who sees somebody
-running for the car at 5:10 should be able to give them two more minutes.
+- 🔴 **Refused with `409 NOT_AT_PICKUP`** unless the car is within 150 m of **this passenger's**
+  pickup; `error.fields.distanceMeters[0]` says how far it still is. The grace starts here and the
+  lateness and no-show fees start from the grace, so the server — not the app — decides "arrived".
+- **Her 5 minutes start from the later of the arrival and her pickup time.** A driver who arrives
+  early sees `graceStartsAt` in the future and the countdown waits for it.
+- Moves the run to `AT_PICKUP` when it is `EN_ROUTE` (the same as `POST /trips/{trip}/status`
+  with `AT_PICKUP`, which answers with the run instead of the timer).
+- 🛑 **There is no "+2 min" any more** (TRIP-11, decision B7): `POST .../wait-timers/{timer}/extend`
+  was removed on 2026-10-31. Every passenger gets the same grace. Remove the button.
 
 #### `GET /trips/{trip}/wait-timers` — active, profile complete, driver only
 
@@ -2856,11 +2884,12 @@ another after ninety seconds is a run somebody may ask about.
 
 | Field | Meaning |
 |---|---|
-| `startedAt` | When the waiting began. Extending does **not** move this. |
-| `expiresAt` | Grace plus everything added. Count down to this. |
+| `startedAt` | When the row was written (the arrival). |
+| `arrivedAt` / `arrivalDistanceMeters` | "I've arrived", as the server checked it: when, and how far from her pickup the car was. |
+| `graceStartsAt` | When her five minutes began: the later of the arrival and her pickup time. |
+| `expiresAt` | `graceStartsAt` + the grace. Count down to this. |
 | `remainingSeconds` | The server's answer now. **Negative once expired** — the screen keeps showing the timer with "grace ended", and how long ago it ended is what the driver decides on. |
 | `graceSeconds` | What was promised, **frozen on the row** when the timer started. A dispute about this morning is settled against the promise in force this morning, not against a number changed later. |
-| `extendedSeconds` | What the driver added on top. Separate from the grace so the record can say "she waited five minutes and then gave two more". |
 | `hasExpired` / `isRunning` | A timer that was answered is not running whatever the clock says. |
 | `outcome` | `null` while running, then `arrived` · `no_show` · `driver_left`. |
 
@@ -3545,7 +3574,7 @@ hold must still be able to read the notice that says so.
 
 | Response field | Meaning |
 |---|---|
-| `type` | What happened — route on this. Today: `seat_requested` (driver) · `seat_approved` · `seat_declined` · `booking_cancelled` (to the other side) · `commute_paused_seat_cancelled` (the commute was paused, her booked days are cancelled and she is back on the waiting list; `data.commuteId`, `data.bookingId`) · `vehicle_replaced_seat_cancelled` (the same news for a replaced car; same `data`) · `seats_offered_by_driver` (a driver picked her off the waiting list and offered her seats — `data.commuteId`, `data.seatRequestId`; the first acceptance of each day still wins) · `trip_day_cancelled` (the driver called off a day — `data.tripId`, `data.bookingId`) · `match_found` (a saved request matched — `data.commuteId`) · `trip_started` · `chat_message` · `rating_due` (passenger, `data.bookingId`) · `rating_due_riders` (driver, once per run, `data.tripId`) · `rating_reminder` (last day of the window, once) · `sos_picked_up` · `report_resolved` · `report_closed` · `account_on_hold` · `account_reinstated`. **Expect new values**; show an unknown one as a plain message. |
+| `type` | What happened — route on this. Today: `seat_requested` (driver) · `seat_approved` · `seat_declined` · `booking_cancelled` (to the other side) · `commute_paused_seat_cancelled` (the commute was paused, her booked days are cancelled and she is back on the waiting list; `data.commuteId`, `data.bookingId`) · `vehicle_replaced_seat_cancelled` (the same news for a replaced car; same `data`) · `seats_offered_by_driver` (a driver picked her off the waiting list and offered her seats — `data.commuteId`, `data.seatRequestId`; the first acceptance of each day still wins) · `trip_day_cancelled` (the driver called off a day — `data.tripId`, `data.bookingId`) · `departure_time_changed` (driver: RAFEEQ moved his departure for one day — `data.scheduledTripId`, `data.commuteId`) · `match_found` (a saved request matched — `data.commuteId`) · `trip_started` · `chat_message` · `rating_due` (passenger, `data.bookingId`) · `rating_due_riders` (driver, once per run, `data.tripId`) · `rating_reminder` (last day of the window, once) · `sos_picked_up` · `report_resolved` · `report_closed` · `account_on_hold` · `account_reinstated`. **Expect new values**; show an unknown one as a plain message. |
 | `category` | `booking` · `payment` · `trip` · `safety` · `marketing`. |
 | `title` / `body` | **Already in the member's language** — rendered when the message was sent, and stored as written. Show them as they are. They never contain a phone number, an address or a full name: a push body appears on a lock screen. |
 | `data` | Ids for the screen to open: `seatRequestId`, `commuteId`, `tripId`, `sosId`, `incidentId`. Never names. |
@@ -3901,6 +3930,7 @@ exist, and every live endpoint must be named here.
 
 | Date | Change |
 |---|---|
+| 2026-10-31 | 📍 **"I've arrived" is checked by GPS, per passenger (TRIP-10, TRIP-11), the "+2 min" is gone (TRIP-11, B7), and Cancel Active Trip takes a reason category (TRIP-22).** `POST /trips/{trip}/status` with `AT_PICKUP` now needs `bookingId`, `lat`, `lng`, and so does `POST /trips/{trip}/wait-timers`: both are refused with **`409 NOT_AT_PICKUP`** (`error.fields.distanceMeters`) unless the car is within 150 m of that passenger's pickup, and both start her grace — which now runs from the **later** of the arrival and her pickup time (`graceStartsAt`, `arrivedAt`, `arrivalDistanceMeters` on the timer; `extendedSeconds` is gone). 🛑 **The `.../wait-timers/{timer}/extend` endpoint was removed** — every passenger gets the same grace. `POST /trips/{trip}/cancel-active` takes `reason` as `breakdown` · `accident` · `emergency` · `other`, plus an optional `note`; free text in `reason` is now a 422. |
 | 2026-10-30 | 🛑 **`POST /trips/{trip}/cancel-active` — the driver stops a run that has already set off (v5 §123–125), and `GET /bookings/{booking}/alternatives` — "find another commute" (§126–128, §441).** Until now there was no lawful way to end a journey that had gone wrong: "cancel today" refuses once the car has moved — correctly — so a driver whose car broke down on the Mehwar could drive it anyway or abandon people while the system insisted the trip was in progress. **`reason` is required** on the new endpoint, because it carries the heaviest weight in the reliability ledger and she can appeal it. 🔴 **The two groups of passengers are not the same and your screens must not treat them so:** whoever was **in the car** ends `ENDED_EARLY` **keeping her attendance** — the part she rode happened — while whoever was **never collected** ends `CANCELLED_BY_DRIVER`; `meta.endedEarly` and `meta.cancelled` give you the counts, and each group gets a different notification. Nobody is charged either way; freed seats are offered to **nobody**. 🔴 **The alternatives list books NOTHING** — v5 says so twice — and `meta.origin.kind` tells you where the server searched from (`WHERE_THE_CAR_STOPPED` · `LAST_STOP_REACHED` · `AGREED_PICKUP` · `AGREED_PICKUP_UNVERIFIED`), which decides your caption. It is readable **while her booking is still `CONFIRMED`**, so she can look before she gives up a seat on a driver who has not come (§241). ⚠️ **Do not build a "where are you?" step** — v5 §129 forbids a safe-stop picker. ⚠️ **And a hole that is now closed:** `POST /trips/{trip}/status` accepted `CANCELLED` and the state machine allowed it from `PREPARING` and `EN_ROUTE`, so one ordinary request marked a run cancelled while every booking on it still read `CONFIRMED`, seats still counted as taken, and no passenger was told. It now refuses with `TRIP_INVALID_TRANSITION` and `error.fields.use` naming the right endpoint. |
 | 2026-10-30 | 🚗 **A car that is already moving can be asked for a seat — v5's active-ride request.** **Same endpoint**: send `scheduledTripId` for a run that has set off and you get one, with **no flag you send** (the circumstances decide, not the client). Two differences, both for the separate sheet v5 draws on the driver's side: **`requestedDuringRide: true`** on the seat-request shape, and **`expiresAt` three minutes out** — v5 says this is the **only countdown left in the product**. The clock is real on the server: approval reads `expiresAt`, so a late tap answers `409 SEAT_REQUEST_NOT_PENDING` with `error.fields.expiredAt`. Two new refusals: `SEAT_UNAVAILABLE` + `duringRide: ["NOT_ACCEPTING"]` when the driver turned the toggle off for that morning, and **`PICKUP_UNREACHABLE`** + `error.fields.reachability` — `already_passed` (**nothing she can do**, offer alternatives rather than a retry) · `would_break_promise` · `detour_too_long` · `position_unknown`/`route_unknown` (**a retry may work**). 🔴 **Reachability is measured, never timed** — v5 forbids a fixed limit twice, because a clock would refuse her on a run crawling five minutes from her gate and accept her on one that had passed her street. ⚠️ And an existing waiting-list **offer** now behaves the same way: it stays open after the run sets off while she is still reachable, and closes **`INELIGIBLE`** once the car has passed — "she stopped qualifying", not "the seat stopped existing". |
 | 2026-10-30 | ⚠️ **The two escalating warning counters: `GET /account/warnings` and `POST /account/warnings/{warning}/dispute`.** Present them as **separate from the reliability score** — the score is the aggregate a monthly review reads, these are the sentences a member is actually told. And v5 tells us not to confuse the two counters with each other: **`LATE_BOARDING`** (she kept the car waiting and boarded — `PICKED_UP`, not a no-show) gets **2** warnings before a fee is possible; **`MISSED_COMMITMENT`** (a no-show, or a cancellation too late to refill the seat) gets **1**. 🔴 **A lateness is delivered after her drop-off and never during the trip** (v5 §10) — so it is recorded at her pickup and **does not appear in this list** until her journey ends; the message would otherwise reach a woman sitting in the car beside the people she kept waiting. The notification carries `warningId`, the **dispute link** v5 requires. ⚠️ **`feeEligible` is a flag and there is no amount** — v5 defers it to the Payments rules, so do not imply a number. Use **`meta.standing`** rather than counting the page: an overturned warning stays listed (so she can show she was cleared) and does not count. 🔒 Disputing does **not** pause the escalation — a reviewer decides — and it is once per warning. |

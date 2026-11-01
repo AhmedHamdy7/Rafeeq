@@ -34,9 +34,16 @@ final class SaveCommuteScheduleRequest extends FormRequest
              */
             'daysMask' => ['required_unless:commuteType,one_time', 'integer', 'min:0', 'max:127'],
 
-            // Departure time on your own clock, 24-hour. Not UTC — send the time
-            // you would read off a wall.
-            'departureTime' => ['required', 'string', 'date_format:H:i:s'],
+            /*
+             * 🔴 Leave this out and send `promisedArrivalTime` instead (C-2, COM-15): you say when
+             * you have to arrive and RAFEEQ works out when you leave, from the route and the
+             * morning's traffic, and moves it as riders join — telling you each time — until 16
+             * hours before the day, when it freezes.
+             *
+             * Still accepted, on your own clock (24-hour, not UTC), for a day you want to keep a
+             * fixed departure; a day that has one is never recomputed.
+             */
+            'departureTime' => ['required_without:promisedArrivalTime', 'nullable', 'string', 'date_format:H:i:s'],
 
             // IANA timezone the departure time is read in.
             'timezone' => ['sometimes', 'string', Rule::in(['Africa/Cairo'])],

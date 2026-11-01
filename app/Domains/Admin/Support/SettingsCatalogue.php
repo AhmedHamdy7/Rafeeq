@@ -62,6 +62,15 @@ final class SettingsCatalogue
         // PROF-28: the fewest seats a car may be approved for at verification.
         'driver.min_approved_seats' => ['group' => 'commute', 'min' => 1, 'max' => 7, 'unit' => 'seats'],
 
+        // ---- Route limits (COM-31, COM-16; decision C8 of 2026-10-31) -----
+        // The driver no longer chooses any of these.
+        'commute.match_radius_meters' => ['group' => 'commute', 'min' => 200, 'max' => 5_000, 'unit' => 'meters'],
+        'commute.max_trip_detour_minutes' => ['group' => 'commute', 'min' => 0, 'max' => 45, 'unit' => 'minutes'],
+        'commute.max_trip_detour_meters' => ['group' => 'commute', 'min' => 0, 'max' => 20_000, 'unit' => 'meters'],
+        'commute.max_pickup_points' => ['group' => 'commute', 'min' => 1, 'max' => 6, 'unit' => 'stops'],
+        'commute.max_dropoff_points' => ['group' => 'commute', 'min' => 1, 'max' => 6, 'unit' => 'stops'],
+        'commute.schedule_lock_hours' => ['group' => 'commute', 'min' => 1, 'max' => 48, 'unit' => 'hours'],
+
         // ---- Money -------------------------------------------------------
         'payment.collection_delay_minutes' => ['group' => 'booking', 'min' => 30, 'max' => 1_440, 'unit' => 'minutes'],
         'payment.max_driver_debt_piastres' => ['group' => 'booking', 'min' => 5_000, 'max' => 200_000, 'unit' => 'piastres'],
@@ -69,7 +78,8 @@ final class SettingsCatalogue
         // ---- The trip itself (Chapter 8) ---------------------------------
         'trip.start_window_minutes' => ['group' => 'trip', 'min' => 15, 'max' => 240, 'unit' => 'minutes'],
         'trip.wait_grace_seconds' => ['group' => 'trip', 'min' => 60, 'max' => 900, 'unit' => 'seconds'],
-        'trip.wait_extension_seconds' => ['group' => 'trip', 'min' => 30, 'max' => 600, 'unit' => 'seconds'],
+        // The "+2 min" extension is gone (TRIP-11): every passenger gets the same grace.
+        'trip.arrival_radius_meters' => ['group' => 'trip', 'min' => 50, 'max' => 1_000, 'unit' => 'meters'],
         'trip.dispute_window_hours' => ['group' => 'trip', 'min' => 1, 'max' => 168, 'unit' => 'hours'],
         'trip.location_batch_max' => ['group' => 'trip', 'min' => 10, 'max' => 500, 'unit' => 'points'],
         'trip.location_clock_skew_seconds' => ['group' => 'trip', 'min' => 10, 'max' => 900, 'unit' => 'seconds'],

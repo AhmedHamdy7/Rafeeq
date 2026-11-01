@@ -31,6 +31,7 @@ class CommuteWeekdaySchedule extends Model
         return [
             'weekday_bit' => 'integer',
             'seats_total' => 'integer',
+            'departure_is_computed' => 'boolean',
         ];
     }
 

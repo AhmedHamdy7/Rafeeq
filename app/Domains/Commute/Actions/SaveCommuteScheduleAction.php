@@ -6,6 +6,8 @@ use App\Domains\Commute\Enums\CommuteType;
 use App\Domains\Commute\Models\CommuteOffer;
 use App\Domains\Commute\Models\CommuteSchedule;
 use App\Domains\Commute\Models\CommuteWeekdaySchedule;
+use App\Domains\Commute\Support\ComputedDeparture;
+use App\Domains\Commute\Support\DepartureTimeCalculator;
 use App\Domains\Shared\Exceptions\DomainException;
 use App\Domains\Shared\Support\ErrorCode;
 use App\Domains\Shared\ValueObjects\DaysMask;
@@ -27,6 +29,8 @@ use Illuminate\Support\Facades\DB;
  */
 final readonly class SaveCommuteScheduleAction
 {
+    public function __construct(private ComputedDeparture $departure) {}
+
     public function execute(CommuteOffer $offer, array $input): CommuteOffer
     {
         CommuteState::assertEditable($offer);
@@ -51,7 +55,8 @@ final readonly class SaveCommuteScheduleAction
             $schedule->fill([
                 'commute_offer_id' => $offer->id,
                 'days_mask' => $daysMask,
-                'departure_time' => $input['departureTime'],
+                // Provisional for an arrival-only schedule: rewritten from the weekdays below.
+                'departure_time' => $input['departureTime'] ?? $input['promisedArrivalTime'],
                 'timezone' => $input['timezone'] ?? 'Africa/Cairo',
                 'start_date' => $startDate->toDateString(),
                 // A one-time commute ends the day it happens.
@@ -99,8 +104,24 @@ final readonly class SaveCommuteScheduleAction
 
             $weekday->commute_offer_id = $offer->id;
             $weekday->weekday_bit = $bit;
-            $weekday->departure_time = $day['departureTime'] ?? $input['departureTime'];
             $weekday->promised_arrival_time = $day['promisedArrivalTime'] ?? ($input['promisedArrivalTime'] ?? null);
+
+            $fixedDeparture = $day['departureTime'] ?? ($input['departureTime'] ?? null);
+
+            if ($fixedDeparture === null && $weekday->promised_arrival_time === null) {
+                // A day with neither has nothing to leave or arrive by.
+                throw DomainException::of(ErrorCode::ValidationFailed, fields: [
+                    "perDay.{$bit}.promisedArrivalTime" => [__('validation.required', ['attribute' => 'promisedArrivalTime'])],
+                ]);
+            }
+
+            /*
+             * C-2 (COM-15, decision C9): no departure for this day means RAFEEQ computes it from
+             * the arrival. What is stored here is an estimate on today's route without traffic,
+             * for display and ordering; each generated day gets its own, and riders move it.
+             */
+            $weekday->departure_is_computed = $fixedDeparture === null;
+            $weekday->departure_time = $fixedDeparture ?? $this->estimatedDeparture($offer, (string) $weekday->promised_arrival_time, $input['timezone'] ?? 'Africa/Cairo');
             // Null, not a copy of the parent: null means "follow the commute", so a later change
             // reaches every day he did not deliberately set differently.
             $weekday->seats_total = $day['seatsTotal'] ?? null;
@@ -122,6 +143,26 @@ final readonly class SaveCommuteScheduleAction
             'days_mask' => DaysMask::fromBitList($saved->pluck('weekday_bit')->all())->value,
             'departure_time' => $saved->min('departure_time'),
         ]);
+    }
+
+    /**
+     * The departure an arrival implies on the route as saved, as a local wall clock. Before a
+     * route exists there is nothing to time, so the arrival itself stands in until publishing
+     * generates the real days.
+     */
+    private function estimatedDeparture(CommuteOffer $offer, string $arrival, string $timezone): string
+    {
+        $offer->loadMissing('locations');
+
+        // Tomorrow's arrival: a provider will not time a journey in the past.
+        $arriveBy = DepartureTimeCalculator::toUtc(
+            CarbonImmutable::tomorrow($timezone)->toDateString(),
+            $arrival,
+            $timezone,
+        );
+
+        return $this->departure->arrivingBy($offer, $arriveBy)
+            ?->setTimezone($timezone)->format('H:i:s') ?? $arrival;
     }
 
     /**
