@@ -510,10 +510,8 @@ it('still refuses an unverified identity the driver surface', function () {
     $unverified = signIn(phone: '01223337777', devicePublicId: 'drv-unverified')['session']['accessToken'];
     completeBasicProfile($unverified);
 
-    test()->withToken($unverified)->getJson('/api/v1/driver/application')
-        ->assertStatus(403)
-        ->assertJsonPath('error.code', 'VERIFICATION_REQUIRED');
-
+    // The application itself is open in any order since F2-1 (the five items are checked on
+    // submit), so the gate that still stands is publishing a commute.
     test()->withToken($unverified)->postJson('/api/v1/commutes', [])
         ->assertStatus(403)
         ->assertJsonPath('error.code', 'VERIFICATION_REQUIRED');
