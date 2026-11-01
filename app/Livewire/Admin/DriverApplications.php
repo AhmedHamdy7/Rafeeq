@@ -110,7 +110,11 @@ class DriverApplications extends Component
              * bug, and the reviewer needs to read it rather than see a blank page.
              */
             // A car review out of range says which range; anything else reads its error code.
-            $this->addError('queue', $e->fields['approvedSeats'][0] ?? __('errors.'.$e->errorCode->value));
+            // F2-2: an ID or selfie still waiting in the verification queue is named, so the
+            // reviewer knows where to go first.
+            $this->addError('queue', $e->fields['approvedSeats'][0]
+                ?? (isset($e->fields['missing']) ? __('admin.drivers.identity_not_approved', ['items' => implode(', ', $e->fields['missing'])]) : null)
+                ?? __('errors.'.$e->errorCode->value));
 
             return;
         }

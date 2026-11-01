@@ -1202,13 +1202,39 @@ return [
             /*
              * DEPLOY-ONLY — never expose this in the admin dashboard.
              *
-             * Which transport actually delivers the code. The SMS provider is
-             * still open question #2 in RAFEEQ_MASTER_PLAN.md §19, so `log` is
-             * the only driver that exists today — it refuses to run in
-             * production on purpose, so shipping without a real provider
-             * fails loudly instead of silently swallowing every code.
+             * Which transport actually delivers the code. `log` writes it to the
+             * log and refuses to run in production on purpose, so shipping
+             * without a real provider fails loudly instead of silently
+             * swallowing every code. `http` is the SMS gateway below (F1-6) —
+             * the provider is still a business choice (open question #2 in
+             * RAFEEQ_MASTER_PLAN.md §19), so it speaks the shape most Egyptian
+             * gateways share and is configured rather than coded per provider.
              */
             'driver' => env('RAFEEQ_OTP_DRIVER', 'log'),
+
+            /*
+             * DEPLOY-ONLY. The SMS gateway `driver = http` posts to (F1-6). What a provider
+             * hands over when the account is opened: an endpoint URL, an API key, and an
+             * approved sender name (Egyptian networks drop messages from an unregistered one).
+             *
+             * `fields` maps our three values onto the provider's own parameter names, because
+             * that is the only thing that differs between most gateways — and changing an env var
+             * is safer than shipping a class per provider we have not signed with yet.
+             */
+            'sms' => [
+                'url' => env('RAFEEQ_SMS_URL'),
+                'api_key' => env('RAFEEQ_SMS_API_KEY'),
+                'sender' => env('RAFEEQ_SMS_SENDER', 'Rafeeq'),
+                // `bearer` sends the key as `Authorization: Bearer …`; `field` sends it in the body.
+                'auth' => env('RAFEEQ_SMS_AUTH', 'bearer'),
+                'fields' => [
+                    'to' => env('RAFEEQ_SMS_FIELD_TO', 'to'),
+                    'message' => env('RAFEEQ_SMS_FIELD_MESSAGE', 'message'),
+                    'sender' => env('RAFEEQ_SMS_FIELD_SENDER', 'sender'),
+                    'api_key' => env('RAFEEQ_SMS_FIELD_API_KEY', 'api_key'),
+                ],
+                'timeout_seconds' => 10,
+            ],
 
             /*
              * DEPLOY-ONLY. A fixed code, so a shared server can be signed into while there
@@ -1230,6 +1256,24 @@ return [
              * why the Action throws rather than letting it through.
              */
             'dev_fixed_code' => env('RAFEEQ_DEV_OTP_CODE'),
+
+            /*
+             * DEPLOY-ONLY. The store-review sign-in (F1-1): ONE phone number that always takes
+             * ONE fixed code, so an Apple or Google reviewer can get past the OTP screen of the
+             * production app without a phone that receives our SMS.
+             *
+             * 🔴 Unlike `dev_fixed_code`, this one works in production — that is where the
+             * reviewers are. What keeps it safe is how small it is: it opens exactly the account
+             * at this number and nothing else, no SMS is sent (the number is not a real person's),
+             * every use is logged as a warning and a security event, and the rate limits, the
+             * resend cooldown and the attempt cap are untouched. `rafeeq:review-accounts` seeds
+             * the account it opens.
+             *
+             * Both must be set or neither does anything. The code must be exactly
+             * `auth.otp.length` digits; anything else throws, for the same reason the dev code does.
+             */
+            'review_phone' => env('RAFEEQ_REVIEW_PHONE'),
+            'review_code' => env('RAFEEQ_REVIEW_OTP'),
 
             // Chapter 2 §23.2 shows a six-digit code. This is the OTP, not the
             // local PIN (which is four digits per MASTER_PLAN §13).

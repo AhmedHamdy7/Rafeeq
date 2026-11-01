@@ -90,6 +90,8 @@ return [
         'reject' => 'Reject',
         'confirm_reject' => 'Confirm rejection',
         'approved' => 'Approved :name as a driver.',
+        // F2-2: the ID or selfie is still waiting in the verification queue.
+        'identity_not_approved' => 'Approve the ID and the selfie in the verification queue first (missing: :items).',
         'rejected' => 'Rejected :name.',
 
         // The car review (F2-7): what the reviewer decides about each car before approving.

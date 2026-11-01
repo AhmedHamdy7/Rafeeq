@@ -50,45 +50,27 @@ it('is readable before any identity is verified', function () {
 });
 
 /**
- * 🔴 An approved driver reads **4 of 5**, not 5, and that is the truth rather than a bug in this
- * read model — it is the first thing the checklist surfaced.
- *
- * `ReviewDriverApplicationAction::approve()` guards exactly two things: that the application is
- * decidable, and that the licence has not expired. It does **not** require a selfie, and it does
- * not mark the `driving_licence` verification row approved. So a driver can be approved and
- * publishing while item 2 of the five was never submitted.
- *
- * Feature 02 v3 says "manual admin approval **after all required items**", so this is a gap in the
- * gate and not in the display. It is pinned here as the current behaviour rather than papered over,
- * because making approval demand a selfie would block existing approved drivers and is a product
- * decision, not a refactor.
+ * 🔴 An approved driver reads **4 of 5**: the ID, the selfie (required since F2-2) and the car
+ * approved, and the `driving_licence` row still short. `ReviewDriverApplicationAction::approve()`
+ * decides the licence as part of the application — it does not mark that verification row approved.
  */
-it('reads four of five for an approved driver, because approval does not require a selfie', function () {
+it('reads four of five for an approved driver, the selfie included since F2-2', function () {
     $token = approvedDriver();
 
     $data = checklist($token)->assertOk()->json('data');
     $items = collect($data['items'])->keyBy('key');
 
     expect($data['of'])->toBe(5)
-        ->and($data['completed'])->toBe(3)
-        // She IS approved, so the chip is right even though an item is outstanding.
+        ->and($data['completed'])->toBe(4)
         ->and($data['overall'])->toBe('verified')
-        ->and($items['selfie']['status'])->toBe('not_started')
+        ->and($items['selfie']['status'])->toBe('approved')
         ->and($items['government_id']['status'])->toBe('approved')
         ->and($items['vehicle_details']['status'])->toBe('approved')
         ->and($items['vehicle_registration']['status'])->toBe('approved');
 });
 
-it('reads five of five once the selfie is approved too', function () {
+it('reads five of five once the licence row is approved too', function () {
     $token = approvedDriver();
-
-    uploadVerificationDocument($token, 'selfie', 'selfie');
-    test()->withToken($token)->postJson('/api/v1/account/verifications/selfie/submit')->assertOk();
-
-    app(ReviewVerificationAction::class)->approve(
-        UserVerification::query()->where('type', VerificationType::Selfie->value)->sole(),
-        adminWithRole(AdminRole::Verification),
-    );
 
     // The licence row is approved as part of the same review in a real queue; here it is set
     // directly, because this test is about the count rather than about the review flow.
@@ -157,10 +139,9 @@ it('warns that a licence is about to expire without calling her unverified', fun
 
     $data = checklist($token)->assertOk()->json('data');
 
-    // 3 of 5 here, not 4: setting an expiry on the still-pending licence row does not approve it,
-    // and the selfie is absent as always after `approvedDriver()`.
+    // 4 of 5: setting an expiry on the still-pending licence row does not approve it.
     expect($data['overall'])->toBe('expiring')
-        ->and($data['completed'])->toBe(3)
+        ->and($data['completed'])->toBe(4)
         ->and($data['licenceExpiresAt'])->not->toBeNull();
 });
 
@@ -179,7 +160,7 @@ it('pauses her on an expired licence', function () {
     expect($data['overall'])->toBe('renewal_required')
         // An expired licence is not a valid one, so it stops counting.
         ->and($items['driving_licence']['status'])->toBe('expired')
-        ->and($data['completed'])->toBe(3);
+        ->and($data['completed'])->toBe(4);
 });
 
 /**
