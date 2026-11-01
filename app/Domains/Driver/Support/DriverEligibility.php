@@ -7,8 +7,6 @@ use App\Domains\Identity\Enums\AccountStatus;
 use App\Domains\Identity\Enums\ProfileStatus;
 use App\Domains\Identity\Models\User;
 use App\Domains\Identity\Support\ProfileSettings;
-use App\Domains\Verification\Enums\VerificationType;
-use App\Domains\Verification\Support\VerificationCentre;
 
 /**
  * Chapter 3 §2: what "Become a Driver" checks before letting anyone in.
@@ -52,9 +50,11 @@ final class DriverEligibility
             $blockers[] = self::blocker('below_minimum_age', 'NONE');
         }
 
-        if (VerificationCentre::missingFrom($user, [VerificationType::GovernmentId]) !== []) {
-            $blockers[] = self::blocker('identity_not_verified', 'VERIFY_IDENTITY');
-        }
+        /*
+         * 🔴 An unverified ID no longer blocks starting (F2-1): it is one of the five items, uploaded
+         * in any order with the others, and approval is where it must be approved (F2-2). The
+         * checklist (`GET /driver/verification`) is what shows it as still to do.
+         */
 
         $profile = $user->driverProfile;
 

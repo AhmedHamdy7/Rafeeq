@@ -34,7 +34,7 @@ beforeEach(function () {
 
     // The "documents approved" notice approvedDriver() just sent (Feature 03 §8) — these tests are
     // about what the driver is told after that, and count her inbox.
-    Notification::query()->where('type', 'driver_documents_approved')->delete();
+    Notification::query()->where('type', 'driver_verified')->delete();
 
     $this->paxToken = verifiedPassenger('01223339999', device: 'pax-2');
     $this->driver = User::query()->where('phone_e164', '+201012345678')->sole();

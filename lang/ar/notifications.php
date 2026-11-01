@@ -268,15 +268,30 @@ return [
         'title' => 'السوّاق متأخر :minutes دقايق',
         'body' => 'رحلة :name كان معادها :time ولسه مابدأتش.',
     ],
-    'driver_documents_approved' => [
+    'driver_verified' => [
         'title' => 'بقيت سوّاق موثّق',
         'body' => 'ورقك اتقبل. تقدر تنشر رحلتك دلوقتي.',
+    ],
+    'driver_item_approved' => [
+        'title' => ':item اتقبل',
+        'body' => ':item بتاعك اتقبل.',
+    ],
+    'driver_item_rejected' => [
+        'title' => ':item محتاج يترفع تاني',
+        'body' => 'افتح التطبيق وشوف السبب، وغيّر الحاجة دي بس.',
+    ],
+    'driver_items' => [
+        'government_id' => 'البطاقة',
+        'selfie' => 'السيلفي',
+        'driving_licence' => 'رخصة القيادة',
+        'vehicle_registration' => 'رخصة العربية',
+        'vehicle_details' => 'بيانات العربية',
     ],
     'driver_documents_rejected' => [
         'title' => 'ورقك محتاج تعديل',
         'body' => 'افتح التطبيق وشوف المطلوب تصلّحه وابعته تاني.',
     ],
-    'licence_expiring' => [
+    'driver_item_expiring' => [
         'title' => 'رخصة القيادة قرّبت تخلص',
         'body' => 'هتخلص يوم :date. ارفع الرخصة الجديدة عشان تفضل تسوق.',
     ],
