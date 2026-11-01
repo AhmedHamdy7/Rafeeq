@@ -3,6 +3,7 @@
 namespace App\Domains\Payment\Support;
 
 use App\Domains\Booking\Models\Booking;
+use App\Domains\Payment\Models\FeeAppeal;
 use App\Domains\Trip\Models\Attendance;
 use App\Domains\Trip\Models\MemberWarning;
 
@@ -11,12 +12,12 @@ use App\Domains\Trip\Models\MemberWarning;
  * (PAY-19: "for drivers and passengers, suspension for debt is always the last step, and never
  * while a dispute is open").
  *
- * Two kinds are recorded, both counted until staff decide them: her appeal against a fee or a
- * warning (SAFE-11), and an attendance dispute ("I was not in that car") on a booking where she is
- * either the passenger or the driver.
+ * Each counts until staff decide it: an appeal against a fee (SAFE-11 — a passenger's on its
+ * warning, a driver's on the fee line), and an attendance dispute ("I was not in that car") on a
+ * booking where she is either the passenger or the driver.
  *
- * ⚠️ SEAM for the payment disputes of PAY-30 → PAY-32 (Feature 03 backend file F-11, workstream W3):
- * when those exist, they are added here, and every debt suspension path picks them up.
+ * Payment disputes (PAY-30 → PAY-32) are reports in review; when their outcomes are built they are
+ * added here too.
  */
 final class OpenDisputes
 {
@@ -28,6 +29,9 @@ final class OpenDisputes
             ->whereNotNull('disputed_at')
             ->whereNull('dispute_resolution')
             ->exists();
+
+        // A driver's appeal against one of his fees.
+        $appeal = $appeal || FeeAppeal::query()->where('user_id', $userId)->whereNull('resolution')->exists();
 
         return $appeal || Attendance::query()
             ->whereNotNull('disputed_at')

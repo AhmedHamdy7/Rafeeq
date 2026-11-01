@@ -7,7 +7,12 @@ use App\Domains\Booking\Enums\BookingStatus;
 use App\Domains\Booking\Models\Booking;
 use App\Domains\Commute\Enums\ScheduledTripStatus;
 use App\Domains\Identity\Models\User;
+use App\Domains\Payment\Support\DriverFees;
+use App\Domains\Payment\Support\FeeSettings;
+use App\Domains\Payment\Support\PassengerFees;
 use App\Domains\Shared\Exceptions\DomainException;
+use App\Domains\Trip\Enums\WarningKind;
+use Carbon\CarbonImmutable;
 use Illuminate\Support\Collection;
 
 /**
@@ -25,7 +30,7 @@ use Illuminate\Support\Collection;
  * {@see CancelBookingAction::byPassenger()}, a passenger's seat on his commute through
  * {@see CancelBookingAction::byDriver()} — so the normal rules apply unchanged: the seat goes back
  * to the waiting list, the reliability record takes the ordinary notice-based mark, and whatever
- * fee those rules charge is charged. Today that fee is 0 (Feature 03 files: W3 adds the ladders).
+ * fee those rules charge is charged (PAY-21, PAY-23).
  *
  * 🔒 **No reason is written on the booking.** `cancelledReason` is returned to BOTH sides, so
  * writing "blocked" there would tell the blocked person exactly what a block must never tell them.
@@ -74,13 +79,44 @@ final readonly class BlockedBookings
                 'role' => $booking->passenger_user_id === $blocker->id ? 'passenger' : 'driver',
             ])->all(),
             /*
-             * ⚠️ 0 for now. The cancellation fee ladders (F-2 for a passenger, F-5 for a driver) are
-             * not built yet; when they are, this is the sum they would charge for these bookings
-             * and `reason` names the rung.
+             * What the ordinary rules would charge the blocker for these (X-4): as a driver, the
+             * driver-cancel fee by notice per seat (PAY-23); as a passenger, a late cancel within
+             * 12 hours on her own counter (PAY-21) — which is dropped if the seat is refilled, so
+             * this is the most it can cost.
              */
-            'feePiastres' => 0,
-            'reason' => null,
+            'feePiastres' => $fee = self::fee($blocker, $bookings),
+            // `none`, `driver_cancel` or `late_cancel` — what the fee is for, to word it.
+            'reason' => match (true) {
+                $fee === 0 => null,
+                $bookings->contains(fn (Booking $b) => $b->driver_profile_id === $blocker->id && DriverFees::cancelPercent($b->scheduledTrip?->departure_at) > 0) => 'driver_cancel',
+                default => 'late_cancel',
+            },
         ];
+    }
+
+    /**
+     * @param  Collection<int, Booking>  $bookings
+     */
+    private static function fee(User $blocker, Collection $bookings): int
+    {
+        $fee = 0;
+        $rung = PassengerFees::nextRung((string) $blocker->id, WarningKind::LateCancel, CarbonImmutable::now());
+
+        foreach ($bookings as $booking) {
+            $departure = $booking->scheduledTrip?->departure_at;
+
+            if ($booking->driver_profile_id === $blocker->id) {
+                $fee += DriverFees::amount($booking, DriverFees::cancelPercent($departure));
+
+                continue;
+            }
+
+            if ($departure !== null && now()->diffInHours($departure, absolute: false) < FeeSettings::lateCancelHours()) {
+                $fee += PassengerFees::amountPiastres($booking, PassengerFees::basisPoints(WarningKind::LateCancel, $rung++));
+            }
+        }
+
+        return $fee;
     }
 
     /**

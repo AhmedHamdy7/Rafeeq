@@ -91,6 +91,38 @@
         <p class="rq-note">{{ __('admin.payments.no_appeals') }}</p>
     @endforelse
 
+    @foreach ($driverAppeals as $appeal)
+        <article class="rq-card" wire:key="driver-appeal-{{ $appeal->id }}">
+            <div style="font-weight:600">
+                <bdi>{{ $appeal->user?->public_first_name ?? '—' }}</bdi>
+                &middot; {{ __('admin.payments.side_driver') }}
+                &middot; <bdi>{{ $appeal->debtEntry?->reason_code }}</bdi>
+            </div>
+            <div class="rq-note">
+                {{ __('admin.payments.appeal_fee', ['amount' => number_format(($appeal->debtEntry?->amount_piastres ?? 0) / 100, 2), 'status' => 'charged']) }}
+                &middot; <bdi>{{ $appeal->reason }}</bdi>
+            </div>
+            @if ($mayAct)
+                @if ($deciding === $appeal->id)
+                    <div style="margin-top:13px">
+                        <textarea class="rq-field" wire:model="appealNote" rows="2" required
+                                  placeholder="{{ __('admin.payments.note_placeholder') }}"></textarea>
+                        @error('appealNote') <p class="rq-error">{{ $message }}</p> @enderror
+                        <div class="rq-actions">
+                            <button type="button" class="rq-btn rq-btn--primary" wire:click="decideDriverAppeal('{{ $appeal->id }}', true)">{{ __('admin.payments.overturn') }}</button>
+                            <button type="button" class="rq-btn rq-btn--quiet" wire:click="decideDriverAppeal('{{ $appeal->id }}', false)">{{ __('admin.payments.uphold') }}</button>
+                            <button type="button" class="rq-btn rq-btn--quiet" wire:click="$set('deciding', null)">{{ __('admin.queue.cancel') }}</button>
+                        </div>
+                    </div>
+                @else
+                    <div class="rq-actions">
+                        <button type="button" class="rq-btn rq-btn--quiet" wire:click="openAppeal('{{ $appeal->id }}')">{{ __('admin.payments.decide') }}</button>
+                    </div>
+                @endif
+            @endif
+        </article>
+    @endforeach
+
     @if ($mayAct)
         <h2 class="rq-h1" style="font-size:18px;margin-top:24px">{{ __('admin.payments.coupon_title') }}</h2>
         <p class="rq-note">{{ __('admin.payments.coupon_help') }}</p>

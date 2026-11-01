@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Api\V1\Driver;
 
+use App\Domains\Booking\Actions\DisplaceConfirmedBookingsAction;
 use App\Domains\Commute\Actions\ChangeCommuteStatusAction;
 use App\Domains\Commute\Actions\CreateCommuteOfferAction;
 use App\Domains\Commute\Actions\DuplicateCommuteOfferAction;
@@ -10,16 +11,19 @@ use App\Domains\Commute\Actions\ReviseCommuteOfferAction;
 use App\Domains\Commute\Actions\SaveCommuteRouteAction;
 use App\Domains\Commute\Actions\SaveCommuteScheduleAction;
 use App\Domains\Commute\Enums\CommuteLocationType;
+use App\Domains\Commute\Enums\CommuteOfferStatus;
 use App\Domains\Commute\Enums\CommutePausedReason;
 use App\Domains\Commute\Models\CommuteOffer;
 use App\Domains\Commute\Support\SeatPricing;
 use App\Domains\Driver\Models\DriverProfile;
 use App\Domains\Geo\Contracts\GeoQueryEngine;
+use App\Domains\Payment\Support\DriverFees;
 use App\Domains\Shared\Exceptions\DomainException;
 use App\Domains\Shared\Support\ErrorCode;
 use App\Domains\Shared\ValueObjects\Coordinate;
 use App\Http\Controllers\Controller;
 use App\Http\OpenApi\ApiErrors;
+use App\Http\Requests\Commute\CancelPreviewRequest;
 use App\Http\Requests\Commute\ReviseCommuteRequest;
 use App\Http\Requests\Commute\SaveCommuteRouteRequest;
 use App\Http\Requests\Commute\SaveCommuteScheduleRequest;
@@ -387,6 +391,33 @@ final class CommuteController extends Controller
      * Scoped to the caller's own commutes, answering 404 for anyone else's — a
      * 403 would confirm the id exists (Bible §6, IDOR).
      */
+    /**
+     * GET /v1/commutes/{commute}/cancel-preview?action=pause|delete|replace_vehicle — what it would
+     * cost before she confirms (C-9, PAY-23). Every confirmed seat on an upcoming day is cancelled,
+     * inside the 16-hour lock too, and each costs the driver-cancel fee by the notice she gives
+     * now. `replace_vehicle` counts every commute of hers, because one car serves them all.
+     *
+     * Answers `{ affectedSeats, feePiastres, reason, perTrip[] }`: `reason` is `none`, `mid_notice`
+     * (10–16h) or `short_notice` (< 10h); `perTrip[]` is each day's `tripId`, `departureAt`,
+     * `seats`, `percent` and `feePiastres`. Show the amount on the second confirmation.
+     */
+    #[ApiErrors(ErrorCode::NotFound)]
+    public function cancelPreview(CancelPreviewRequest $request, string $commute): JsonResponse
+    {
+        $offer = $this->owned($request, $commute);
+
+        $offers = $request->validated('action') === 'replace_vehicle'
+            ? CommuteOffer::query()
+                ->where('driver_profile_id', $request->user()->id)
+                ->whereNot('status', CommuteOfferStatus::Archived->value)
+                ->get()
+            : collect([$offer]);
+
+        $bookings = $offers->flatMap(fn (CommuteOffer $one) => DisplaceConfirmedBookingsAction::futureConfirmedBookings($one));
+
+        return ApiResponse::success(DriverFees::preview($bookings));
+    }
+
     private function owned(Request $request, string $commuteId): CommuteOffer
     {
         return CommuteOffer::query()

@@ -12,6 +12,8 @@ use App\Domains\Commute\Models\ScheduledTrip;
 use App\Domains\Identity\Models\User;
 use App\Domains\Notification\Enums\NotificationType;
 use App\Domains\Notification\Support\Notifier;
+use App\Domains\Payment\Support\DriverFees;
+use App\Domains\Payment\Support\FeeSettings;
 use App\Domains\Reliability\Enums\ReliabilityEventKind;
 use App\Domains\Reliability\Support\ReliabilityLedger;
 use App\Domains\Trip\Enums\AttendanceStatus;
@@ -161,6 +163,25 @@ final readonly class SweepDelayedTripsAction
 
             foreach ($bookings as $booking) {
                 $this->endSeat($booking, $locked);
+            }
+
+            /*
+             * 🔴 PAY-26 (Feature 03 backend file F-8): a driver who never came pays half of every
+             * seat confirmed that morning — including the ones whose passenger had already given
+             * up waiting, whose 25 % lateness fee is voided in favour of this (PAY-29).
+             */
+            $gaveUp = Booking::query()
+                ->where('scheduled_trip_id', $locked->getKey())
+                ->where('status', BookingStatus::ExitedDueToDriverDelay->value)
+                ->whereNotIn('id', $bookings->pluck('id'))
+                ->get();
+
+            foreach ($gaveUp as $booking) {
+                DriverFees::void($booking, DriverFees::LATE, 'became_driver_no_show');
+            }
+
+            foreach ($bookings->concat($gaveUp) as $booking) {
+                DriverFees::charge($booking, DriverFees::NO_SHOW, FeeSettings::driverNoShowPercent(), 'PAY-26');
             }
 
             $locked->forceFill([

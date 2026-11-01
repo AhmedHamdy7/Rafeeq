@@ -161,6 +161,20 @@ enum NotificationType: string
     /** Somebody from the waiting list took the seat: the late-cancel fee is dropped (R-8). */
     case LateCancelFeeWaived = 'late_cancel_fee_waived';
 
+    // ---- Driver fees (PAY-23 → PAY-29) — one message per act, the total of its seats ---------
+
+    /** He cancelled seats — one passenger, a day, a pause, a delete, a new car, a block (PAY-23). */
+    case DriverCancelFee = 'driver_cancel_fee';
+
+    /** He ended a run that had set off (PAY-24, PAY-25). */
+    case DriverEndedTripFee = 'driver_ended_trip_fee';
+
+    /** He never came and the run expired (PAY-26). */
+    case DriverNoShowFee = 'driver_no_show_fee';
+
+    /** A passenger left or switched because he was late (PAY-29). */
+    case DriverLateFee = 'driver_late_fee';
+
     /**
      * Her appeal against a reliability event was approved (Feature 03 v5 §115).
      *
@@ -432,6 +446,10 @@ enum NotificationType: string
             self::LateCancelFee,
             self::LateCancelFeeCharged,
             self::LateCancelFeeWaived,
+            self::DriverCancelFee,
+            self::DriverEndedTripFee,
+            self::DriverNoShowFee,
+            self::DriverLateFee,
             self::AppealApproved,
             self::AppealDeclined,
             self::ChatMessage,

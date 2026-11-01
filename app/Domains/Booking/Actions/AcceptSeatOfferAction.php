@@ -23,6 +23,8 @@ use App\Domains\Commute\Support\ScheduleLock;
 use App\Domains\Group\Actions\AddMemberToGroupAction;
 use App\Domains\Outbox\Enums\OutboxEventType;
 use App\Domains\Outbox\Support\Outbox;
+use App\Domains\Payment\Support\DriverFees;
+use App\Domains\Payment\Support\FeeSettings;
 use App\Domains\Payment\Support\PassengerDebt;
 use App\Domains\Reliability\Enums\ReliabilityEventKind;
 use App\Domains\Reliability\Support\ReliabilityLedger;
@@ -455,6 +457,11 @@ final readonly class AcceptSeatOfferAction
                 ? (int) config('rafeeq.booking.cancellation_fee_piastres')
                 : 0,
         ])->save();
+
+        // PAY-29 (F-10): she switched because he was late — 25 % of her seat on the driver.
+        if ($reason === SwitchReason::DriverDelay) {
+            DriverFees::charge($old, DriverFees::LATE, FeeSettings::driverLatePercent(), 'PAY-29');
+        }
 
         // Never below zero, however the data got there.
         $release = min($old->seats_reserved, $oldTrip->seats_taken);

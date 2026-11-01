@@ -8,6 +8,7 @@ use App\Domains\Booking\Support\DuringRideRequests;
 use App\Domains\Commute\Actions\CancelTripDayAction;
 use App\Domains\Commute\Models\CommuteOffer;
 use App\Domains\Commute\Models\ScheduledTrip;
+use App\Domains\Payment\Support\DriverFees;
 use App\Domains\Shared\Exceptions\DomainException;
 use App\Domains\Shared\Support\ErrorCode;
 use App\Domains\Shared\ValueObjects\Coordinate;
@@ -187,10 +188,30 @@ final class TripController extends Controller
     }
 
     /**
+     * GET /v1/trips/{trip}/cancel-preview — what "Cancel today" would cost before he confirms (C-9,
+     * PAY-23): `{ affectedSeats, feePiastres, reason, perTrip[] }` for this one day. `reason` is
+     * `none`, `mid_notice` (10–16h) or `short_notice` (< 10h).
+     */
+    #[ApiErrors(ErrorCode::NotFound)]
+    public function cancelPreview(Request $request, string $trip): JsonResponse
+    {
+        $day = $this->driven($request, $trip);
+
+        $bookings = Booking::query()
+            ->where('scheduled_trip_id', $day->getKey())
+            ->where('status', BookingStatus::Confirmed->value)
+            ->with('scheduledTrip')
+            ->get();
+
+        return ApiResponse::success(DriverFees::preview($bookings));
+    }
+
+    /**
      * POST /v1/trips/{trip}/cancel — "Cancel today" (screen 23): one day off, the commute stands.
      *
-     * Every passenger on the day is told and their booking ends as cancelled by the driver; see
-     * the Action for what else closes with it.
+     * Every passenger on the day is told and their booking ends as cancelled by the driver; he pays
+     * the driver-cancel fee by timing per confirmed seat (PAY-23, C-6) — preview it first. See the
+     * Action for what else closes with it.
      */
     #[ApiErrors(ErrorCode::TripNotCancellable, ErrorCode::NotFound)]
     public function cancel(CancelTripDayRequest $request, string $trip, CancelTripDayAction $action): JsonResponse

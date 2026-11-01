@@ -14,7 +14,7 @@
 >
 > **Base URL:** `{host}/api/v1` · **Auth:** bearer token · **Format:** JSON only.
 
-**Last updated:** 2026-11-01 · **174 endpoints live** · Phases 0–7, 9 and 11 complete · 10, 12 and 13 all but a decision each
+**Last updated:** 2026-11-01 · **178 endpoints live** · Phases 0–7, 9 and 11 complete · 10, 12 and 13 all but a decision each
 
 ---
 
@@ -22,7 +22,7 @@
 
 ### What is ready
 
-**174 endpoints live** and tested, across the 47 designed screens:
+**178 endpoints live** and tested, across the 47 designed screens:
 
 | | Count | Covers |
 |---|---|---|
@@ -728,6 +728,7 @@ fails if this list and the running routes ever disagree in either direction.
 | `POST /commutes/{commute}/pause` | 4.5 Commutes (driver) |
 | `POST /commutes/{commute}/pickup-preview` | 4.5 Commutes (driver) |
 | `GET /commutes/{commute}/price` | 4.5 Commutes (driver) |
+| `GET /commutes/{commute}/cancel-preview` | 4.5 Commutes (driver) |
 | `POST /commutes/{commute}/publish` | 4.5 Commutes (driver) |
 | `POST /commutes/{commute}/resume` | 4.5 Commutes (driver) |
 | `POST /commutes/{commute}/return` | 4.5 Commutes (driver) |
@@ -750,9 +751,11 @@ fails if this list and the running routes ever disagree in either direction.
 | `PATCH /bookings/{booking}/cancel` | 4.7 Seat requests and bookings |
 | `POST /bookings/{booking}/dispute` | 4.7 Seat requests and bookings |
 | `GET /driver/bookings` | 4.7 Seat requests and bookings |
+| `POST /driver/bookings/{booking}/cancel` | 4.7 Seat requests and bookings |
 | `GET /account/debt` | 4.16 Money |
 | `GET /account/debt/statements` | 4.16 Money |
 | `POST /account/debt/payments` | 4.16 Money |
+| `POST /account/debt/entries/{entry}/appeal` | 4.16 Money |
 | `GET /groups/{group}/statement` | 4.16 Money |
 | `GET /driver/seat-requests` | 4.7 Seat requests and bookings |
 | `POST /driver/seat-requests/{seatRequest}/approve` | 4.7 Seat requests and bookings |
@@ -789,6 +792,7 @@ fails if this list and the running routes ever disagree in either direction.
 | `POST /pickup-requests/{pickupRequest}/accept-alternative` | 4.8 Pickup points |
 | `GET /trips/{trip}` | 4.9 Live trip |
 | `GET /trips/{trip}/attendance` | 4.9 Live trip |
+| `GET /trips/{trip}/cancel-preview` | 4.9 Live trip |
 | `POST /trips/{trip}/cancel` | 4.9 Live trip |
 | `POST /trips/{trip}/cancel-active` | 4.9 Live trip |
 | `POST /trips/{trip}/check-in` | 4.9 Live trip |
@@ -1613,6 +1617,17 @@ Replaces the old `price-suggestion` slider.
 `COMMUTE_INCOMPLETE` (422) if the route has not been saved yet. `VEHICLE_SEATS_NOT_APPROVED` (409)
 while the car has not been reviewed — nothing for the driver to fix, he waits for the review.
 
+#### `GET /commutes/{commute}/cancel-preview?action=pause|delete|replace_vehicle` — verified
+
+What pausing, deleting or replacing the car would cost **before** she confirms (C-9, PAY-23). Each
+cancels **every** confirmed seat on an upcoming day — inside the 16-hour lock too — and each seat
+costs the driver-cancel fee by the notice she gives now (16h+: 0 · 10–16h: 10 % · under 10h: 25 %).
+`replace_vehicle` counts every commute of hers: one car serves them all.
+
+Same shape as `GET /trips/{trip}/cancel-preview` (4.9): `affectedSeats`, `feePiastres`, `reason`,
+`perTrip[]`. **Two confirmations; the second shows the amount.** An automatic pause (a suspended
+car, a lapsed licence, unpaid commission) costs nothing.
+
 #### `POST /commutes/{commute}/publish` — verified
 
 Computes the route, writes the search box, generates the first bookable days. Re-checks driver and
@@ -2400,8 +2415,23 @@ Releases the seat under the same lock that takes it. Which side cancelled is rea
 caller is**, never from the request — a passenger must not be able to record their own
 cancellation as the driver's, which would move the blame for a missed ride.
 
-**No fee is charged.** The cancellation policy is still an open question and a guessed fee would
-take money from a real person on an assumption. `cancellationFeePiastres` is always `0` today.
+**The decided fees apply** (`cancellationFeePiastres` on the booking stays `0`; the fee is on the
+ledger, 4.16):
+
+- **a passenger** within **12 hours** of departure → a late cancel on her own counter (see
+  `GET /account/warnings`): a warning first, then a share of the seat — held until departure and
+  **dropped if somebody from the waiting list takes the seat**. Earlier is free.
+- **a driver** → the driver-cancel fee by notice, per seat: **16h or more: 0 · 10–16h: 10 % ·
+  under 10h: 25 %**. A driver removing one passenger should use `POST /driver/bookings/{booking}/cancel`,
+  which asks for his reason.
+
+#### `POST /driver/bookings/{booking}/cancel` — active, profile complete, driver only
+
+The driver removing **one** passenger (C-5, COM-21) — for example one who refused a change he
+cannot do without. `{ "reason": "..." }` (required, 3–255; kept for support and his appeal, **never
+sent to her**). The booking becomes `CANCELLED_BY_DRIVER`, she is told and shown alternatives, the
+seat goes to the waiting list, and he pays the driver-cancel fee by notice (16h+: 0 · 10–16h: 10 %
+· under 10h: 25 % of her seat). `404` for anybody else's booking.
 
 #### `POST /bookings/{booking}/dispute` — active, profile complete
 
@@ -2579,6 +2609,13 @@ Closes the session, completes the bookings, updates the counters, and clears the
 **No money moves** — there is a two-hour delay before collection so a driver who tapped the wrong
 name can notice (and Phase 8 is not built).
 
+#### `GET /trips/{trip}/cancel-preview` — driver only
+
+What "Cancel today" would cost him, before he confirms (C-9): `affectedSeats`, `feePiastres`,
+`reason` (`none` · `mid_notice` 10–16h · `short_notice` under 10h) and `perTrip[]` (`tripId`,
+`departureAt`, `seats`, `percent`, `feePiastres`). **Two confirmations; the second shows the
+amount.** It is the same arithmetic the cancellation then charges.
+
 #### `POST /trips/{trip}/cancel` — active, profile complete, driver only — "Cancel today" (screen 23)
 
 `{ "reason"?: "..." }` (optional, up to 255). Calls off **one day**; the commute and every other day
@@ -2586,7 +2623,9 @@ stand. `200` with the day (`ScheduledTrip`, `status: "CANCELLED"`, `seatsTaken: 
 
 - Every booking on the day becomes `CANCELLED_BY_DRIVER` and every passenger gets a
   `trip_day_cancelled` notification (4.14) with the driver's first name and the date — **never the
-  reason**, which may be personal and shows on a lock screen. Nothing is charged.
+  reason**, which may be personal and shows on a lock screen. The passengers pay nothing; the
+  driver pays the driver-cancel fee by notice per confirmed seat (16h+: 0 · 10–16h: 10 % · < 10h:
+  25 %) — **show it first** with `GET /trips/{trip}/cancel-preview`.
 - A pending one-day request for that date is expired.
 - `TRIP_NOT_CANCELLABLE` (409, `error.fields.status`) once the run has started, or if the day is
   already cancelled. A run already under way is stopped with `POST /trips/{trip}/cancel-active`
@@ -2745,7 +2784,7 @@ car is not somebody to put a form in front of.
 |---|---|
 | **No driver confirmation** | By design. A flow needing the driver's agreement would need it from the person she may be getting away from. |
 | **Her booking becomes `ENDED_EARLY`** | A **new status**. Not `COMPLETED` (which would say she was carried where she agreed, and decides what she is charged) and not cancelled (which would say she never travelled, and lands on the cancellation history a future driver reads). |
-| **No fee** | `cancellationFeePiastres` is `0`. She was carried. |
+| **Full fare** | She chose to get out, so she pays the whole seat (PAY-27) and the booking is `PAID` at once; `cancellationFeePiastres` is `0`. |
 | **Location access ends at once** | `GET /trips/{trip}/location` answers `404` for her from that moment, and any live-share link she sent a friend is revoked. For most commutes where the car goes next is the driver's street. |
 | **She can still rate it** | She travelled part of the way, and this is the review it matters most to allow. |
 | **The driver is told** | `passenger_ended_early` — **without the reason.** It may be about her. |
@@ -2766,7 +2805,7 @@ ruined**. This moves all three to the driver.
 | | |
 |---|---|
 | **Her booking becomes `EXITED_DUE_TO_DRIVER_DELAY`** | A **new status**. Not `CANCELLED_BY_PASSENGER` (charges her, and reads as her decision for ever) and not `CANCELLED_BY_DRIVER` (reports a cancellation that never happened — the driver was *late*, which is a different failure with its own record). |
-| **No fee** | `cancellationFeePiastres` is `0`. |
+| **No fee for her** | `cancellationFeePiastres` is `0`. The **driver** pays 25 % of her seat (PAY-29) — half of it instead if the morning then expires as a no-show (PAY-26). |
 | **Nothing on her record** | The reliability event lands on the **driver** (`driver_late_caused_exit`). |
 | **The driver is told, WITH the reason** | `passenger_exited_driver_delay`. Unlike `passenger_ended_early`, where the reason is withheld because it may be about her, this one *is* about her driving — and a driver told she lost somebody without being told why cannot act on it. |
 | `reason` in the body | Optional. The server records its own finding regardless. |
@@ -3872,6 +3911,20 @@ code to translate), `bookingId`, `createdAt`.
 WebP; send `multipart/form-data`). Answers **201** with the payment `pending_confirmation`.
 `409 DEBT_NOTHING_OWED` when that side owes nothing. Rate-limited with the reports.
 
+#### `POST /account/debt/entries/{entry}/appeal` — a driver appealing one of his fees
+
+`{ "reason": "..." }` (10–1000 — what happened and what evidence he has). `entry` is a `lines[].id`
+of type `fee` on his **driver** side. Once per fee, within **48 hours** of it appearing (SAFE-11).
+**201** with `{ id, debtEntryId, status: "pending", createdAt, resolvedAt }`; `422` with
+`error.fields.appeal`: `ALREADY_APPEALED` or `APPEAL_WINDOW_CLOSED`. Staff decide; overturned →
+the whole fee is credited back (PAY-10). While it waits he cannot be suspended for debt. A
+passenger appeals hers on its warning (`POST /account/warnings/{warning}/dispute`).
+
+Driver fees (each told once per act with the total and the 48 hours): cancelling before the trip
+by notice `driver_cancel_fee` (PAY-23) · ending a run that set off, 100 % per seat
+`driver_ended_trip_fee` (PAY-24, PAY-25) · never came, 50 % `driver_no_show_fee` (PAY-26) · a
+passenger left because he was late, 25 % `driver_late_fee` (PAY-29).
+
 🔒 Her own, always. There is no endpoint at any access level that reads another member's debt.
 
 #### `GET /groups/{group}/statement` — optional `?weekOf=YYYY-MM-DD`
@@ -3897,7 +3950,7 @@ it is not a passenger's business either.
 | `bookingId` · `tripDate` · `seats` | Which journey. |
 | `pricePiastres` | 🔴 What was **agreed**, read from the booking's snapshot — never recomputed from today's price. A driver who raises her price does not retroactively change what somebody already owed. |
 | `paymentType` | `cash` or `online`. |
-| `paymentStatus` | `NOT_DUE` · `PENDING` · `PAID` · `FAILED` · `REFUNDED` · `DISPUTED`. Cash becomes `PAID` the moment she is dropped off. |
+| `paymentStatus` | `NOT_DUE` · `PENDING` · `PAID` · `FAILED` · `REFUNDED` · `DISPUTED` · `WAIVED` (nothing owed: the driver ended her run). Cash becomes `PAID` the moment she is dropped off. |
 | `wasNoShow` | Still owed — the seat was held and the car went (decision D18) — but flagged so you can show it differently from an ordinary ride. |
 
 `totals` carries `duePiastres`, `paidPiastres` and `outstandingPiastres` (stated, not left as
@@ -4043,6 +4096,7 @@ exist, and every live endpoint must be named here.
 
 | Date | Change |
 |---|---|
+| 2026-11-01 | 🚗 **Driver fees (PAY-23 → PAY-29, C-5 → C-10).** New: `POST /driver/bookings/{booking}/cancel` (remove one passenger), `GET /trips/{trip}/cancel-preview` and `GET /commutes/{commute}/cancel-preview` (the fee before he confirms), `POST /account/debt/entries/{entry}/appeal` (48h). Cancelling seats costs the driver by notice (16h+: 0 · 10–16h: 10 % · < 10h: 25 %) on one passenger, Cancel today, pause, delete, a new car and a block; ending a run that set off 100 %; never coming 50 %; a passenger leaving because he was late 25 %. After a breakdown, accident or emergency a passenger aboard pays the share of her route past 25 %; otherwise nothing — her booking's `paymentStatus` is the new `WAIVED`. `PATCH /bookings/{booking}/cancel` now applies the fees. End early is the full fare. |
 | 2026-11-01 | 💸 **Passenger fees (PAY-20 → PAY-22, TRIP-26, SAFE-11).** Three counters — `NO_SHOW`, `LATE_CANCEL`, `LATE_BOARDING` — each with its ladder and a 90-day reset; `MISSED_COMMITMENT` is history only. Warnings now carry `feePiastres`, `feeStatus`, `appealBy`. A late cancel's fee waits for departure and is dropped if the seat is refilled. Appeals close after 48 hours (`APPEAL_WINDOW_CLOSED`). `away` on the group attendance cancels that day. |
 | 2026-11-01 | 💳 **Debt and paying it (PAY-08 → PAY-17, PAY-34, PAY-45, PAY-46).** the old `/driver/balance` is gone; `GET /account/debt`, `GET /account/debt/statements` and `POST /account/debt/payments` replace it. Two sides per person (driver commission due Friday 23:59 Cairo; passenger fees on the next trip), no amount cap, +10 % once after the Friday, driving suspended after the second Friday, booking suspended after 14 days or over 200 EGP (`RIDING_SUSPENDED_FOR_DEBT`). Paying is "I paid" with an InstaPay reference that staff confirm. Section 4.16. |
 | 2026-10-31 | 🛡️ **Feature 03 safety, reliability and push (X-3, X-4, X-6, X-7, §8).** **Block:** new **`GET /safety/blocked-users/preview?userId=`** → `{bookingsToCancel, feePiastres, reason}`, and `POST /safety/blocked-users` now **cancels every upcoming booking the two share**, as the blocker (fee 0 today); the blocked person only sees a `booking_cancelled`. The id to block is **`otherPartyUserId`** on the booking (and `passengerUserId` on the driver's attendance rows) — `null` until the journey is over. **Reports:** four new categories (`false_arrival` · `dropped_early` · `women_only_misuse` · `abusive_review`) and a **24-hour window** after the journey ends — `409 REPORT_WINDOW_CLOSED`; no window without a `bookingId`; **no audio** yet (Q-007). **Trusted contacts: 3, not 5** (existing ones are kept). **Reliability:** 90-day window and the partners' weights (table in 4.2), new kinds `DRIVER_LATE` and `PASSENGER_LATE`; still gates nothing. **Push:** FCM HTTP v1 is built and switched on per server; eight new notification types (4.14). |

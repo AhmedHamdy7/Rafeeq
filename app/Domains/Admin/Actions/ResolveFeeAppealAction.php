@@ -7,6 +7,8 @@ use App\Domains\Admin\Support\AdminActionLog;
 use App\Domains\Identity\Models\User;
 use App\Domains\Payment\Enums\DebtEntryType;
 use App\Domains\Payment\Enums\DebtSide;
+use App\Domains\Payment\Models\DebtEntry;
+use App\Domains\Payment\Models\FeeAppeal;
 use App\Domains\Payment\Support\DebtLedger;
 use App\Domains\Shared\Exceptions\DomainException;
 use App\Domains\Shared\Support\ErrorCode;
@@ -16,7 +18,8 @@ use App\Domains\Trip\Models\MemberWarning;
 use Illuminate\Support\Facades\DB;
 
 /**
- * Staff deciding a passenger's appeal against a warning or its fee (SAFE-11, PAY-10).
+ * Staff deciding an appeal against a fee (SAFE-11, PAY-10): a passenger's, on its warning; a
+ * driver's, on the fee line itself.
  *
  * - **Upheld** (the warning stands) → nothing moves.
  * - **Overturned** → the warning stops counting on her ladder, and its fee goes: never charged if it
@@ -70,6 +73,50 @@ final readonly class ResolveFeeAppealAction
             );
 
             return $warning;
+        });
+    }
+
+    /**
+     * A driver's appeal against one of his fees: overturned → the whole fee credited back.
+     */
+    public function driverFee(FeeAppeal $appeal, AdminUser $admin, bool $overturn, string $note): FeeAppeal
+    {
+        return DB::transaction(function () use ($appeal, $admin, $overturn, $note): FeeAppeal {
+            $appeal = FeeAppeal::query()->whereKey($appeal->getKey())->lockForUpdate()->firstOrFail();
+
+            if ($appeal->resolution !== null) {
+                throw DomainException::of(ErrorCode::FeeAppealNotOpen);
+            }
+
+            $resolution = $overturn ? DisputeResolution::Overturned : DisputeResolution::Upheld;
+
+            $appeal->forceFill([
+                'resolution' => $resolution,
+                'resolved_by_admin_id' => $admin->id,
+                'resolved_at' => now(),
+                'resolution_note' => $note,
+            ])->save();
+
+            if ($overturn) {
+                $fee = DebtEntry::query()->findOrFail($appeal->debt_entry_id);
+
+                DebtLedger::credit(
+                    User::query()->findOrFail($appeal->user_id),
+                    DebtEntryType::Credit,
+                    (int) $fee->amount_piastres,
+                    'appeal_upheld',
+                    meta: ['rule' => 'PAY-10', 'feeEntryId' => $fee->id],
+                    side: DebtSide::Driver,
+                    idempotencyKey: "fee_appeal_reversal:{$appeal->getKey()}",
+                );
+            }
+
+            AdminActionLog::record($admin, 'fee.appeal_decide', $appeal,
+                after: ['resolution' => $resolution->value],
+                reason: $note,
+            );
+
+            return $appeal;
         });
     }
 }

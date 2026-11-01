@@ -57,6 +57,46 @@ final class FeeSettings
         return max(1, (int) self::get('fees.appeal_hours'));
     }
 
+    public static function driverCancelFreeHours(): int
+    {
+        return max(0, (int) self::get('fees.driver_cancel_free_hours'));
+    }
+
+    public static function driverCancelShortHours(): int
+    {
+        return max(0, (int) self::get('fees.driver_cancel_short_hours'));
+    }
+
+    public static function driverCancelMidPercent(): int
+    {
+        return self::percent(self::get('fees.driver_cancel_mid_percent'));
+    }
+
+    public static function driverCancelShortPercent(): int
+    {
+        return self::percent(self::get('fees.driver_cancel_short_percent'));
+    }
+
+    public static function driverActiveCancelPercent(): int
+    {
+        return self::percent(self::get('fees.driver_active_cancel_percent'));
+    }
+
+    public static function proRataFreePercent(): int
+    {
+        return self::percent(self::get('fees.pro_rata_free_percent'));
+    }
+
+    public static function driverNoShowPercent(): int
+    {
+        return self::percent(self::get('fees.driver_no_show_percent'));
+    }
+
+    public static function driverLatePercent(): int
+    {
+        return self::percent(self::get('fees.driver_late_percent'));
+    }
+
     private static function percent(mixed $value): int
     {
         return max(0, min(200, (int) $value));

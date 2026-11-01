@@ -14,6 +14,7 @@ use App\Domains\Commute\Models\ScheduledTrip;
 use App\Domains\Identity\Models\User;
 use App\Domains\Notification\Enums\NotificationType;
 use App\Domains\Notification\Support\Notifier;
+use App\Domains\Payment\Support\DriverFees;
 use App\Domains\Reliability\Enums\ReliabilityEventKind;
 use App\Domains\Reliability\Support\ReliabilityLedger;
 use App\Domains\Shared\Exceptions\DomainException;
@@ -38,9 +39,10 @@ use Illuminate\Support\Facades\DB;
  * - every passenger is told, by name and date — and NOT the reason, which may be personal and
  *   would show on a lock screen.
  *
- * 🔒 Money: nothing is charged and nothing is refunded here, because nothing has been paid — every
- * booking is cash, settled on the day, until Phase 8 brings online payment. When it does, a
- * driver-cancelled day must refund in full; that rule belongs with the payment, not here.
+ * 🔴 Money: the passengers pay nothing; the driver pays the driver-cancel fee by the notice he gave,
+ * per confirmed seat (PAY-23; Feature 03 backend file C-6) — previewed first by
+ * `GET /trips/{trip}/cancel-preview` (C-9). Nothing is refunded because nothing was paid: every
+ * booking is cash, settled on the day.
  *
  * Only a day that has not started. Once the run is under way, ending it is the trip lifecycle's
  * job (`AdvanceTripAction`), with its own record of what happened on the road.
@@ -73,6 +75,7 @@ final readonly class CancelTripDayAction
 
             foreach ($bookings as $booking) {
                 $from = $booking->status;
+                $wasConfirmed = $from === BookingStatus::Confirmed;
 
                 $booking->forceFill([
                     'status' => BookingStatus::CancelledByDriver->value,
@@ -100,6 +103,11 @@ final readonly class CancelTripDayAction
                  * does. The weight for a day is lower than for singling out one booking —
                  * cancelling the whole morning is at least not a decision about a particular woman.
                  */
+                // PAY-23 (C-6): the driver-cancel fee by the notice he gave, per confirmed seat.
+                if ($wasConfirmed) {
+                    DriverFees::chargeCancellation($booking->setRelation('scheduledTrip', $trip));
+                }
+
                 ReliabilityLedger::record(
                     $trip->commuteOffer->driver_profile_id,
                     ReliabilityEventKind::DriverCancelledDay,

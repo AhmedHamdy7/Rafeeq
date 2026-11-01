@@ -214,6 +214,32 @@ return [
 
         // SAFE-11: every appeal within this many hours of the fee or decision appearing.
         'appeal_hours' => 48,
+
+        /*
+         * PAY-23, the driver cancelling before the trip — one passenger, the day, a pause, a delete,
+         * a vehicle replacement, a block — per affected confirmed seat, by the notice he gave:
+         * `driver_cancel_free_hours` or more → nothing; down to `driver_cancel_short_hours` → the
+         * mid fee; less → the short fee.
+         */
+        'driver_cancel_free_hours' => 16,
+        'driver_cancel_short_hours' => 10,
+        'driver_cancel_mid_percent' => 10,
+        'driver_cancel_short_percent' => 25,
+
+        // PAY-24, PAY-25, PAY-28: ending a run that set off, or dropping her early without asking.
+        'driver_active_cancel_percent' => 100,
+
+        /*
+         * PAY-24: after a breakdown, accident or emergency, a passenger who travelled more than this
+         * share of her own route pays that share of the fare; at or below it, nothing.
+         */
+        'pro_rata_free_percent' => 25,
+
+        // PAY-26: the driver never started and the run expired.
+        'driver_no_show_percent' => 50,
+
+        // PAY-29: per passenger who left or switched because he was late.
+        'driver_late_percent' => 25,
     ],
 
     'debt' => [

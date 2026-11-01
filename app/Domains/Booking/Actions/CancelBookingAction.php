@@ -15,6 +15,7 @@ use App\Domains\Notification\Enums\NotificationType;
 use App\Domains\Notification\Support\Notifier;
 use App\Domains\Outbox\Enums\OutboxEventType;
 use App\Domains\Outbox\Support\Outbox;
+use App\Domains\Payment\Support\DriverFees;
 use App\Domains\Payment\Support\FeeSettings;
 use App\Domains\Reliability\Enums\ReliabilityEventKind;
 use App\Domains\Reliability\Support\ReliabilityLedger;
@@ -36,11 +37,10 @@ use Illuminate\Support\Facades\DB;
  * `decrement()` is used for the same reason `increment()` is on the way in: one
  * atomic statement rather than a read and a write with a gap.
  *
- * 🔒 Money is NOT touched. Chapter 6 says nothing about fees and MASTER_PLAN §19
- * lists the cancellation policy as open question #7, deferred to Phase 8 — the
- * chapter itself is called "very general" on it there. So a cancellation releases
- * the seat and records what happened, and charges nothing. Inventing a fee would
- * take money from a real person on the strength of an assumption.
+ * 🔴 The fees are the decided ones (PAY-21, PAY-23): a passenger's late cancel goes on her
+ * late-cancel counter ({@see RecordMemberWarningAction}); a driver's cancellation costs him a share
+ * of each seat by the notice he gave ({@see DriverFees}). `cancellation_fee_piastres` on the booking
+ * is the old configured fee and stays 0.
  */
 final readonly class CancelBookingAction
 {
@@ -73,13 +73,20 @@ final readonly class CancelBookingAction
      */
     public function byDriver(Booking $booking, string $driverUserId, ?string $reason = null): Booking
     {
-        return $this->cancel(
-            $booking,
-            BookingStatus::CancelledByDriver,
-            BookingActorType::Driver,
-            $driverUserId,
-            $reason,
-        );
+        return DB::transaction(function () use ($booking, $driverUserId, $reason): Booking {
+            $cancelled = $this->cancel(
+                $booking,
+                BookingStatus::CancelledByDriver,
+                BookingActorType::Driver,
+                $driverUserId,
+                $reason,
+            );
+
+            // PAY-23 (C-5): the driver-cancel fee by the notice he gave, on his side.
+            DriverFees::chargeCancellation($cancelled);
+
+            return $cancelled;
+        });
     }
 
     /**
@@ -99,18 +106,32 @@ final readonly class CancelBookingAction
      *
      * @param  DisplacementReason  $reason  stored on the booking, so support can answer "why did my
      *                                      Tuesday disappear" without reconstructing it
+     * @param  bool  $chargeDriver  whether the driver chose it, and so pays the fee by timing
      */
-    public function byDisplacement(Booking $booking, string $driverUserId, DisplacementReason $reason): Booking
+    public function byDisplacement(Booking $booking, string $driverUserId, DisplacementReason $reason, bool $chargeDriver = false): Booking
     {
-        return $this->cancel(
-            $booking,
-            BookingStatus::CancelledByDriver,
-            BookingActorType::Driver,
-            $driverUserId,
-            $reason->value,
-            notify: false,
-            offerToWaitlist: false,
-        );
+        return DB::transaction(function () use ($booking, $driverUserId, $reason, $chargeDriver): Booking {
+            $cancelled = $this->cancel(
+                $booking,
+                BookingStatus::CancelledByDriver,
+                BookingActorType::Driver,
+                $driverUserId,
+                $reason->value,
+                notify: false,
+                offerToWaitlist: false,
+            );
+
+            /*
+             * PAY-23 (C-7, C-8, C-10): when HE chose it — paused, deleted, replaced the car — the
+             * driver-cancel fee by timing, per seat. Not when the platform did it (a suspended
+             * vehicle, a lapsed licence, unpaid commission): nobody chose those.
+             */
+            if ($chargeDriver) {
+                DriverFees::chargeCancellation($cancelled);
+            }
+
+            return $cancelled;
+        });
     }
 
     /**

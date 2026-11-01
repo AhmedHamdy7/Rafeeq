@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Api\V1\Payment;
 
 use App\Domains\Driver\Models\DriverProfile;
+use App\Domains\Payment\Actions\AppealFeeAction;
 use App\Domains\Payment\Actions\SubmitDebtPaymentAction;
 use App\Domains\Payment\Enums\DebtSide;
 use App\Domains\Payment\Models\Coupon;
@@ -14,12 +15,14 @@ use App\Domains\Payment\Support\SettlementWeek;
 use App\Domains\Shared\Support\ErrorCode;
 use App\Http\Controllers\Controller;
 use App\Http\OpenApi\ApiErrors;
+use App\Http\Requests\Payment\AppealFeeRequest;
 use App\Http\Requests\Payment\DebtStatementRequest;
 use App\Http\Requests\Payment\SubmitDebtPaymentRequest;
 use App\Http\Resources\CouponResource;
 use App\Http\Resources\DebtEntryResource;
 use App\Http\Resources\DebtPaymentResource;
 use App\Http\Resources\DebtSideResource;
+use App\Http\Resources\FeeAppealResource;
 use App\Http\Responses\ApiResponse;
 use Carbon\CarbonImmutable;
 use Illuminate\Http\JsonResponse;
@@ -96,6 +99,22 @@ final class DebtController extends Controller
             'takenOffPiastres' => (int) -$lines->where('amount_piastres', '<', 0)->sum('amount_piastres'),
             'lines' => DebtEntryResource::collection($lines),
         ]);
+    }
+
+    /**
+     * POST /v1/account/debt/entries/{entry}/appeal — a driver appealing one of his fees (SAFE-11;
+     * PAY-23 → PAY-29), within 48 hours of it appearing, once. A passenger appeals hers on its
+     * warning instead (`POST /account/warnings/{warning}/dispute`).
+     *
+     * 201 with the appeal `pending`. `422` with `error.fields.appeal`: `ALREADY_APPEALED` or
+     * `APPEAL_WINDOW_CLOSED`. While it waits, no suspension for debt touches him.
+     */
+    #[ApiErrors(ErrorCode::ValidationFailed, ErrorCode::NotFound)]
+    public function appealFee(AppealFeeRequest $request, string $entry, AppealFeeAction $action): JsonResponse
+    {
+        $appeal = $action->execute($request->user(), $entry, (string) $request->validated('reason'));
+
+        return ApiResponse::success(new FeeAppealResource($appeal), status: 201);
     }
 
     /**

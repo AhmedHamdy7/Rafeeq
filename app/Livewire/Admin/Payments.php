@@ -11,6 +11,7 @@ use App\Domains\Payment\Enums\DebtPaymentStatus;
 use App\Domains\Payment\Enums\DebtSide;
 use App\Domains\Payment\Models\DebtEntry;
 use App\Domains\Payment\Models\DebtPayment;
+use App\Domains\Payment\Models\FeeAppeal;
 use App\Domains\Payment\Support\DebtStanding;
 use App\Domains\Shared\Exceptions\DomainException;
 use App\Domains\Trip\Models\MemberWarning;
@@ -196,6 +197,31 @@ class Payments extends Component
         session()->flash('status', __($overturn ? 'admin.payments.appeal_overturned' : 'admin.payments.appeal_upheld'));
     }
 
+    /**
+     * A driver's appeal against one of his fees: overturning credits the whole fee back.
+     */
+    public function decideDriverAppeal(string $appealId, bool $overturn, ResolveFeeAppealAction $action): void
+    {
+        $this->authorizeTo(AdminPermission::DebtManage);
+
+        $this->validate(['appealNote' => ['required', 'string', 'min:10', 'max:255']], attributes: [
+            'appealNote' => __('admin.payments.note'),
+        ]);
+
+        $appeal = FeeAppeal::query()->whereKey($appealId)->first() ?? abort(404);
+
+        try {
+            $action->driverFee($appeal, $this->admin(), $overturn, $this->appealNote);
+        } catch (DomainException $e) {
+            $this->addError('appealNote', __('errors.'.$e->errorCode->value));
+
+            return;
+        }
+
+        $this->reset('deciding', 'appealNote');
+        session()->flash('status', __($overturn ? 'admin.payments.appeal_overturned' : 'admin.payments.appeal_upheld'));
+    }
+
     private function payment(string $paymentId): DebtPayment
     {
         return DebtPayment::query()->whereKey($paymentId)->first() ?? abort(404);
@@ -235,9 +261,18 @@ class Payments extends Component
             ->limit(50)
             ->get();
 
+        $driverAppeals = FeeAppeal::query()
+            ->whereNull('resolution')
+            ->with(['user', 'debtEntry'])
+            ->orderBy('created_at')
+            ->orderBy('id')
+            ->limit(50)
+            ->get();
+
         return view('livewire.admin.payments', [
             'pending' => $pending,
             'appeals' => $appeals,
+            'driverAppeals' => $driverAppeals,
             'owed' => $owed,
             'mayAct' => $this->admin()?->can(AdminPermission::DebtManage->value) === true,
         ])->title(__('admin.payments.title'));

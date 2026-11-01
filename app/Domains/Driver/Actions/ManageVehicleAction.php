@@ -171,7 +171,7 @@ final readonly class ManageVehicleAction
              * driving rather than mid-swap.
              */
             if ($outgoing->isNotEmpty()) {
-                $this->displace->forDriver($profile, DisplacementReason::VehicleReplaced);
+                $this->displace->forDriver($profile, DisplacementReason::VehicleReplaced, chargeDriver: true);
             }
 
             $outgoing->each(fn (Vehicle $other) => $other->forceFill(['is_active' => false])->save());

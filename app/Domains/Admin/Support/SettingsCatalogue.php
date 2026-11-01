@@ -149,6 +149,14 @@ final class SettingsCatalogue
         'fees.lateness_step_4_percent' => ['group' => 'fees', 'min' => 0, 'max' => 200, 'unit' => 'percent'],
         'fees.lateness_step_5_percent' => ['group' => 'fees', 'min' => 0, 'max' => 200, 'unit' => 'percent'],
         'fees.appeal_hours' => ['group' => 'fees', 'min' => 12, 'max' => 168, 'unit' => 'hours'],
+        'fees.driver_cancel_free_hours' => ['group' => 'fees', 'min' => 1, 'max' => 72, 'unit' => 'hours'],
+        'fees.driver_cancel_short_hours' => ['group' => 'fees', 'min' => 0, 'max' => 48, 'unit' => 'hours'],
+        'fees.driver_cancel_mid_percent' => ['group' => 'fees', 'min' => 0, 'max' => 200, 'unit' => 'percent'],
+        'fees.driver_cancel_short_percent' => ['group' => 'fees', 'min' => 0, 'max' => 200, 'unit' => 'percent'],
+        'fees.driver_active_cancel_percent' => ['group' => 'fees', 'min' => 0, 'max' => 200, 'unit' => 'percent'],
+        'fees.pro_rata_free_percent' => ['group' => 'fees', 'min' => 0, 'max' => 100, 'unit' => 'percent'],
+        'fees.driver_no_show_percent' => ['group' => 'fees', 'min' => 0, 'max' => 200, 'unit' => 'percent'],
+        'fees.driver_late_percent' => ['group' => 'fees', 'min' => 0, 'max' => 200, 'unit' => 'percent'],
 
         // ---- Operations (Chapter 12) -------------------------------------
         'admin.suspension_review_hours' => ['group' => 'admin', 'min' => 1, 'max' => 168, 'unit' => 'hours'],

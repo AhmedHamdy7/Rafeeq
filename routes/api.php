@@ -280,6 +280,8 @@ Route::prefix('v1')->group(function (): void {
              * `price-suggestion` slider when the driver stopped choosing the price (D-0016).
              */
             Route::get('{commute}/price', [CommuteController::class, 'price']);
+            // C-9: the fee pausing, deleting or replacing the car would cost, before she confirms.
+            Route::get('{commute}/cancel-preview', [CommuteController::class, 'cancelPreview']);
 
             Route::post('{commute}/publish', [CommuteController::class, 'publish']);
             Route::post('{commute}/pause', [CommuteController::class, 'pause']);
@@ -618,6 +620,8 @@ Route::prefix('v1')->group(function (): void {
         Route::post('seat-requests/{seatRequest}/counteroffer/decline', [SeatRequestController::class, 'declineCounteroffer']);
 
         Route::get('driver/bookings', [BookingController::class, 'forDriver']);
+        // C-5: the driver removing ONE passenger — a driver cancellation, with the fee by timing.
+        Route::post('driver/bookings/{booking}/cancel', [BookingController::class, 'cancelAsDriver']);
 
         /*
          * Her waiting list, and the one place a driver hands out seats herself (Feature 03 v5).
@@ -673,6 +677,7 @@ Route::prefix('v1')->group(function (): void {
         Route::get('account/debt', [DebtController::class, 'show']);
         Route::get('account/debt/statements', [DebtController::class, 'statement']);
         Route::post('account/debt/payments', [DebtController::class, 'storePayment'])->middleware('throttle:safety-reports');
+        Route::post('account/debt/entries/{entry}/appeal', [DebtController::class, 'appealFee']);
         Route::get('groups/{group}/statement', [MoneyController::class, 'groupStatement']);
 
         /*
@@ -765,6 +770,8 @@ Route::prefix('v1')->group(function (): void {
         Route::patch('trips/{trip}/receive-requests', [TripController::class, 'receiveRequests']);
 
         // "Cancel today" — one day off, before it starts; the commute stands (screen 23).
+        // C-9: what "Cancel today" would cost him, before he confirms.
+        Route::get('trips/{trip}/cancel-preview', [TripController::class, 'cancelPreview']);
         Route::post('trips/{trip}/cancel', [TripController::class, 'cancel']);
 
         /*

@@ -10,6 +10,8 @@ use App\Domains\Booking\Support\BookingEventLog;
 use App\Domains\Commute\Models\ScheduledTrip;
 use App\Domains\Notification\Enums\NotificationType;
 use App\Domains\Notification\Support\Notifier;
+use App\Domains\Payment\Support\DriverFees;
+use App\Domains\Payment\Support\FeeSettings;
 use App\Domains\Reliability\Enums\ReliabilityEventKind;
 use App\Domains\Reliability\Support\ReliabilityLedger;
 use App\Domains\Shared\Exceptions\DomainException;
@@ -109,6 +111,9 @@ final readonly class ExitForDriverDelayAction
              * event it records on somebody because a different person pressed a button.
              */
             $this->recordAgainstTheDriver($trip, $booking, $entitlement);
+
+            // PAY-29 (F-10): 25 % of her seat on the driver; voided if the run becomes a no-show.
+            DriverFees::charge($booking, DriverFees::LATE, FeeSettings::driverLatePercent(), 'PAY-29');
 
             $this->tellTheDriver($trip, $booking, $entitlement);
 

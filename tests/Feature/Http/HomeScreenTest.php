@@ -720,17 +720,26 @@ it('labels each passenger with what they said, and counts the same answers', fun
 
     test()->withToken($paxToken)->postJson("/api/v1/groups/{$group->id}/attendance", [
         'tripId' => $this->tripId,
-        'status' => GroupAttendanceStatus::Away->value,
+        'status' => GroupAttendanceStatus::Coming->value,
     ])->assertStatus(201);
 
     $run = test()->withToken($this->driverToken)->getJson('/api/v1/driver/home')
         ->assertOk()->json('data.nextRun');
 
-    expect($run['passengers'][0]['attendanceStatus'])->toBe('away')
-        ->and($run['attendance']['away'])->toBe(1)
-        ->and($run['attendance']['coming'])->toBe(0)
+    expect($run['passengers'][0]['attendanceStatus'])->toBe('coming')
+        ->and($run['attendance']['coming'])->toBe(1)
+        ->and($run['attendance']['away'])->toBe(0)
         // The driver has still not answered.
         ->and($run['attendance']['awaiting'])->toBe(1);
+
+    // 🔴 "I can't make it" cancels her seat that day (TRIP-26), so she leaves the list.
+    test()->withToken($paxToken)->postJson("/api/v1/groups/{$group->id}/attendance", [
+        'tripId' => $this->tripId,
+        'status' => GroupAttendanceStatus::Away->value,
+    ])->assertStatus(201);
+
+    expect(test()->withToken($this->driverToken)->getJson('/api/v1/driver/home')
+        ->assertOk()->json('data.nextRun.passengers'))->toBe([]);
 });
 
 it('counts the driver in the group total, which is what makes the fraction add up', function () {

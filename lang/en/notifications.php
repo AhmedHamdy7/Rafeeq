@@ -253,6 +253,22 @@ return [
         'title' => 'No fee for your cancellation',
         'body' => 'Somebody from the waiting list took your seat on :date, so your late cancellation costs nothing.',
     ],
+    'driver_cancel_fee' => [
+        'title' => 'Cancellation fee: EGP :amount',
+        'body' => 'Cancelling confirmed seats close to departure adds EGP :amount to this week’s commission. Had an emergency? Appeal with evidence within :hours hours.',
+    ],
+    'driver_ended_trip_fee' => [
+        'title' => 'Trip ended early: EGP :amount',
+        'body' => 'Ending a run that had set off adds EGP :amount to this week’s commission. Breakdown or accident? Appeal with evidence within :hours hours.',
+    ],
+    'driver_no_show_fee' => [
+        'title' => 'Missed trip: EGP :amount',
+        'body' => 'Your run never started, so EGP :amount is added to this week’s commission. Appeal with evidence within :hours hours.',
+    ],
+    'driver_late_fee' => [
+        'title' => 'Late start: EGP :amount',
+        'body' => 'A passenger left because you were late, so EGP :amount is added to this week’s commission. Appeal within :hours hours.',
+    ],
     'appeal_approved' => [
         'title' => 'Your appeal was approved',
         'body' => 'The record from :date no longer counts towards your reliability. It stays visible so you can see it was cleared.',

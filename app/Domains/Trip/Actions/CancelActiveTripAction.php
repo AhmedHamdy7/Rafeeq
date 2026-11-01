@@ -2,25 +2,30 @@
 
 namespace App\Domains\Trip\Actions;
 
-use App\Domains\Booking\Actions\CancelBookingAction;
 use App\Domains\Booking\Enums\BookingActorType;
 use App\Domains\Booking\Enums\BookingEventType;
 use App\Domains\Booking\Enums\BookingStatus;
+use App\Domains\Booking\Enums\PaymentStatus;
 use App\Domains\Booking\Enums\SeatRequestStatus;
 use App\Domains\Booking\Models\Booking;
 use App\Domains\Booking\Models\SeatRequest;
 use App\Domains\Booking\Support\BookingEventLog;
 use App\Domains\Commute\Actions\CancelTripDayAction;
 use App\Domains\Commute\Models\ScheduledTrip;
+use App\Domains\Geo\Contracts\GeoQueryEngine;
 use App\Domains\Identity\Models\User;
 use App\Domains\Matching\Actions\SuggestAlternativesAction;
 use App\Domains\Notification\Enums\NotificationType;
 use App\Domains\Notification\Support\Notifier;
+use App\Domains\Payment\Actions\SettleBookingAction;
+use App\Domains\Payment\Support\DriverFees;
+use App\Domains\Payment\Support\FeeSettings;
 use App\Domains\Reliability\Enums\ReliabilityEventKind;
 use App\Domains\Reliability\Support\ReliabilityLedger;
 use App\Domains\Safety\Models\LiveShare;
 use App\Domains\Shared\Exceptions\DomainException;
 use App\Domains\Shared\Support\ErrorCode;
+use App\Domains\Shared\ValueObjects\Coordinate;
 use App\Domains\Trip\Enums\ActiveTripCancelReason;
 use App\Domains\Trip\Enums\AttendanceStatus;
 use App\Domains\Trip\Enums\TripSessionStatus;
@@ -49,9 +54,8 @@ use Illuminate\Support\Facades\DB;
  *   money moves it would erase what she owes for it too.
  * - **Not yet collected** — nothing happened to her, so her booking is `cancelled_by_driver`.
  *
- * Either way she pays nothing: v5 puts the fee and the reliability impact on the driver, and the
- * zero here is written rather than configured for the reason set out in
- * {@see CancelBookingAction}.
+ * The money is PAY-24/PAY-25: the driver pays the whole of every affected seat; she pays nothing,
+ * except after a breakdown, accident or emergency for the part past the first 25 % of her route.
  *
  * 🔴 **The freed seats are not offered to anybody.** A seat on a run that has stopped is not a seat,
  * and the offer would reach the waiting list for a car that is no longer going anywhere.
@@ -71,7 +75,12 @@ use Illuminate\Support\Facades\DB;
  */
 final readonly class CancelActiveTripAction
 {
-    public function __construct(private AdvanceTripAction $advance) {}
+    public function __construct(
+        private AdvanceTripAction $advance,
+        private SettleBookingAction $settle,
+        private RecordTripLocationAction $locations,
+        private GeoQueryEngine $geo,
+    ) {}
 
     /**
      * @param  ActiveTripCancelReason  $category  required (TRIP-22, F-13): what the fees read
@@ -127,6 +136,23 @@ final readonly class CancelActiveTripAction
                 $aboard ? $endedEarly++ : $cancelled++;
 
                 /*
+                 * 🔴 The money (PAY-24, PAY-25; Feature 03 backend file F-6, F-7): the driver pays
+                 * the whole of every affected seat, whatever the reason — after a breakdown,
+                 * accident or emergency it is reversed if his evidence appeal within 48 hours wins.
+                 * A passenger never collected pays nothing.
+                 */
+                DriverFees::charge(
+                    $booking,
+                    DriverFees::ACTIVE_CANCEL,
+                    FeeSettings::driverActiveCancelPercent(),
+                    $category->isUnavoidable() ? 'PAY-24' : 'PAY-25',
+                );
+
+                if ($aboard) {
+                    $this->settleAboard($booking, $session, $category);
+                }
+
+                /*
                  * 🔴 Per passenger, including the ones never collected. Both lost the morning, and
                  * a single event for the run would make stopping a full car cost what stopping an
                  * empty one does — the same reasoning
@@ -169,6 +195,63 @@ final readonly class CancelActiveTripAction
 
             return ['trip' => $trip->refresh(), 'endedEarly' => $endedEarly, 'cancelled' => $cancelled];
         });
+    }
+
+    /**
+     * What she pays for the part she rode (PAY-24, PAY-25).
+     *
+     * - **Any other reason** → nothing.
+     * - **Breakdown, accident, emergency** → nothing for up to 25 % of HER route; past that, that
+     *   share of the fare, and RAFEEQ's commission on that share. Her share is how far the car had
+     *   carried her from her pickup towards her drop-off, measured where it stopped. If the car's
+     *   position is not known, she is given the benefit of it and pays nothing.
+     *
+     * Settled at once (PAY-07), or marked `waived` so the cash sweep never charges the full fare.
+     */
+    private function settleAboard(Booking $booking, TripSession $session, ActiveTripCancelReason $category): void
+    {
+        $share = $category->isUnavoidable() ? $this->travelledShare($booking, $session) : 0.0;
+
+        if ($share * 100 <= FeeSettings::proRataFreePercent()) {
+            $booking->forceFill(['payment_status' => PaymentStatus::Waived->value])->save();
+
+            return;
+        }
+
+        $price = (int) round($booking->price_snapshot_piastres * $share);
+        $commission = (int) round($booking->platform_fee_snapshot_piastres * $share);
+
+        $booking->forceFill([
+            'price_snapshot_piastres' => $price,
+            'platform_fee_snapshot_piastres' => $commission,
+            'driver_amount_snapshot_piastres' => $price - $commission,
+        ])->save();
+
+        $this->settle->execute($booking);
+    }
+
+    /**
+     * How much of her own route the car had covered, 0 to 1.
+     */
+    private function travelledShare(Booking $booking, TripSession $session): float
+    {
+        $position = $this->locations->current($session);
+        $pickup = $booking->pickup_point;
+        $dropoff = $booking->dropoff_point;
+
+        if ($position === null || $pickup === null || $dropoff === null) {
+            return 0.0;
+        }
+
+        $route = $this->geo->distanceMeters($pickup, $dropoff)->metres;
+
+        if ($route <= 0) {
+            return 0.0;
+        }
+
+        $carried = $this->geo->distanceMeters($pickup, new Coordinate((float) $position->lat, (float) $position->lng))->metres;
+
+        return max(0.0, min(1.0, $carried / $route));
     }
 
     /**

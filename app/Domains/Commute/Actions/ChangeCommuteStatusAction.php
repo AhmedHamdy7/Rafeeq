@@ -72,7 +72,12 @@ final readonly class ChangeCommuteStatusAction
              * notification, find the commute still published, and request the seat she was just
              * told she had lost. One transaction means neither half can land without the other.
              */
-            $this->displace->forCommute($offer, DisplacementReason::CommutePaused);
+            $this->displace->forCommute(
+                $offer,
+                DisplacementReason::CommutePaused,
+                // PAY-23 (C-7): his choice costs the fee by timing; an automatic pause does not.
+                chargeDriver: $reason === CommutePausedReason::ByDriver,
+            );
 
             return $offer;
         });
@@ -119,7 +124,12 @@ final readonly class ChangeCommuteStatusAction
              *    replacement already use — the same cancellation, reliability record and one
              *    notice per passenger. Not put back on the waiting list: there is no commute left.
              */
-            $this->displace->forCommute($offer, DisplacementReason::CommuteDeleted);
+            $this->displace->forCommute(
+                $offer,
+                DisplacementReason::CommuteDeleted,
+                // PAY-23 (C-8): deleting it is his choice; a schedule that simply ended is not.
+                chargeDriver: $reason === null,
+            );
 
             // 2. Then every upcoming day, which now has nobody on it.
             $days = $this->cancelFutureTrips($offer, $reason);
