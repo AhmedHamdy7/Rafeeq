@@ -206,6 +206,7 @@ it('generates a document describing every /v1 route', function () {
         'PATCH /v1/safety/emergency-contacts/{contact}',
         'DELETE /v1/safety/emergency-contacts/{contact}',
         'GET /v1/safety/blocked-users',
+        'GET /v1/safety/blocked-users/preview',
         'POST /v1/safety/blocked-users',
         'DELETE /v1/safety/blocked-users/{user}',
         /*

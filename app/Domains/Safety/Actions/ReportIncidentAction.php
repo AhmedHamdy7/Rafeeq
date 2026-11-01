@@ -10,6 +10,7 @@ use App\Domains\Safety\Enums\SafetyEventType;
 use App\Domains\Safety\Enums\SafetySeverity;
 use App\Domains\Safety\Models\Incident;
 use App\Domains\Safety\Support\SafetyEventLog;
+use App\Domains\Safety\Support\SafetySettings;
 use App\Domains\Shared\Exceptions\DomainException;
 use App\Domains\Shared\Support\ErrorCode;
 use Illuminate\Support\Facades\DB;
@@ -51,6 +52,15 @@ final readonly class ReportIncidentAction
         IncidentCategory::Payment->value => SafetySeverity::Low,
         IncidentCategory::LostItem->value => SafetySeverity::Low,
         IncidentCategory::Other->value => SafetySeverity::Medium,
+        /*
+         * Feature 03 files X-7. Being put out of a car part-way, and a women-only seat used against
+         * its purpose, are about somebody's safety and are read the same morning. A false arrival is
+         * a dispute about a fee (TRIP-17), and an abusive review hurts but endangers nobody.
+         */
+        IncidentCategory::DroppedEarly->value => SafetySeverity::High,
+        IncidentCategory::WomenOnlyMisuse->value => SafetySeverity::High,
+        IncidentCategory::FalseArrival->value => SafetySeverity::Medium,
+        IncidentCategory::AbusiveReview->value => SafetySeverity::Low,
     ];
 
     /**
@@ -76,6 +86,10 @@ final readonly class ReportIncidentAction
         $severity = self::SEVERITY[$category->value];
 
         $booking = $this->bookingOf($reporter, $attributes['bookingId'] ?? null);
+
+        if ($booking !== null) {
+            $this->assertInsideTheWindow($booking);
+        }
 
         return DB::transaction(function () use ($reporter, $attributes, $category, $severity, $booking): Incident {
             $incident = new Incident;
@@ -149,6 +163,43 @@ final readonly class ReportIncidentAction
             ?? throw DomainException::of(ErrorCode::IncidentNotReportable, fields: [
                 'bookingId' => ['NOT_YOURS'],
             ]);
+    }
+
+    /**
+     * 🔴 A problem with a journey is reported within 24 hours of it (SAFE-08, Feature 03 files X-7).
+     *
+     * Measured from the END of the journey: when the run finished, or — for a morning that never
+     * ran (the driver never came, the day was called off) — from when it should have left. A
+     * journey that has not ended yet, or has not happened yet, is always inside the window: a
+     * driver's threatening message the night before is reportable before the trip, not after.
+     *
+     * Only a report tied to a booking has a journey to measure from. One about somebody posing as
+     * a Rafeeq driver has none and is always accepted — see the class docblock.
+     *
+     * ⚠️ The 24 hours are the time to REPORT. The appeal window is a different number (SAFE-11).
+     */
+    private function assertInsideTheWindow(Booking $booking): void
+    {
+        $trip = $booking->scheduledTrip;
+        $session = $trip?->tripSession;
+
+        $endedAt = $session?->completed_at;
+
+        if ($endedAt === null && $session?->started_at === null && $trip?->departure_at?->isPast()) {
+            $endedAt = $trip->departure_at;
+        }
+
+        if ($endedAt === null) {
+            return;
+        }
+
+        $closesAt = $endedAt->copy()->addHours(SafetySettings::reportWindowHours());
+
+        if (now()->greaterThan($closesAt)) {
+            throw DomainException::of(ErrorCode::ReportWindowClosed, fields: [
+                'bookingId' => ['WINDOW_CLOSED'],
+            ]);
+        }
     }
 
     /**

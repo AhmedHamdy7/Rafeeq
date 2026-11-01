@@ -1,5 +1,6 @@
 <?php
 
+use App\Domains\Admin\Models\PlatformSetting;
 use App\Domains\Booking\Actions\CancelBookingAction;
 use App\Domains\Booking\Actions\OfferSeatToWaitlistAction;
 use App\Domains\Booking\Enums\SwitchReason;
@@ -28,9 +29,10 @@ use Illuminate\Support\Facades\Route;
  * incrementally drifts the first time a job runs twice, which is the reasoning
  * `RecomputeRatingStatsAction` already sets out for averages.
  *
- * ⚠️ The weights themselves are placeholders pending a product decision. These tests assert the
- * BEHAVIOUR — what is recorded, against whom, and what stops counting — and read the weights from
- * config rather than hard-coding numbers nobody has agreed.
+ * The weights are the partners' (Feature 03 files X-3, decisions D3/D4): driver/passenger no-show
+ * −10/−5, cancel < 10h −5/−2, 10–16h −3/—, ≥ 16h −1/0, lateness −2/−1, ending a trip −8. They are
+ * written out here as numbers on purpose, so a change to the shipped defaults is a visible change
+ * to these tests. ⚠️ The score gates nothing (D4).
  */
 beforeEach(function () {
     $this->driverToken = approvedDriver();
@@ -73,10 +75,23 @@ it('starts everybody at a perfect score', function () {
 });
 
 /**
+ * Moves only the day's departure, not its date — `(commute_offer_id, trip_date)` is unique, and the
+ * notice a cancellation gave is read from `departure_at` and nothing else.
+ */
+function departsInHours(string $tripId, float $hours): void
+{
+    ScheduledTrip::query()->whereKey($tripId)->update([
+        'departure_at' => now()->addMinutes((int) round($hours * 60)),
+    ]);
+}
+
+/**
  * 🔴 The most pointed act: she looked at one woman's booking and ended it.
  */
 it('marks a driver who cancels one passenger’s seat', function () {
     $her = rider($this->driverToken, $this->commuteId, $this->tripId, '01112223344', 'pax-1');
+
+    departsInHours($this->tripId, 5);
 
     test()->flushHeaders()->withToken($this->driverToken)
         ->patchJson("/api/v1/bookings/{$her['bookingId']}/cancel")->assertOk();
@@ -88,20 +103,63 @@ it('marks a driver who cancels one passenger’s seat', function () {
         ->and($event->role)->toBe(ReliabilityRole::Driver)
         ->and($event->booking_id)->toBe($her['bookingId'])
         // The weight is snapshotted, so a later policy change cannot rewrite her record.
-        ->and($event->weight)->toBe(ReliabilityEventKind::DriverCancelledBooking->weight());
+        // Under ten hours' notice: −5.
+        ->and($event->weight)->toBe(5);
 
-    expect(ReliabilityLedger::scoreFor($this->driver->id, ReliabilityRole::Driver))
-        ->toBe(ReliabilityLedger::PERFECT - ReliabilityEventKind::DriverCancelledBooking->weight());
+    expect(ReliabilityLedger::scoreFor($this->driver->id, ReliabilityRole::Driver))->toBe(95);
+});
+
+/**
+ * 🔴 X-3: a driver's cancellation costs by the notice she gave — < 10h −5, 10–16h −3, ≥ 16h −1.
+ * The boundaries are `reliability.late_cancellation_hours` and the schedule lock.
+ */
+it('weighs a driver’s cancellation by the notice she gave', function (float $hours, int $weight) {
+    $her = rider($this->driverToken, $this->commuteId, $this->tripId, '01112223344', 'pax-1');
+
+    departsInHours($this->tripId, $hours);
+
+    test()->flushHeaders()->withToken($this->driverToken)
+        ->patchJson("/api/v1/bookings/{$her['bookingId']}/cancel")->assertOk();
+
+    expect(ReliabilityEvent::sole()->weight)->toBe($weight);
+})->with([
+    'short notice' => [9.5, 5],
+    'between the short-notice line and the lock' => [12, 3],
+    'beyond the lock' => [40, 1],
+]);
+
+/**
+ * 🔒 An operator who sets a weight to 0 switches that event off: a row worth nothing would sit in
+ * her history looking like a mark against her.
+ */
+it('records nothing for an event whose weight is set to zero', function () {
+    PlatformSetting::query()->create([
+        'setting_key' => 'reliability.weights.driver_cancel_long_notice',
+        'setting_value' => 0,
+        'value_type' => 'integer',
+        'description' => 'Switched off',
+    ]);
+
+    $her = rider($this->driverToken, $this->commuteId, $this->tripId, '01112223344', 'pax-1');
+
+    departsInHours($this->tripId, 40);
+
+    test()->flushHeaders()->withToken($this->driverToken)
+        ->patchJson("/api/v1/bookings/{$her['bookingId']}/cancel")->assertOk();
+
+    expect(ReliabilityEvent::query()->count())->toBe(0);
 });
 
 /**
  * 🔴 v5: a displacement counts too — "Cancellation/displacement reduces Reliability Score" — and it
  * is recorded PER PASSENGER, because five women rearranging their mornings is five times the harm
- * of one. At a smaller weight, because she did not choose any of them individually.
+ * of one. X-3 has one "driver cancels" row, so it takes the same notice ladder.
  */
-it('marks a pause once for every passenger it displaces, more gently', function () {
+it('marks a pause once for every passenger it displaces', function () {
     rider($this->driverToken, $this->commuteId, $this->tripId, '01112223344', 'pax-1');
     rider($this->driverToken, $this->commuteId, $this->tripId, '01155667788', 'pax-2');
+
+    departsInHours($this->tripId, 12);
 
     test()->flushHeaders()->withToken($this->driverToken)
         ->postJson("/api/v1/commutes/{$this->commuteId}/pause")->assertOk();
@@ -111,12 +169,10 @@ it('marks a pause once for every passenger it displaces, more gently', function 
         ->get();
 
     expect($events)->toHaveCount(2)
-        // Gentler per person than singling somebody out.
-        ->and(ReliabilityEventKind::DriverDisplacedPassenger->weight())
-        ->toBeLessThan(ReliabilityEventKind::DriverCancelledBooking->weight());
+        // 10–16 hours' notice: −3 each.
+        ->and($events->pluck('weight')->all())->toBe([3, 3]);
 
-    expect(ReliabilityLedger::scoreFor($this->driver->id, ReliabilityRole::Driver))
-        ->toBe(ReliabilityLedger::PERFECT - 2 * ReliabilityEventKind::DriverDisplacedPassenger->weight());
+    expect(ReliabilityLedger::scoreFor($this->driver->id, ReliabilityRole::Driver))->toBe(94);
 });
 
 it('marks a driver who calls off a whole day, once per passenger on it', function () {
@@ -149,7 +205,8 @@ it('marks a passenger the driver recorded as absent', function () {
 
     expect($event->kind)->toBe(ReliabilityEventKind::PassengerNoShow)
         ->and($event->user_id)->toBe($her['user']->id)
-        ->and($event->role)->toBe(ReliabilityRole::Passenger);
+        ->and($event->role)->toBe(ReliabilityRole::Passenger)
+        ->and($event->weight)->toBe(5);
 });
 
 /**
@@ -207,7 +264,8 @@ it('marks a passenger who cancels close to departure', function () {
     $event = ReliabilityEvent::sole();
 
     expect($event->kind)->toBe(ReliabilityEventKind::PassengerCancelledLate)
-        ->and($event->user_id)->toBe($her['user']->id);
+        ->and($event->user_id)->toBe($her['user']->id)
+        ->and($event->weight)->toBe(2);
 });
 
 /**
@@ -370,7 +428,7 @@ it('shows her her own score with every event behind it', function () {
         // Her driving record is untouched and separate.
         ->and($data['asDriver']['score'])->toBe(ReliabilityLedger::PERFECT)
         // The number is readable rather than mysterious.
-        ->and($data['windowDays'])->toBe((int) config('rafeeq.reliability.window_days'));
+        ->and($data['windowDays'])->toBe(90);
 });
 
 /**

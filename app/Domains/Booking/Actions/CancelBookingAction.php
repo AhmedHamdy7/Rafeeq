@@ -145,7 +145,8 @@ final readonly class CancelBookingAction
      * - **A driver ending one named passenger's seat** is the most pointed act here and lands on
      *   her driver record.
      * - **A displacement** — a paused commute, a replaced vehicle — lands on her record too, per
-     *   displaced passenger, but at a smaller weight: she did not choose any of them individually.
+     *   displaced passenger, on the same notice ladder as any driver cancellation (Feature 03 files
+     *   X-3: < 10h / 10–16h / ≥ 16h) — from the passenger's kerb it is the same morning lost.
      * - **A passenger cancelling her own seat** lands on her passenger record ONLY if she did it
      *   close enough to departure that the driver could not fill it. Cancelling a week out costs
      *   nobody anything and is recorded as nothing at all — a reliability score that punished

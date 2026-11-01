@@ -26,7 +26,12 @@ final class ReportIncidentRequest extends FormRequest
     public function rules(): array
     {
         return [
-            // What happened, as one of the categories the chapter lists.
+            /*
+             * What happened: `harassment`, `unsafe_driving`, `identity_mismatch`, `payment`,
+             * `no_show`, `lost_item`, `other`, `false_arrival` (the driver said she arrived and was
+             * not there), `dropped_early` (put out before the drop-off), `women_only_misuse`,
+             * `abusive_review`.
+             */
             'category' => ['required', 'string', Rule::enum(IncidentCategory::class)],
 
             /*
@@ -35,7 +40,11 @@ final class ReportIncidentRequest extends FormRequest
              */
             'description' => ['nullable', 'string', 'max:5000'],
 
-            // The journey it was about, if there was one. Must be the reporter's own.
+            /*
+             * The journey it was about, if there was one. Must be the reporter's own. A problem with
+             * a journey is reported within 24 hours of its end (`409 REPORT_WINDOW_CLOSED` after);
+             * a journey still to come, or still under way, can always be reported.
+             */
             'bookingId' => ['nullable', 'string', 'size:26'],
         ];
     }

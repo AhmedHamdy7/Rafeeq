@@ -73,6 +73,15 @@ final class SafetySettings
         return max(1, (int) self::get('safety.reports_per_hour'));
     }
 
+    /**
+     * How long after a journey ends a problem with it can still be reported, in hours (SAFE-08,
+     * Feature 03 files X-7: 24).
+     */
+    public static function reportWindowHours(): int
+    {
+        return max(1, (int) self::get('safety.report_window_hours'));
+    }
+
     /** 🔒 How long evidence attached to a report is kept, in days. */
     public static function evidenceRetentionDays(): int
     {

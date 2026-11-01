@@ -8,6 +8,7 @@ use App\Domains\Shared\Support\ErrorCode;
 use App\Domains\Trip\Enums\WaitTimerOutcome;
 use App\Domains\Trip\Models\TripSession;
 use App\Domains\Trip\Models\TripWaitTimer;
+use App\Domains\Trip\Support\DriverArrivalNotice;
 use App\Domains\Trip\Support\TripSettings;
 use Carbon\CarbonImmutable;
 use Illuminate\Support\Facades\DB;
@@ -80,6 +81,13 @@ final readonly class WaitTimerAction
         $timer->extended_seconds = 0;
 
         $timer->save();
+
+        /*
+         * The GPS-checked "I've arrived" at her pickup (TRIP-10, via ArriveAtPickupAction) is what
+         * starts this, so this is the moment to tell her (Feature 03 files §8: "Driver arrived") —
+         * through the one method that says it, at most once.
+         */
+        DriverArrivalNotice::send($session, $booking);
 
         return $timer;
     }
