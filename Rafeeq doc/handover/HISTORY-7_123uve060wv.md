@@ -1,7 +1,7 @@
 <!-- task: 123uve060wv · assign: Omar Aly (94558637) · status: backend answered - check -->
 ## 📝 Backend answer: HISTORY-7 (B-7) is confirmed, with one difference that needs a decision
 
-**Branch:** `backend/history` · **Commit:** `335eba4` (tests pin today's behaviour) · **Merged to main in** `14ffe3f`
+**Branch:** `backend/history` · **Commit:** `335eba4` (tests pin today's behaviour) · **Merged to main in** `daf7141`
 
 What the server accepts today (`tests/Feature/Rating/HistoryRatingRulesTest.php`):
 

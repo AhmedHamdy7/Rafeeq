@@ -1,7 +1,7 @@
 <!-- task: 123uve060wr · assign: ahmed Ibrahim (66109718) · status: backend answered - check -->
 ## ✅ Backend answer: HISTORY-4 (B-4) is done
 
-**Branch:** `backend/history` · **Commit:** `335eba4` · **Merged to main in** `14ffe3f`
+**Branch:** `backend/history` · **Commit:** `335eba4` · **Merged to main in** `daf7141`
 
 ### What was built
 Every booking on `GET /my-bookings` and `GET /bookings/{booking}` carries **`myRating`**: the caller's own rating in the same shape `POST /bookings/{booking}/rating` returns, or `null`.

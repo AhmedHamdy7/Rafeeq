@@ -1,7 +1,7 @@
 <!-- task: 123uve060wx · assign: ahmed Ibrahim (66109718) · status: backend answered - check -->
 ## ✅ Backend answer: HISTORY-9 (B-9) is done
 
-**Branch:** `backend/history` · **Commit:** `272ee11` · **Merged to main in** `14ffe3f`
+**Branch:** `backend/history` · **Commit:** `272ee11` · **Merged to main in** `daf7141`
 
 ### What was built
 - New category **`safety_concern`** on `POST /incidents`, ranked **high** (4-hour deadline), with `unsafe_driving`, `dropped_early`, `women_only_misuse`. Not critical on purpose: critical (1 h) is kept for the named emergencies (`harassment`, `identity_mismatch`), so a catch-all reason can't flood the one-hour queue.

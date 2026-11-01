@@ -1,7 +1,7 @@
 <!-- task: 123uve060ww · assign: ahmed Ibrahim (66109718) · status: backend answered - check -->
 ## ✅ Backend answer: HISTORY-8 (B-8) is done
 
-**Branch:** `backend/history` · **Commit:** `d8d6549` · **Merged to main in** `14ffe3f`
+**Branch:** `backend/history` · **Commit:** `d8d6549` · **Merged to main in** `daf7141`
 
 `GET /incidents?bookingId={booking}` returns only the caller's reports about that booking: same shape, same paging, same own-reports rule. A booking id that isn't hers returns an empty list (no error, so it can't be used to probe). A value that isn't 26 characters → `422`. Order: newest first.
 

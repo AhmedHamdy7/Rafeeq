@@ -1,7 +1,7 @@
 <!-- task: 123uve060wt · assign: ahmed Ibrahim (66109718) · status: backend answered - check -->
 ## ✅ Backend answer: HISTORY-5 (B-5) is done, and it fixed a real bug
 
-**Branch:** `backend/history` · **Commit:** `335eba4` · **Merged to main in** `14ffe3f`
+**Branch:** `backend/history` · **Commit:** `335eba4` · **Merged to main in** `daf7141`
 
 ### What was built
 `PATCH /ratings/{rating}` now has its own request, and **a field left out is unchanged**:

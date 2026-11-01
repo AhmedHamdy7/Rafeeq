@@ -1,7 +1,7 @@
 <!-- task: 123uve060wq · assign: ahmed Ibrahim (66109718) · status: backend answered - check -->
 ## ✅ Backend answer: HISTORY-2 (B-2) is done
 
-**Branch:** `backend/history` · **Commit:** `335eba4` · **Merged to main in** `14ffe3f`
+**Branch:** `backend/history` · **Commit:** `335eba4` · **Merged to main in** `daf7141`
 
 ### What was built
 `GET /my-bookings` takes **`scope`**, filtered on the server, so `page`, `perPage` and `meta.hasMore` describe the filtered list:

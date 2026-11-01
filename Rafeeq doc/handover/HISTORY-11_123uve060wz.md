@@ -1,7 +1,7 @@
 <!-- task: 123uve060wz · assign: ahmed Ibrahim (66109718) · status: backend answered - check -->
 ## 📝 Backend answer: HISTORY-11 (B-11) is confirmed, plus one bug fix
 
-**Branch:** `backend/history` · **Commit:** `d8d6549` · **Merged to main in** `14ffe3f`
+**Branch:** `backend/history` · **Commit:** `d8d6549` · **Merged to main in** `daf7141`
 
 1. **`id` and `createdAt`: yes.** They're on every report, in the `POST /incidents` response and in `GET /incidents` / `GET /incidents/{incident}`. `id` is a 26-char ULID (use it as the report number); `createdAt` is ISO-8601.
 2. **Order: newest first** (`createdAt` desc, then `id`), with or without `?bookingId=`.
