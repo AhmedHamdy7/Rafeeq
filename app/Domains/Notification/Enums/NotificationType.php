@@ -381,11 +381,23 @@ enum NotificationType: string
      */
     case CommuteStillNotStarted = 'commute_still_not_started';
 
-    /**
-     * Her driver application was approved. Filed under safety with the account notices: whether she
-     * may drive is a change to her access, and that must reach her whatever she switched off.
+    /*
+     * The driver's five items, one notice per reviewer decision (F2-14, PROF-23). Filed under safety
+     * with the account notices: whether she may drive is a change to her access, and that must reach
+     * her whatever she switched off. `data.itemKey` is the key `GET /driver/verification` uses, so
+     * the app opens that item. 🔒 Sent only to somebody who has started a driver application — a
+     * passenger never hears about driver verification (PROF-12, E3).
      */
-    case DriverDocumentsApproved = 'driver_documents_approved';
+    case DriverItemApproved = 'driver_item_approved';
+
+    // `data.rejectionReason` is the reviewer's words, so she replaces only that item (PROF-17).
+    case DriverItemRejected = 'driver_item_rejected';
+
+    /**
+     * The whole verification became `verified`: she can publish. Once per account — replaces
+     * `driver_documents_approved`, which said the same thing.
+     */
+    case DriverVerified = 'driver_verified';
 
     /**
      * Her driver application was sent back. 🔒 Without the reviewer's reason in the body — that is
@@ -393,8 +405,11 @@ enum NotificationType: string
      */
     case DriverDocumentsRejected = 'driver_documents_rejected';
 
-    /** Her driving licence expires inside the warning window (PROF-15's "Expiring"). Once per expiry date. */
-    case LicenceExpiring = 'licence_expiring';
+    /**
+     * An approved item with an expiry — her driving licence — is inside the warning window (PROF-15's
+     * "Expiring"). Once per expiry date. `data.itemKey` + `data.expiresAt`. Replaces `licence_expiring`.
+     */
+    case DriverItemExpiring = 'driver_item_expiring';
 
     /**
      * To the driver: RAFEEQ moved his departure for one day because a rider joined or left
@@ -413,9 +428,11 @@ enum NotificationType: string
             self::AccountReinstated,
             self::DrivingSuspendedForDebt,
             self::RidingSuspendedForDebt,
-            self::DriverDocumentsApproved,
+            self::DriverItemApproved,
+            self::DriverItemRejected,
+            self::DriverVerified,
             self::DriverDocumentsRejected,
-            self::LicenceExpiring => NotificationCategory::Safety,
+            self::DriverItemExpiring => NotificationCategory::Safety,
 
             self::DebtDueTomorrow,
             self::DebtOverdue,

@@ -345,15 +345,31 @@ return [
         'title' => 'Your driver is :minutes minutes late',
         'body' => ':name’s commute was due to leave at :time and still has not started.',
     ],
-    'driver_documents_approved' => [
+    'driver_verified' => [
         'title' => 'You are a verified driver',
         'body' => 'Your documents were approved. You can publish your commute now.',
+    ],
+    'driver_item_approved' => [
+        'title' => ':item approved',
+        'body' => 'Your :item was approved.',
+    ],
+    'driver_item_rejected' => [
+        'title' => ':item needs a new upload',
+        'body' => 'Open the app to see why, and replace only this item.',
+    ],
+    // The names of the five items, as they read in the two notices above.
+    'driver_items' => [
+        'government_id' => 'National ID',
+        'selfie' => 'Selfie',
+        'driving_licence' => 'Driving licence',
+        'vehicle_registration' => 'Car registration',
+        'vehicle_details' => 'Car details',
     ],
     'driver_documents_rejected' => [
         'title' => 'Your documents need a change',
         'body' => 'Open the app to see what to fix and send it again.',
     ],
-    'licence_expiring' => [
+    'driver_item_expiring' => [
         'title' => 'Your driving licence expires soon',
         'body' => 'It expires on :date. Upload the renewed licence to keep driving.',
     ],

@@ -14,7 +14,7 @@
 >
 > **Base URL:** `{host}/api/v1` · **Auth:** bearer token · **Format:** JSON only.
 
-**Last updated:** 2026-11-01 · **179 endpoints live** · Phases 0–7, 9 and 11 complete · 10, 12 and 13 all but a decision each
+**Last updated:** 2026-11-01 · **181 endpoints live** · Phases 0–7, 9 and 11 complete · 10, 12 and 13 all but a decision each
 
 ---
 
@@ -22,7 +22,7 @@
 
 ### What is ready
 
-**179 endpoints live** and tested, across the 47 designed screens:
+**181 endpoints live** and tested, across the 47 designed screens:
 
 | | Count | Covers |
 |---|---|---|
@@ -259,7 +259,7 @@ The order that keeps you unblocked. Each step only needs the ones above it.
 | 1 | 5, 6 — phone, OTP | Nothing works without a token. |
 | 2 | 7, 8 — basic profile, role | `profileStatus` gates the `active` tier. Until it is `BASIC_COMPLETE` most endpoints 403. |
 | 3 | ~~2, 3, 4~~ | 🔴 **Gone.** The local PIN, biometric login and account switching left the MVP — no PIN setup, no PIN entry, no "forgot PIN", no account picker. Session restore is silent. Skip straight to step 4. |
-| 4 | 15, 30 — verification centre, identity capture | 🔴 **No longer blocks booking.** `verified:government_id` now gates **only the driver flow** — the application, vehicles, and publishing. A passenger books with a verified phone number and nothing else, so you can build steps 5–8 before this one. Still build it: it drives the home banner, the trust level a driver sees when deciding on your request, and her optional `minRating`/trust filters. |
+| 4 | 15, 30 — verification centre, identity capture | 🔴 **No longer blocks booking.** `verified:government_id` now gates **only publishing a commute** — since F2-1 even the driver application and vehicles take the ID in any order. A passenger books with a verified phone number and nothing else, so you can build steps 5–8 before this one. Still build it: it drives the home banner, the trust level a driver sees when deciding on your request, and her optional `minRating`/trust filters. |
 | 5 | 9 — home | One call. Gives you a real screen early and exercises the envelope, the person shape and the verification banner. |
 | 6 | 10, 11, 12 — discover, filters, match details | The search engine. Read 4.6 first; the score breakdown is designed to be shown. |
 | 7 | 13, 14 — seat request, done | First write path with a domain refusal you must render properly. |
@@ -947,6 +947,43 @@ depend on account standing.
 🔒 `hasLocalPin` is a **flag, not a value**. Never send the PIN itself; there is no field for it
 and there never will be. `pushToken` is stored encrypted.
 
+#### `GET /account/deletion` — signed-in
+
+May she delete her account now (F1-4, PROF-31)? Call it when the "Delete account" screen opens, so
+the blocked message shows **before** she confirms.
+
+```json
+{ "canDelete": false, "debtPiastres": 4500,
+  "tripsInFeeWindow": [ { "bookingId": "01…", "tripId": "01…", "role": "passenger", "departureAt": "2026-11-02T05:30:00+00:00" } ] }
+```
+
+- `debtPiastres` — what she owes on **both** sides (passenger fees + driver commission). > 0 → "Pay
+  it first" with a link to the Payments screen.
+- `tripsInFeeWindow` — trips whose cancellation would cost a fee: as a passenger, a seat leaving in
+  under 12 h; as a driver (`role: "driver"`), a booked seat on her commute leaving in under 16 h, or a
+  trip already moving. → "After your trip at 07:30". Trips further out do **not** block — deleting
+  cancels them for free.
+
+#### `DELETE /account` — signed-in
+
+Deletes it. **Reachable while suspended** (nobody may be trapped in an account). No body.
+Returns `{"deleted": true}` — then sign out locally; every session is already revoked.
+
+| Refusal | When |
+|---|---|
+| `409 ACCOUNT_HAS_DEBT` | She owes money. `error.fields.debtPiastres`. |
+| `409 ACCOUNT_HAS_TRIP_IN_FEE_WINDOW` | A trip inside the fee window. `error.fields.bookingIds`. |
+
+What happens: her upcoming seats are cancelled (seat to the waiting list, driver told, no fee); her
+commutes are archived (every rider told, no fee); pending seat requests and saved requests close;
+every session ends; name, photo, email, birth date, saved places, saved searches and trusted contacts
+are removed and the number is freed — **she can sign up again with the same number** as a new
+account. Trips, payments, ratings and reports stay, attached to nobody. It is immediate:
+`PENDING_DELETION` stays unused until the grace period is decided (Q-055).
+
+🌐 **Web page for Google Play:** `{host}/delete-account` — phone → SMS code → delete, same rules.
+Put this URL in the Play Console data-safety form.
+
 #### `GET /account/consents` · `POST /account/consents` — signed-in
 
 | Response field | Meaning |
@@ -1386,11 +1423,19 @@ read `error.fields` for which.
 
 ## 4.4 Driver application and vehicles
 
-> Becoming a driver: the application, the licence, the vehicle and its documents. Needs 4.3 approved first.
+> Becoming a driver: the application, the licence, the vehicle and its documents.
 >
 > **Screens** 31 · **Shapes** —
 
-All of these need `verified:government_id` except `eligibility`.
+🔴 **Since 2026-11-01 (F2-1): the five items go in any order.** None of these needs an approved ID
+any more — start the application, add the licence and the car, upload the ID and the selfie, in
+whatever order the driver likes, all as drafts. Two checks stay, at the end:
+
+- **Submit** needs all five **uploaded and sent**: the ID and the selfie submitted (`under_review`
+  or `approved`), the licence details and both licence sides, a car with its registration.
+- **Approval** (staff) needs the ID **and the selfie approved** (F2-2). The checklist shows which.
+
+Publishing a commute (4.5) still needs `verified:government_id`.
 
 #### `GET /driver/verification` — active, profile complete
 
@@ -1449,7 +1494,7 @@ missing, so gating it would leave them with a refusal and no explanation.
 | `eligible` | Whether they can start an application at all. |
 | `blockers[]` | Machine codes for what is missing, e.g. `GOVERNMENT_ID_NOT_VERIFIED`, `UNDER_MINIMUM_AGE`. Render your own copy per code. |
 
-#### `GET` / `POST` / `DELETE /driver/application` — verified
+#### `GET` / `POST` / `DELETE /driver/application` — active, profile complete
 
 `POST` creates or updates the draft; `DELETE` withdraws it.
 
@@ -1463,15 +1508,19 @@ missing, so gating it would leave them with a refusal and no explanation.
 | `missing[]` | What still has to be supplied before `/submit` will accept it. Drive your checklist from this rather than your own logic. |
 | `vehicles[]` | The vehicle shape below. |
 
-#### `PUT /driver/application/licence` — verified
+#### `PUT /driver/application/licence` — active, profile complete
 
 **Request:** `nationalId` (14 digits), `licenceNumber`, `licenceExpiry` (must be in the future).
 
-#### `POST /driver/application/submit` — verified
+#### `POST /driver/application/submit` — active, profile complete
 
-`DRIVER_APPLICATION_INCOMPLETE` lists what is missing in `error.fields`.
+`422 DRIVER_APPLICATION_INCOMPLETE` lists what is missing in `error.fields.missing`: any of
+`government_id` · `selfie` (not yet submitted) · `national_id` · `licence_number` · `licence_expiry` ·
+`licence_front` · `licence_back` · `vehicle` · `vehicle_registration` (no registration at all) ·
+`registration_front` / `registration_back` (one side sent, this one missing). **Never** `insurance` or
+`inspection` (F2-15).
 
-#### `GET` / `POST /driver/vehicles` · `PATCH /driver/vehicles/{vehicle}` — verified
+#### `GET` / `POST /driver/vehicles` · `PATCH /driver/vehicles/{vehicle}` — active, profile complete
 
 **POST/PATCH request:** `make`, `model`, `year`, `colour`, `plateNumber`, `seats`,
 `transmission`, `fuelType`.
@@ -1487,7 +1536,7 @@ missing, so gating it would leave them with a refusal and no explanation.
 | `status` | `PENDING` · `APPROVED` · `REJECTED`. A commute can only be published on an approved, active vehicle. |
 | `documents[]` | `id`, `type`, `status`, `expiresAt`. **No path and no URL** — a document's storage path never appears in any payload. |
 
-#### `POST /driver/vehicles/{vehicle}/activate` — verified
+#### `POST /driver/vehicles/{vehicle}/activate` — active, profile complete
 
 🔴 **This is how a driver replaces her car**, and three rules changed here.
 
@@ -1517,9 +1566,17 @@ journey and the evidence that it was allowed to.
 Makes this the active vehicle and deactivates the others, in one transaction — so there is never a
 moment with none active, and never one with two.
 
-#### `POST /driver/vehicles/{vehicle}/documents` — verified
+#### `POST /driver/vehicles/{vehicle}/documents` — active, profile complete
 
-**Request:** `type` (registration, insurance…), `file`, `expiresAt`.
+**Request:** `type`, `file`, `expiresAt`.
+
+| `type` | |
+|---|---|
+| `registration_front` · `registration_back` | **The car licence, both sides (F2-4).** The only car paper required. |
+| `registration` | One image of it — what the app sent before F2-4. Still accepted and still enough on its own. |
+| `insurance` · `inspection` | Accepted, **never required**: they block nothing — not submit, approval or activate (F2-15). |
+
+No car photos (dropped 2026-10-31).
 
 ---
 
@@ -3830,7 +3887,10 @@ hold must still be able to read the notice that says so.
 | `rating_due` · `rating_due_riders` · `rating_reminder` | passenger / driver | rate (4.13) | `bookingId` or `tripId` |
 | `sos_picked_up` · `report_resolved` · `report_closed` | the reporter | the SOS / report | `sosId` / `incidentId` |
 | `account_on_hold` · `account_reinstated` | the member (safety) | — | *no ids* |
-| `driver_documents_approved` · `driver_documents_rejected` · `licence_expiring` | driver (safety) | the application / licence | `driverProfileId` (documents) |
+| `driver_item_approved` · `driver_item_rejected` | driver (safety), per verification item | that item on `GET /driver/verification` — replace only it | `itemKey` (`government_id` · `selfie` · `driving_licence`), + `rejectionReason` on a rejection |
+| `driver_verified` | driver (safety), once — the whole verification became `verified` (replaces `driver_documents_approved`) | driver mode | `driverProfileId` |
+| `driver_documents_rejected` | driver (safety) — the application as a whole was sent back | the application | `driverProfileId` |
+| `driver_item_expiring` | driver (safety), once per expiry date (replaces `licence_expiring`) | the licence item | `itemKey`, `expiresAt` |
 
 🔴 The debt reminders fire **once a day at most**, from `debt.reminder_hour` (an admin setting, 18:00
 Cairo shipped), and never for somebody who owes nothing.
@@ -4226,6 +4286,8 @@ exist, and every live endpoint must be named here.
 | Date | Change |
 |---|---|
 | 2026-11-01 | 🕘 **No booking deadline, and the waiting-list flow written down (follow-ups 1.1–1.5, 2, 3, 6).** 🛑 **The 21:00-the-night-before cut-off is gone** (R-5): a day takes requests until it leaves, `bookingDeadlineAt` is **removed** from the scheduled-trip shape, and `BOOKING_DEADLINE_PASSED` now only means the day has departed. **New notification `waitlist_application_received`** to the driver when a request lands on a full day (it used to be `seat_requested`). The waiting-list cap (10, `BOOKING_WAITLIST_FULL`) is now an **admin setting**. 4.7 now documents what was already built: `kind` (`seat_request` / `waitlist_application`) and `hasOtherConfirmedCommute` on the driver's inbox, `/waitlist` as the yes to an application, **requests never expire**, one seat per passenger per time slot (`BOOKING_ALREADY_BOOKED` + `overlapsBookingId`), women-only commutes visible to everybody with `403 SEAT_REQUEST_WOMEN_ONLY`, and the new seat-request statuses. 4.5: deleting a commute cancels **every** upcoming day, booked ones too. 4.12: the block preview's `feePiastres` / `reason` are **real** (they said "always 0"). 4.14: one table of every notification type, including the commission, coupon and +5/+10 "driver late" ones. No new endpoints. |
+| 2026-11-01 | 🚗 **Driver verification: any order, selfie required, registration sides, and per-item notices (F2-1, F2-2, F2-4, F2-14, F2-15).** The application, licence and vehicle endpoints **no longer need an approved ID** — the five items go in any order as drafts; `identity_not_verified` is gone from `GET /driver/eligibility`. Submit needs all five sent (`missing[]` can now list `government_id` and `selfie`); staff approval needs the ID **and selfie** approved. New vehicle document types `registration_front` / `registration_back` (the single `registration` still counts); insurance and inspection never block. Notifications (driver only): `driver_item_approved`, `driver_item_rejected` (`itemKey`, `rejectionReason`), `driver_verified` (once; **replaces** `driver_documents_approved`), `driver_item_expiring` (**replaces** `licence_expiring`) (4.4, 4.14). |
+| 2026-11-01 | 🗑️ **Account deletion, the store-review sign-in, and the SMS transport (F1-4, F1-1, F1-6).** New: `GET /account/deletion` (may she delete, and why not) and `DELETE /account` — refused with `409 ACCOUNT_HAS_DEBT` / `409 ACCOUNT_HAS_TRIP_IN_FEE_WINDOW`; otherwise her trips are cancelled for free, every session ends, and she is anonymised (4.2). Public web page `{host}/delete-account` for Google Play. Server-side only: one store-review number with a fixed code works in production (`RAFEEQ_REVIEW_PHONE` / `RAFEEQ_REVIEW_OTP`, nothing for the app to build), and a real SMS transport is ready for the provider (`RAFEEQ_OTP_DRIVER=http`). |
 | 2026-11-01 | ❓ **"Did you ask to get off here?" (TRIP-20, PAY-28)** — new `POST /bookings/{booking}/early-drop` and the `early_drop_check` notification; bookings now return `feeLinePiastres`, `feeLineReason` and `earlyDrop`. A `false_arrival` report puts her no-show on that booking under review (TRIP-17). Staff now settle the money of payment disputes (PAY-31, PAY-32) and women-only misuse (PAY-47, the man is suspended until he pays) from the safety desk. |
 | 2026-11-01 | 🚗 **Driver fees (PAY-23 → PAY-29, C-5 → C-10).** New: `POST /driver/bookings/{booking}/cancel` (remove one passenger), `GET /trips/{trip}/cancel-preview` and `GET /commutes/{commute}/cancel-preview` (the fee before he confirms), `POST /account/debt/entries/{entry}/appeal` (48h). Cancelling seats costs the driver by notice (16h+: 0 · 10–16h: 10 % · < 10h: 25 %) on one passenger, Cancel today, pause, delete, a new car and a block; ending a run that set off 100 %; never coming 50 %; a passenger leaving because he was late 25 %. After a breakdown, accident or emergency a passenger aboard pays the share of her route past 25 %; otherwise nothing — her booking's `paymentStatus` is the new `WAIVED`. `PATCH /bookings/{booking}/cancel` now applies the fees. End early is the full fare. |
 | 2026-11-01 | 💸 **Passenger fees (PAY-20 → PAY-22, TRIP-26, SAFE-11).** Three counters — `NO_SHOW`, `LATE_CANCEL`, `LATE_BOARDING` — each with its ladder and a 90-day reset; `MISSED_COMMITMENT` is history only. Warnings now carry `feePiastres`, `feeStatus`, `appealBy`. A late cancel's fee waits for departure and is dropped if the seat is refilled. Appeals close after 48 hours (`APPEAL_WINDOW_CLOSED`). `away` on the group attendance cancels that day. |
@@ -4262,7 +4324,7 @@ exist, and every live endpoint must be named here.
 | 2026-10-16 | 🎟️ **A freed seat is now OFFERED to everybody on the waitlist, and the first acceptance wins.** Two new endpoints: `GET /seat-offers` and `POST /seat-offers/{offer}/accept`, which returns the **booking** — no second driver approval, because everybody on the list was already approved when she waitlisted them. **So your screen 20 was right: the waitlist does now fill empty seats automatically.** It previously promoted one person into the driver inbox as a fresh decision, which could leave a seat empty for 48 hours waiting on one reply. ⚠️ **`waitlistPosition` is now an ESTIMATE** — keep showing it, never say it entitles her to the next seat; position only decides who is notified first, and number 2 can win. A loser gets `409 SEAT_OFFER_CLOSED` with `error.fields.status`: show **TAKEN_BY_OTHER** ("somebody was quicker") differently from **CLOSED** ("the seat stopped existing"). |
 | 2026-10-16 | 📅 **Each weekday of a commute can now have its own departure, promised arrival, price and capacity** (Feature 03). `PUT /commutes/{commute}/schedule` takes two new optional fields — `promisedArrivalTime` and `perDay`, keyed by the day's bit. **Sending neither behaves exactly as before**, so nothing you have built changes. Each day's occurrences are generated from that day's own values and snapshot them, so a cheaper Thursday produces cheaper Thursdays while the rest of the week is untouched. Re-sending the schedule **replaces** the week rather than merging. ⚠️ A `promisedArrivalTime` is a commitment: arriving later than it counts against the driver's on-time rate outside a five-minute tolerance, so omit it rather than guessing. |
 | 2026-10-16 | 🔒 **New: `boardingCode`** — a four-digit number on every booking, for the line your design draws under the car: `Plate ﺱ 4821 · PIN 7391`. It answers **"is this the right car?"**, which the passenger asks at the kerb while comparing the plate. **Both sides see the same number** (otherwise nobody could confirm it): the passenger on `GET /bookings/{booking}`, the driver there and on `GET /trips/{trip}/attendance`. One per journey, so it changes daily. 🔴 **It decides nothing** — `check-in` takes no code and never will. Attendance is the driver's tap (decision D18); the Master Plan rejected a code for that job outright, because "a PIN fails when somebody is running for the car". Do not block boarding, payment or no-show on it: a flat battery must never lock somebody out of a car she has already verified by plate and sight. It appears in no payload other passengers can read. |
-| 2026-10-16 | ✅ **New: `GET /driver/verification`** — the five-item checklist the driver card is drawn from (`government_id` · `selfie` · `driving_licence` · `vehicle_registration` · `vehicle_details`), with `completed` / `of`, a per-item `status`, a **per-item `rejectionReason`** so you can say "replace only that document", and one of seven `overall` headlines matching the design's card states. Reachable **without** verification, because it is the screen that explains what is missing. `expiring` keeps the verified badge; `suspended` outranks everything. ⚠️ `completed` can read 4 while `overall` is `verified` — approval does not currently require a selfie, and we have flagged that rather than hiding it. |
+| 2026-10-16 | ✅ **New: `GET /driver/verification`** — the five-item checklist the driver card is drawn from (`government_id` · `selfie` · `driving_licence` · `vehicle_registration` · `vehicle_details`), with `completed` / `of`, a per-item `status`, a **per-item `rejectionReason`** so you can say "replace only that document", and one of seven `overall` headlines matching the design's card states. Reachable **without** verification, because it is the screen that explains what is missing. `expiring` keeps the verified badge; `suspended` outranks everything. ⚠️ `completed` can read 4 while `overall` is `verified` — approval did not require a selfie then (fixed 2026-11-01, F2-2). |
 | 2026-10-16 | ✅ **`PUT /account/profile/basic` now takes `firstName` + `lastName`, as the design draws it** — or `fullName`, exactly as today. Nothing breaks, so build the two-field screen whenever you like. `lastName` is optional (a single name is a real name). When you send the two fields, `publicFirstName` becomes the **given name** rather than the first token of a joined string — which is the difference between showing "عبد الرحمن" and showing "عبد". |
 | 2026-10-16 | ✅ **New: `GET` / `PATCH /account/comfort-preferences`** — the comfort chips you want remembered, **per mode**, so a passenger stops re-ticking them on every search. They are **the same six values a search already accepts** (`nonsmoking` · `quiet` · `ac` · `nofood` · `luggage` · `front`), so a saved list goes straight into `requiredRules` with no translation. `chosen` tells "never answered" apart from "none of them". 🔒 **Saving a default filters nothing** — the chips are a soft `score.comfort`, never an exclusion, and a test holds it. *(An earlier draft of this entry described four fields named `smoking`/`music`/`conversation`/`airConditioning` with `yes`/`no`/`either` values. That shape was replaced before release: it invented a second vocabulary for chips the matcher already understood, and nothing read it. If you built against it, switch to `rules[]`.)* |
 | 2026-10-16 | 🚗 **Vehicle replacement works, and it used to be impossible.** An approved driver could not add a vehicle at all — it answered `409 DRIVER_APPLICATION_LOCKED` — so she could not change her car without losing her approval first. Now she adds a replacement, it is reviewed on its own while her current car keeps working, and activating it moves her commutes across. 🔴 `POST /driver/vehicles/{vehicle}/activate` now **refuses an unapproved vehicle** with `422 VEHICLE_NOT_ALLOWED`, and refuses the whole swap with `422` if a live commute sells more seats than the replacement has — nothing is half-applied. Confirmed future bookings are **kept**, and each passenger gets the new `booking_vehicle_changed` notification **naming the car and plate**. |

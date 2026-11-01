@@ -12,9 +12,12 @@ use App\Domains\Driver\Models\VerificationLog;
 use App\Domains\Identity\Enums\SecurityEventType;
 use App\Domains\Identity\Support\SecurityLog;
 use App\Domains\Notification\Enums\NotificationType;
+use App\Domains\Notification\Models\Notification;
 use App\Domains\Notification\Support\Notifier;
 use App\Domains\Shared\Exceptions\DomainException;
 use App\Domains\Shared\Support\ErrorCode;
+use App\Domains\Verification\Enums\VerificationType;
+use App\Domains\Verification\Support\VerificationCentre;
 use Illuminate\Support\Facades\DB;
 
 /**
@@ -38,6 +41,20 @@ final readonly class ReviewDriverApplicationAction
         // submission. Time passes while an application sits in the queue.
         if (! $profile->hasValidLicence()) {
             throw DomainException::of(ErrorCode::LicenceExpired);
+        }
+
+        /*
+         * 🔴 F2-2 (B33): all five items, the selfie included. Submit only needs the ID and the selfie
+         * SENT (F2-1: everything goes in any order), so this is the one place that makes sure a
+         * reviewer actually approved them. The selfie was the gap: nothing ever required it, so a
+         * driver could be approved with no face on record to match against the ID.
+         */
+        $unapproved = VerificationCentre::missingFrom($profile->user, [VerificationType::GovernmentId, VerificationType::Selfie]);
+
+        if ($unapproved !== []) {
+            throw DomainException::of(ErrorCode::DriverApplicationIncomplete, fields: [
+                'missing' => $unapproved,
+            ]);
         }
 
         return DB::transaction(function () use ($profile, $reviewer): DriverProfile {
@@ -64,10 +81,21 @@ final readonly class ReviewDriverApplicationAction
                 'reviewer_id' => $reviewer->id,
             ]);
 
-            // Feature 03 files §8: "documents approved". The push itself is queued after commit.
-            Notifier::send($profile->user, NotificationType::DriverDocumentsApproved, data: [
-                'driverProfileId' => (string) $profile->getKey(),
-            ]);
+            /*
+             * Feature 03 files §8 "documents approved", now `driver_verified` (F2-14): ONCE per
+             * account. A driver re-approved after a suspension or a renewal is not newly verified,
+             * and a second "you can publish now" would be noise. The push is queued after commit.
+             */
+            $already = Notification::query()
+                ->where('user_id', $profile->user_id)
+                ->where('type', NotificationType::DriverVerified->value)
+                ->exists();
+
+            if (! $already) {
+                Notifier::send($profile->user, NotificationType::DriverVerified, data: [
+                    'driverProfileId' => (string) $profile->getKey(),
+                ]);
+            }
 
             return $profile;
         });

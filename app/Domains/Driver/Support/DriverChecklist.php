@@ -113,8 +113,13 @@ final class DriverChecklist
      */
     private static function vehicleRegistration(?Vehicle $vehicle): array
     {
-        $document = $vehicle?->documents
-            ->firstWhere('type', VehicleDocumentType::Registration);
+        // F2-4: the single legacy image, or the two sides. One side alone is a start, not a finish.
+        $papers = $vehicle?->documents->filter(fn ($doc) => $doc->type->isRegistration()) ?? collect();
+        $types = $papers->map(fn ($doc) => $doc->type)->all();
+        $complete = in_array(VehicleDocumentType::Registration, $types, true)
+            || (in_array(VehicleDocumentType::RegistrationFront, $types, true) && in_array(VehicleDocumentType::RegistrationBack, $types, true));
+
+        $document = $papers->sortBy(fn ($doc) => $doc->expires_at)->first();
 
         $expired = $document?->expires_at !== null && $document->expires_at->isPast();
 
@@ -122,6 +127,7 @@ final class DriverChecklist
             'key' => 'vehicle_registration',
             'status' => match (true) {
                 $vehicle === null || $document === null => 'not_started',
+                ! $complete => 'in_progress',
                 $expired => 'expired',
                 // A vehicle document is approved with the vehicle it belongs to: the reviewer
                 // decides on the car, not on each page of its paperwork separately.
