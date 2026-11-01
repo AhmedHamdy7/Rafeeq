@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\Api\V1\Account\AccountDeletionController;
 use App\Http\Controllers\Api\V1\Account\AvatarController;
 use App\Http\Controllers\Api\V1\Account\ComfortPreferenceController;
 use App\Http\Controllers\Api\V1\Account\ConsentController;
@@ -89,6 +90,18 @@ Route::prefix('v1')->group(function (): void {
         Route::get('devices', [DeviceController::class, 'index']);
         Route::delete('devices/{device}/session', [DeviceController::class, 'destroySession']);
         Route::patch('devices/current/security', [DeviceController::class, 'updateSecurity']);
+
+        /*
+         * Deleting the account (F1-4, PROF-31). Outside the `active` group for the same reason as
+         * the devices above: nobody may be trapped in an account, suspended or not. The debt rule
+         * still holds — a suspension does not excuse what she owes.
+         */
+        Route::get('deletion', [AccountDeletionController::class, 'show']);
+    });
+
+    Route::delete('account', [AccountDeletionController::class, 'destroy'])->middleware('auth:sanctum');
+
+    Route::prefix('account')->middleware('auth:sanctum')->group(function (): void {
 
         Route::get('consents', [ConsentController::class, 'index']);
         Route::post('consents', [ConsentController::class, 'store']);

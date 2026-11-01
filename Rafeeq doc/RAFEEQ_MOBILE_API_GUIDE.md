@@ -14,7 +14,7 @@
 >
 > **Base URL:** `{host}/api/v1` · **Auth:** bearer token · **Format:** JSON only.
 
-**Last updated:** 2026-11-01 · **179 endpoints live** · Phases 0–7, 9 and 11 complete · 10, 12 and 13 all but a decision each
+**Last updated:** 2026-11-01 · **181 endpoints live** · Phases 0–7, 9 and 11 complete · 10, 12 and 13 all but a decision each
 
 ---
 
@@ -22,7 +22,7 @@
 
 ### What is ready
 
-**179 endpoints live** and tested, across the 47 designed screens:
+**181 endpoints live** and tested, across the 47 designed screens:
 
 | | Count | Covers |
 |---|---|---|
@@ -944,6 +944,43 @@ depend on account standing.
 
 🔒 `hasLocalPin` is a **flag, not a value**. Never send the PIN itself; there is no field for it
 and there never will be. `pushToken` is stored encrypted.
+
+#### `GET /account/deletion` — signed-in
+
+May she delete her account now (F1-4, PROF-31)? Call it when the "Delete account" screen opens, so
+the blocked message shows **before** she confirms.
+
+```json
+{ "canDelete": false, "debtPiastres": 4500,
+  "tripsInFeeWindow": [ { "bookingId": "01…", "tripId": "01…", "role": "passenger", "departureAt": "2026-11-02T05:30:00+00:00" } ] }
+```
+
+- `debtPiastres` — what she owes on **both** sides (passenger fees + driver commission). > 0 → "Pay
+  it first" with a link to the Payments screen.
+- `tripsInFeeWindow` — trips whose cancellation would cost a fee: as a passenger, a seat leaving in
+  under 12 h; as a driver (`role: "driver"`), a booked seat on her commute leaving in under 16 h, or a
+  trip already moving. → "After your trip at 07:30". Trips further out do **not** block — deleting
+  cancels them for free.
+
+#### `DELETE /account` — signed-in
+
+Deletes it. **Reachable while suspended** (nobody may be trapped in an account). No body.
+Returns `{"deleted": true}` — then sign out locally; every session is already revoked.
+
+| Refusal | When |
+|---|---|
+| `409 ACCOUNT_HAS_DEBT` | She owes money. `error.fields.debtPiastres`. |
+| `409 ACCOUNT_HAS_TRIP_IN_FEE_WINDOW` | A trip inside the fee window. `error.fields.bookingIds`. |
+
+What happens: her upcoming seats are cancelled (seat to the waiting list, driver told, no fee); her
+commutes are archived (every rider told, no fee); pending seat requests and saved requests close;
+every session ends; name, photo, email, birth date, saved places, saved searches and trusted contacts
+are removed and the number is freed — **she can sign up again with the same number** as a new
+account. Trips, payments, ratings and reports stay, attached to nobody. It is immediate:
+`PENDING_DELETION` stays unused until the grace period is decided (Q-055).
+
+🌐 **Web page for Google Play:** `{host}/delete-account` — phone → SMS code → delete, same rules.
+Put this URL in the Play Console data-safety form.
 
 #### `GET /account/consents` · `POST /account/consents` — signed-in
 
@@ -4116,6 +4153,7 @@ exist, and every live endpoint must be named here.
 
 | Date | Change |
 |---|---|
+| 2026-11-01 | 🗑️ **Account deletion, the store-review sign-in, and the SMS transport (F1-4, F1-1, F1-6).** New: `GET /account/deletion` (may she delete, and why not) and `DELETE /account` — refused with `409 ACCOUNT_HAS_DEBT` / `409 ACCOUNT_HAS_TRIP_IN_FEE_WINDOW`; otherwise her trips are cancelled for free, every session ends, and she is anonymised (4.2). Public web page `{host}/delete-account` for Google Play. Server-side only: one store-review number with a fixed code works in production (`RAFEEQ_REVIEW_PHONE` / `RAFEEQ_REVIEW_OTP`, nothing for the app to build), and a real SMS transport is ready for the provider (`RAFEEQ_OTP_DRIVER=http`). |
 | 2026-11-01 | ❓ **"Did you ask to get off here?" (TRIP-20, PAY-28)** — new `POST /bookings/{booking}/early-drop` and the `early_drop_check` notification; bookings now return `feeLinePiastres`, `feeLineReason` and `earlyDrop`. A `false_arrival` report puts her no-show on that booking under review (TRIP-17). Staff now settle the money of payment disputes (PAY-31, PAY-32) and women-only misuse (PAY-47, the man is suspended until he pays) from the safety desk. |
 | 2026-11-01 | 🚗 **Driver fees (PAY-23 → PAY-29, C-5 → C-10).** New: `POST /driver/bookings/{booking}/cancel` (remove one passenger), `GET /trips/{trip}/cancel-preview` and `GET /commutes/{commute}/cancel-preview` (the fee before he confirms), `POST /account/debt/entries/{entry}/appeal` (48h). Cancelling seats costs the driver by notice (16h+: 0 · 10–16h: 10 % · < 10h: 25 %) on one passenger, Cancel today, pause, delete, a new car and a block; ending a run that set off 100 %; never coming 50 %; a passenger leaving because he was late 25 %. After a breakdown, accident or emergency a passenger aboard pays the share of her route past 25 %; otherwise nothing — her booking's `paymentStatus` is the new `WAIVED`. `PATCH /bookings/{booking}/cancel` now applies the fees. End early is the full fare. |
 | 2026-11-01 | 💸 **Passenger fees (PAY-20 → PAY-22, TRIP-26, SAFE-11).** Three counters — `NO_SHOW`, `LATE_CANCEL`, `LATE_BOARDING` — each with its ladder and a 90-day reset; `MISSED_COMMITMENT` is history only. Warnings now carry `feePiastres`, `feeStatus`, `appealBy`. A late cancel's fee waits for departure and is dropped if the seat is refilled. Appeals close after 48 hours (`APPEAL_WINDOW_CLOSED`). `away` on the group attendance cancels that day. |

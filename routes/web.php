@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\AccountDeletionPageController;
 use App\Http\Controllers\Admin\HomeController;
 use App\Http\Controllers\Admin\LogoutController;
 use App\Http\Controllers\Admin\StaffFileController;
@@ -41,6 +42,23 @@ Route::view('/', 'welcome');
 Route::get('/s/{token}', [LiveShareController::class, 'show'])
     ->middleware('throttle:60,1')
     ->name('live-share.show');
+
+/*
+|--------------------------------------------------------------------------
+| Delete your account — the web page Google Play requires (F1-4)
+|--------------------------------------------------------------------------
+|
+| For somebody who can no longer open the app. Outside `/v1` for the same reason as the live share:
+| a page for a person, not part of the app's contract. The code it texts is a `high_risk_action`
+| code, so it cannot sign anybody in; the OTP rate limits apply as everywhere, and the IP throttle
+| is on top of them.
+|
+*/
+Route::prefix('delete-account')->middleware('throttle:20,1')->group(function (): void {
+    Route::get('/', [AccountDeletionPageController::class, 'show'])->name('account-deletion.show');
+    Route::post('code', [AccountDeletionPageController::class, 'requestCode'])->name('account-deletion.code');
+    Route::post('confirm', [AccountDeletionPageController::class, 'confirm'])->name('account-deletion.confirm');
+});
 
 /*
 |--------------------------------------------------------------------------
