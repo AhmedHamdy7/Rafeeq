@@ -7,6 +7,7 @@ use App\Domains\Booking\Enums\SeatRequestStatus;
 use App\Domains\Booking\Models\Booking;
 use App\Domains\Booking\Models\SeatRequest;
 use App\Domains\Commute\Enums\CommuteOfferStatus;
+use App\Domains\Commute\Enums\CommutePausedReason;
 use App\Domains\Commute\Models\CommuteOffer;
 use App\Domains\Commute\Models\ScheduledTrip;
 use App\Domains\Driver\Models\Vehicle;
@@ -96,7 +97,7 @@ it('suspends a driver whose debt missed its second Friday: commutes paused, ever
 
     expect(DebtAccount::query()->where('user_id', $this->driver->id)->where('side', 'driver')->sole()->suspended_at)->not->toBeNull()
         ->and(CommuteOffer::query()->findOrFail($this->commuteId)->status)->toBe(CommuteOfferStatus::Paused)
-        ->and(CommuteOffer::query()->findOrFail($this->commuteId)->paused_reason)->toBe('commission_unpaid')
+        ->and(CommuteOffer::query()->findOrFail($this->commuteId)->paused_reason)->toBe(CommutePausedReason::CommissionUnpaid)
         ->and($booking->status)->toBe(BookingStatus::CancelledByDriver)
         // Back on the waiting list for when the commute returns.
         ->and(SeatRequest::query()->findOrFail($booking->seat_request_id)->status)->toBe(SeatRequestStatus::Waitlisted)
