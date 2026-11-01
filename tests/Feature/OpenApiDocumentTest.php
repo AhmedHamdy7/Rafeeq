@@ -242,6 +242,7 @@ it('generates a document describing every /v1 route', function () {
         'POST /v1/commute-demands',
         'DELETE /v1/commute-demands/{demand}',
         'GET /v1/matches',
+        'POST /v1/matches/{match}/opened',
         'GET /v1/saved-searches',
         'POST /v1/saved-searches',
         'DELETE /v1/saved-searches/{search}',

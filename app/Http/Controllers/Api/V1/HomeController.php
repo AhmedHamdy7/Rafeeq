@@ -16,12 +16,21 @@ use App\Domains\Driver\Models\DriverProfile;
 use App\Domains\Group\Models\CommuteGroup;
 use App\Domains\Group\Models\GroupMember;
 use App\Domains\Identity\Models\User;
+use App\Domains\Matching\Actions\SuggestAlternativesAction;
+use App\Domains\Matching\Enums\CommuteDemandStatus;
 use App\Domains\Matching\Models\CommuteDemand;
 use App\Domains\Matching\Models\MatchNotification;
 use App\Domains\Matching\Models\SavedSearch;
+use App\Domains\Matching\Models\SearchHistory;
+use App\Domains\Matching\Support\SearchCriteria;
+use App\Domains\Notification\Enums\NotificationChannel;
+use App\Domains\Notification\Models\Notification;
+use App\Domains\Rating\Actions\SubmitRatingAction;
+use App\Domains\Shared\Exceptions\DomainException;
 use App\Domains\Verification\Support\VerificationCentre;
 use App\Http\Controllers\Controller;
 use App\Http\Resources\BookingResource;
+use App\Http\Resources\HomeJourney;
 use App\Http\Resources\JourneyCard;
 use App\Http\Resources\MatchNotificationResource;
 use App\Http\Resources\PersonSummary;
@@ -30,7 +39,10 @@ use App\Http\Responses\ApiResponse;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\Cache;
+use Throwable;
 
 /**
  * The two screens people open the app on: screen 9 for a passenger, screen 23 for a
@@ -61,6 +73,20 @@ final class HomeController extends Controller
     /** Requests on the driver's card before it says "see all". */
     private const int PENDING_REQUESTS = 5;
 
+    /** "Two suggested alternatives" under an ended journey (F3P-08 → F3P-10). */
+    private const int ALTERNATIVES = 2;
+
+    /**
+     * How long one ended journey's alternatives are reused, in seconds.
+     *
+     * 🔴 The alternatives are the real search engine — the same one `GET /bookings/{booking}/
+     * alternatives` runs, ending in routing-provider work — and Home is polled. Without this, every
+     * pull-to-refresh on a cancelled morning would be a full search. Five minutes is short enough
+     * that a seat taken meanwhile is soon gone from the card, and asking for it is the ordinary
+     * request flow, which re-checks the seat anyway.
+     */
+    private const int ALTERNATIVES_TTL_SECONDS = 300;
+
     /**
      * GET /v1/home — screen 9.
      *
@@ -70,8 +96,11 @@ final class HomeController extends Controller
      * three. The full lists are their own paginated endpoints, which is what "See all"
      * goes to.
      */
-    public function passenger(Request $request): JsonResponse
-    {
+    public function passenger(
+        Request $request,
+        SubmitRatingAction $ratings,
+        SuggestAlternativesAction $alternatives,
+    ): JsonResponse {
         $user = $request->user();
 
         return ApiResponse::success([
@@ -90,7 +119,15 @@ final class HomeController extends Controller
              */
             'verification' => $this->verificationBanner($user),
 
-            'nextJourney' => $this->nextJourney($request),
+            /*
+             * The bell badge (HOME-10). The same count `GET /notifications` puts in
+             * `meta.unreadCount`, from the same query, so Home is one request and the badge
+             * cannot disagree with the inbox behind it.
+             */
+            'unreadNotifications' => $this->unreadNotifications($user->id),
+
+            'nextJourney' => $this->nextJourney($request, $ratings, $alternatives),
+            'demandAlert' => $this->demandAlert($user->id),
             'topMatches' => $this->topMatches($request),
             'savedSearches' => $this->savedSearches($user->id),
         ]);
@@ -162,15 +199,52 @@ final class HomeController extends Controller
     }
 
     /**
-     * The card at the top of screen 9: the caller's soonest journey that has not
-     * finished.
+     * The card at the top of screen 9 — which journey it is about (HOME-1).
+     *
+     * In this order, the first that exists:
+     *
+     * 1. **The journey happening now** — its departure has passed or its run has set off, and her
+     *    seat is still held. A car on the way to her outranks anything else she could be shown.
+     * 2. **A journey that ended on her today** — cancelled by the driver, expired, she left because
+     *    the driver was late, or completed. Until the end of that journey's local day, because the
+     *    outcome is news she has to have seen, and "your 07:00 was cancelled" vanishing at 07:01
+     *    would leave her at the kerb wondering whether the app forgot.
+     * 3. **The soonest journey that has not started** — what this card has always been.
+     * 4. **A completed journey she has not rated**, while the rating window is open — but only when
+     *    there is nothing upcoming to show. A ride from four days ago asking for stars must not hide
+     *    tomorrow's pickup; once tomorrow exists, the rating is still in `GET /ratings/pending`.
+     *
+     * ⚠️ "Until she has seen it" is approximated by time, not tracked: nothing records that she
+     * looked at the card, and adding a write to a read-only screen the app polls would be the wrong
+     * place for it. The windows above are the ones the request proposed.
      *
      * @return array<string, mixed>|null
      */
-    private function nextJourney(Request $request): ?array
+    private function nextJourney(
+        Request $request,
+        SubmitRatingAction $ratings,
+        SuggestAlternativesAction $alternatives,
+    ): ?array {
+        $userId = $request->user()->id;
+
+        $upcoming = $this->currentBooking($userId);
+
+        $booking = $this->happeningNow($userId)
+            ?? $this->endedToday($userId, $ratings)
+            ?? $upcoming
+            ?? $this->awaitingRating($userId, $ratings);
+
+        return $booking === null ? null : $this->journeyCard($request, $booking, $ratings, $alternatives);
+    }
+
+    /**
+     * Rows 1 and 3 of the order above share one query: a seat still held on a run that has not
+     * finished, soonest first. What this card returned before HOME-1, unchanged.
+     */
+    private function currentBooking(string $userId): ?Booking
     {
-        $booking = Booking::query()
-            ->where('bookings.passenger_user_id', $request->user()->id)
+        return $this->journeyQuery()
+            ->where('bookings.passenger_user_id', $userId)
             ->whereIn('bookings.status', $this->liveBookingStatuses())
             /*
              * Joined rather than filtered with whereHas: the card is "the SOONEST one",
@@ -178,14 +252,101 @@ final class HomeController extends Controller
              * unordered whereHas would return whichever row the database happened to
              * find first.
              */
-            ->join('scheduled_trips', 'scheduled_trips.id', '=', 'bookings.scheduled_trip_id')
             ->where(fn (Builder $query) => $this->currentTrips($query))
             ->orderBy('scheduled_trips.departure_at')
             // A tiebreak, because two journeys can leave in the same minute.
             ->orderBy('bookings.id')
+            ->first();
+    }
+
+    /**
+     * Row 1: a CONFIRMED seat on a run that is underway, or whose departure has passed without it
+     * setting off (F3P-07, until the sweep expires the day). Today only — a morning the sweep has
+     * not reached yet is still this morning, and yesterday's is not "now".
+     */
+    private function happeningNow(string $userId): ?Booking
+    {
+        return $this->journeyQuery()
+            ->where('bookings.passenger_user_id', $userId)
+            ->where('bookings.status', BookingStatus::Confirmed)
+            ->where(fn (Builder $query) => $query
+                ->whereIn('scheduled_trips.status', [
+                    ScheduledTripStatus::Preparing,
+                    ScheduledTripStatus::EnRoute,
+                    ScheduledTripStatus::InProgress,
+                ])
+                ->orWhere(fn (Builder $late) => $late
+                    ->where('scheduled_trips.status', ScheduledTripStatus::Scheduled)
+                    ->where('scheduled_trips.departure_at', '<=', now())
+                    // A generous bound for the query; the local-day test below is the real one.
+                    ->where('scheduled_trips.departure_at', '>=', now()->subDay())))
+            ->orderBy('scheduled_trips.departure_at')
+            ->orderBy('bookings.id')
+            ->get()
+            ->first(fn (Booking $candidate): bool => $candidate->scheduledTrip->status !== ScheduledTripStatus::Scheduled
+                || $this->isTodayFor($candidate->scheduledTrip));
+    }
+
+    /**
+     * Row 2: a journey whose outcome she has to see — on its own local day. The most recent outcome
+     * first, because the newest news is the card's to give.
+     */
+    private function endedToday(string $userId, SubmitRatingAction $ratings): ?Booking
+    {
+        return $this->journeyQuery()
+            ->where('bookings.passenger_user_id', $userId)
+            ->whereIn('bookings.status', [
+                BookingStatus::CancelledByDriver,
+                BookingStatus::ExitedDueToDriverDelay,
+                BookingStatus::Completed,
+            ])
+            // Bounded in SQL so a long history is not loaded to find today; exact below.
+            ->where('scheduled_trips.departure_at', '>=', now()->subDays(2))
+            ->where('scheduled_trips.departure_at', '<=', now()->addDay())
+            ->orderByDesc('bookings.updated_at')
+            ->orderByDesc('bookings.id')
+            ->get()
+            ->first(fn (Booking $candidate): bool => $this->isTodayFor($candidate->scheduledTrip)
+                // A completed ride she has already rated has nothing left to say to her.
+                && ($candidate->status !== BookingStatus::Completed
+                    || HomeJourney::for($candidate, $ratings, $userId)->canRate()));
+    }
+
+    /**
+     * Row 4: the most recent completed ride still waiting for her stars.
+     */
+    private function awaitingRating(string $userId, SubmitRatingAction $ratings): ?Booking
+    {
+        return $this->journeyQuery()
+            ->where('bookings.passenger_user_id', $userId)
+            ->where('bookings.status', BookingStatus::Completed)
+            ->whereDoesntHave('ratings', fn (Builder $query) => $query->where('reviewer_user_id', $userId))
+            // No window is longer than this; the exact deadline is RatingSettings', checked below.
+            ->where('scheduled_trips.departure_at', '>=', now()->subDays(31))
+            ->orderByDesc('scheduled_trips.departure_at')
+            ->orderByDesc('bookings.id')
+            ->limit(5)
+            ->get()
+            ->first(fn (Booking $candidate): bool => ! $ratings->deadlineFor($candidate)->isPast());
+    }
+
+    /**
+     * Bookings joined to their day, with everything the card reads.
+     *
+     * Joined rather than filtered with whereHas: the card is "the SOONEST one" (or the latest
+     * outcome), and ordering by a column on the related trip is what picks it. An unordered
+     * whereHas would return whichever row the database happened to find first.
+     *
+     * @return Builder<Booking>
+     */
+    private function journeyQuery(): Builder
+    {
+        return Booking::query()
+            ->join('scheduled_trips', 'scheduled_trips.id', '=', 'bookings.scheduled_trip_id')
             ->select('bookings.*')
             ->with([
                 'scheduledTrip.commuteSchedule',
+                'scheduledTrip.tripSession',
                 'scheduledTrip.commuteOffer.locations',
                 'scheduledTrip.commuteOffer.vehicle',
                 'scheduledTrip.commuteOffer.driverProfile.user.stats',
@@ -193,28 +354,76 @@ final class HomeController extends Controller
                 'commuteGroup.activeMembers',
                 'commuteGroup.attendances',
                 'seatRequest',
-            ])
-            ->first();
+                'passenger',
+            ]);
+    }
 
-        if ($booking === null) {
-            return null;
-        }
+    /**
+     * Whether the day of this journey is today, on the commute's own wall clock — the same test
+     * `isToday` on the card makes. Cairo's day, not the server's UTC one.
+     */
+    private function isTodayFor(ScheduledTrip $trip): bool
+    {
+        $timezone = $trip->commuteSchedule?->timezone ?? config('app.timezone');
 
+        return $trip->departure_local->isSameDay(Carbon::now($timezone));
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function journeyCard(
+        Request $request,
+        Booking $booking,
+        SubmitRatingAction $ratings,
+        SuggestAlternativesAction $alternatives,
+    ): array {
         $trip = $booking->scheduledTrip;
         $offer = $trip->commuteOffer;
         $driver = $offer->driverProfile;
 
-        return [
-            /*
-             * The booking in full, from the resource that already owns the rule about
-             * when a meeting point may be exact. Composed rather than re-described, so
-             * the home screen cannot end up with a more generous version of it.
-             */
-            ...(new BookingResource($booking))->toArray($request),
+        $state = HomeJourney::for($booking, $ratings, $request->user()->id);
+        $phase = $state->phase();
 
-            ...JourneyCard::route($offer),
+        /*
+         * The booking in full, from the resource that already owns the rule about when a meeting
+         * point may be exact. Composed rather than re-described, so the home screen cannot end up
+         * with a more generous version of it — and `pickup` below is built FROM its `meetingPoint`
+         * for the same reason.
+         */
+        $resource = (new BookingResource($booking))->toArray($request);
+        $route = JourneyCard::route($offer);
+
+        return [
+            ...$resource,
+
+            // The state the card switches on (HOME-2). `status` and `trip.status` are unchanged.
+            'phase' => $phase,
+
+            ...$route,
             ...JourneyCard::timing($trip),
             'attendance' => JourneyCard::attendance($booking->commuteGroup, $trip),
+
+            // "Every Sun, Tue, Thu" (HOME-3).
+            'daysMask' => $state->daysMask(),
+            'pickup' => $state->pickup($resource['meetingPoint'], $route['originLabel']),
+            'dropoff' => $state->dropoff($resource['dropoffPoint'], $route['destinationLabel']),
+
+            // F3P-04 → F3P-06 (HOME-4). Null before the driver starts and after the ride.
+            'live' => $state->live(),
+
+            // F3P-07 (HOME-5). The button calls `POST /bookings/{booking}/exit-without-fee`.
+            'canLeaveWithoutFee' => $state->canLeaveWithoutFee(),
+
+            // F3P-08 → F3P-10 (HOME-6). `cancellationFeePiastres` is already on the booking.
+            'endedAt' => $state->endedAt(),
+            'alternatives' => in_array($phase, HomeJourney::ENDED, true)
+                ? $this->alternatives($booking, $alternatives)
+                : [],
+
+            // F3P-11 (HOME-7).
+            'completedAt' => $state->completedAt()?->toIso8601String(),
+            'canRate' => $state->canRate(),
 
             /*
              * "Trial tomorrow" on the card. Read from the request that produced the
@@ -261,6 +470,111 @@ final class HomeController extends Controller
     }
 
     /**
+     * "07:30 · Karim · Fifth Settlement → Smart Village B12 · 2 seats" — up to two commutes she
+     * could still ask on, under a journey that was taken away from her (HOME-6).
+     *
+     * 🔴 The SAME suggestion `GET /bookings/{booking}/alternatives` makes, cut to two and to the
+     * card's fields, so the card and the "Find Alternative" screen behind it cannot disagree about
+     * what exists. It books nothing, like that endpoint.
+     *
+     * An empty list, never an error, when nothing fits or the booking has no recorded drop-off to
+     * search towards — the card simply shows no alternatives, and Home must not fail because a
+     * suggestion could not be made.
+     *
+     * @return array<int, array<string, mixed>>
+     */
+    private function alternatives(Booking $booking, SuggestAlternativesAction $action): array
+    {
+        return Cache::remember(
+            "home:alternatives:{$booking->getKey()}",
+            self::ALTERNATIVES_TTL_SECONDS,
+            function () use ($booking, $action): array {
+                try {
+                    $results = $action->execute($booking)['results'];
+                } catch (DomainException) {
+                    return [];
+                }
+
+                $cards = [];
+
+                foreach (array_slice($results, 0, self::ALTERNATIVES) as $result) {
+                    $offer = $result->offer;
+
+                    $cards[] = [
+                        'commuteId' => $offer->id,
+                        // The day it fits on — what a trial or a seat request is made against.
+                        'tripId' => $result->trip->id,
+                        'departureAt' => $result->trip->departure_at->toIso8601String(),
+                        'departureLocal' => $result->trip->departure_local->format('Y-m-d H:i:s'),
+                        ...JourneyCard::route($offer),
+                        'seatsAvailable' => (int) max(0, $result->trip->seats_total - $result->trip->seats_taken),
+                        // A first name and nothing else, as on every suggestion (PersonSummary).
+                        'driver' => ['publicFirstName' => $offer->driverProfile->user->public_first_name],
+                    ];
+                }
+
+                return $cards;
+            },
+        );
+    }
+
+    /**
+     * "3 new commutes match your demand · New Cairo → Smart Village · Sun–Thu · 08:00" (HOME-8).
+     *
+     * ONE alert: the active demand with the most matches she has not opened, the most recently
+     * created demand on a tie. Null when no demand has an unopened match — the card is news, and
+     * "0 new commutes" is not.
+     *
+     * "Opened" is `match_notifications.clicked_at`, which `POST /matches/{match}/opened` stamps
+     * when she taps a match. Without that call every match stays new forever, so the app MUST send
+     * it.
+     *
+     * @return array<string, mixed>|null
+     */
+    private function demandAlert(string $userId): ?array
+    {
+        $demand = CommuteDemand::query()
+            ->where('passenger_user_id', $userId)
+            ->where('status', CommuteDemandStatus::Active)
+            ->select('commute_demands.*')
+            ->selectSub(MatchNotification::query()
+                ->selectRaw('count(*)')
+                ->whereColumn('match_notifications.commute_demand_id', 'commute_demands.id')
+                ->whereNull('match_notifications.clicked_at'), 'unopened_count')
+            ->orderByDesc('unopened_count')
+            ->latest('created_at')
+            ->orderByDesc('id')
+            ->first();
+
+        if ($demand === null || (int) $demand->unopened_count === 0) {
+            return null;
+        }
+
+        return [
+            'demandId' => $demand->id,
+            'newMatchesCount' => (int) $demand->unopened_count,
+            'originLabel' => $demand->origin_label,
+            'destinationLabel' => $demand->destination_label,
+            'daysMask' => (int) $demand->days_mask,
+            // "08:00" — the start of the window she asked to arrive in; the end is beside it.
+            'arrivalTimeLocal' => substr((string) $demand->preferred_arrival_start, 0, 5),
+            'arrivalWindowEndLocal' => substr((string) $demand->preferred_arrival_end, 0, 5),
+        ];
+    }
+
+    /**
+     * The same count as `GET /notifications`' `meta.unreadCount`: in-app rows only, unread.
+     */
+    private function unreadNotifications(string $userId): int
+    {
+        return Notification::query()
+            ->where('user_id', $userId)
+            ->where('channel', NotificationChannel::InApp->value)
+            ->whereNull('read_at')
+            ->count();
+    }
+
+    /**
      * "Matches on your route" — commutes found for the caller's saved requests.
      *
      * Ordered by score rather than by when they were found: the strip has room for three,
@@ -280,21 +594,80 @@ final class HomeController extends Controller
                 'commuteOffer.driverProfile.user',
                 'commuteOffer.locations',
                 'commuteOffer.schedule',
+                'commuteOffer.driverProfile',
+                'commuteDemand',
             ])
             ->orderByDesc('score')
             ->orderByDesc('id')
             ->limit(self::TOP_MATCHES)
             ->get();
 
+        $nextDays = $this->nextOpenDays($notifications->pluck('commute_offer_id')->all());
+
         $cards = [];
 
         // foreach, not map: a mapped collection loses its element type in the published
         // contract, which is the one thing the mobile team cannot guess at.
         foreach ($notifications as $notification) {
-            $cards[] = (new MatchNotificationResource($notification))->toArray($request);
+            $card = (new MatchNotificationResource($notification))->toArray($request);
+            $demand = $notification->commuteDemand;
+            $next = $nextDays->get($notification->commute_offer_id);
+
+            /*
+             * HOME-9, added HERE rather than on MatchNotificationResource: `GET /matches` shares
+             * that resource and has its own consumers, and these three answer questions only this
+             * strip asks.
+             */
+            $cards[] = [
+                ...$card,
+
+                /*
+                 * "Matches "New Cairo → Smart Village"". A demand has no title of its own, so it
+                 * is named by the route she typed; null when either end was never labelled, and
+                 * the row then says "Matches your demand".
+                 */
+                'demandTitle' => $demand?->origin_label !== null && $demand->destination_label !== null
+                    ? "{$demand->origin_label} → {$demand->destination_label}"
+                    : null,
+
+                /*
+                 * "2 seats left" — on the commute's SOONEST day still open to booking, which is the
+                 * day a request from this row would be made on. Null when it has no such day.
+                 */
+                'seatsAvailable' => $next === null ? null : (int) max(0, $next->seats_total - $next->seats_taken),
+
+                'driver' => [
+                    ...$card['driver'],
+                    // 0 → "New driver". The profile's counter, as on every other card.
+                    'completedTrips' => (int) $notification->commuteOffer->driverProfile->completed_trips_count,
+                ],
+            ];
         }
 
         return $cards;
+    }
+
+    /**
+     * Each commute's soonest day that has not left, in one query for the whole strip.
+     *
+     * @param  array<int, string>  $offerIds
+     * @return Collection<string, ScheduledTrip>
+     */
+    private function nextOpenDays(array $offerIds): Collection
+    {
+        if ($offerIds === []) {
+            return collect();
+        }
+
+        return ScheduledTrip::query()
+            ->whereIn('commute_offer_id', $offerIds)
+            ->where('status', ScheduledTripStatus::Scheduled)
+            ->where('departure_at', '>=', now())
+            ->orderBy('departure_at')
+            ->orderBy('id')
+            ->get(['id', 'commute_offer_id', 'departure_at', 'seats_total', 'seats_taken'])
+            ->unique('commute_offer_id')
+            ->keyBy('commute_offer_id');
     }
 
     /**
@@ -315,16 +688,50 @@ final class HomeController extends Controller
             ->limit(self::SAVED_SEARCHES)
             ->get();
 
+        $signatures = [];
+
+        foreach ($searches as $search) {
+            $signatures[$search->id] = $this->searchSignature($search, $userId);
+        }
+
+        /*
+         * "You searched this on Tuesday" (HOME-9). When she last RAN this search, from her own
+         * recent-search history — matched on the same signature that history and the result cache
+         * use, so "the same search" means one thing across the feature. One query for the strip.
+         */
+        $lastSearched = SearchHistory::query()
+            ->where('user_id', $userId)
+            ->whereIn('signature', array_values(array_filter($signatures)))
+            ->pluck('searched_at', 'signature');
+
         $cards = [];
 
         foreach ($searches as $search) {
+            $signature = $signatures[$search->id];
+            $at = $signature === null ? null : $lastSearched->get($signature);
+
             $cards[] = [
                 'id' => $search->id,
                 'title' => $search->title,
+                // Null when she saved it and has not run it since (history is pruned after a while).
+                'lastSearchedAt' => $at === null ? null : Carbon::parse($at)->toIso8601String(),
             ];
         }
 
         return $cards;
+    }
+
+    /**
+     * The recent-search signature of a saved search's filters, or null for filters saved before
+     * the current search shape that no longer parse — such a card simply has no "last searched".
+     */
+    private function searchSignature(SavedSearch $search, string $userId): ?string
+    {
+        try {
+            return SearchCriteria::fromArray($search->filters)->signature($userId);
+        } catch (Throwable) {
+            return null;
+        }
     }
 
     /**
