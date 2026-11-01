@@ -39,8 +39,12 @@ final class SeatAvailabilityChecker
     }
 
     /**
-     * A trip that is cancelled, already under way, or past its booking deadline
-     * cannot take anyone new — however many seats the column still says are free.
+     * A trip that is cancelled or past its departure cannot take anyone new — however many
+     * seats the column still says are free.
+     *
+     * There is no earlier cut-off (Feature 03 R-5): the 21:00-the-night-before deadline is gone,
+     * so a day takes requests right up to its departure. `BOOKING_DEADLINE_PASSED` kept its name
+     * because the app already handles it; it now means only "this day has left".
      */
     public function assertTripIsBookable(ScheduledTrip $trip): void
     {
@@ -52,9 +56,6 @@ final class SeatAvailabilityChecker
             throw DomainException::of(ErrorCode::BookingDeadlinePassed);
         }
 
-        if ($trip->booking_deadline_at !== null && $trip->booking_deadline_at->isPast()) {
-            throw DomainException::of(ErrorCode::BookingDeadlinePassed);
-        }
     }
 
     /**

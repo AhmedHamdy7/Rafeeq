@@ -8,6 +8,7 @@ use App\Domains\Commute\Models\ScheduledTrip;
 use App\Domains\Shared\ValueObjects\DaysMask;
 use Carbon\CarbonImmutable;
 use Illuminate\Database\QueryException;
+use Illuminate\Support\Facades\Schema;
 
 /**
  * Chapter 4 §4: "publishing creates scheduled trips", and passengers always book
@@ -236,20 +237,19 @@ it('refuses a day whose seat price is not the share plus the commission', functi
         ->toThrow(QueryException::class);
 });
 
-it('sets a booking deadline the evening before, in the driver timezone', function () {
-    $this->travelTo(CarbonImmutable::parse('2026-06-01 06:00', 'Africa/Cairo'));
-
+/**
+ * Feature 03 R-5 (follow-up N2): a generated day carries no booking cut-off. The 21:00-the-night-before
+ * column is gone, so nothing can quietly start refusing requests again.
+ */
+it('generates days with no booking deadline', function () {
     $offer = publishedOffer();
-    scheduleFor($offer, ['days_mask' => 127, 'start_date' => '2026-06-02', 'end_date' => '2026-06-10']);
+    scheduleFor($offer);
 
     app(GenerateScheduledTripsAction::class)->execute($offer->refresh());
 
-    $trip = ScheduledTrip::where('trip_date', '2026-06-03')->sole();
-
-    $deadline = $trip->booking_deadline_at->setTimezone('Africa/Cairo');
-
-    expect($deadline->toDateString())->toBe('2026-06-02')
-        ->and($deadline->format('H:i'))->toBe(sprintf('%02d:00', config('rafeeq.commute.booking_deadline_hour')));
+    expect(ScheduledTrip::count())->toBeGreaterThan(0)
+        ->and(Schema::hasColumn('scheduled_trips', 'booking_deadline_at'))->toBeFalse()
+        ->and(config('rafeeq.commute.booking_deadline_hour'))->toBeNull();
 });
 
 it('continues from where it left off instead of walking the same days again', function () {

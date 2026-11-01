@@ -518,7 +518,6 @@ class DatabaseSeeder extends Seeder
             'departure_at' => DepartureTimeCalculator::toUtc($tripDate, $schedule->departure_time, $schedule->timezone),
             'departure_local' => "{$tripDate} 07:05:00",
             'seats_total' => $offer->seats_total,
-            'booking_deadline_at' => now()->parse($tripDate)->subDay()->setTime(21, 0),
         ]);
 
         // Priced by the same quote the generator uses (P-1); these columns are not fillable.

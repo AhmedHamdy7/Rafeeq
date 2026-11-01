@@ -220,27 +220,11 @@ final readonly class GenerateScheduledTripsAction
                 $weekday->promised_arrival_time,
                 $schedule->timezone,
             ),
-            'booking_deadline_at' => $this->bookingDeadline($date, $schedule->timezone),
         ]);
 
         // Not fillable: only a quote may price a day.
         $trip->forceFill($quote->toTripColumns());
 
         $trip->save();
-    }
-
-    /**
-     * The evening before, in the driver's own timezone, so they know who is
-     * coming before they sleep. Converted to UTC like every other instant.
-     */
-    private function bookingDeadline(CarbonImmutable $tripDate, string $timezone): CarbonImmutable
-    {
-        $hour = (int) config('rafeeq.commute.booking_deadline_hour');
-
-        return DepartureTimeCalculator::toUtc(
-            $tripDate->subDay()->toDateString(),
-            sprintf('%02d:00:00', $hour),
-            $timezone,
-        );
     }
 }

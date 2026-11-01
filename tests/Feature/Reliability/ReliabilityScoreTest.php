@@ -238,7 +238,6 @@ it('leaves an early passenger cancellation off the record entirely', function ()
      */
     ScheduledTrip::query()->whereKey($this->tripId)->update([
         'departure_at' => now()->addDays(5),
-        'booking_deadline_at' => now()->addDays(5),
     ]);
 
     test()->flushHeaders()->withToken($her['token'])

@@ -24,4 +24,4 @@ All 15 subtasks are done in one change, **merged to `main` in `257cd97`** (branc
 ### Decisions for @Omar Aly
 1. **"This week"** on the demand count means the next 7 days, not Sat → Fri. OK?
 2. **Area names** on the trimmed route come from the catalogue place's district (or the nearest place within 3 km). Where the catalogue is thin, Start/End labels can be `null`.
-3. Outside this group and still open: recurring waiting-list applications (G23 / N3), women-only visible to all (B-6) and removing the 21:00 deadline (B-7).
+3. Outside this group: recurring waiting-list applications (G23 / N3) and women-only visible to all (B-6) are still open; the 21:00 deadline (B-7) was removed by the follow-ups work.

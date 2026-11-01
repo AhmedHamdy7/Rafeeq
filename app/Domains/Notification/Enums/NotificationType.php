@@ -27,6 +27,17 @@ enum NotificationType: string
 
     // ---- Booking ------------------------------------------------------------
     case SeatRequested = 'seat_requested';
+
+    /**
+     * Somebody asked to join the driver's WAITING LIST (Feature 03 R-1, BOOK-18): her request
+     * arrived on a day with no seat, or at a time she already rides with somebody else.
+     *
+     * Its own message rather than `seat_requested` with a flag, because the driver is being asked
+     * a different question — "put her on your list?", not "give her a seat?" — and a lock screen
+     * that said "would like to join your commute" would promise a seat nobody has. `data.kind`
+     * is still `waitlist_application`, so an app routing on the request opens the same card.
+     */
+    case WaitlistApplicationReceived = 'waitlist_application_received';
     case SeatApproved = 'seat_approved';
     case SeatDeclined = 'seat_declined';
     case BookingCancelled = 'booking_cancelled';
@@ -432,6 +443,7 @@ enum NotificationType: string
             self::CouponIssued => NotificationCategory::Payment,
 
             self::SeatRequested,
+            self::WaitlistApplicationReceived,
             self::SeatApproved,
             self::SeatDeclined,
             self::BookingCancelled,

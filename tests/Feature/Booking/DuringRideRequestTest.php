@@ -144,7 +144,7 @@ it('refuses her when the day is full', function () {
 
 /**
  * 🔴 And the ordinary rules still apply to an ordinary request. A day that has not set off is
- * refused past its deadline exactly as before — this path replaces those checks rather than
+ * refused once its departure has passed exactly as before — this path replaces those checks rather than
  * loosening them, so nothing about tomorrow's booking changed.
  */
 it('leaves a request on a run that has not started under the old rules', function () {
@@ -154,9 +154,9 @@ it('leaves a request on a run that has not started under the old rules', functio
         ->orderBy('trip_date')
         ->firstOrFail();
 
-    // Past its deadline, and not under way.
+    // Past its departure, and never started — not a run in progress.
     ScheduledTrip::query()->whereKey($otherDay->getKey())->update([
-        'booking_deadline_at' => now()->subHour(),
+        'departure_at' => now()->subHour(),
     ]);
 
     askDuringRide($this->paxToken, $this->commuteId, $otherDay->getKey())

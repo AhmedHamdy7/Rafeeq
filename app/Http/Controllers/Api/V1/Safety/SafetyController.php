@@ -385,8 +385,10 @@ final class SafetyController extends Controller
      * what it would cost her, before she confirms (Feature 03 files X-4).
      *
      * `bookingsToCancel` lists every confirmed seat the two share on a day not yet under way;
-     * `feePiastres` is what the normal cancellation rules would charge her for them (0 until the
-     * fee ladders exist) and `reason` names the rule (null while there is no fee).
+     * `feePiastres` is what the normal cancellation rules will charge her for them — the real amount,
+     * by the same arithmetic the block then applies (the driver-cancel fee by notice per seat, or her
+     * late-cancel fee inside 12 hours) — and `reason` names the rule: `driver_cancel`,
+     * `late_cancel`, or null when the fee is 0.
      */
     #[ApiErrors(ErrorCode::CannotBlockSelf, ErrorCode::NotFound)]
     public function blockPreview(BlockPreviewRequest $request, BlockUserAction $action): JsonResponse

@@ -364,6 +364,22 @@ it('lets the passenger withdraw before an answer', function () {
 });
 
 /**
+ * 🔴 Feature 03 R-5 (follow-up N2): no booking deadline. A day leaving in half an hour can still be
+ * asked for and approved — under the old rule it stopped taking requests at 21:00 last night and
+ * answered `BOOKING_DEADLINE_PASSED`.
+ */
+it('takes and approves a request right up to the departure', function () {
+    ScheduledTrip::query()->whereKey($this->tripId)->update(['departure_at' => now()->addMinutes(30)]);
+
+    $requestId = requestSeat($this->paxToken, $this->commuteId, ['scheduledTripId' => $this->tripId])
+        ->assertStatus(201)->json('data.id');
+
+    $this->withToken($this->driverToken)
+        ->postJson("/api/v1/driver/seat-requests/{$requestId}/approve")
+        ->assertStatus(201);
+});
+
+/**
  * 🔴 Feature 03 R-4 (BOOK-36, decision C2-note): requests never expire. The 48-hour window is gone.
  */
 it('never expires a request nobody has answered yet', function () {
@@ -510,10 +526,8 @@ it('still refuses an unverified identity the driver surface', function () {
     $unverified = signIn(phone: '01223337777', devicePublicId: 'drv-unverified')['session']['accessToken'];
     completeBasicProfile($unverified);
 
-    test()->withToken($unverified)->getJson('/api/v1/driver/application')
-        ->assertStatus(403)
-        ->assertJsonPath('error.code', 'VERIFICATION_REQUIRED');
-
+    // The application itself is open in any order since F2-1 (the five items are checked on
+    // submit), so the gate that still stands is publishing a commute.
     test()->withToken($unverified)->postJson('/api/v1/commutes', [])
         ->assertStatus(403)
         ->assertJsonPath('error.code', 'VERIFICATION_REQUIRED');

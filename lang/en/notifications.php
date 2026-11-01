@@ -33,6 +33,10 @@ return [
         'title' => 'New seat request',
         'body' => ':name would like to join your commute.',
     ],
+    'waitlist_application_received' => [
+        'title' => 'New waiting-list request',
+        'body' => ':name would like to join your waiting list.',
+    ],
     'seat_approved' => [
         'title' => 'You have a seat',
         'body' => ':name has approved your request.',
