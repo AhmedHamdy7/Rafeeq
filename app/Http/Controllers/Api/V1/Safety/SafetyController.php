@@ -20,6 +20,7 @@ use App\Domains\Trip\Models\TripSession;
 use App\Http\Controllers\Controller;
 use App\Http\OpenApi\ApiErrors;
 use App\Http\Requests\Safety\AttachIncidentEvidenceRequest;
+use App\Http\Requests\Safety\BlockPreviewRequest;
 use App\Http\Requests\Safety\BlockUserRequest;
 use App\Http\Requests\Safety\ReportIncidentRequest;
 use App\Http\Requests\Safety\ShareLiveTripRequest;
@@ -155,7 +156,7 @@ final class SafetyController extends Controller
     /**
      * POST /v1/incidents — file a report.
      */
-    #[ApiErrors(ErrorCode::IncidentNotReportable, ErrorCode::TooManyRequests)]
+    #[ApiErrors(ErrorCode::IncidentNotReportable, ErrorCode::ReportWindowClosed, ErrorCode::TooManyRequests)]
     public function reportIncident(ReportIncidentRequest $request, ReportIncidentAction $action): JsonResponse
     {
         $incident = $action->execute($request->user(), $request->validated());
@@ -351,10 +352,25 @@ final class SafetyController extends Controller
     }
 
     /**
+     * GET /v1/safety/blocked-users/preview?userId= — what blocking this person would cancel, and
+     * what it would cost her, before she confirms (Feature 03 files X-4).
+     *
+     * `bookingsToCancel` lists every confirmed seat the two share on a day not yet under way;
+     * `feePiastres` is what the normal cancellation rules would charge her for them (0 until the
+     * fee ladders exist) and `reason` names the rule (null while there is no fee).
+     */
+    #[ApiErrors(ErrorCode::CannotBlockSelf, ErrorCode::NotFound)]
+    public function blockPreview(BlockPreviewRequest $request, BlockUserAction $action): JsonResponse
+    {
+        return ApiResponse::success($action->preview($request->user(), $request->string('userId')->value()));
+    }
+
+    /**
      * POST /v1/safety/blocked-users — block somebody.
      *
      * The matching engine has excluded blocked pairs in BOTH directions since Phase 6; this writes
-     * the row it reads. Existing bookings are untouched — "existing completed history remains".
+     * the row it reads, and cancels every upcoming booking the two share, as the blocker (X-4) —
+     * show `GET /safety/blocked-users/preview` first. Completed history is untouched.
      */
     #[ApiErrors(ErrorCode::CannotBlockSelf, ErrorCode::AlreadyBlocked, ErrorCode::NotFound)]
     public function block(BlockUserRequest $request, BlockUserAction $action): JsonResponse

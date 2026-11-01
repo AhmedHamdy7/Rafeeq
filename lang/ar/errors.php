@@ -134,6 +134,7 @@ return [
     'CANNOT_BLOCK_SELF' => 'مش ممكن تحظر نفسك.',
     'ALREADY_BLOCKED' => 'الشخص ده محظور بالفعل.',
     'INCIDENT_NOT_REPORTABLE' => 'مش ممكن تبلّغ عن الرحلة دي.',
+    'REPORT_WINDOW_CLOSED' => 'وقت الإبلاغ عن الرحلة دي خلص. كلّم الدعم لو حصل حاجة خطيرة.',
     'INCIDENT_EVIDENCE_LIMIT_REACHED' => 'وصلت لأقصى عدد ملفات ممكن تضيفها للبلاغ ده.',
     'INCIDENT_CLOSED' => 'البلاغ ده اتقفل، فمش ممكن يتضاف عليه حاجة. ابعت بلاغ جديد لو فيه حاجة تانية.',
     'LIVE_SHARE_ALREADY_ENDED' => 'الرابط ده متوقّف خلاص.',

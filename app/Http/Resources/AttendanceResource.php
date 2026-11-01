@@ -2,6 +2,7 @@
 
 namespace App\Http\Resources;
 
+use App\Domains\Safety\Support\OtherParty;
 use App\Domains\Trip\Models\Attendance;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
@@ -67,6 +68,15 @@ final class AttendanceResource extends JsonResource
             'disputedAt' => $this->disputed_at?->toIso8601String(),
             'disputeReason' => $this->dispute_reason,
             'disputeResolution' => $this->dispute_resolution?->value,
+
+            /*
+             * The passenger's user id, to the driver, once this booking's journey is over — so the
+             * driver's trip summary can offer Block and Report (Feature 03 files X-4). Null before.
+             */
+            'passengerUserId' => $this->when(
+                $this->resource->relationLoaded('booking') && $this->booking !== null,
+                fn (): ?string => OtherParty::idFor($this->booking, $request->user()),
+            ),
 
             'person' => $this->when(
                 $this->resource->relationLoaded('booking') && $this->booking->relationLoaded('passenger'),

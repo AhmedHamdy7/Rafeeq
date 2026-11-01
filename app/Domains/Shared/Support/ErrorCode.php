@@ -233,6 +233,8 @@ enum ErrorCode: string
     case IncidentEvidenceLimitReached = 'INCIDENT_EVIDENCE_LIMIT_REACHED';
     case IncidentClosed = 'INCIDENT_CLOSED';
     case LiveShareAlreadyEnded = 'LIVE_SHARE_ALREADY_ENDED';
+    // Feature 03 files X-7, SAFE-08: more than 24 hours since that journey ended.
+    case ReportWindowClosed = 'REPORT_WINDOW_CLOSED';
 
     // ---- Notifications (Phase 12, Chapter 11) --------------------------
     case NotificationCategoryLocked = 'NOTIFICATION_CATEGORY_LOCKED';
@@ -438,7 +440,9 @@ enum ErrorCode: string
              * client's move is to file a new report, not to retry with different credentials — and
              * that distinction is the whole reason this is not a generic Forbidden.
              */
-            self::IncidentClosed => 409,
+            self::IncidentClosed,
+            // 409: the time to report that journey has passed — a state, like a closed rating window.
+            self::ReportWindowClosed => 409,
 
             // 422: about what was sent. The list is full, or the report has nothing to attach to.
             self::EmergencyContactLimitReached,

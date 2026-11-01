@@ -4,6 +4,7 @@ namespace App\Http\Resources;
 
 use App\Domains\Booking\Enums\BookingStatus;
 use App\Domains\Booking\Models\Booking;
+use App\Domains\Safety\Support\OtherParty;
 use App\Domains\Trip\Support\DriverDelay;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
@@ -83,6 +84,15 @@ final class BookingResource extends JsonResource
              * where to wait for her at the other end of the day.
              */
             'dropoffPoint' => $this->dropoffPoint(),
+
+            /*
+             * The other person's user id — the driver's to the passenger, the passenger's to the
+             * driver — so the trip summary can offer Block and Report (Feature 03 files X-4).
+             *
+             * 🔒 Null until the journey is over (`COMPLETED`, `ENDED_EARLY`, `NO_SHOW`,
+             * `EXITED_DUE_TO_DRIVER_DELAY`); see OtherParty for why not before.
+             */
+            'otherPartyUserId' => OtherParty::idFor($this->resource, $request->user()),
 
             'cancelledAt' => $this->cancelled_at?->toIso8601String(),
             'cancelledReason' => $this->cancelled_reason,
