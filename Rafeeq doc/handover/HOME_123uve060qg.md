@@ -24,3 +24,4 @@ Tests: new `tests/Feature/Http/HomeJourneyStatesTest.php` (16) plus the existing
 - TRIP-26: `nextJourney.checkIn {groupId, answer, cutoffAt, canAnswer}` → `POST /groups/{group}/attendance`.
 - TRIP-02 / TRIP-29 on `GET /driver/home`: `laterThisWeek[]`, `notices[]` (`seat_opened` / `passenger_switched`, last 24 h), `nextRun.leaveBy {at, local, lateWarning}`.
 - Car type: `vehicle.make` + `model` + `colour` already cover "Kia Sportage · Silver"; nothing added.
+- HOME-1 "until she has seen it" is now real: the card keeps an ended or completed-unrated journey until the app calls `POST /bookings/{booking}/seen` (no body, harmless to repeat), for up to 7 days. `nextJourney.isSeen`, `booking.outcomeSeenAt`. `409 BOOKING_NOT_ENDED` on a journey that hasn't ended. Call it once the ended card has been on screen.

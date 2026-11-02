@@ -223,7 +223,7 @@ it('keeps showing a journey she left because the driver was late, with no fee an
     }
 });
 
-it('shows a day the driver cancelled, until that day is over', function () {
+it('shows a day the driver cancelled until she has seen it', function () {
     runLeavingIn($this->tripId, 120);
 
     asHomeDriver($this->driverToken, 'POST', "/api/v1/trips/{$this->tripId}/cancel", ['reason' => 'Car in the garage'])
@@ -234,14 +234,51 @@ it('shows a day the driver cancelled, until that day is over', function () {
     expect($card['phase'])->toBe('cancelled_by_driver')
         ->and($card['endedAt'])->not->toBeNull()
         ->and($card['cancellationFeePiastres'])->toBe(0)
-        ->and($card['alternatives'])->toBeArray();
+        ->and($card['alternatives'])->toBeArray()
+        ->and($card['isSeen'])->toBeFalse();
 
-    // Yesterday's cancellation is not news today. The day is moved rather than the clock, which
-    // would also expire her access token.
     $yesterday = now()->subDay();
     ScheduledTrip::query()->whereKey($this->tripId)->update(['departure_at' => $yesterday, 'departure_local' => $yesterday]);
 
+    expect(homeCard($this->paxToken)['phase'])->toBe('cancelled_by_driver');
+
+    asHomeDriver($this->paxToken, 'POST', "/api/v1/bookings/{$this->bookingId}/seen")
+        ->assertOk()
+        ->assertJsonPath('data.outcomeSeenAt', fn ($at) => $at !== null);
+
     expect(homeCard($this->paxToken))->toBeNull();
+});
+
+it('drops an ended journey she never saw after seven days', function () {
+    runLeavingIn($this->tripId, 120);
+
+    asHomeDriver($this->driverToken, 'POST', "/api/v1/trips/{$this->tripId}/cancel", ['reason' => 'Car in the garage'])
+        ->assertOk();
+
+    $eightDaysAgo = now()->subDays(8);
+    ScheduledTrip::query()->whereKey($this->tripId)->update(['departure_at' => $eightDaysAgo, 'departure_local' => $eightDaysAgo]);
+
+    expect(homeCard($this->paxToken))->toBeNull();
+});
+
+it('marks only her own ended journey as seen', function () {
+    asHomeDriver($this->paxToken, 'POST', "/api/v1/bookings/{$this->bookingId}/seen")
+        ->assertStatus(409)
+        ->assertJsonPath('error.code', 'BOOKING_NOT_ENDED');
+
+    runLeavingIn($this->tripId, 120);
+    asHomeDriver($this->driverToken, 'POST', "/api/v1/trips/{$this->tripId}/cancel", ['reason' => 'Car in the garage'])
+        ->assertOk();
+
+    asHomeDriver($this->driverToken, 'POST', "/api/v1/bookings/{$this->bookingId}/seen")->assertNotFound();
+
+    $first = asHomeDriver($this->paxToken, 'POST', "/api/v1/bookings/{$this->bookingId}/seen")
+        ->assertOk()->json('data.outcomeSeenAt');
+
+    $this->travel(5)->minutes();
+
+    expect(asHomeDriver($this->paxToken, 'POST', "/api/v1/bookings/{$this->bookingId}/seen")
+        ->assertOk()->json('data.outcomeSeenAt'))->toBe($first);
 });
 
 it('names a morning the sweep expired as expired, not as her leaving', function () {
@@ -287,6 +324,8 @@ it('lets the next pickup outrank an old ride still waiting for stars', function 
     ScheduledTrip::query()->whereKey($this->tripId)->update(['departure_at' => $twoDaysAgo, 'departure_local' => $twoDaysAgo]);
 
     expect(homeCard($this->paxToken)['phase'])->toBe('completed');
+
+    asHomeDriver($this->paxToken, 'POST', "/api/v1/bookings/{$this->bookingId}/seen")->assertOk();
 
     // Another driver's commute: one request per commute, and hers on the first is answered.
     fakeOtpSender();

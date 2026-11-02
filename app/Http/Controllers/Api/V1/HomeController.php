@@ -90,6 +90,8 @@ final class HomeController extends Controller
      */
     private const int ALTERNATIVES_TTL_SECONDS = 300;
 
+    private const int UNSEEN_OUTCOME_DAYS = 7;
+
     private const int LATER_THIS_WEEK = 7;
 
     private const int LATER_THIS_WEEK_DAYS = 7;
@@ -231,18 +233,13 @@ final class HomeController extends Controller
      *
      * 1. **The journey happening now** — its departure has passed or its run has set off, and her
      *    seat is still held. A car on the way to her outranks anything else she could be shown.
-     * 2. **A journey that ended on her today** — cancelled by the driver, expired, she left because
-     *    the driver was late, or completed. Until the end of that journey's local day, because the
-     *    outcome is news she has to have seen, and "your 07:00 was cancelled" vanishing at 07:01
-     *    would leave her at the kerb wondering whether the app forgot.
+     * 2. **A journey that ended and she has not seen** — cancelled by the driver, expired, she left
+     *    because the driver was late, or completed and not rated — until the app sends
+     *    `POST /bookings/{booking}/seen`, for up to seven days.
      * 3. **The soonest journey that has not started** — what this card has always been.
      * 4. **A completed journey she has not rated**, while the rating window is open — but only when
      *    there is nothing upcoming to show. A ride from four days ago asking for stars must not hide
      *    tomorrow's pickup; once tomorrow exists, the rating is still in `GET /ratings/pending`.
-     *
-     * ⚠️ "Until she has seen it" is approximated by time, not tracked: nothing records that she
-     * looked at the card, and adding a write to a read-only screen the app polls would be the wrong
-     * place for it. The windows above are the ones the request proposed.
      *
      * @return array<string, mixed>|null
      */
@@ -256,7 +253,7 @@ final class HomeController extends Controller
         $upcoming = $this->currentBooking($userId);
 
         $booking = $this->happeningNow($userId)
-            ?? $this->endedToday($userId, $ratings)
+            ?? $this->unseenOutcome($userId, $ratings)
             ?? $upcoming
             ?? $this->awaitingRating($userId, $ratings);
 
@@ -313,29 +310,20 @@ final class HomeController extends Controller
                 || $this->isTodayFor($candidate->scheduledTrip));
     }
 
-    /**
-     * Row 2: a journey whose outcome she has to see — on its own local day. The most recent outcome
-     * first, because the newest news is the card's to give.
-     */
-    private function endedToday(string $userId, SubmitRatingAction $ratings): ?Booking
+    private function unseenOutcome(string $userId, SubmitRatingAction $ratings): ?Booking
     {
         return $this->journeyQuery()
             ->where('bookings.passenger_user_id', $userId)
-            ->whereIn('bookings.status', [
-                BookingStatus::CancelledByDriver,
-                BookingStatus::ExitedDueToDriverDelay,
-                BookingStatus::Completed,
-            ])
-            // Bounded in SQL so a long history is not loaded to find today; exact below.
-            ->where('scheduled_trips.departure_at', '>=', now()->subDays(2))
+            ->whereIn('bookings.status', BookingStatus::OUTCOMES_TO_SEE)
+            ->whereNull('bookings.outcome_seen_at')
+            ->where('scheduled_trips.departure_at', '>=', now()->subDays(self::UNSEEN_OUTCOME_DAYS))
             ->where('scheduled_trips.departure_at', '<=', now()->addDay())
             ->orderByDesc('bookings.updated_at')
             ->orderByDesc('bookings.id')
+            ->limit(10)
             ->get()
-            ->first(fn (Booking $candidate): bool => $this->isTodayFor($candidate->scheduledTrip)
-                // A completed ride she has already rated has nothing left to say to her.
-                && ($candidate->status !== BookingStatus::Completed
-                    || HomeJourney::for($candidate, $ratings, $userId)->canRate()));
+            ->first(fn (Booking $candidate): bool => $candidate->status !== BookingStatus::Completed
+                || HomeJourney::for($candidate, $ratings, $userId)->canRate());
     }
 
     /**
@@ -452,6 +440,8 @@ final class HomeController extends Controller
             // F3P-11 (HOME-7).
             'completedAt' => $state->completedAt()?->toIso8601String(),
             'canRate' => $state->canRate(),
+
+            'isSeen' => $booking->outcome_seen_at !== null,
 
             /*
              * "Trial tomorrow" on the card. Read from the request that produced the

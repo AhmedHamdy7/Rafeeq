@@ -14,7 +14,7 @@
 >
 > **Base URL:** `{host}/api/v1` · **Auth:** bearer token · **Format:** JSON only.
 
-**Last updated:** 2026-11-01 · **186 endpoints live** · Phases 0–7, 9 and 11 complete · 10, 12 and 13 all but a decision each
+**Last updated:** 2026-11-02 · **187 endpoints live** · Phases 0–7, 9 and 11 complete · 10, 12 and 13 all but a decision each
 
 ---
 
@@ -22,7 +22,7 @@
 
 ### What is ready
 
-**186 endpoints live** and tested, across the 47 designed screens:
+**187 endpoints live** and tested, across the 47 designed screens:
 
 | | Count | Covers |
 |---|---|---|
@@ -812,6 +812,7 @@ fails if this list and the running routes ever disagree in either direction.
 | `PATCH /trips/{trip}/receive-requests` | 4.9 Live trip |
 | `POST /bookings/{booking}/end-early` | 4.9 Live trip |
 | `POST /bookings/{booking}/exit-without-fee` | 4.9 Live trip |
+| `POST /bookings/{booking}/seen` | 4.11 Home aggregates |
 | `POST /bookings/{booking}/early-drop` | 4.9 Live trip |
 | `GET /bookings/{booking}/alternatives` | 4.9 Live trip |
 | `POST /trips/{trip}/start` | 4.9 Live trip |
@@ -3394,7 +3395,7 @@ they explain.
 | `greetingName` | Their public first name. |
 | `verification` | `{level, of, percentage, isComplete}` — the same numbers as the Verification Centre, so the banner cannot disagree with the screen behind it. 🔴 **`null` for a passenger-only account** (PROF-12, F2-8): passengers never verify, so hide the banner. It appears once the account has the driver capability. |
 | `unreadNotifications` | The bell badge: the same number as `GET /notifications` → `meta.unreadCount`, so Home is one request. |
-| `nextJourney` | The journey the card is about, or **`null`** (F3P-01). Contains the full booking (4.7) plus `originLabel`, `destinationLabel`, `departureAt`, `departureLocal`, `departsInMinutes`, `isToday`, `attendance`, `isTrial`, `driver` (5.1), `vehicle`, and the state fields below. **Which journey**, the first that exists: ① the one **happening now** (run started, or departure passed and the driver has not started — today only); ② one that **ended on her today** — cancelled by the driver, expired, she left for a driver delay, or completed and not yet rated — until the end of that day (Cairo); ③ the **soonest upcoming confirmed** one — a `PENDING` request is never on the card (TRIP-01); ④ a **completed ride still waiting for her stars**, inside the rating window, only when nothing is upcoming. A ride she cancelled herself is not shown. |
+| `nextJourney` | The journey the card is about, or **`null`** (F3P-01). Contains the full booking (4.7) plus `originLabel`, `destinationLabel`, `departureAt`, `departureLocal`, `departsInMinutes`, `isToday`, `attendance`, `isTrial`, `driver` (5.1), `vehicle`, and the state fields below. **Which journey**, the first that exists: ① the one **happening now** (run started, or departure passed and the driver has not started — today only); ② one that **ended and she has not seen** — cancelled by the driver, expired, she left for a driver delay, or completed and not yet rated — until you send `POST /bookings/{booking}/seen`, for up to 7 days; ③ the **soonest upcoming confirmed** one — a `PENDING` request is never on the card (TRIP-01); ④ a **completed ride still waiting for her stars**, inside the rating window, only when nothing is upcoming. A ride she cancelled herself is not shown. |
 | `nextJourney.phase` | **The state the card switches on**, decided by the server: `scheduled` (F3P-02/03) · `driver_en_route` (F3P-04, the run has started) · `driver_arrived` (F3P-05, the driver's GPS-checked "I've arrived" for her) · `on_board` (F3P-06, she is checked in and not yet dropped off) · `driver_delayed` (F3P-07: 5 min after departure with the run not started, or the run started but the driver has not arrived 5 min after her pickup time, or the car passed her stop) · `cancelled_by_driver` (F3P-08) · `expired` (F3P-09, the driver never started and the day was closed) · `exited` (F3P-10, she pressed Leave Without Fee) · `completed` (F3P-11). `status` and `trip.status` are unchanged — switch on `phase`, not on them. |
 | `nextJourney.daysMask` | The days she rides — her requested days, or the commute's days. Sat 1 … Fri 64. |
 | `nextJourney.pickup` | `{label, at, local, lat, lng, isExact}` — "Your agreed pickup · Rehab Gate 2 · 07:05". `label`/`lat`/`lng`/`isExact` are `meetingPoint`'s (fuzzed, label `null`, until confirmed). **`at` is her pickup time** — departure plus the drive to her stop — and is the same instant her arrival grace counts from. `meetingPoint` stays. |
@@ -3404,6 +3405,7 @@ they explain.
 | `nextJourney.checkIn` | `{groupId, answer, cutoffAt, canAnswer}` (TRIP-26). `answer` is `coming` or `null` (no answer = coming; "I can't make it" cancels the day, so it never shows here). `cutoffAt` is 2 h before departure; show the two buttons only while `canAnswer`. Answer with `POST /groups/{group}/attendance` `{tripId, status: "coming" \| "away"}`. |
 | `nextJourney.endedAt` | When it was cancelled / expired / she exited; `null` otherwise. With `cancellationFeePiastres` (`0` → "no fee to you" / "no penalty"). |
 | `nextJourney.alternatives[]` | Up to 2, **only** on `cancelled_by_driver` / `expired` / `exited`, else `[]`: `{commuteId, tripId, departureAt, departureLocal, originLabel, destinationLabel, seatsAvailable, driver{publicFirstName}}`. The first two of `GET /bookings/{booking}/alternatives` (refreshed every 5 min); suggestions, nothing booked. "Find Alternative" opens that endpoint for the full list. |
+| `nextJourney.isSeen` | `false` until you call `POST /bookings/{booking}/seen`. **Call it once the ended or completed card has actually been on screen**, not when `/home` merely loads; the next `/home` then moves on. |
 | `nextJourney.completedAt` · `canRate` | F3P-11: when she was set down, and whether **Rate** shows (`false` once she rated or the window closed). Rating is `POST /bookings/{booking}/rating` (4.13). |
 | `nextJourney.attendance` | `{coming, away, awaiting, total}` — **four counts, not "2 of 3"**. Somebody who said they are away and somebody who has not answered are not the same person to a driver deciding whether to wait, so the server does not collapse them. `total` includes the driver. |
 | `nextJourney.vehicle` | `make`, `model`, `colour`, `seats`, and `plateNumber` **only when the booking is confirmed**. |
@@ -3411,6 +3413,13 @@ they explain.
 | `demandAlert` | "**3** new commutes match your demand" — `{demandId, newMatchesCount, originLabel, destinationLabel, daysMask, arrivalTimeLocal, arrivalWindowEndLocal}` for the active demand with the most **unopened** matches, or `null` (no card). Opened = `POST /matches/{match}/opened`. Hide it on F3P-01 yourself if the design says so; the server sends it whenever there is news. |
 | `topMatches[]` | Up to 3, **ordered by score** rather than recency. Same shape as `GET /matches`, plus three Home-only fields: `demandTitle` ("New Cairo → Smart Village", `null` if the demand has no labels → "Matches your demand"), `seatsAvailable` (on the commute's soonest open day; `null` if none), `driver.completedTrips` (`0` → "New driver"). |
 | `savedSearches[]` | Up to 5 — `{id, title, lastSearchedAt}`. `lastSearchedAt` is when she last ran that exact search ("You searched this on Tuesday"), `null` if not since saving. **No match count**: that would mean running the most expensive query in the product several times per home load. |
+
+#### `POST /bookings/{booking}/seen` — signed-in, passenger only
+
+She has seen how this journey ended (HOME-1). No body. Stamps `outcomeSeenAt` on the booking the first time; repeat calls are harmless and keep the first time. Returns the booking (4.7).
+
+- `409 BOOKING_NOT_ENDED` with `fields.status` unless the booking is `CANCELLED_BY_DRIVER`, `EXITED_DUE_TO_DRIVER_DELAY` or `COMPLETED`.
+- `404` if it isn't her booking.
 
 #### `GET /driver/home` — signed-in
 

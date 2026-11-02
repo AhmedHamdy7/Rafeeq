@@ -379,6 +379,28 @@ final class BookingController extends Controller
         ));
     }
 
+    #[ApiErrors(ErrorCode::BookingNotEnded, ErrorCode::NotFound)]
+    public function seen(Request $request, string $booking): JsonResponse
+    {
+        $target = Booking::query()
+            ->whereKey($booking)
+            ->where('passenger_user_id', $request->user()->id)
+            ->first()
+            ?? throw DomainException::of(ErrorCode::NotFound);
+
+        if (! in_array($target->status, BookingStatus::OUTCOMES_TO_SEE, true)) {
+            throw DomainException::of(ErrorCode::BookingNotEnded, fields: [
+                'status' => [strtoupper($target->status->value)],
+            ]);
+        }
+
+        if ($target->outcome_seen_at === null) {
+            $target->forceFill(['outcome_seen_at' => now()])->save();
+        }
+
+        return ApiResponse::success(new BookingResource($target));
+    }
+
     private function visible(Request $request, string $bookingId): Booking
     {
         $userId = $request->user()->id;

@@ -346,7 +346,7 @@ final class HomeJourney
                 ->subHours((int) config('rafeeq.group.attendance_cutoff_hours'));
 
         return [
-            'groupId' => $group?->getKey(),
+            'groupId' => $group === null ? null : (string) $group->getKey(),
             'answer' => $answer,
             'cutoffAt' => $cutoff?->toIso8601String(),
             'canAnswer' => $group !== null

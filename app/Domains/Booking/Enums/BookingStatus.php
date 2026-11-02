@@ -51,6 +51,12 @@ enum BookingStatus: string
      */
     case ExitedDueToDriverDelay = 'exited_due_to_driver_delay';
 
+    public const array OUTCOMES_TO_SEE = [
+        self::CancelledByDriver,
+        self::ExitedDueToDriverDelay,
+        self::Completed,
+    ];
+
     public function canTransitionTo(self $next): bool
     {
         return in_array($next, $this->allowedTransitions(), true);
