@@ -13,6 +13,7 @@ use App\Domains\Identity\Support\SecurityLog;
 use App\Domains\Matching\Actions\SuggestAlternativesAction;
 use App\Domains\Matching\Support\AlternativeOrigin;
 use App\Domains\Matching\Support\SearchRateLimit;
+use App\Domains\Payment\Support\PassengerFees;
 use App\Domains\Shared\Exceptions\DomainException;
 use App\Domains\Shared\Support\ErrorCode;
 use App\Domains\Trip\Actions\AdvanceTripAction;
@@ -100,6 +101,23 @@ final class BookingController extends Controller
             // The same history fields as the list, so the past trip screen needs one call.
             new BookingResource($this->visible($request, $booking)->load(['scheduledTrip', ...BookingResource::historyRelations($request->user()), ...BookingResource::pickupEtaRelations()]))
         );
+    }
+
+    /**
+     * GET /v1/bookings/{booking}/cancel-preview — what cancelling her own seat now would cost her
+     * (TRIPS-18), from the same rule the cancel runs. Hers only: the driver's previews are on the
+     * trip and the commute.
+     */
+    #[ApiErrors(ErrorCode::NotFound)]
+    public function cancelPreview(Request $request, string $booking): JsonResponse
+    {
+        $hers = Booking::query()
+            ->whereKey($booking)
+            ->where('passenger_user_id', $request->user()->id)
+            ->with('scheduledTrip')
+            ->first() ?? throw DomainException::of(ErrorCode::NotFound);
+
+        return ApiResponse::success(PassengerFees::cancelPreview($hers));
     }
 
     /**

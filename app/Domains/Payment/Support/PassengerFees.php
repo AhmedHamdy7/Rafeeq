@@ -49,6 +49,40 @@ final class PassengerFees
      * current run, a run being warnings less than the reset gap apart, the newest less than the gap
      * before `$on`.
      */
+    /**
+     * TRIPS-18: what cancelling her own seat NOW would cost her, before she confirms — worked out
+     * the way `CancelBookingAction` will work it out (PAY-21), so the sheet and the charge agree.
+     *
+     * Inside `fees.late_cancel_hours` the cancel goes on her late-cancel counter: the first rungs
+     * may be a warning with no money (`feePiastres: 0`, `warning: true`), later ones a quarter of
+     * the no-show fee. A fee is held until departure and dropped if a waiting passenger takes the
+     * seat (R-8), which is why `waivedIfRefilled` is part of the answer.
+     *
+     * @return array{feePiastres: int, reason: string, warning: bool, rung: int|null, waivedIfRefilled: bool}
+     */
+    public static function cancelPreview(Booking $booking): array
+    {
+        $departure = $booking->scheduledTrip?->departure_at;
+        $hoursAhead = $departure === null ? null : now()->diffInHours($departure, absolute: false);
+
+        if ($hoursAhead === null || $hoursAhead >= FeeSettings::lateCancelHours()) {
+            return ['feePiastres' => 0, 'reason' => 'none', 'warning' => false, 'rung' => null, 'waivedIfRefilled' => false];
+        }
+
+        $on = CarbonImmutable::parse($booking->scheduledTrip->trip_date ?? now());
+        $rung = self::nextRung((string) $booking->passenger_user_id, WarningKind::LateCancel, $on);
+        $fee = self::amountPiastres($booking, self::basisPoints(WarningKind::LateCancel, $rung));
+
+        return [
+            'feePiastres' => $fee,
+            // `late_cancel_warning`: on the counter, no money this time. `late_cancel_fee`: money.
+            'reason' => $fee > 0 ? 'late_cancel_fee' : 'late_cancel_warning',
+            'warning' => true,
+            'rung' => $rung,
+            'waivedIfRefilled' => $fee > 0,
+        ];
+    }
+
     public static function nextRung(string $userId, WarningKind $kind, CarbonImmutable $on): int
     {
         $gap = FeeSettings::counterResetDays();

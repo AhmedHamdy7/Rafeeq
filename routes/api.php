@@ -594,6 +594,8 @@ Route::prefix('v1')->group(function (): void {
         Route::get('my-bookings', [BookingController::class, 'mine']);
         Route::get('bookings/{booking}', [BookingController::class, 'show']);
         Route::patch('bookings/{booking}/cancel', [BookingController::class, 'cancel']);
+        // TRIPS-18: what cancelling her seat now would cost her, before she confirms.
+        Route::get('bookings/{booking}/cancel-preview', [BookingController::class, 'cancelPreview']);
 
         /*
          * The passenger's safety exit (Feature 03 v5): she is in the car and wants out before her
