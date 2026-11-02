@@ -620,3 +620,22 @@ it('carries the offer card on every offer, with the driver as a first name only'
         ->and($offer['driver'])->not->toHaveKey('id')
         ->and($offer['driver'])->not->toHaveKey('phone');
 });
+
+/**
+ * TRIPS-12: her Requests and Waiting list cards are drawable from `GET /seat-requests` alone.
+ */
+it('carries the waiting-list card on her own seat requests', function () {
+    $first = joinWaitlist('01222220001', 'pax-2', $this->commuteId, $this->trip->id);
+
+    $row = test()->withToken($first['token'])->getJson('/api/v1/seat-requests')
+        ->assertOk()->json('data.0');
+
+    expect($row['kind'])->toBe('waitlist_application')
+        ->and($row['status'])->toBe('WAITLISTED')
+        ->and($row['joinedWaitlistAt'])->not->toBeNull()
+        ->and($row)->toHaveKey('availableToday')
+        ->and($row['commute'])->toHaveKeys(['originLabel', 'destinationLabel', 'commuteGroupId', 'driver', 'vehicle'])
+        ->and($row['pickup'])->toHaveKeys(['label', 'lat', 'lng', 'source'])
+        ->and($row['commute']['driver'])->not->toHaveKey('id')
+        ->and(json_encode($row['commute']['driver']))->not->toContain('fullName');
+});
