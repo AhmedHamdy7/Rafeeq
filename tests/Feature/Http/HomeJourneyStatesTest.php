@@ -249,6 +249,19 @@ it('shows a day the driver cancelled until she has seen it', function () {
     expect(homeCard($this->paxToken))->toBeNull();
 });
 
+it('shows a day the driver cancelled days ahead until she has seen it', function () {
+    runLeavingIn($this->tripId, 60 * 24 * 5, dayOffset: 60);
+
+    asHomeDriver($this->driverToken, 'POST', "/api/v1/trips/{$this->tripId}/cancel", ['reason' => 'Car in the garage'])
+        ->assertOk();
+
+    expect(homeCard($this->paxToken)['phase'])->toBe('cancelled_by_driver');
+
+    asHomeDriver($this->paxToken, 'POST', "/api/v1/bookings/{$this->bookingId}/seen")->assertOk();
+
+    expect(homeCard($this->paxToken))->toBeNull();
+});
+
 it('drops an ended journey she never saw after seven days', function () {
     runLeavingIn($this->tripId, 120);
 
