@@ -148,6 +148,7 @@ enum ErrorCode: string
     case SeatRequestNotWaitlisted = 'SEAT_REQUEST_NOT_WAITLISTED';
     case WaitlistFull = 'BOOKING_WAITLIST_FULL';
     case BookingNotCancellable = 'BOOKING_NOT_CANCELLABLE';
+    case BookingNotEnded = 'BOOKING_NOT_ENDED';
     case CannotBookOwnCommute = 'BOOKING_OWN_COMMUTE';
 
     /**
@@ -441,6 +442,7 @@ enum ErrorCode: string
             self::PickupUnreachable,
             self::WaitlistFull,
             self::BookingNotCancellable,
+            self::BookingNotEnded,
             self::PickupAlreadyRequested,
             self::PickupRequestNotPending,
             /*

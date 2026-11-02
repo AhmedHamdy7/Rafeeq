@@ -151,6 +151,7 @@ final class BookingResource extends JsonResource
 
             'cancelledAt' => $this->cancelled_at?->toIso8601String(),
             'cancelledReason' => $this->cancelled_reason,
+            'outcomeSeenAt' => $this->outcome_seen_at?->toIso8601String(),
             'cancellationFeePiastres' => $this->cancellation_fee_piastres,
 
             /*
@@ -176,7 +177,8 @@ final class BookingResource extends JsonResource
 
             /*
              * Whether the driver has let her down badly enough that leaving is free right now
-             * (Feature 03 v5 §241), and which way — `not_started` or `passed_your_stop`.
+             * (Feature 03 v5 §241), and which way — `not_started`, `passed_your_stop` or
+             * `late_for_pickup`.
              *
              * 🔴 Null is the normal answer and means "do not show the button". The entitlement is
              * the server's finding, not a claim a client can make, so this is the only way a client

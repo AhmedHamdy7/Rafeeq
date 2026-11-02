@@ -63,6 +63,7 @@ class Booking extends Model
             'dropoff_lat' => 'decimal:7',
             'dropoff_lng' => 'decimal:7',
             'cancelled_at' => 'datetime',
+            'outcome_seen_at' => 'datetime',
             'early_drop_asked_at' => 'datetime',
             'cancellation_fee_piastres' => 'integer',
             // The passenger's debt riding on this ride, beside the fare (PAY-16). Not fillable:

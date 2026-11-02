@@ -6,12 +6,14 @@ use App\Domains\Booking\Enums\BookingStatus;
 use App\Domains\Booking\Enums\PickupPointRequestStatus;
 use App\Domains\Booking\Enums\SeatRequestCommitment;
 use App\Domains\Booking\Enums\SeatRequestStatus;
+use App\Domains\Booking\Enums\SwitchReason;
 use App\Domains\Booking\Models\Booking;
 use App\Domains\Booking\Models\PickupPointRequest;
 use App\Domains\Booking\Models\SeatRequest;
 use App\Domains\Commute\Enums\ScheduledTripStatus;
 use App\Domains\Commute\Models\CommuteOffer;
 use App\Domains\Commute\Models\ScheduledTrip;
+use App\Domains\Commute\Support\ComputedDeparture;
 use App\Domains\Driver\Models\DriverProfile;
 use App\Domains\Group\Models\CommuteGroup;
 use App\Domains\Group\Models\GroupMember;
@@ -36,6 +38,7 @@ use App\Http\Resources\MatchNotificationResource;
 use App\Http\Resources\PersonSummary;
 use App\Http\Resources\SeatRequestResource;
 use App\Http\Responses\ApiResponse;
+use Carbon\CarbonImmutable;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -86,6 +89,20 @@ final class HomeController extends Controller
      * request flow, which re-checks the seat anyway.
      */
     private const int ALTERNATIVES_TTL_SECONDS = 300;
+
+    private const int UNSEEN_OUTCOME_DAYS = 7;
+
+    private const int LATER_THIS_WEEK = 7;
+
+    private const int LATER_THIS_WEEK_DAYS = 7;
+
+    private const int DRIVER_NOTICES = 5;
+
+    private const int DRIVER_NOTICE_HOURS = 24;
+
+    private const int LEAVE_BY_HORIZON_MINUTES = 180;
+
+    private const int LEAVE_BY_TTL_SECONDS = 300;
 
     /**
      * GET /v1/home — screen 9.
@@ -139,7 +156,7 @@ final class HomeController extends Controller
      * The largest card in the product: today's run, who is on it, what is owed, and
      * what is still waiting to be answered.
      */
-    public function driver(Request $request): JsonResponse
+    public function driver(Request $request, ComputedDeparture $departures): JsonResponse
     {
         $profile = DriverProfile::query()
             ->whereKey($request->user()->id)
@@ -155,6 +172,8 @@ final class HomeController extends Controller
             return ApiResponse::success([
                 'greetingName' => $request->user()->public_first_name,
                 'nextRun' => null,
+                'laterThisWeek' => [],
+                'notices' => [],
                 'pendingRequests' => ['count' => 0, 'items' => []],
                 'stats' => ['onTimeRate' => null, 'completedTrips' => 0, 'avgDetourMinutes' => null],
             ]);
@@ -162,7 +181,9 @@ final class HomeController extends Controller
 
         return ApiResponse::success([
             'greetingName' => $request->user()->public_first_name,
-            'nextRun' => $this->nextRun($request, $profile),
+            'nextRun' => $nextRun = $this->nextRun($request, $profile, $departures),
+            'laterThisWeek' => $this->laterThisWeek($profile, $nextRun['tripId'] ?? null),
+            'notices' => $this->driverNotices($request, $profile),
             'pendingRequests' => $this->pendingRequests($request, $profile->user_id),
 
             /*
@@ -212,18 +233,13 @@ final class HomeController extends Controller
      *
      * 1. **The journey happening now** — its departure has passed or its run has set off, and her
      *    seat is still held. A car on the way to her outranks anything else she could be shown.
-     * 2. **A journey that ended on her today** — cancelled by the driver, expired, she left because
-     *    the driver was late, or completed. Until the end of that journey's local day, because the
-     *    outcome is news she has to have seen, and "your 07:00 was cancelled" vanishing at 07:01
-     *    would leave her at the kerb wondering whether the app forgot.
+     * 2. **A journey that ended and she has not seen** — cancelled by the driver, expired, she left
+     *    because the driver was late, or completed and not rated — until the app sends
+     *    `POST /bookings/{booking}/seen`, for up to seven days.
      * 3. **The soonest journey that has not started** — what this card has always been.
      * 4. **A completed journey she has not rated**, while the rating window is open — but only when
      *    there is nothing upcoming to show. A ride from four days ago asking for stars must not hide
      *    tomorrow's pickup; once tomorrow exists, the rating is still in `GET /ratings/pending`.
-     *
-     * ⚠️ "Until she has seen it" is approximated by time, not tracked: nothing records that she
-     * looked at the card, and adding a write to a read-only screen the app polls would be the wrong
-     * place for it. The windows above are the ones the request proposed.
      *
      * @return array<string, mixed>|null
      */
@@ -237,7 +253,7 @@ final class HomeController extends Controller
         $upcoming = $this->currentBooking($userId);
 
         $booking = $this->happeningNow($userId)
-            ?? $this->endedToday($userId, $ratings)
+            ?? $this->unseenOutcome($userId, $ratings)
             ?? $upcoming
             ?? $this->awaitingRating($userId, $ratings);
 
@@ -245,14 +261,14 @@ final class HomeController extends Controller
     }
 
     /**
-     * Rows 1 and 3 of the order above share one query: a seat still held on a run that has not
-     * finished, soonest first. What this card returned before HOME-1, unchanged.
+     * Rows 1 and 3 of the order above share one query: a confirmed seat on a run that has not
+     * finished, soonest first. A pending request is not a commute yet (TRIP-01).
      */
     private function currentBooking(string $userId): ?Booking
     {
         return $this->journeyQuery()
             ->where('bookings.passenger_user_id', $userId)
-            ->whereIn('bookings.status', $this->liveBookingStatuses())
+            ->where('bookings.status', BookingStatus::Confirmed)
             /*
              * Joined rather than filtered with whereHas: the card is "the SOONEST one",
              * and ordering by a column on the related trip is what picks it. An
@@ -294,29 +310,20 @@ final class HomeController extends Controller
                 || $this->isTodayFor($candidate->scheduledTrip));
     }
 
-    /**
-     * Row 2: a journey whose outcome she has to see — on its own local day. The most recent outcome
-     * first, because the newest news is the card's to give.
-     */
-    private function endedToday(string $userId, SubmitRatingAction $ratings): ?Booking
+    private function unseenOutcome(string $userId, SubmitRatingAction $ratings): ?Booking
     {
         return $this->journeyQuery()
             ->where('bookings.passenger_user_id', $userId)
-            ->whereIn('bookings.status', [
-                BookingStatus::CancelledByDriver,
-                BookingStatus::ExitedDueToDriverDelay,
-                BookingStatus::Completed,
-            ])
-            // Bounded in SQL so a long history is not loaded to find today; exact below.
-            ->where('scheduled_trips.departure_at', '>=', now()->subDays(2))
+            ->whereIn('bookings.status', BookingStatus::OUTCOMES_TO_SEE)
+            ->whereNull('bookings.outcome_seen_at')
+            ->where('scheduled_trips.departure_at', '>=', now()->subDays(self::UNSEEN_OUTCOME_DAYS))
             ->where('scheduled_trips.departure_at', '<=', now()->addDay())
             ->orderByDesc('bookings.updated_at')
             ->orderByDesc('bookings.id')
+            ->limit(10)
             ->get()
-            ->first(fn (Booking $candidate): bool => $this->isTodayFor($candidate->scheduledTrip)
-                // A completed ride she has already rated has nothing left to say to her.
-                && ($candidate->status !== BookingStatus::Completed
-                    || HomeJourney::for($candidate, $ratings, $userId)->canRate()));
+            ->first(fn (Booking $candidate): bool => $candidate->status !== BookingStatus::Completed
+                || HomeJourney::for($candidate, $ratings, $userId)->canRate());
     }
 
     /**
@@ -419,6 +426,8 @@ final class HomeController extends Controller
             // F3P-04 → F3P-06 (HOME-4). Null before the driver starts and after the ride.
             'live' => $state->live(),
 
+            'checkIn' => $state->checkIn(),
+
             // F3P-07 (HOME-5). The button calls `POST /bookings/{booking}/exit-without-fee`.
             'canLeaveWithoutFee' => $state->canLeaveWithoutFee(),
 
@@ -431,6 +440,8 @@ final class HomeController extends Controller
             // F3P-11 (HOME-7).
             'completedAt' => $state->completedAt()?->toIso8601String(),
             'canRate' => $state->canRate(),
+
+            'isSeen' => $booking->outcome_seen_at !== null,
 
             /*
              * "Trial tomorrow" on the card. Read from the request that produced the
@@ -746,7 +757,7 @@ final class HomeController extends Controller
      *
      * @return array<string, mixed>|null
      */
-    private function nextRun(Request $request, DriverProfile $profile): ?array
+    private function nextRun(Request $request, DriverProfile $profile, ComputedDeparture $departures): ?array
     {
         $trip = ScheduledTrip::query()
             ->whereIn('commute_offer_id', CommuteOffer::query()
@@ -786,6 +797,7 @@ final class HomeController extends Controller
 
             ...JourneyCard::route($offer),
             ...JourneyCard::timing($trip),
+            'leaveBy' => $this->leaveBy($trip, $departures),
             'attendance' => JourneyCard::attendance($group, $trip),
 
             'seatsTotal' => $trip->seats_total,
@@ -808,6 +820,127 @@ final class HomeController extends Controller
 
             'passengers' => $this->runPassengers($request, $confirmed, $group, $trip),
         ];
+    }
+
+    /**
+     * @return array{at: string, local: string, lateWarning: bool}|null
+     */
+    private function leaveBy(ScheduledTrip $trip, ComputedDeparture $departures): ?array
+    {
+        if ($trip->status !== ScheduledTripStatus::Scheduled
+            || $trip->departure_at === null
+            || $trip->departure_at->isPast()
+            || now()->diffInMinutes($trip->departure_at) > self::LEAVE_BY_HORIZON_MINUTES) {
+            return null;
+        }
+
+        $at = Cache::remember(
+            "driver-home:leave-by:{$trip->getKey()}",
+            self::LEAVE_BY_TTL_SECONDS,
+            fn (): ?string => $departures->forTrip($trip)?->toIso8601String(),
+        );
+
+        if ($at === null) {
+            return null;
+        }
+
+        $leaveBy = CarbonImmutable::parse($at);
+        $timezone = $trip->commuteSchedule?->timezone ?? config('app.timezone');
+
+        return [
+            'at' => $leaveBy->toIso8601String(),
+            'local' => $leaveBy->setTimezone($timezone)->format('Y-m-d H:i:s'),
+            'lateWarning' => $leaveBy->lessThan($trip->departure_at),
+        ];
+    }
+
+    /**
+     * @return array<int, array<string, mixed>>
+     */
+    private function laterThisWeek(DriverProfile $profile, ?string $nextTripId): array
+    {
+        $trips = ScheduledTrip::query()
+            ->whereIn('commute_offer_id', CommuteOffer::query()
+                ->where('driver_profile_id', $profile->user_id)
+                ->select('id'))
+            ->where('status', ScheduledTripStatus::Scheduled)
+            ->where('departure_at', '>=', now())
+            ->where('departure_at', '<=', now()->addDays(self::LATER_THIS_WEEK_DAYS))
+            ->when($nextTripId !== null, fn (Builder $query) => $query->whereKeyNot($nextTripId))
+            ->orderBy('departure_at')
+            ->orderBy('id')
+            ->limit(self::LATER_THIS_WEEK)
+            ->with(['commuteSchedule', 'commuteOffer.locations'])
+            ->get();
+
+        $rows = [];
+
+        foreach ($trips as $trip) {
+            $rows[] = [
+                'commuteId' => $trip->commute_offer_id,
+                'tripId' => $trip->id,
+                ...JourneyCard::route($trip->commuteOffer),
+                'departureAt' => $trip->departure_at->toIso8601String(),
+                'departureLocal' => $trip->departure_local->format('Y-m-d H:i:s'),
+                'seatsTotal' => $trip->seats_total,
+                'seatsTaken' => $trip->seats_taken,
+                'seatsOpen' => (int) max(0, $trip->seats_total - $trip->seats_taken),
+            ];
+        }
+
+        return $rows;
+    }
+
+    /**
+     * @return array<int, array<string, mixed>>
+     */
+    private function driverNotices(Request $request, DriverProfile $profile): array
+    {
+        $bookings = Booking::query()
+            ->join('scheduled_trips', 'scheduled_trips.id', '=', 'bookings.scheduled_trip_id')
+            ->select('bookings.*')
+            ->whereIn('scheduled_trips.commute_offer_id', CommuteOffer::query()
+                ->where('driver_profile_id', $profile->user_id)
+                ->select('id'))
+            ->where('scheduled_trips.departure_at', '>=', now())
+            ->where('bookings.cancelled_at', '>=', now()->subHours(self::DRIVER_NOTICE_HOURS))
+            ->where(fn (Builder $query) => $query
+                ->where('bookings.status', BookingStatus::CancelledByPassenger)
+                ->orWhere(fn (Builder $exit) => $exit
+                    ->where('bookings.status', BookingStatus::ExitedDueToDriverDelay)
+                    ->where(fn (Builder $reason) => $reason
+                        ->whereNull('bookings.cancelled_reason')
+                        ->orWhere('bookings.cancelled_reason', '!=', 'trip_expired')))
+                ->orWhere(fn (Builder $switch) => $switch
+                    ->where('bookings.status', BookingStatus::CancelledByDriver)
+                    ->where('bookings.cancelled_reason', SwitchReason::DriverDelay->value)))
+            ->with(['passenger.stats', 'passenger.verifications', 'scheduledTrip'])
+            ->orderByDesc('bookings.cancelled_at')
+            ->orderByDesc('bookings.id')
+            ->limit(self::DRIVER_NOTICES)
+            ->get();
+
+        $switches = [SwitchReason::Voluntary->value, SwitchReason::DriverDelay->value];
+        $notices = [];
+
+        foreach ($bookings as $booking) {
+            $trip = $booking->scheduledTrip;
+
+            $notices[] = [
+                'kind' => in_array($booking->cancelled_reason, $switches, true) ? 'passenger_switched' : 'seat_opened',
+                'bookingId' => $booking->id,
+                'tripId' => $trip->id,
+                'commuteId' => $trip->commute_offer_id,
+                'person' => PersonSummary::for($booking->passenger, $request->user()),
+                'seatsReleased' => $booking->seats_reserved,
+                'seatsOpen' => (int) max(0, $trip->seats_total - $trip->seats_taken),
+                'departureAt' => $trip->departure_at->toIso8601String(),
+                'departureLocal' => $trip->departure_local->format('Y-m-d H:i:s'),
+                'at' => $booking->cancelled_at->toIso8601String(),
+            ];
+        }
+
+        return $notices;
     }
 
     /**

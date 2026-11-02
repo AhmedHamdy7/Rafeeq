@@ -198,6 +198,7 @@ it('generates a document describing every /v1 route', function () {
          */
         'POST /v1/bookings/{booking}/end-early',
         'POST /v1/bookings/{booking}/exit-without-fee',
+        'POST /v1/bookings/{booking}/seen',
         // TRIP-20: her answer to "Did you ask to get off here?"
         'POST /v1/bookings/{booking}/early-drop',
         'POST /v1/trips/{trip}/drop-off',

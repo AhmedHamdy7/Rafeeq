@@ -246,7 +246,7 @@ it('records it against the driver, once per passenger left waiting', function ()
  * second event for the same seat.
  */
 it('does not double-count somebody who already left', function () {
-    runLeavingIn($this->tripId, -1);
+    runLeavingIn($this->tripId, -5);
 
     test()->flushHeaders()->withToken($this->paxToken)
         ->postJson("/api/v1/bookings/{$this->bookingId}/exit-without-fee")->assertOk();

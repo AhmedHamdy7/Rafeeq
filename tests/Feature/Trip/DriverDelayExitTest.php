@@ -79,7 +79,7 @@ function runStartedLate(string $driverToken, string $tripId): void
  * reads as her decision.
  */
 it('lets her leave for free once departure has passed with no run', function () {
-    runLeavingIn($this->tripId, -1);
+    runLeavingIn($this->tripId, -5);
 
     exitWithoutFee($this->paxToken, $this->bookingId)
         ->assertOk()
@@ -99,12 +99,8 @@ it('lets her leave for free once departure has passed with no run', function () 
         ->and((int) $booking->cancellation_fee_piastres)->toBe(0);
 });
 
-/**
- * ⚠️ No grace period, deliberately. A tolerance here would be the platform deciding how long a
- * woman should stand in the street — and nothing happens automatically, it only becomes HER option.
- */
-it('is not available one minute before departure', function () {
-    runLeavingIn($this->tripId, 1);
+it('is not available four minutes after departure', function () {
+    runLeavingIn($this->tripId, -4);
 
     exitWithoutFee($this->paxToken, $this->bookingId)
         ->assertStatus(409)
@@ -131,12 +127,8 @@ it('ignores a client that simply claims the driver is late', function () {
         ->toBe(BookingStatus::Confirmed);
 });
 
-/**
- * Once the car is moving the question stops being "has she set off" — it becomes whether the car
- * reaches her, which is the other condition.
- */
-it('is not available merely because the driver set off late', function () {
-    runLeavingIn($this->tripId, -20);
+it('is not available while a late car is still within five minutes of her pickup time', function () {
+    runLeavingIn($this->tripId, -2);
 
     runStartedLate($this->driverToken, $this->tripId);
 
@@ -145,18 +137,24 @@ it('is not available merely because the driver set off late', function () {
         ->assertJsonPath('error.fields.driverDelay.0', 'NOT_DELAYED');
 });
 
+it('lets her leave for free when the car has not reached her five minutes after her pickup time', function () {
+    runLeavingIn($this->tripId, -20);
+
+    runStartedLate($this->driverToken, $this->tripId);
+
+    exitWithoutFee($this->paxToken, $this->bookingId)
+        ->assertOk()
+        ->assertJsonPath('data.status', 'EXITED_DUE_TO_DRIVER_DELAY')
+        ->assertJsonPath('data.cancelledReason', 'late_for_pickup')
+        ->assertJsonPath('data.cancellationFeePiastres', 0);
+});
+
 /*
 |--------------------------------------------------------------------------
 | The car drove past her
 |--------------------------------------------------------------------------
 */
 
-/**
- * 🔴 v5 says "missed agreed pickup", and nothing in this system stores an agreed pickup TIME — only
- * a place. So the question asked is the one the data can answer honestly: has the car driven past
- * her? A stop later in the route reached while hers is not. That is a record of being skipped, not
- * a prediction about when she would have been collected.
- */
 it('lets her leave for free when the car has reached a stop beyond hers', function () {
     /*
      * A second passenger, so being driven past is a real state rather than a contrived one: the car
@@ -209,7 +207,7 @@ it('lets her leave for free when the car has reached a stop beyond hers', functi
 });
 
 it('is not available while her stop is still ahead of the car', function () {
-    runLeavingIn($this->tripId, -20);
+    runLeavingIn($this->tripId, -2);
 
     runStartedLate($this->driverToken, $this->tripId);
 
@@ -228,7 +226,7 @@ it('is not available while her stop is still ahead of the car', function () {
  * the Reliability Score exists to measure.
  */
 it('records it against the driver and nothing against her', function () {
-    runLeavingIn($this->tripId, -1);
+    runLeavingIn($this->tripId, -5);
 
     exitWithoutFee($this->paxToken, $this->bookingId)->assertOk();
 
@@ -247,7 +245,7 @@ it('records it against the driver and nothing against her', function () {
  * without being told why cannot act on it.
  */
 it('tells the driver she has lost a passenger', function () {
-    runLeavingIn($this->tripId, -1);
+    runLeavingIn($this->tripId, -5);
 
     exitWithoutFee($this->paxToken, $this->bookingId)->assertOk();
 
@@ -266,7 +264,7 @@ it('tells the driver she has lost a passenger', function () {
  * whom may be watching the same driver fail to arrive.
  */
 it('frees the seat without announcing it', function () {
-    runLeavingIn($this->tripId, -1);
+    runLeavingIn($this->tripId, -5);
 
     $before = ScheduledTrip::query()->whereKey($this->tripId)->sole()->seats_taken;
 
@@ -292,7 +290,7 @@ it('publishes the entitlement on her booking so the button can be shown', functi
         // Null means "do not show the button".
         ->assertJsonPath('data.driverDelay', null);
 
-    runLeavingIn($this->tripId, -1);
+    runLeavingIn($this->tripId, -5);
 
     test()->flushHeaders()->withToken($this->paxToken)
         ->getJson("/api/v1/bookings/{$this->bookingId}")
@@ -305,7 +303,7 @@ it('publishes the entitlement on her booking so the button can be shown', functi
  * here would record her own failure as the passenger's exit.
  */
 it('refuses the driver and refuses a stranger', function () {
-    runLeavingIn($this->tripId, -1);
+    runLeavingIn($this->tripId, -5);
 
     exitWithoutFee($this->driverToken, $this->bookingId)->assertStatus(404);
 
@@ -318,7 +316,7 @@ it('refuses the driver and refuses a stranger', function () {
 });
 
 it('refuses a booking that has already ended', function () {
-    runLeavingIn($this->tripId, -1);
+    runLeavingIn($this->tripId, -5);
 
     exitWithoutFee($this->paxToken, $this->bookingId)->assertOk();
 

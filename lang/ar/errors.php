@@ -79,6 +79,7 @@ return [
     'CALL_NOT_AVAILABLE' => 'مافيش رقم تليفون متاح للحجز ده دلوقتي.',
     'BOOKING_WAITLIST_FULL' => 'قائمة الانتظار للرحلة دي كاملة.',
     'BOOKING_NOT_CANCELLABLE' => 'الحجز ده مش ممكن يتلغي بعد كده.',
+    'BOOKING_NOT_ENDED' => 'الرحلة دي لسه ما خلصتش.',
     'BOOKING_OWN_COMMUTE' => 'مش ممكن تحجز مقعد في رحلتك بنفسك.',
     'SEAT_REQUEST_WOMEN_ONLY' => 'الرحلة دي للستات بس.',
     'COMMUTE_DEMAND_NOT_EDITABLE' => 'الطلب المحفوظ ده خلص. احفظ طلب جديد.',

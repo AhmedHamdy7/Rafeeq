@@ -6,6 +6,7 @@ use App\Domains\Booking\Models\Booking;
 use App\Domains\Commute\Models\ScheduledTrip;
 use App\Domains\Trip\Enums\NavigationStopKind;
 use App\Domains\Trip\Models\NavigationStop;
+use App\Domains\Trip\Models\TripWaitTimer;
 use Carbon\CarbonImmutable;
 
 /**
@@ -19,14 +20,9 @@ use Carbon\CarbonImmutable;
  * cannot be claimed — a flag in a request body saying "my driver was late" would be a way to cancel
  * for free whenever you felt like it, and the person it would cost is the driver, who was on time.
  *
- * 🔴 **And both conditions are FACTS, not estimates.** That constraint shaped the second one. v5
- * says "missed agreed pickup", but nothing in this system stores an agreed pickup *time* — a
- * booking carries an agreed pickup *place*, and the only time attached to it is the routing
- * provider's ETA, which is rebuilt whenever the stops change. Treating that estimate as a
- * commitment would mean telling a driver she broke a promise she never made. So the question asked
- * here is the one the data can answer honestly: **has the car driven past her?** A stop later in the
- * route has been reached and hers has not — which is not a prediction about when she would be
- * collected, it is a record that she was skipped.
+ * D-0020 (2026-10-28) sets the timing: five minutes after departure if the run has not begun, or
+ * five minutes after her agreed pickup time ({@see PickupTime}) if it has begun but not reached her.
+ * A car that has driven past her stop entitles her at once.
  */
 final class DriverDelay
 {
@@ -35,21 +31,11 @@ final class DriverDelay
      */
     public static function entitlesFreeExit(Booking $booking, ScheduledTrip $trip): bool
     {
-        return self::neverSetOff($trip) || self::drovePastHer($booking);
+        return self::reasonFor($booking, $trip) !== null;
     }
 
     /**
-     * Departure has passed and the run has not begun.
-     *
-     * ⚠️ **No grace period, deliberately.** v5 says "hasn't started by departure", and a tolerance
-     * here would be the platform deciding how long a woman should stand in the street before her
-     * own time is her own again. Nothing happens automatically at this moment — it only becomes
-     * HER option. She is free to wait, and most people will.
-     *
-     * Note what this is not: the driver's on-time record is judged against
-     * `trip.on_time_threshold_minutes` (ten minutes), and that is a different question with a
-     * different purpose. One decides whether she is marked late; this decides whether somebody else
-     * is trapped.
+     * The run has not begun five minutes after departure (TRIP-05, D-0020).
      */
     public static function neverSetOff(ScheduledTrip $trip): bool
     {
@@ -57,15 +43,61 @@ final class DriverDelay
             return false;
         }
 
-        if (CarbonImmutable::now()->lessThan($trip->departure_at)) {
+        $opensAt = CarbonImmutable::instance($trip->departure_at)
+            ->addMinutes((int) config('rafeeq.trip.delay_passenger_warning_minutes'));
+
+        if (CarbonImmutable::now()->lessThan($opensAt)) {
             return false;
         }
 
         $session = $trip->tripSession;
 
-        // Started counts even if it started late: once the car is moving, the question becomes
-        // whether it reaches her, which is `drovePastHer()` below.
         return $session === null || $session->started_at === null;
+    }
+
+    public static function lateForPickup(Booking $booking, ScheduledTrip $trip): bool
+    {
+        $lateness = (int) config('rafeeq.trip.driver_late_for_pickup_minutes');
+
+        if ($trip->departure_at === null
+            || CarbonImmutable::now()->lessThan(CarbonImmutable::instance($trip->departure_at)->addMinutes($lateness))) {
+            return false;
+        }
+
+        $session = $trip->tripSession;
+
+        if ($session === null || $session->started_at === null || $session->current_status->isTerminal()) {
+            return false;
+        }
+
+        $pickupAt = PickupTime::for((clone $booking)->setRelation('scheduledTrip', $trip));
+
+        if ($pickupAt === null) {
+            return false;
+        }
+
+        $opensAt = $pickupAt->addMinutes($lateness);
+
+        if (CarbonImmutable::now()->lessThan($opensAt)) {
+            return false;
+        }
+
+        $arrived = TripWaitTimer::query()
+            ->where('trip_session_id', $session->getKey())
+            ->where('booking_id', $booking->getKey())
+            ->whereNotNull('arrived_at')
+            ->exists();
+
+        if ($arrived) {
+            return false;
+        }
+
+        return ! NavigationStop::query()
+            ->where('scheduled_trip_id', $booking->scheduled_trip_id)
+            ->where('booking_id', $booking->getKey())
+            ->where('kind', NavigationStopKind::PassengerPickup)
+            ->whereNotNull('reached_at')
+            ->exists();
     }
 
     /**
@@ -108,6 +140,7 @@ final class DriverDelay
         return match (true) {
             self::neverSetOff($trip) => 'not_started',
             self::drovePastHer($booking) => 'passed_your_stop',
+            self::lateForPickup($booking, $trip) => 'late_for_pickup',
             default => null,
         };
     }

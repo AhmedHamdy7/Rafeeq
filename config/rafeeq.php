@@ -569,6 +569,7 @@ return [
          */
         'delay_driver_reminder_minutes' => 1,
         'delay_passenger_warning_minutes' => 5,
+        'driver_late_for_pickup_minutes' => 5,
         'delay_violation_minutes' => 10,
         'delay_expiry_minutes' => 20,
         'still_driving_extension_minutes' => 15,
