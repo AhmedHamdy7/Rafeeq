@@ -135,7 +135,7 @@ it('leads with the journey that leaves soonest', function () {
  * 🔒 The plate identifies the car outside somebody's house. A confirmed booking has
  * earned it; nothing else has.
  */
-it('gives the plate number only once the seat is confirmed', function () {
+it('gives the plate number on a confirmed seat, and no card for a pending one', function () {
     $paxToken = verifiedPassenger('01112223344');
     $requestId = requestSeat($paxToken, $this->commuteId, ['scheduledTripId' => $this->tripId])
         ->assertStatus(201)->json('data.id');
@@ -161,17 +161,14 @@ it('gives the plate number only once the seat is confirmed', function () {
     $pending = test()->withToken($paxToken)->getJson('/api/v1/home')
         ->assertOk()->json('data.nextJourney');
 
-    expect($pending['vehicle']['plateNumber'])->toBeNull()
-        // The colour and model stay: that is how you tell a silver car from a white one
-        // at a busy gate, and it identifies nobody.
-        ->and($pending['vehicle']['colour'])->not->toBeNull();
+    expect($pending)->toBeNull();
 });
 
 /**
  * 🔒 The same rule, on the meeting point that IS a specific place — which is the one the
  * rule exists for. A pickup point is often somebody's front door.
  */
-it('fuzzes an agreed meeting point until the seat is confirmed', function () {
+it('shows the agreed meeting point once confirmed, and no card while pending', function () {
     $commuteId = readyCommute($this->driverToken, Vehicle::sole()->id, ['allowsCustomPickup' => true]);
     test()->withToken($this->driverToken)->postJson("/api/v1/commutes/{$commuteId}/publish")->assertOk();
 
@@ -216,9 +213,7 @@ it('fuzzes an agreed meeting point until the seat is confirmed', function () {
     $pending = test()->withToken($paxToken)->getJson('/api/v1/home')
         ->assertOk()->json('data.nextJourney');
 
-    // ~110m: the right neighbourhood on a map, not a door to knock on.
-    expect($pending['meetingPoint']['isExact'])->toBeFalse()
-        ->and($pending['meetingPoint']['lat'])->toBe(round(onTheWay()['lat'], 3));
+    expect($pending)->toBeNull();
 });
 
 it('stops showing a journey once it is cancelled', function () {

@@ -14,3 +14,13 @@
 - ✅ HOME-10: `unreadNotifications`.
 
 Tests: new `tests/Feature/Http/HomeJourneyStatesTest.php` (16) plus the existing Home, wait-timer, delay-exit, alternatives, guide, OpenAPI and screen-map suites, all green. The full suite was not run.
+
+---
+
+**Follow-up: gaps against the business specs** (branch `fix/home-gaps`)
+
+- TRIP-05 / D-0020: Leave Without Fee now opens **5 min after departure** when the run hasn't started (was: at departure). New reason `late_for_pickup`: the run started but the driver hasn't arrived **5 min after her pickup time**. Both show `phase: driver_delayed`; `live` stays filled when the run has started.
+- TRIP-01: the card shows **confirmed** journeys only; a `PENDING` request is no longer on it.
+- TRIP-26: `nextJourney.checkIn {groupId, answer, cutoffAt, canAnswer}` → `POST /groups/{group}/attendance`.
+- TRIP-02 / TRIP-29 on `GET /driver/home`: `laterThisWeek[]`, `notices[]` (`seat_opened` / `passenger_switched`, last 24 h), `nextRun.leaveBy {at, local, lateWarning}`.
+- Car type: `vehicle.make` + `model` + `colour` already cover "Kia Sportage · Silver"; nothing added.

@@ -6,6 +6,7 @@ use App\Domains\Booking\Enums\BookingStatus;
 use App\Domains\Booking\Models\Booking;
 use App\Domains\Commute\Enums\ScheduledTripStatus;
 use App\Domains\Commute\Models\ScheduledTrip;
+use App\Domains\Group\Enums\GroupAttendanceStatus;
 use App\Domains\Rating\Actions\SubmitRatingAction;
 use App\Domains\Trip\Enums\NavigationStopKind;
 use App\Domains\Trip\Models\Attendance;
@@ -129,7 +130,6 @@ final class HomeJourney
                     : self::EXITED,
             BookingStatus::Completed => self::COMPLETED,
             BookingStatus::Confirmed => $this->confirmedPhase(),
-            // A pending booking has nothing live about it yet: the driver has not said yes.
             default => self::SCHEDULED,
         };
     }
@@ -143,7 +143,13 @@ final class HomeJourney
         $session = $this->trip->tripSession;
 
         if ($session !== null && $session->started_at !== null && ! $session->current_status->isTerminal()) {
-            return $this->arrivedAt !== null ? self::DRIVER_ARRIVED : self::DRIVER_EN_ROUTE;
+            if ($this->arrivedAt !== null) {
+                return self::DRIVER_ARRIVED;
+            }
+
+            return DriverDelay::entitlesFreeExit($this->booking, $this->trip)
+                ? self::DRIVER_DELAYED
+                : self::DRIVER_EN_ROUTE;
         }
 
         /*
@@ -215,6 +221,10 @@ final class HomeJourney
     public function live(): ?array
     {
         $phase = $this->phase();
+
+        if ($phase === self::DRIVER_DELAYED && $this->trip->tripSession?->started_at !== null) {
+            $phase = self::DRIVER_EN_ROUTE;
+        }
 
         if (! in_array($phase, self::LIVE, true)) {
             return null;
@@ -313,6 +323,37 @@ final class HomeJourney
         $elapsed = max(0, $from->diffInSeconds($now, absolute: false));
 
         return (int) min(self::PROGRESS_CEILING, floor($elapsed / $expected * 100));
+    }
+
+    /**
+     * @return array{groupId: string|null, answer: string|null, cutoffAt: string|null, canAnswer: bool}|null
+     */
+    public function checkIn(): ?array
+    {
+        if ($this->booking->status !== BookingStatus::Confirmed) {
+            return null;
+        }
+
+        $group = $this->booking->commuteGroup;
+        $declared = $group?->attendances
+            ->where('scheduled_trip_id', $this->trip->getKey())
+            ->firstWhere('user_id', $this->viewerId);
+        $answer = $declared?->status === GroupAttendanceStatus::NoResponse ? null : $declared?->status->value;
+
+        $cutoff = $this->trip->departure_at === null
+            ? null
+            : CarbonImmutable::instance($this->trip->departure_at)
+                ->subHours((int) config('rafeeq.group.attendance_cutoff_hours'));
+
+        return [
+            'groupId' => $group?->getKey(),
+            'answer' => $answer,
+            'cutoffAt' => $cutoff?->toIso8601String(),
+            'canAnswer' => $group !== null
+                && $cutoff !== null
+                && $cutoff->isFuture()
+                && $this->trip->status === ScheduledTripStatus::Scheduled,
+        ];
     }
 
     /**

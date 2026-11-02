@@ -84,7 +84,7 @@ final readonly class ExitForDriverDelayAction
             $booking->forceFill([
                 'status' => BookingStatus::ExitedDueToDriverDelay->value,
                 'cancelled_at' => now(),
-                // The server's finding, not her words: `not_started` or `passed_your_stop`.
+                // The server's finding, not her words: `not_started`, `passed_your_stop` or `late_for_pickup`.
                 'cancelled_reason' => $reason ?? $entitlement,
                 // 🔴 Nothing. This is the whole feature.
                 'cancellation_fee_piastres' => 0,

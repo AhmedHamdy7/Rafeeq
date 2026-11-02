@@ -418,3 +418,108 @@ it('carries the unread notification count the inbox reports', function () {
     expect(homeAs($this->paxToken)['unreadNotifications'])->toBe($inbox)
         ->and($inbox)->toBeGreaterThan(0);
 });
+
+it('keeps the card on scheduled four minutes after departure, and only then says delayed', function () {
+    runLeavingIn($this->tripId, -4);
+
+    expect(homeCard($this->paxToken)['phase'])->toBe('scheduled')
+        ->and(homeCard($this->paxToken)['canLeaveWithoutFee'])->toBeFalse();
+
+    runLeavingIn($this->tripId, -5);
+
+    expect(homeCard($this->paxToken)['phase'])->toBe('driver_delayed')
+        ->and(homeCard($this->paxToken)['canLeaveWithoutFee'])->toBeTrue();
+});
+
+it('says delayed when the car set off but has not reached her five minutes after her pickup time', function () {
+    runLeavingIn($this->tripId, -20);
+    asHomeDriver($this->driverToken, 'POST', "/api/v1/trips/{$this->tripId}/start")->assertStatus(201);
+    asHomeDriver($this->driverToken, 'POST', "/api/v1/trips/{$this->tripId}/status", ['status' => 'EN_ROUTE'])->assertOk();
+
+    $card = homeCard($this->paxToken);
+
+    expect($card['phase'])->toBe('driver_delayed')
+        ->and($card['canLeaveWithoutFee'])->toBeTrue()
+        ->and($card['driverDelay'])->toBe('late_for_pickup')
+        ->and($card['live'])->not->toBeNull();
+});
+
+it('does not put a pending request on the card', function () {
+    Booking::query()->whereKey($this->bookingId)->update(['status' => 'pending']);
+
+    expect(homeCard($this->paxToken))->toBeNull();
+});
+
+it('carries her own check-in answer and the cutoff', function () {
+    runLeavingIn($this->tripId, 600);
+
+    $checkIn = homeCard($this->paxToken)['checkIn'];
+    $cutoff = ScheduledTrip::query()->findOrFail($this->tripId)->departure_at->subHours(2);
+
+    expect($checkIn['groupId'])->not->toBeNull()
+        ->and($checkIn['answer'])->toBeNull()
+        ->and(strtotime($checkIn['cutoffAt']))->toBe($cutoff->getTimestamp())
+        ->and($checkIn['canAnswer'])->toBeTrue();
+
+    test()->flushHeaders()->withToken($this->paxToken)
+        ->postJson("/api/v1/groups/{$checkIn['groupId']}/attendance", ['tripId' => $this->tripId, 'status' => 'coming'])
+        ->assertSuccessful();
+
+    expect(homeCard($this->paxToken)['checkIn']['answer'])->toBe('coming');
+
+    runLeavingIn($this->tripId, 60);
+
+    expect(homeCard($this->paxToken)['checkIn']['canAnswer'])->toBeFalse();
+});
+
+it('lists the driver\'s later trips this week without the next run', function () {
+    $home = test()->flushHeaders()->withToken($this->driverToken)->getJson('/api/v1/driver/home')->assertOk()->json('data');
+    $limit = now()->addDays(7)->getTimestamp();
+
+    expect($home['laterThisWeek'])->toBeArray()
+        ->and(collect($home['laterThisWeek'])->pluck('tripId'))->not->toContain($home['nextRun']['tripId']);
+
+    foreach ($home['laterThisWeek'] as $row) {
+        expect(strtotime($row['departureAt']))->toBeLessThanOrEqual($limit)
+            ->and(strtotime($row['departureAt']))->toBeGreaterThan(strtotime($home['nextRun']['departureAt']) - 1)
+            ->and($row)->toHaveKeys(['commuteId', 'originLabel', 'destinationLabel', 'departureLocal', 'seatsOpen']);
+    }
+});
+
+it('tells the driver a seat opened, and that a passenger switched', function () {
+    test()->flushHeaders()->withToken($this->paxToken)->patchJson("/api/v1/bookings/{$this->bookingId}/cancel")->assertOk();
+
+    $notices = test()->flushHeaders()->withToken($this->driverToken)->getJson('/api/v1/driver/home')->assertOk()->json('data.notices');
+
+    expect($notices)->toHaveCount(1)
+        ->and($notices[0]['kind'])->toBe('seat_opened')
+        ->and($notices[0]['bookingId'])->toBe($this->bookingId)
+        ->and($notices[0]['tripId'])->toBe($this->tripId)
+        ->and($notices[0]['person']['publicFirstName'])->not->toBeEmpty();
+
+    Booking::query()->whereKey($this->bookingId)->update(['cancelled_reason' => 'voluntary']);
+
+    $notices = test()->flushHeaders()->withToken($this->driverToken)->getJson('/api/v1/driver/home')->assertOk()->json('data.notices');
+
+    expect($notices[0]['kind'])->toBe('passenger_switched');
+
+    Booking::query()->whereKey($this->bookingId)->update(['cancelled_at' => now()->subDays(2)]);
+
+    expect(test()->flushHeaders()->withToken($this->driverToken)->getJson('/api/v1/driver/home')->json('data.notices'))->toBe([]);
+});
+
+it('suggests when the driver should leave, close to departure only', function () {
+    $trip = runLeavingIn($this->tripId, 60);
+    $trip->forceFill(['promised_arrival_at' => $trip->departure_at->copy()->addHour()])->save();
+
+    $leaveBy = test()->flushHeaders()->withToken($this->driverToken)->getJson('/api/v1/driver/home')->assertOk()->json('data.nextRun.leaveBy');
+
+    expect($leaveBy)->not->toBeNull()
+        ->and($leaveBy['at'])->not->toBeNull()
+        ->and($leaveBy['local'])->toMatch('/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/')
+        ->and($leaveBy['lateWarning'])->toBeBool();
+
+    runLeavingIn($this->tripId, 600);
+
+    expect(test()->flushHeaders()->withToken($this->driverToken)->getJson('/api/v1/driver/home')->json('data.nextRun.leaveBy'))->toBeNull();
+});
