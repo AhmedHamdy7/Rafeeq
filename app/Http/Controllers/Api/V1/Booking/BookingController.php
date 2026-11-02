@@ -13,6 +13,7 @@ use App\Domains\Identity\Support\SecurityLog;
 use App\Domains\Matching\Actions\SuggestAlternativesAction;
 use App\Domains\Matching\Support\AlternativeOrigin;
 use App\Domains\Matching\Support\SearchRateLimit;
+use App\Domains\Notification\Support\ContactInfoDetector;
 use App\Domains\Payment\Support\PassengerFees;
 use App\Domains\Shared\Exceptions\DomainException;
 use App\Domains\Shared\Support\ErrorCode;
@@ -26,6 +27,7 @@ use App\Http\OpenApi\ApiErrors;
 use App\Http\Requests\Booking\AnswerEarlyDropRequest;
 use App\Http\Requests\Booking\CancelBookingAsDriverRequest;
 use App\Http\Requests\Booking\ListMyBookingsRequest;
+use App\Http\Requests\Booking\UpdatePickupNoteRequest;
 use App\Http\Resources\BookingResource;
 use App\Http\Resources\MatchResultResource;
 use App\Http\Responses\ApiResponse;
@@ -118,6 +120,41 @@ final class BookingController extends Controller
             ->first() ?? throw DomainException::of(ErrorCode::NotFound);
 
         return ApiResponse::success(PassengerFees::cancelPreview($hers));
+    }
+
+    /**
+     * PATCH /v1/bookings/{booking}/pickup-note — her note to her driver about where she waits
+     * (TRIPS-17). Hers only, on a seat that is still ahead of her; the driver reads it as
+     * `pickupNote` on the same booking.
+     *
+     * 🔒 Filtered like the trip chat: a note is a second way to write to the driver, and the
+     * phone-number rule would mean nothing if it held in one and not the other.
+     */
+    #[ApiErrors(ErrorCode::ChatContactInfoNotAllowed, ErrorCode::Conflict, ErrorCode::NotFound)]
+    public function updatePickupNote(UpdatePickupNoteRequest $request, string $booking): JsonResponse
+    {
+        $hers = Booking::query()
+            ->whereKey($booking)
+            ->where('passenger_user_id', $request->user()->id)
+            ->first() ?? throw DomainException::of(ErrorCode::NotFound);
+
+        if (! in_array($hers->status, [BookingStatus::Pending, BookingStatus::Confirmed], true)) {
+            throw DomainException::of(ErrorCode::Conflict);
+        }
+
+        $note = trim((string) $request->validated('note'));
+
+        if ($note !== '' && ContactInfoDetector::contains($note)) {
+            throw DomainException::of(ErrorCode::ChatContactInfoNotAllowed, fields: [
+                'note' => [__('errors.'.ErrorCode::ChatContactInfoNotAllowed->value)],
+            ]);
+        }
+
+        $hers->forceFill(['pickup_note' => $note === '' ? null : $note])->save();
+
+        return ApiResponse::success(
+            new BookingResource($hers->load(['scheduledTrip', ...BookingResource::historyRelations($request->user()), ...BookingResource::pickupEtaRelations()]))
+        );
     }
 
     /**

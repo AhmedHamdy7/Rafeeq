@@ -55,3 +55,39 @@ it('is hers only — the driver has his own previews', function () {
     $this->withToken($this->driverToken)->getJson("/api/v1/bookings/{$this->bookingId}/cancel-preview")
         ->assertNotFound();
 });
+
+/*
+|--------------------------------------------------------------------------
+| TRIPS-17 — her pickup note
+|--------------------------------------------------------------------------
+*/
+
+it('lets her write a pickup note her driver reads on the same booking', function () {
+    $this->withToken($this->paxToken)
+        ->patchJson("/api/v1/bookings/{$this->bookingId}/pickup-note", ['note' => "I'll wait by the pharmacy"])
+        ->assertOk()
+        ->assertJsonPath('data.pickupNote', "I'll wait by the pharmacy");
+
+    $this->withToken($this->driverToken)->getJson("/api/v1/bookings/{$this->bookingId}")
+        ->assertOk()
+        ->assertJsonPath('data.pickupNote', "I'll wait by the pharmacy");
+
+    // Cleared with null.
+    $this->withToken($this->paxToken)
+        ->patchJson("/api/v1/bookings/{$this->bookingId}/pickup-note", ['note' => null])
+        ->assertOk()
+        ->assertJsonPath('data.pickupNote', null);
+});
+
+it('refuses a phone number in the note, as the chat does', function () {
+    $this->withToken($this->paxToken)
+        ->patchJson("/api/v1/bookings/{$this->bookingId}/pickup-note", ['note' => 'call me 01112223344'])
+        ->assertStatus(422)
+        ->assertJsonPath('error.code', 'CHAT_CONTACT_INFO_NOT_ALLOWED');
+});
+
+it('lets only her edit it', function () {
+    $this->withToken($this->driverToken)
+        ->patchJson("/api/v1/bookings/{$this->bookingId}/pickup-note", ['note' => 'x'])
+        ->assertNotFound();
+});

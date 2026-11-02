@@ -152,6 +152,8 @@ final class BookingResource extends JsonResource
             'cancelledAt' => $this->cancelled_at?->toIso8601String(),
             'cancelledReason' => $this->cancelled_reason,
             'outcomeSeenAt' => $this->outcome_seen_at?->toIso8601String(),
+            // TRIPS-17: her note to her driver about where she waits, or null. Both sides read it.
+            'pickupNote' => $this->pickup_note,
             'cancellationFeePiastres' => $this->cancellation_fee_piastres,
 
             /*

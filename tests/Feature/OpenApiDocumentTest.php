@@ -114,6 +114,7 @@ it('generates a document describing every /v1 route', function () {
         'GET /v1/account/deletion',
         'DELETE /v1/account',
         'GET /v1/bookings/{booking}/cancel-preview',
+        'PATCH /v1/bookings/{booking}/pickup-note',
         'PATCH /v1/account/devices/current/security',
         'GET /v1/account/consents',
         'POST /v1/account/consents',
