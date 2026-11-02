@@ -35,7 +35,8 @@ final class SeatOfferController extends Controller
         $offers = SeatOffer::query()
             ->whereHas('seatRequest', fn ($query) => $query
                 ->where('passenger_user_id', $request->user()->id))
-            ->with('scheduledTrip')
+            // TRIPS-13: route, driver, car, her points and the arrival, once for the page.
+            ->with(SeatOfferResource::relations())
             // Live ones first, then the history — newest of each, because the only one she can act
             // on is an open one and it should never be below a week of closed ones.
             ->orderByRaw("CASE WHEN status = 'open' THEN 0 ELSE 1 END")

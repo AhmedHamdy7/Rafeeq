@@ -2,7 +2,10 @@
 
 namespace App\Http\Resources;
 
+use App\Domains\Booking\Enums\SeatOfferStatus;
 use App\Domains\Booking\Models\SeatOffer;
+use App\Domains\Booking\Support\SameTimeBookings;
+use App\Domains\Matching\Support\PassengerStanding;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
 
@@ -20,8 +23,28 @@ use Illuminate\Http\Resources\Json\JsonResource;
  */
 final class SeatOfferResource extends JsonResource
 {
+    /**
+     * What the card and the detail draw (TRIPS-13), loaded once for the page.
+     *
+     * @return array<int, string>
+     */
+    public static function relations(): array
+    {
+        return [
+            'scheduledTrip.commuteOffer.locations',
+            'scheduledTrip.commuteOffer.vehicle',
+            'scheduledTrip.commuteOffer.driverProfile.user.stats',
+            'scheduledTrip.commuteOffer.driverProfile.user.verifications',
+            'seatRequest',
+        ];
+    }
+
     public function toArray(Request $request): array
     {
+        $trip = $this->relationLoaded('scheduledTrip') ? $this->scheduledTrip : null;
+        $offer = $trip?->relationLoaded('commuteOffer') ? $trip->commuteOffer : null;
+        $seatRequest = $this->relationLoaded('seatRequest') ? $this->seatRequest : null;
+
         return [
             'id' => $this->id,
             'status' => strtoupper($this->status->value),
@@ -41,6 +64,33 @@ final class SeatOfferResource extends JsonResource
                 'departureLocal' => $this->scheduledTrip->departure_local?->toDateTimeString(),
                 'pricePiastres' => (int) $this->scheduledTrip->seat_price_piastres,
             ]),
+
+            /*
+             * TRIPS-13: the rest of the card — whose car, which road, where she gets in and out, and
+             * when she arrives. Null when the relations were not loaded (the accept and decline
+             * answers). 🔒 The driver is the same `PersonSummary` every passenger card uses: a first
+             * name, never a full name, a phone, a user id or a plate.
+             */
+            'originLabel' => $offer === null ? null : JourneyCard::route($offer)['originLabel'],
+            'destinationLabel' => $offer === null ? null : JourneyCard::route($offer)['destinationLabel'],
+            'driver' => $offer?->driverProfile?->user === null ? null
+                : PersonSummary::for($offer->driverProfile->user, $request->user(), asDriver: true),
+            'vehicle' => $offer?->vehicle === null ? null : [
+                'make' => $offer->vehicle->make,
+                'model' => $offer->vehicle->model,
+                'colour' => $offer->vehicle->colour,
+            ],
+            'pickup' => $seatRequest === null ? null : ['label' => $seatRequest->requested_pickup_label],
+            'dropoff' => $seatRequest === null ? null : ['label' => $seatRequest->requested_dropoff_label],
+            'promisedArrivalLocal' => $trip === null ? null : PassengerStanding::promisedArrivalLocal($trip),
+
+            /*
+             * Her own booking that overlaps this seat in time (R-3) — the one "Switch Commute" would
+             * replace — or null. Only while the offer is open: a closed offer replaces nothing.
+             */
+            'conflictingBookingId' => $trip === null || $seatRequest === null || $this->status !== SeatOfferStatus::Open
+                ? null
+                : SameTimeBookings::overlapping($trip, (string) $seatRequest->passenger_user_id)->first()?->id,
         ];
     }
 }

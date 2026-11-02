@@ -590,3 +590,33 @@ it('answers 404 for an offer that is not hers', function () {
         ->postJson("/api/v1/seat-offers/{$hers->id}/accept")
         ->assertStatus(404);
 });
+
+/**
+ * TRIPS-13: the offer card is drawable from the list alone — route, driver, car, her points, the
+ * arrival — and the driver is a first name and nothing that identifies her further.
+ */
+it('carries the offer card on every offer, with the driver as a first name only', function () {
+    $first = joinWaitlist('01222220001', 'pax-2', $this->commuteId, $this->trip->id);
+
+    test()->withToken($this->riderToken)
+        ->patchJson("/api/v1/bookings/{$this->bookingId}/cancel")->assertOk();
+
+    $offer = test()->withToken($first['token'])->getJson('/api/v1/seat-offers')
+        ->assertOk()->json('data.0');
+
+    expect($offer)->toHaveKeys([
+        'originLabel', 'destinationLabel', 'driver', 'vehicle', 'pickup', 'dropoff',
+        'promisedArrivalLocal', 'conflictingBookingId',
+    ])
+        ->and($offer['originLabel'])->not->toBeNull()
+        ->and($offer['driver']['publicFirstName'])->not->toBeNull()
+        ->and($offer['vehicle'])->toHaveKeys(['make', 'model', 'colour'])
+        ->and($offer['vehicle'])->not->toHaveKey('plateNumber')
+        ->and($offer['pickup'])->toHaveKey('label')
+        // She holds no other seat that morning.
+        ->and($offer['conflictingBookingId'])->toBeNull();
+
+    expect(json_encode($offer['driver']))->not->toContain('fullName')
+        ->and($offer['driver'])->not->toHaveKey('id')
+        ->and($offer['driver'])->not->toHaveKey('phone');
+});

@@ -58,6 +58,7 @@ final class SeatRequestResource extends JsonResource
             'scheduledTrip',
             'commuteOffer.locations',
             'commuteOffer.vehicle',
+            'commuteOffer.group',
             'commuteOffer.driverProfile.user.stats',
             'commuteOffer.driverProfile.user.verifications',
             'commuteOffer.scheduledTrips' => fn ($query) => $query
@@ -258,6 +259,8 @@ final class SeatRequestResource extends JsonResource
 
         return [
             ...JourneyCard::route($offer),
+            // TRIPS-12: the commute's group, so the card can open the group once she is in it.
+            'commuteGroupId' => $offer->group?->id,
             'tripId' => $day?->id,
             'tripDate' => $day?->trip_date->toDateString(),
             'departureAt' => $day?->departure_at->toIso8601String(),
