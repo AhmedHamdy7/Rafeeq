@@ -47,9 +47,7 @@ Poll every **30 s while `nextJourney.live` is not null**; otherwise load on open
       "boardingCode": null,
       "price": {
         "seatPricePiastres": 17000,
-        "totalPiastres": 17000,
-        "driverSharePiastres": {},
-        "driverShareTotalPiastres": {}
+        "totalPiastres": 17000
       },
       "paymentType": "cash",
       "paymentStatus": "NOT_DUE",
@@ -71,7 +69,6 @@ Poll every **30 s while `nextJourney.live` is not null**; otherwise load on open
       "driverDelay": null,
       "pickupEta": null,
       "pickupEtaLocal": null,
-      "myRating": {},
       "trip": {
         "id": "01m6exd5mqwk2ncd4g2hchrek3",
         "tripDate": "2026-11-03",
@@ -283,6 +280,9 @@ The card is the booking (same fields as `GET /bookings/{booking}`) plus the Home
 | `isSeen` | bool | `false` until the app calls `POST /bookings/{id}/seen` (§3). |
 | `outcomeSeenAt` | string \| null | When `seen` was first called. |
 | `vehicle` | object | `{make, model, colour, seats, plateNumber}`. |
+| `price` | object | `{seatPricePiastres, totalPiastres}` for the passenger. `driverSharePiastres` / `driverShareTotalPiastres` are sent **only to the driver** and are absent here. The old `platformFeePiastres` / `driverAmountPiastres` no longer exist. |
+| `feeLinePiastres` · `feeLineReason` | int · string \| null | The fee line on her booking (L-11). `0` / `null` when there is none. |
+| `myRating` | — | **Not on `/home`.** It's on the History endpoints (`GET /bookings?scope=past`, `GET /bookings/{id}`), as `null` or `{id, bookingId, direction, kind, stars, comment, tags[], isVisible, editableUntil, editedAt, createdAt}`. On Home use `canRate`. |
 | `driver` | object | Public profile + `completedTrips`. |
 | `attendance` | object | `{coming, away, awaiting, total}` for the group. |
 
@@ -369,7 +369,7 @@ Real response after the driver cancelled her day (5 days ahead):
 }
 ```
 
-`expired` looks the same with `status: "EXITED_DUE_TO_DRIVER_DELAY"` and `cancelledReason: "trip_expired"`.
+`expired` comes back as `phase: "expired"` with `status: "EXITED_DUE_TO_DRIVER_DELAY"` and `cancelledReason: "trip_expired"`. **This is intended, not a typo:** when the driver never starts, the sweep closes her seat with the same booking status as a passenger who left, and the reason tells them apart. `BOOKING`'s `EXPIRED` status means something else (a pending request that ran out). Switch on `phase`.
 
 `alternatives[]` is empty in the demo because no other commute fits. When filled:
 
