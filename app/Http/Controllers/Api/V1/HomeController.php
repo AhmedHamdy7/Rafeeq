@@ -317,7 +317,6 @@ final class HomeController extends Controller
             ->whereIn('bookings.status', BookingStatus::OUTCOMES_TO_SEE)
             ->whereNull('bookings.outcome_seen_at')
             ->where('scheduled_trips.departure_at', '>=', now()->subDays(self::UNSEEN_OUTCOME_DAYS))
-            ->where('scheduled_trips.departure_at', '<=', now()->addDay())
             ->orderByDesc('bookings.updated_at')
             ->orderByDesc('bookings.id')
             ->limit(10)
