@@ -639,3 +639,35 @@ it('carries the waiting-list card on her own seat requests', function () {
         ->and($row['commute']['driver'])->not->toHaveKey('id')
         ->and(json_encode($row['commute']['driver']))->not->toContain('fullName');
 });
+
+/**
+ * TRIPS-14: each Trips tab asks for its own statuses, and the page describes that list.
+ */
+it('filters her seat requests and her offers by status', function () {
+    $first = joinWaitlist('01222220001', 'pax-2', $this->commuteId, $this->trip->id);
+
+    test()->withToken($first['token'])->getJson('/api/v1/seat-requests?status=waitlisted')
+        ->assertOk()->assertJsonCount(1, 'data');
+
+    test()->withToken($first['token'])->getJson('/api/v1/seat-requests?status=PENDING,COUNTEROFFERED')
+        ->assertOk()->assertJsonCount(0, 'data');
+
+    test()->withToken($this->riderToken)
+        ->patchJson("/api/v1/bookings/{$this->bookingId}/cancel")->assertOk();
+
+    test()->withToken($first['token'])->getJson('/api/v1/seat-offers?status=OPEN')
+        ->assertOk()->assertJsonCount(1, 'data');
+
+    test()->withToken($first['token'])->getJson('/api/v1/seat-offers?status=ACCEPTED,DECLINED')
+        ->assertOk()->assertJsonCount(0, 'data');
+});
+
+it('refuses a status that does not exist', function () {
+    $first = joinWaitlist('01222220001', 'pax-2', $this->commuteId, $this->trip->id);
+
+    test()->withToken($first['token'])->getJson('/api/v1/seat-requests?status=PENDING,NOPE')
+        ->assertStatus(422);
+
+    test()->withToken($first['token'])->getJson('/api/v1/seat-offers?status=MAYBE')
+        ->assertStatus(422);
+});

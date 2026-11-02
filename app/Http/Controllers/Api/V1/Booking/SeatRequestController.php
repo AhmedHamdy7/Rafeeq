@@ -16,6 +16,7 @@ use App\Domains\Shared\Support\ErrorCode;
 use App\Http\Controllers\Controller;
 use App\Http\OpenApi\ApiErrors;
 use App\Http\Requests\Booking\CounterofferSeatRequestRequest;
+use App\Http\Requests\Booking\ListSeatRequestsRequest;
 use App\Http\Requests\Booking\RequestSeatRequest;
 use App\Http\Requests\Booking\SetStandbyAvailabilityRequest;
 use App\Http\Resources\SeatApprovalResource;
@@ -83,11 +84,17 @@ final class SeatRequestController extends Controller
 
     /**
      * GET /v1/seat-requests — the caller's own requests, as a passenger.
+     *
+     * `?status=PENDING,COUNTEROFFERED` narrows it to those statuses (TRIPS-14), so each Trips tab
+     * asks for its own page and `meta.hasMore` describes the list it shows.
      */
-    public function index(Request $request): JsonResponse
+    public function index(ListSeatRequestsRequest $request): JsonResponse
     {
+        $statuses = $request->statuses();
+
         $requests = SeatRequest::query()
             ->where('passenger_user_id', $request->user()->id)
+            ->when($statuses !== [], fn ($query) => $query->whereIn('status', $statuses))
             // The commute summary and times her screens draw (DISCOVER-13), once for the page.
             ->with(SeatRequestResource::passengerRelations())
             ->latest('created_at')
