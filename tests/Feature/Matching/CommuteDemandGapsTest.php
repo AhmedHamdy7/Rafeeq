@@ -159,15 +159,16 @@ it('adds the Greater Cairo places once', function () {
         ->assertJsonPath('data.0.name', 'Smart Village');
 });
 
-it('tells the app whether the Women-only chip is hers, without sending her gender', function () {
+it('tells the app her own gender and whether the Women-only chip is hers', function () {
     $man = passenger('01112225566', gender: 'man', device: 'pax-man');
 
     $woman = test()->flushHeaders()->withToken($this->paxToken)->getJson('/api/v1/auth/me')->assertOk();
     $him = test()->flushHeaders()->withToken($man)->getJson('/api/v1/auth/me')->assertOk();
 
-    expect($woman->json('data.user.canChooseWomenOnly'))->toBeTrue()
-        ->and($him->json('data.user.canChooseWomenOnly'))->toBeFalse()
-        ->and($woman->getContent())->not->toContain('"gender"');
+    expect($woman->json('data.user.gender'))->toBe('woman')
+        ->and($woman->json('data.user.canChooseWomenOnly'))->toBeTrue()
+        ->and($him->json('data.user.gender'))->toBe('man')
+        ->and($him->json('data.user.canChooseWomenOnly'))->toBeFalse();
 });
 
 it('brings old demands into line: the chip shows exactly what matching does', function () {

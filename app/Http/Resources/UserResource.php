@@ -16,9 +16,9 @@ use Illuminate\Http\Resources\Json\JsonResource;
  *
  * Every field is listed explicitly — never `$this->resource->toArray()` —
  * because the model's `#[Hidden]` list is a safety net, not the contract.
- * `gender` is absent on purpose and stays absent: it is a hard matching
- * filter (Bible §15.2, pitfall #30) and appears in no response at all, not
- * even this one. Other members see {@see MemberResource}, never this.
+ * `gender` is returned here and nowhere else: it is her own account, and the
+ * app needs it to show the Women-only chip. It is never returned about anybody
+ * else (SAFE-18). Other members see {@see MemberResource}, never this.
  *
  * @mixin User
  */
@@ -77,6 +77,7 @@ final class UserResource extends JsonResource
             'organizationId' => $this->organization_id,
             'preferredLanguage' => $this->preferred_language,
             'trustLevel' => $this->trust_level,
+            'gender' => $this->gender === null || $this->gender === Gender::PreferNotToSay ? null : $this->gender->value,
             'canChooseWomenOnly' => $this->gender === Gender::Woman,
             // Drives the forced re-acceptance prompt when new terms ship.
             'outstandingConsents' => RecordConsentAction::outstandingFor($this->resource),

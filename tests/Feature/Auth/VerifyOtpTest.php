@@ -313,9 +313,9 @@ it('routes a suspended, not banned, account like any other', function () {
         ->and($result['user']['suspension']['permanent'])->toBeFalse();
 });
 
-it('never exposes gender, and the whole payload is free of it', function () {
+it('returns her own gender, and null before she has given it', function () {
     $result = signIn();
 
-    expect($result['user'])->not->toHaveKey('gender')
-        ->and(json_encode($result))->not->toContain('gender');
+    expect($result['user'])->toHaveKey('gender')
+        ->and($result['user']['gender'])->toBeNull();
 });
