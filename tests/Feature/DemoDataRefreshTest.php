@@ -1,6 +1,8 @@
 <?php
 
 use App\Domains\Booking\Models\Booking;
+use App\Domains\Commute\Models\CommuteLocation;
+use App\Domains\Commute\Models\CommuteRule;
 use App\Domains\Commute\Models\ScheduledTrip;
 use App\Domains\Identity\Models\User;
 use Database\Seeders\DemoDataSeeder;
@@ -44,4 +46,28 @@ it('is refused in production', function () {
     app()->detectEnvironment(fn () => 'production');
 
     $this->artisan('demo:refresh')->assertFailed();
+});
+
+it('adds the match states to a demo environment seeded before them, and only once', function () {
+    CommuteLocation::query()->whereIn('type', ['pickup', 'dropoff'])->delete();
+    CommuteRule::query()->whereHas('commuteOffer.driverProfile.user', fn ($user) => $user->where('phone_e164', 'like', '+2010555500%'))->delete();
+    User::query()->where('phone_e164', '+201055559901')->delete();
+
+    $this->artisan('demo:match-states')->expectsOutputToContain('tester created')->assertSuccessful();
+
+    $points = CommuteLocation::query()->whereIn('type', ['pickup', 'dropoff'])->count();
+
+    expect($points)->toBe(8)
+        ->and(User::query()->where('phone_e164', '+201055559901')->sole()->gender->value)->toBe('man');
+
+    $this->artisan('demo:match-states')->assertSuccessful();
+
+    expect(CommuteLocation::query()->whereIn('type', ['pickup', 'dropoff'])->count())->toBe($points)
+        ->and(User::query()->where('phone_e164', '+201055559901')->count())->toBe(1);
+});
+
+it('refuses to add match states in production', function () {
+    app()->detectEnvironment(fn () => 'production');
+
+    $this->artisan('demo:match-states')->assertFailed();
 });
