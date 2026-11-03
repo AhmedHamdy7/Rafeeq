@@ -3,6 +3,7 @@
 namespace App\Http\Resources;
 
 use App\Domains\Booking\Support\PickupEta;
+use App\Domains\Booking\Support\RequestEligibility;
 use App\Domains\Commute\Enums\CommuteAudience;
 use App\Domains\Commute\Enums\CommuteLocationType;
 use App\Domains\Commute\Models\CommuteLocation;
@@ -52,15 +53,21 @@ final class PassengerCommuteResource extends JsonResource
 
         $pickups = [];
         $dropoffs = [];
+        $offsets = [];
 
         // foreach, not array_map: a list built this way keeps its element type in the contract.
         foreach ($offer->locations->sortBy('sequence') as $location) {
-            if ($location->type === CommuteLocationType::Pickup) {
-                $pickups[] = $this->suggestion($geo, $offer, $location);
+            if ($location->type !== CommuteLocationType::Pickup && $location->type !== CommuteLocationType::Dropoff) {
+                continue;
             }
 
-            if ($location->type === CommuteLocationType::Dropoff) {
-                $dropoffs[] = $this->suggestion($geo, $offer, $location);
+            $seconds = PickupEta::secondsAlong($geo, $offer, new Coordinate((float) $location->lat, (float) $location->lng));
+            $offsets[(string) $location->id] = $seconds;
+
+            if ($location->type === CommuteLocationType::Pickup) {
+                $pickups[] = $this->suggestion($offer, $location, $seconds);
+            } else {
+                $dropoffs[] = $this->suggestion($offer, $location, $seconds);
             }
         }
 
@@ -71,6 +78,7 @@ final class PassengerCommuteResource extends JsonResource
                 ...MatchResultResource::otherDay($trip, $this->standing),
                 // The day's own frozen price (P-1), which a later price change does not move.
                 'seatPricePiastres' => (int) $trip->seat_price_piastres,
+                'pointTimes' => $this->pointTimes($trip, $offsets),
             ];
         }
 
@@ -124,11 +132,12 @@ final class PassengerCommuteResource extends JsonResource
              */
             'upcomingTrips' => $upcomingTrips,
 
-            'rules' => $this->rulesMap($offer),
+            'rules' => (object) $this->rulesMap($offer),
+            'requestEligibility' => RequestEligibility::for($request->user(), $offer),
             'vehicle' => [
                 'make' => $offer->vehicle?->make,
                 'model' => $offer->vehicle?->model,
-                'colour' => $offer->vehicle?->colour,
+                'colour' => LocalisedLabel::of($offer->vehicle?->colour),
                 'tier' => $offer->vehicle?->tierOrDefault()->value,
                 'hasAc' => (bool) $offer->vehicle?->has_ac,
             ],
@@ -144,9 +153,33 @@ final class PassengerCommuteResource extends JsonResource
      *
      * @return array{id: string, label: string|null, lat: float, lng: float, estimatedTime: string|null}
      */
-    private function suggestion(GeoQueryEngine $geo, CommuteOffer $offer, CommuteLocation $location): array
+    /**
+     * @param  array<string, int|null>  $offsets
+     * @return array<int, array{pointId: string, estimatedAt: string, estimatedLocal: string}>
+     */
+    private function pointTimes(ScheduledTrip $trip, array $offsets): array
     {
-        $seconds = PickupEta::secondsAlong($geo, $offer, new Coordinate((float) $location->lat, (float) $location->lng));
+        $times = [];
+
+        foreach ($offsets as $pointId => $seconds) {
+            if ($seconds === null || $trip->departure_at === null) {
+                continue;
+            }
+
+            $at = CarbonImmutable::instance($trip->departure_at)->addSeconds($seconds);
+
+            $times[] = [
+                'pointId' => (string) $pointId,
+                'estimatedAt' => $at->toIso8601String(),
+                'estimatedLocal' => CarbonImmutable::instance($trip->departure_local)->addSeconds($seconds)->format('Y-m-d H:i:s'),
+            ];
+        }
+
+        return $times;
+    }
+
+    private function suggestion(CommuteOffer $offer, CommuteLocation $location, ?int $seconds): array
+    {
         $departure = $offer->schedule?->departure_time;
 
         return [
@@ -201,7 +234,12 @@ final class PassengerCommuteResource extends JsonResource
         $place = $offer->locations->firstWhere('type', $type)?->place
             ?? app(SearchPlacesAction::class)->nearest($near, Distance::fromKilometres(3));
 
-        return $place?->district ?? $place?->city ?? $place?->name;
+        if ($place === null) {
+            return null;
+        }
+
+        return LocalisedLabel::of($place->district ?? $place->city)
+            ?? (app()->getLocale() === 'en' ? $place->name : $place->name_ar);
     }
 
     /**

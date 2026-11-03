@@ -1,0 +1,89 @@
+<?php
+
+use App\Domains\Commute\Enums\CommuteAudience;
+use App\Domains\Commute\Models\CommuteLocation;
+use App\Domains\Commute\Models\CommuteOffer;
+use App\Domains\Commute\Models\ScheduledTrip;
+use App\Domains\Driver\Models\Vehicle;
+use App\Domains\Geo\Models\Place;
+use Illuminate\Support\Facades\Storage;
+
+beforeEach(function () {
+    Storage::fake('documents');
+
+    $this->driverToken = approvedDriver(phone: '01012345678', devicePublicId: 'driver-1');
+    $this->commuteId = createCommute($this->driverToken, Vehicle::sole()->id, ['allowsCustomPickup' => true])
+        ->assertStatus(201)->json('data.id');
+
+    saveRoute($this->driverToken, $this->commuteId, [
+        'pickups' => [['lat' => 30.0624, 'lng' => 31.3614, 'address' => 'Ring Road, Rehab exit']],
+        'dropoffs' => [['lat' => 30.0684, 'lng' => 31.1015, 'address' => 'Mehwar, Sheikh Zayed']],
+    ])->assertOk();
+    saveSchedule($this->driverToken, $this->commuteId)->assertOk();
+
+    test()->withToken($this->driverToken)->postJson("/api/v1/commutes/{$this->commuteId}/publish")->assertOk();
+
+    $this->paxToken = verifiedPassenger('01112223344');
+});
+
+function commuteDetail(string $token, string $commuteId, string $language = 'ar')
+{
+    return test()->flushHeaders()->withToken($token)->withHeader('Accept-Language', $language)
+        ->getJson("/api/v1/commutes/{$commuteId}/public")->assertOk();
+}
+
+it('sends rules as an object even when the commute has none', function () {
+    CommuteOffer::query()->findOrFail($this->commuteId)->rules()->delete();
+
+    expect(commuteDetail($this->paxToken, $this->commuteId)->getContent())->toContain('"rules":{}');
+});
+
+it('tells a woman she may request the commute', function () {
+    expect(commuteDetail($this->paxToken, $this->commuteId)->json('data.requestEligibility'))
+        ->toBe(['canRequest' => true, 'reason' => null]);
+});
+
+it('tells a man he may not request a women-only commute', function () {
+    CommuteOffer::query()->whereKey($this->commuteId)->update(['audience' => CommuteAudience::WomenOnly->value]);
+    $manToken = verifiedPassenger('01112225566', gender: 'man', device: 'pax-man');
+
+    expect(commuteDetail($manToken, $this->commuteId)->json('data.requestEligibility'))
+        ->toBe(['canRequest' => false, 'reason' => 'women_only']);
+});
+
+it('tells her she already has an open request', function () {
+    requestSeat($this->paxToken, $this->commuteId, [
+        'scheduledTripId' => ScheduledTrip::query()->orderBy('departure_at')->firstOrFail()->id,
+    ])->assertStatus(201);
+
+    expect(commuteDetail($this->paxToken, $this->commuteId)->json('data.requestEligibility'))
+        ->toBe(['canRequest' => false, 'reason' => 'already_requested']);
+});
+
+it('gives every upcoming day its own time at each suggested point', function () {
+    $detail = commuteDetail($this->paxToken, $this->commuteId)->json('data');
+    $pointIds = collect([...$detail['pickups'], ...$detail['dropoffs']])->pluck('id');
+    $day = $detail['upcomingTrips'][0];
+    $trip = ScheduledTrip::query()->findOrFail($day['id']);
+
+    expect(collect($day['pointTimes'])->pluck('pointId')->all())->toBe($pointIds->all());
+
+    foreach ($day['pointTimes'] as $time) {
+        expect(strtotime($time['estimatedAt']))->toBeGreaterThanOrEqual($trip->departure_at->getTimestamp())
+            ->and($time['estimatedLocal'])->toMatch('/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/');
+    }
+});
+
+it('names areas and the car colour in the request language', function () {
+    Vehicle::sole()->forceFill(['colour' => 'فضي'])->save();
+    $place = Place::factory()->create(['name' => 'Rehab Gate 2', 'name_ar' => 'الرحاب بوابة ٢', 'district' => 'القاهرة الجديدة']);
+    CommuteLocation::query()->where('commute_offer_id', $this->commuteId)->where('type', 'origin')->update(['place_id' => $place->id]);
+
+    $ar = commuteDetail($this->paxToken, $this->commuteId, 'ar')->json('data');
+    $en = commuteDetail($this->paxToken, $this->commuteId, 'en')->json('data');
+
+    expect($ar['vehicle']['colour'])->toBe('فضي')
+        ->and($en['vehicle']['colour'])->toBe('Silver')
+        ->and($ar['route']['start']['label'])->toBe('القاهرة الجديدة')
+        ->and($en['route']['start']['label'])->toBe('New Cairo');
+});

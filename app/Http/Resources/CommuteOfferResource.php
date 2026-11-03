@@ -65,7 +65,7 @@ final class CommuteOfferResource extends JsonResource
             'missing' => CommuteChecklist::missingFor($this->resource),
             'locations' => CommuteLocationResource::collection($this->whenLoaded('locations')),
             'schedule' => new CommuteScheduleResource($this->whenLoaded('schedule')),
-            'rules' => $this->rulesMap(),
+            'rules' => (object) $this->rulesMap(),
             'upcomingTrips' => ScheduledTripResource::collection($this->whenLoaded('scheduledTrips')),
         ];
     }

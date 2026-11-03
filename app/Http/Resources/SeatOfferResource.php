@@ -78,7 +78,7 @@ final class SeatOfferResource extends JsonResource
             'vehicle' => $offer?->vehicle === null ? null : [
                 'make' => $offer->vehicle->make,
                 'model' => $offer->vehicle->model,
-                'colour' => $offer->vehicle->colour,
+                'colour' => LocalisedLabel::of($offer->vehicle->colour),
             ],
             'pickup' => $seatRequest === null ? null : ['label' => $seatRequest->requested_pickup_label],
             'dropoff' => $seatRequest === null ? null : ['label' => $seatRequest->requested_dropoff_label],

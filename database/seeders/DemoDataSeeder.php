@@ -11,10 +11,12 @@ use App\Domains\Commute\Enums\CommuteAudience;
 use App\Domains\Commute\Enums\CommuteDirection;
 use App\Domains\Commute\Enums\CommuteLocationType;
 use App\Domains\Commute\Enums\CommuteOfferStatus;
+use App\Domains\Commute\Enums\CommuteRuleKey;
 use App\Domains\Commute\Enums\CommuteType;
 use App\Domains\Commute\Enums\ScheduledTripStatus;
 use App\Domains\Commute\Models\CommuteLocation;
 use App\Domains\Commute\Models\CommuteOffer;
+use App\Domains\Commute\Models\CommuteRule;
 use App\Domains\Commute\Models\CommuteSchedule;
 use App\Domains\Commute\Models\ScheduledTrip;
 use App\Domains\Commute\Support\DepartureTimeCalculator;
@@ -50,6 +52,7 @@ use App\Domains\Verification\Models\TrustScore;
 use App\Domains\Verification\Models\UserVerification;
 use Illuminate\Database\Console\Seeds\WithoutModelEvents;
 use Illuminate\Database\Seeder;
+use Illuminate\Support\Facades\DB;
 use RuntimeException;
 
 /**
@@ -94,13 +97,13 @@ class DemoDataSeeder extends Seeder
      * @var list<array<string, mixed>>
      */
     private const DRIVERS = [
-        ['name' => 'هالة سمير', 'first' => 'هالة', 'phone' => '+201055550001', 'time' => '06:50:00', 'tier' => VehicleTier::Comfort, 'seats' => 3, 'plate' => 'ر س 118', 'make' => 'Hyundai', 'model' => 'Tucson', 'colour' => 'أبيض', 'trips' => 142, 'onTime' => 94.0, 'audience' => CommuteAudience::WomenOnly],
-        ['name' => 'منى عبد الله', 'first' => 'منى', 'phone' => '+201055550002', 'time' => '07:15:00', 'tier' => VehicleTier::Standard, 'seats' => 4, 'plate' => 'ل م 307', 'make' => 'Toyota', 'model' => 'Corolla', 'colour' => 'رمادي', 'trips' => 58, 'onTime' => 88.0, 'audience' => CommuteAudience::WomenOnly],
-        ['name' => 'سلمى فؤاد', 'first' => 'سلمى', 'phone' => '+201055550003', 'time' => '07:30:00', 'tier' => VehicleTier::Standard, 'seats' => 3, 'plate' => 'ن ه 952', 'make' => 'Nissan', 'model' => 'Sunny', 'colour' => 'أزرق', 'trips' => 11, 'onTime' => 100.0, 'audience' => CommuteAudience::WomenOnly],
+        ['name' => 'هالة سمير', 'first' => 'هالة', 'phone' => '+201055550001', 'time' => '06:50:00', 'tier' => VehicleTier::Comfort, 'seats' => 3, 'plate' => 'ر س 118', 'make' => 'Hyundai', 'model' => 'Tucson', 'colour' => 'أبيض', 'trips' => 142, 'onTime' => 94.0, 'audience' => CommuteAudience::WomenOnly, 'pickups' => [['lat' => 30.0590, 'lng' => 31.4700, 'label' => 'Rehab Mall 2 gate'], ['lat' => 30.0650, 'lng' => 31.4300, 'label' => 'Ring Road, Suez Road exit']], 'dropoffs' => [['lat' => 30.0710, 'lng' => 31.0300, 'label' => 'Smart Village main gate']], 'rules' => [CommuteRuleKey::NonSmoking, CommuteRuleKey::Ac]],
+        ['name' => 'منى عبد الله', 'first' => 'منى', 'phone' => '+201055550002', 'time' => '07:15:00', 'tier' => VehicleTier::Standard, 'seats' => 4, 'plate' => 'ل م 307', 'make' => 'Toyota', 'model' => 'Corolla', 'colour' => 'رمادي', 'trips' => 58, 'onTime' => 88.0, 'audience' => CommuteAudience::WomenOnly, 'pickups' => [], 'dropoffs' => []],
+        ['name' => 'سلمى فؤاد', 'first' => 'سلمى', 'phone' => '+201055550003', 'time' => '07:30:00', 'tier' => VehicleTier::Standard, 'seats' => 3, 'plate' => 'ن ه 952', 'make' => 'Nissan', 'model' => 'Sunny', 'colour' => 'أزرق', 'trips' => 11, 'onTime' => 100.0, 'audience' => CommuteAudience::WomenOnly, 'pickups' => [['lat' => 30.0590, 'lng' => 31.4700, 'label' => 'Rehab Mall 2 gate']], 'dropoffs' => [['lat' => 30.0710, 'lng' => 31.0300, 'label' => 'Smart Village main gate']], 'rules' => [CommuteRuleKey::Quiet], 'full' => true],
         ['name' => 'داليا رأفت', 'first' => 'داليا', 'phone' => '+201055550004', 'time' => '06:40:00', 'tier' => VehicleTier::Comfort, 'seats' => 2, 'plate' => 'ص ع 673', 'make' => 'Jeep', 'model' => 'Compass', 'colour' => 'أسود', 'trips' => 231, 'onTime' => 96.0, 'audience' => CommuteAudience::AnyVerified],
         // Deliberately unrated: a new driver is a state the client must render, and `null` must
         // never be drawn as nought stars.
-        ['name' => 'ياسمين طارق', 'first' => 'ياسمين', 'phone' => '+201055550005', 'time' => '07:45:00', 'tier' => VehicleTier::Standard, 'seats' => 4, 'plate' => 'و ي 240', 'make' => 'Kia', 'model' => 'Cerato', 'colour' => 'أحمر', 'trips' => 0, 'onTime' => null, 'audience' => CommuteAudience::WomenOnly],
+        ['name' => 'ياسمين طارق', 'first' => 'ياسمين', 'phone' => '+201055550005', 'time' => '07:45:00', 'tier' => VehicleTier::Standard, 'seats' => 4, 'plate' => 'و ي 240', 'make' => 'Kia', 'model' => 'Cerato', 'colour' => 'أحمر', 'trips' => 0, 'onTime' => null, 'audience' => CommuteAudience::WomenOnly, 'pickups' => [['lat' => 30.0590, 'lng' => 31.4700, 'label' => 'Rehab Mall 2 gate'], ['lat' => 30.0650, 'lng' => 31.4300, 'label' => 'Ring Road, Suez Road exit']], 'dropoffs' => [['lat' => 30.0710, 'lng' => 31.0300, 'label' => 'Smart Village main gate']], 'rules' => [CommuteRuleKey::Ac]],
     ];
 
     /**
@@ -125,6 +128,7 @@ class DemoDataSeeder extends Seeder
     private const TESTERS = [
         ['name' => 'أحمد إبراهيم', 'first' => 'أحمد', 'phone' => '+201125847213'],
         ['name' => 'عمر علي', 'first' => 'عمر', 'phone' => '+201014531739'],
+        ['name' => 'كريم حسن', 'first' => 'كريم', 'phone' => '+201055559901', 'gender' => 'man'],
     ];
 
     public function run(): void
@@ -158,6 +162,16 @@ class DemoDataSeeder extends Seeder
          * get that subtly wrong in a way only the mobile team would notice.
          */
         $this->command?->call('commutes:generate-trips');
+
+        foreach (self::DRIVERS as $spec) {
+            if ($spec['full'] ?? false) {
+                ScheduledTrip::query()
+                    ->whereIn('commute_offer_id', CommuteOffer::query()
+                        ->whereHas('driverProfile.user', fn ($user) => $user->where('phone_e164', $spec['phone']))
+                        ->select('id'))
+                    ->update(['seats_taken' => DB::raw('seats_total')]);
+            }
+        }
 
         $mariam = User::query()->where('phone_e164', '+201033334444')->firstOrFail();
 
@@ -285,6 +299,30 @@ class DemoDataSeeder extends Seeder
             'seat_price_piastres' => $quote->seatPricePiastres,
             'driver_share_piastres' => $quote->driverSharePiastres,
         ])->save();
+
+        $sequence = 1;
+
+        foreach ([[CommuteLocationType::Pickup, $spec['pickups'] ?? []], [CommuteLocationType::Dropoff, $spec['dropoffs'] ?? []]] as [$type, $points]) {
+            foreach ($points as $point) {
+                CommuteLocation::create([
+                    'commute_offer_id' => $offer->id,
+                    'type' => $type,
+                    'point' => new Coordinate(lat: $point['lat'], lng: $point['lng']),
+                    'lat' => $point['lat'],
+                    'lng' => $point['lng'],
+                    'address' => $point['label'],
+                    'sequence' => $sequence++,
+                ]);
+            }
+        }
+
+        foreach ($spec['rules'] ?? [] as $key) {
+            CommuteRule::create([
+                'commute_offer_id' => $offer->id,
+                'rule_key' => $key,
+                'rule_value' => true,
+            ]);
+        }
 
         foreach ([
             [$origin, CommuteLocationType::Origin, 'الرحاب، بوابة ٢', 0],
@@ -530,7 +568,10 @@ class DemoDataSeeder extends Seeder
         Place $origin,
         Place $destination,
     ): void {
-        $tester = User::factory()->woman()->create([
+        $isMan = ($spec['gender'] ?? 'woman') === 'man';
+        $factory = User::factory();
+
+        $tester = ($isMan ? $factory->man() : $factory->woman())->create([
             'phone_e164' => $spec['phone'],
             'full_name' => $spec['name'],
             'public_first_name' => $spec['first'],
@@ -555,6 +596,10 @@ class DemoDataSeeder extends Seeder
             'score' => 64,
             'public_tier' => PublicTrustTier::Trusted,
         ]);
+
+        if ($isMan) {
+            return;
+        }
 
         $this->seatOn($tester, $this->nextFreeTrip());
         $this->seedPassengerIntent($tester, $origin, $destination);
@@ -638,6 +683,13 @@ class DemoDataSeeder extends Seeder
         $command->line('   +201014531739  Omar Aly       — passenger: confirmed seat, saved search, a request');
         $command->line('   +201033334444  Mariam         — passenger: bookings, a RATED trip, a saved search');
         $command->line('   +201011112222  Nour           — driver: published commute, group, pending requests');
+        $command->line('   +201055559901  Karim          — passenger, a MAN: women-only commutes answer canRequest false');
+        $command->newLine();
+        $command->line('   Match screens (F3P-21 → 23), as a woman tester:');
+        $command->line('     ياسمين  open seats, new driver, 2 pickups + 1 drop-off, ac');
+        $command->line('     سلمى    women-only and full on every day → waiting list, quiet');
+        $command->line('     هالة    06:50 — overlaps the testers\' 06:40 seat with داليا on its first day');
+        $command->line('     منى     no suggested points → custom pin');
         $command->newLine();
         $command->line('   All four see all six commutes. Five of the six are women-only and the audience');
         $command->line('   filter is a hard exclusion, so the testers are seeded as women — flip one to');
