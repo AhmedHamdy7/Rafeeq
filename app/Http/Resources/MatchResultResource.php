@@ -146,7 +146,7 @@ final class MatchResultResource extends JsonResource
             'vehicle' => [
                 'make' => $offer->vehicle?->make,
                 'model' => $offer->vehicle?->model,
-                'colour' => $offer->vehicle?->colour,
+                'colour' => LocalisedLabel::of($offer->vehicle?->colour),
                 // `comfort` shows the Comfort badge (S-1, PROF-26): a higher-rated car, priced at
                 // a higher km rate. Filter on it with `tier=comfort`.
                 'tier' => $offer->vehicle?->tierOrDefault()->value,
@@ -212,7 +212,7 @@ final class MatchResultResource extends JsonResource
             ],
 
             'detourMinutes' => round($this->score->detourMinutes, 1),
-            'rules' => $this->rulesMap(),
+            'rules' => (object) $this->rulesMap(),
             // The other days of the same commute that also fit, so one commute is
             // one card rather than twenty near-identical ones.
             'otherDays' => $otherDays,

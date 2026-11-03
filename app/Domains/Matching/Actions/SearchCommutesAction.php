@@ -93,7 +93,7 @@ final readonly class SearchCommutesAction
             // `preventLazyLoading` would otherwise turn this into an exception —
             // which is exactly the N+1 it exists to catch.
             ->with([
-                'commuteOffer.locations',
+                'commuteOffer.locations.place',
                 'commuteOffer.rules',
                 'commuteOffer.vehicle',
                 // The driver's USER too: the result card shows their public first

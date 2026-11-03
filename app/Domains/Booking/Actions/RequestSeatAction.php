@@ -9,6 +9,7 @@ use App\Domains\Booking\Enums\SeatRequestStatus;
 use App\Domains\Booking\Models\SeatRequest;
 use App\Domains\Booking\Support\DuringRideRequests;
 use App\Domains\Booking\Support\RequestedPoints;
+use App\Domains\Booking\Support\RequestEligibility;
 use App\Domains\Booking\Support\RequestKinds;
 use App\Domains\Booking\Support\SeatAvailabilityChecker;
 use App\Domains\Commute\Models\CommuteOffer;
@@ -277,21 +278,7 @@ final readonly class RequestSeatAction
      */
     private function assertNoOpenRequest(User $passenger, CommuteOffer $offer): void
     {
-        $exists = SeatRequest::query()
-            ->where('passenger_user_id', $passenger->id)
-            ->where('commute_offer_id', $offer->id)
-            ->whereIn('status', [
-                SeatRequestStatus::Pending->value,
-                SeatRequestStatus::Approved->value,
-                SeatRequestStatus::Waitlisted->value,
-                /*
-                 * A counteroffer is an open conversation: the driver has answered with a different
-                 * meeting place and is waiting on this passenger. The generated unique column
-                 * enforces it too — this gives her an explanation instead of a database error.
-                 */
-                SeatRequestStatus::Counteroffered->value,
-            ])
-            ->exists();
+        $exists = RequestEligibility::hasOpenRequest($passenger, $offer);
 
         if ($exists) {
             throw DomainException::of(ErrorCode::AlreadyRequested);

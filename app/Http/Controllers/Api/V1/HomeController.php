@@ -34,6 +34,7 @@ use App\Http\Controllers\Controller;
 use App\Http\Resources\BookingResource;
 use App\Http\Resources\HomeJourney;
 use App\Http\Resources\JourneyCard;
+use App\Http\Resources\LocalisedLabel;
 use App\Http\Resources\MatchNotificationResource;
 use App\Http\Resources\PersonSummary;
 use App\Http\Resources\SeatRequestResource;
@@ -360,7 +361,7 @@ final class HomeController extends Controller
             ->with([
                 'scheduledTrip.commuteSchedule',
                 'scheduledTrip.tripSession',
-                'scheduledTrip.commuteOffer.locations',
+                'scheduledTrip.commuteOffer.locations.place',
                 'scheduledTrip.commuteOffer.vehicle',
                 'scheduledTrip.commuteOffer.driverProfile.user.stats',
                 'scheduledTrip.commuteOffer.driverProfile.user.verifications',
@@ -477,7 +478,7 @@ final class HomeController extends Controller
         return [
             'make' => $offer->vehicle?->make,
             'model' => $offer->vehicle?->model,
-            'colour' => $offer->vehicle?->colour,
+            'colour' => LocalisedLabel::of($offer->vehicle?->colour),
             // Total seats including the driver's — "3-seat group" on the card.
             'seats' => $offer->vehicle?->seats,
             'plateNumber' => $booking->status->grantsExactDetails()
@@ -609,7 +610,7 @@ final class HomeController extends Controller
             ->with([
                 'commuteOffer.vehicle',
                 'commuteOffer.driverProfile.user',
-                'commuteOffer.locations',
+                'commuteOffer.locations.place',
                 'commuteOffer.schedule',
                 'commuteOffer.driverProfile',
                 'commuteDemand',
@@ -767,7 +768,7 @@ final class HomeController extends Controller
             ->orderBy('id')
             ->with([
                 'commuteSchedule',
-                'commuteOffer.locations',
+                'commuteOffer.locations.place',
                 'commuteOffer.vehicle',
                 'commuteOffer.group.activeMembers',
                 'commuteOffer.group.attendances',
@@ -869,7 +870,7 @@ final class HomeController extends Controller
             ->orderBy('departure_at')
             ->orderBy('id')
             ->limit(self::LATER_THIS_WEEK)
-            ->with(['commuteSchedule', 'commuteOffer.locations'])
+            ->with(['commuteSchedule', 'commuteOffer.locations.place'])
             ->get();
 
         $rows = [];

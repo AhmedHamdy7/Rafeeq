@@ -34,8 +34,8 @@ final class JourneyCard
         $destination = $offer->locations->firstWhere('type', CommuteLocationType::Destination);
 
         return [
-            'originLabel' => $origin?->address,
-            'destinationLabel' => $destination?->address,
+            'originLabel' => LocalisedLabel::location($origin),
+            'destinationLabel' => LocalisedLabel::location($destination),
         ];
     }
 

@@ -281,7 +281,7 @@ final class SeatRequestResource extends JsonResource
             'vehicle' => [
                 'make' => $offer->vehicle?->make,
                 'model' => $offer->vehicle?->model,
-                'colour' => $offer->vehicle?->colour,
+                'colour' => LocalisedLabel::of($offer->vehicle?->colour),
                 'tier' => $offer->vehicle?->tierOrDefault()->value,
                 'hasAc' => (bool) $offer->vehicle?->has_ac,
             ],
