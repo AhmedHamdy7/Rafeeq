@@ -2,6 +2,7 @@
 
 namespace App\Http\Resources;
 
+use App\Domains\Geo\Models\Place;
 use App\Domains\Matching\Models\CommuteDemand;
 use App\Domains\Matching\Support\DemandMatchCount;
 use Illuminate\Http\Request;
@@ -58,13 +59,13 @@ final class CommuteDemandResource extends JsonResource
             'origin' => [
                 'lat' => (float) $this->origin_lat,
                 'lng' => (float) $this->origin_lng,
-                'label' => $this->origin_label,
+                'label' => LocalisedLabel::place($this->loadedPlace('originPlace'), $this->origin_label),
                 'placeId' => $this->origin_place_id,
             ],
             'destination' => [
                 'lat' => (float) $this->dest_lat,
                 'lng' => (float) $this->dest_lng,
-                'label' => $this->destination_label,
+                'label' => LocalisedLabel::place($this->loadedPlace('destinationPlace'), $this->destination_label),
                 'placeId' => $this->destination_place_id,
             ],
             'commuteType' => $this->commute_type->value,
@@ -108,6 +109,19 @@ final class CommuteDemandResource extends JsonResource
      *
      * @return list<string>
      */
+    /**
+     * @return list<string>
+     */
+    public static function relations(): array
+    {
+        return ['originPlace', 'destinationPlace'];
+    }
+
+    private function loadedPlace(string $relation): ?Place
+    {
+        return $this->resource->relationLoaded($relation) ? $this->resource->{$relation} : null;
+    }
+
     private function ruleKeys(): array
     {
         $keys = [];

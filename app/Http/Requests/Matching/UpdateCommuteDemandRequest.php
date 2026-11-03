@@ -2,9 +2,7 @@
 
 namespace App\Http\Requests\Matching;
 
-use App\Domains\Matching\Support\PlaceLabels;
-use App\Domains\Matching\Support\SearchCriteria;
-use Illuminate\Foundation\Http\FormRequest;
+use Illuminate\Validation\Validator;
 
 /**
  * Editing a saved ride request, or pausing it (Feature 03 S-4, BOOK-06, decision C12).
@@ -19,7 +17,7 @@ use Illuminate\Foundation\Http\FormRequest;
  * is one thing, and half of an old one stitched to half of a new one matches journeys nobody asked
  * for.
  */
-final class UpdateCommuteDemandRequest extends FormRequest
+final class UpdateCommuteDemandRequest extends CommuteDemandRequest
 {
     public function rules(): array
     {
@@ -37,20 +35,16 @@ final class UpdateCommuteDemandRequest extends FormRequest
         }
 
         // The same rules as a new request — one source, so the two cannot drift.
-        return [...(new SearchCommutesRequest)->rules(), ...$paused];
+        return [...parent::rules(), ...$paused];
     }
 
-    public function criteria(): SearchCriteria
+    public function withValidator(Validator $validator): void
     {
-        return SearchCriteria::fromArray($this->safe()->except('paused'));
+        if ($this->replacesCriteria()) {
+            parent::withValidator($validator);
+        }
     }
 
-    public function places(): PlaceLabels
-    {
-        return PlaceLabels::fromInput($this->validated());
-    }
-
-    /** Whether the request carries a whole new ride request, not only the switch. */
     public function replacesCriteria(): bool
     {
         return $this->has('origin');

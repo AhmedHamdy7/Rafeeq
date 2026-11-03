@@ -247,6 +247,7 @@ it('generates a document describing every /v1 route', function () {
         'POST /v1/incidents/{incident}/appeal',
         'GET /v1/search/commutes',
         'GET /v1/commute-demands',
+        'GET /v1/commute-demands/{demand}',
         'POST /v1/commute-demands',
         'DELETE /v1/commute-demands/{demand}',
         'GET /v1/matches',

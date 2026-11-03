@@ -10,7 +10,11 @@ use App\Domains\Matching\Jobs\MatchNewDemand;
 use App\Domains\Matching\Models\CommuteDemand;
 use App\Domains\Matching\Support\PlaceLabels;
 use App\Domains\Matching\Support\SearchCriteria;
+use App\Domains\Shared\Exceptions\DomainException;
+use App\Domains\Shared\Support\ErrorCode;
+use Carbon\CarbonInterface;
 use Illuminate\Support\Facades\DB;
+use Throwable;
 
 /**
  * Saves what a passenger was looking for when nothing matched (Chapter 5's
@@ -32,6 +36,8 @@ final readonly class SaveCommuteDemandAction
 
     public function execute(User $passenger, SearchCriteria $criteria, ?PlaceLabels $labels = null): CommuteDemand
     {
+        $this->assertNotDuplicate($passenger->id, $criteria);
+
         $demand = new CommuteDemand;
 
         $demand->fill(['passenger_user_id' => $passenger->id]);
@@ -40,12 +46,12 @@ final readonly class SaveCommuteDemandAction
         // Not fillable: a request must not be able to set its own status, and the
         // expiry is a platform policy rather than the passenger's choice.
         $demand->status = CommuteDemandStatus::Active->value;
-        $demand->expires_at = now()->addDays((int) config('rafeeq.matching.demand_expiry_days'));
+        $demand->expires_at = self::freshExpiry();
 
         $demand->save();
 
         // Against the commutes already running — see MatchDemandToExistingCommutesAction.
-        DB::afterCommit(fn () => MatchNewDemand::dispatch($demand->id));
+        DB::afterCommit(fn () => self::matchNow($demand->id));
 
         return $demand;
     }
@@ -62,26 +68,69 @@ final readonly class SaveCommuteDemandAction
         $rematch = false;
 
         if ($criteria !== null) {
+            $this->assertNotDuplicate($demand->passenger_user_id, $criteria, $demand->id);
             $this->fillCriteria($demand, $criteria, $labels);
             $rematch = true;
+
+            if ($demand->status === CommuteDemandStatus::Expired) {
+                $demand->status = CommuteDemandStatus::Active->value;
+            }
+
+            $demand->expires_at = self::freshExpiry();
         }
 
         if ($paused === true && $demand->status === CommuteDemandStatus::Active) {
             $demand->status = CommuteDemandStatus::Paused->value;
         }
 
-        if ($paused === false && $demand->status === CommuteDemandStatus::Paused) {
+        if ($paused === false && in_array($demand->status, [CommuteDemandStatus::Paused, CommuteDemandStatus::Expired], true)) {
             $demand->status = CommuteDemandStatus::Active->value;
+            $demand->expires_at = self::freshExpiry();
             $rematch = true;
         }
 
         $demand->save();
 
         if ($rematch && $demand->status === CommuteDemandStatus::Active) {
-            DB::afterCommit(fn () => MatchNewDemand::dispatch($demand->id));
+            DB::afterCommit(fn () => self::matchNow($demand->id));
         }
 
         return $demand->refresh();
+    }
+
+    private static function freshExpiry(): CarbonInterface
+    {
+        return now()->addDays((int) config('rafeeq.matching.demand_expiry_days'));
+    }
+
+    private static function matchNow(string $demandId): void
+    {
+        try {
+            MatchNewDemand::dispatchSync($demandId);
+        } catch (Throwable $e) {
+            report($e);
+            MatchNewDemand::dispatch($demandId);
+        }
+    }
+
+    private function assertNotDuplicate(string $passengerId, SearchCriteria $criteria, ?string $except = null): void
+    {
+        $existing = CommuteDemand::query()
+            ->where('passenger_user_id', $passengerId)
+            ->whereIn('status', [CommuteDemandStatus::Active->value, CommuteDemandStatus::Paused->value, CommuteDemandStatus::Expired->value])
+            ->where('days_mask', $criteria->days->value)
+            ->where('preferred_arrival_start', $criteria->arrivalWindowStart)
+            ->where('preferred_arrival_end', $criteria->arrivalWindowEnd)
+            ->when($except !== null, fn ($query) => $query->whereKeyNot($except))
+            ->get(['id', 'origin_lat', 'origin_lng', 'dest_lat', 'dest_lng'])
+            ->first(fn (CommuteDemand $demand): bool => round((float) $demand->origin_lat, 3) === round($criteria->origin->lat, 3)
+                && round((float) $demand->origin_lng, 3) === round($criteria->origin->lng, 3)
+                && round((float) $demand->dest_lat, 3) === round($criteria->destination->lat, 3)
+                && round((float) $demand->dest_lng, 3) === round($criteria->destination->lng, 3));
+
+        if ($existing !== null) {
+            throw DomainException::of(ErrorCode::DemandExists, fields: ['demandId' => [(string) $existing->id]]);
+        }
     }
 
     public function cancel(CommuteDemand $demand): CommuteDemand

@@ -64,11 +64,12 @@ it('returns the breakdown, not just a total', function () {
 it('loses schedule points for a departure outside the window', function () {
     $inWindow = search($this->paxToken)->assertOk()->json('data.0.score.schedule');
 
-    // The commute leaves at 07:05; ask for 07:20–07:40, so it is fifteen minutes
-    // early — half the thirty-minute span over which the score decays.
+    // The commute leaves at 07:05; ask for 07:20–07:40 with no flexibility, so it is
+    // about fifteen minutes early — half the thirty-minute span over which the score decays.
     $outOfWindow = search($this->paxToken, [
         'arrivalWindowStart' => '07:20:00',
         'arrivalWindowEnd' => '07:40:00',
+        'flexibilityMinutes' => 0,
     ])->assertOk()->json('data.0.score.schedule');
 
     expect($inWindow)->toBe(25)
@@ -240,4 +241,20 @@ it('stops offering a day that filled up after it was cached', function () {
     ScheduledTrip::query()->update(['seats_taken' => 3]);
 
     expect(search($this->paxToken)->assertOk()->json('data'))->toBe([]);
+});
+
+it('treats one time with a flexibility like the same range', function () {
+    $single = search($this->paxToken, [
+        'arrivalWindowStart' => '07:20:00',
+        'arrivalWindowEnd' => '07:20:00',
+        'flexibilityMinutes' => 30,
+    ])->assertOk()->json('data.0.score.schedule');
+
+    $range = search($this->paxToken, [
+        'arrivalWindowStart' => '06:50:00',
+        'arrivalWindowEnd' => '07:50:00',
+        'flexibilityMinutes' => 0,
+    ])->assertOk()->json('data.0.score.schedule');
+
+    expect($single)->toBe(25)->and($range)->toBe(25);
 });

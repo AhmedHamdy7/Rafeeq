@@ -5,6 +5,7 @@ namespace App\Domains\Matching\Support;
 use App\Domains\Commute\Models\CommuteOffer;
 use App\Domains\Commute\Models\ScheduledTrip;
 use App\Domains\Shared\ValueObjects\WalkTime;
+use Carbon\CarbonImmutable;
 
 /**
  * The 100-point match model (Bible §Part 2, scene 4.3), in one place.
@@ -60,10 +61,11 @@ final class ScoringModel
         float $detourMinutes,
         array $offerRules,
         ?float $driverOnTimeRate,
+        ?int $pickupSeconds = null,
     ): ScoreBreakdown {
         return new ScoreBreakdown(
             overlap: self::overlap($overlapPercent),
-            schedule: self::schedule($trip, $criteria),
+            schedule: self::schedule($trip, $criteria, $pickupSeconds),
             detour: self::detour($detourMinutes, $criteria->maxDetourMinutes),
             audience: self::audience($offer, $criteria),
             comfort: self::comfort($criteria->requiredRules, $offerRules),
@@ -84,24 +86,27 @@ final class ScoringModel
     }
 
     /**
-     * Full marks for arriving inside the window the passenger asked for, then
-     * falling away with each minute outside it.
+     * Full marks when the car reaches HER pickup inside the window she asked for, widened by her
+     * flexibility on each side, then falling away with each minute outside it.
      *
-     * Measured against the LOCAL departure time, not the UTC instant: the
-     * passenger said "around 8am" meaning their own clock, and across a DST
-     * transition the same local time is a different instant.
+     * Her pickup is the departure plus the drive to her meeting point (`meetingPoint.estimatedLocal`),
+     * or the departure when that is unknown. Measured on the LOCAL clock: across a DST transition the
+     * same local time is a different instant.
      */
-    private static function schedule(ScheduledTrip $trip, SearchCriteria $criteria): int
+    private static function schedule(ScheduledTrip $trip, SearchCriteria $criteria, ?int $pickupSeconds = null): int
     {
-        $departure = $trip->departure_local->format('H:i:s');
+        $pickup = CarbonImmutable::instance($trip->departure_local)->addSeconds($pickupSeconds ?? 0)->format('H:i:s');
+        $flex = max(0, $criteria->flexibilityMinutes) * 60;
+        $start = self::shift($criteria->arrivalWindowStart, -$flex);
+        $end = self::shift($criteria->arrivalWindowEnd, $flex);
 
-        if ($departure >= $criteria->arrivalWindowStart && $departure <= $criteria->arrivalWindowEnd) {
+        if ($pickup >= $start && $pickup <= $end) {
             return self::SCHEDULE_WEIGHT;
         }
 
-        $minutesOut = $departure < $criteria->arrivalWindowStart
-            ? self::minutesBetween($departure, $criteria->arrivalWindowStart)
-            : self::minutesBetween($criteria->arrivalWindowEnd, $departure);
+        $minutesOut = $pickup < $start
+            ? self::minutesBetween($pickup, $start)
+            : self::minutesBetween($end, $pickup);
 
         // Thirty minutes out is worth nothing: a commuter who has to leave half
         // an hour early every day has not been matched, they have been
@@ -109,6 +114,13 @@ final class ScoringModel
         $decay = max(0.0, 1 - $minutesOut / 30);
 
         return (int) round(self::SCHEDULE_WEIGHT * $decay);
+    }
+
+    private static function shift(string $time, int $seconds): string
+    {
+        $value = strtotime("1970-01-01 {$time} UTC") + $seconds;
+
+        return gmdate('H:i:s', max(0, min(86_399, $value)));
     }
 
     /**

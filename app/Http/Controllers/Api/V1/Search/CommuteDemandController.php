@@ -10,7 +10,7 @@ use App\Domains\Shared\Exceptions\DomainException;
 use App\Domains\Shared\Support\ErrorCode;
 use App\Http\Controllers\Controller;
 use App\Http\OpenApi\ApiErrors;
-use App\Http\Requests\Matching\SearchCommutesRequest;
+use App\Http\Requests\Matching\CommuteDemandRequest;
 use App\Http\Requests\Matching\UpdateCommuteDemandRequest;
 use App\Http\Resources\CommuteDemandResource;
 use App\Http\Resources\MatchNotificationResource;
@@ -36,6 +36,8 @@ final class CommuteDemandController extends Controller
     {
         $demands = CommuteDemand::query()
             ->where('passenger_user_id', $request->user()->id)
+            ->where('status', '!=', CommuteDemandStatus::Cancelled->value)
+            ->with(CommuteDemandResource::relations())
             ->latest('created_at')
             ->orderByDesc('id')
             ->get();
@@ -47,11 +49,24 @@ final class CommuteDemandController extends Controller
      * POST /v1/commute-demands — saves what was searched for when nothing matched
      * (Chapter 5's "Save this commute request?").
      */
-    public function store(SearchCommutesRequest $request, SaveCommuteDemandAction $action): JsonResponse
+    #[ApiErrors(ErrorCode::NotFound)]
+    public function show(Request $request, string $demand): JsonResponse
+    {
+        $owned = $this->owned($request, $demand);
+
+        if ($owned->status === CommuteDemandStatus::Cancelled) {
+            throw DomainException::of(ErrorCode::NotFound);
+        }
+
+        return ApiResponse::success(new CommuteDemandResource($owned->load(CommuteDemandResource::relations())));
+    }
+
+    #[ApiErrors(ErrorCode::DemandExists, ErrorCode::ValidationFailed)]
+    public function store(CommuteDemandRequest $request, SaveCommuteDemandAction $action): JsonResponse
     {
         $demand = $action->execute($request->user(), $request->criteria(), $request->places());
 
-        return ApiResponse::success(new CommuteDemandResource($demand), status: 201);
+        return ApiResponse::success(new CommuteDemandResource($demand->load(CommuteDemandResource::relations())), status: 201);
     }
 
     /**
@@ -67,7 +82,7 @@ final class CommuteDemandController extends Controller
      * `{ "paused": true }` alone pauses it; the whole request again replaces it. A cancelled one is
      * gone from her point of view, so it answers 404 like one that never existed.
      */
-    #[ApiErrors(ErrorCode::NotFound, ErrorCode::ValidationFailed)]
+    #[ApiErrors(ErrorCode::NotFound, ErrorCode::DemandExists, ErrorCode::ValidationFailed)]
     public function update(UpdateCommuteDemandRequest $request, string $demand, SaveCommuteDemandAction $action): JsonResponse
     {
         $owned = $this->owned($request, $demand);
@@ -83,7 +98,7 @@ final class CommuteDemandController extends Controller
             $request->has('paused') ? $request->boolean('paused') : null,
         );
 
-        return ApiResponse::success(new CommuteDemandResource($updated));
+        return ApiResponse::success(new CommuteDemandResource($updated->load(CommuteDemandResource::relations())));
     }
 
     #[ApiErrors(ErrorCode::NotFound)]

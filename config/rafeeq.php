@@ -425,6 +425,19 @@ return [
         'demand_expiry_days' => 60,
 
         /*
+         * What a demand matches with when the app does not send `maxWalkMinutes` /
+         * `maxDetourMinutes`: the design never asks for either.
+         */
+        'demand_default_walk_minutes' => 10,
+        'demand_default_detour_minutes' => 15,
+
+        /*
+         * A demand whose origin and destination are closer than this is refused: it can never
+         * match anything.
+         */
+        'demand_min_trip_metres' => 300,
+
+        /*
          * The score a newly published commute must reach before its match is
          * worth interrupting someone for. A notification about a poor match
          * teaches people to ignore notifications.

@@ -81,6 +81,7 @@ return [
     'BOOKING_WAITLIST_FULL' => 'The waiting list for this commute is full.',
     'BOOKING_NOT_CANCELLABLE' => 'That booking can no longer be cancelled.',
     'BOOKING_NOT_ENDED' => 'That journey has not ended yet.',
+    'DEMAND_EXISTS' => 'You already have this demand.',
     'BOOKING_OWN_COMMUTE' => 'You cannot book a seat on your own commute.',
     'SEAT_REQUEST_WOMEN_ONLY' => 'This commute is for women only.',
     'COMMUTE_DEMAND_NOT_EDITABLE' => 'This saved commute has ended. Save a new one instead.',
