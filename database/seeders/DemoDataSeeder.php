@@ -25,6 +25,7 @@ use App\Domains\Driver\Enums\VehicleTier;
 use App\Domains\Driver\Enums\VehicleVerificationStatus;
 use App\Domains\Driver\Models\DriverProfile;
 use App\Domains\Driver\Models\Vehicle;
+use App\Domains\Geo\Actions\SearchPlacesAction;
 use App\Domains\Geo\Models\Corridor;
 use App\Domains\Geo\Models\Place;
 use App\Domains\Geo\Support\StraightLineGeoEngine;
@@ -97,13 +98,13 @@ class DemoDataSeeder extends Seeder
      * @var list<array<string, mixed>>
      */
     private const DRIVERS = [
-        ['name' => 'هالة سمير', 'first' => 'هالة', 'phone' => '+201055550001', 'time' => '06:50:00', 'tier' => VehicleTier::Comfort, 'seats' => 3, 'plate' => 'ر س 118', 'make' => 'Hyundai', 'model' => 'Tucson', 'colour' => 'أبيض', 'trips' => 142, 'onTime' => 94.0, 'audience' => CommuteAudience::WomenOnly, 'pickups' => [['lat' => 30.0590, 'lng' => 31.4700, 'label' => 'Rehab Mall 2 gate'], ['lat' => 30.0650, 'lng' => 31.4300, 'label' => 'Ring Road, Suez Road exit']], 'dropoffs' => [['lat' => 30.0710, 'lng' => 31.0300, 'label' => 'Smart Village main gate']], 'rules' => [CommuteRuleKey::NonSmoking, CommuteRuleKey::Ac]],
+        ['name' => 'هالة سمير', 'first' => 'هالة', 'phone' => '+201055550001', 'time' => '06:50:00', 'tier' => VehicleTier::Comfort, 'seats' => 3, 'plate' => 'ر س 118', 'make' => 'Hyundai', 'model' => 'Tucson', 'colour' => 'أبيض', 'trips' => 142, 'onTime' => 94.0, 'audience' => CommuteAudience::WomenOnly, 'pickups' => [['lat' => 30.0590, 'lng' => 31.4700, 'label' => 'Rehab Mall 2 gate'], ['lat' => 30.0650, 'lng' => 31.4300, 'label' => 'Ring Road, Suez Road exit']], 'dropoffs' => [['lat' => 30.0710, 'lng' => 31.0300, 'label' => 'Smart Village main gate']], 'rules' => [CommuteRuleKey::NonSmoking, CommuteRuleKey::Ac], 'promise' => true],
         ['name' => 'منى عبد الله', 'first' => 'منى', 'phone' => '+201055550002', 'time' => '07:15:00', 'tier' => VehicleTier::Standard, 'seats' => 4, 'plate' => 'ل م 307', 'make' => 'Toyota', 'model' => 'Corolla', 'colour' => 'رمادي', 'trips' => 58, 'onTime' => 88.0, 'audience' => CommuteAudience::WomenOnly, 'pickups' => [], 'dropoffs' => []],
         ['name' => 'سلمى فؤاد', 'first' => 'سلمى', 'phone' => '+201055550003', 'time' => '07:30:00', 'tier' => VehicleTier::Standard, 'seats' => 3, 'plate' => 'ن ه 952', 'make' => 'Nissan', 'model' => 'Sunny', 'colour' => 'أزرق', 'trips' => 11, 'onTime' => 100.0, 'audience' => CommuteAudience::WomenOnly, 'pickups' => [['lat' => 30.0590, 'lng' => 31.4700, 'label' => 'Rehab Mall 2 gate']], 'dropoffs' => [['lat' => 30.0710, 'lng' => 31.0300, 'label' => 'Smart Village main gate']], 'rules' => [CommuteRuleKey::Quiet], 'full' => true],
         ['name' => 'داليا رأفت', 'first' => 'داليا', 'phone' => '+201055550004', 'time' => '06:40:00', 'tier' => VehicleTier::Comfort, 'seats' => 2, 'plate' => 'ص ع 673', 'make' => 'Jeep', 'model' => 'Compass', 'colour' => 'أسود', 'trips' => 231, 'onTime' => 96.0, 'audience' => CommuteAudience::AnyVerified],
         // Deliberately unrated: a new driver is a state the client must render, and `null` must
         // never be drawn as nought stars.
-        ['name' => 'ياسمين طارق', 'first' => 'ياسمين', 'phone' => '+201055550005', 'time' => '07:45:00', 'tier' => VehicleTier::Standard, 'seats' => 4, 'plate' => 'و ي 240', 'make' => 'Kia', 'model' => 'Cerato', 'colour' => 'أحمر', 'trips' => 0, 'onTime' => null, 'audience' => CommuteAudience::WomenOnly, 'pickups' => [['lat' => 30.0590, 'lng' => 31.4700, 'label' => 'Rehab Mall 2 gate'], ['lat' => 30.0650, 'lng' => 31.4300, 'label' => 'Ring Road, Suez Road exit']], 'dropoffs' => [['lat' => 30.0710, 'lng' => 31.0300, 'label' => 'Smart Village main gate']], 'rules' => [CommuteRuleKey::Ac]],
+        ['name' => 'ياسمين طارق', 'first' => 'ياسمين', 'phone' => '+201055550005', 'time' => '07:45:00', 'tier' => VehicleTier::Standard, 'seats' => 4, 'plate' => 'و ي 240', 'make' => 'Kia', 'model' => 'Cerato', 'colour' => 'أحمر', 'trips' => 0, 'onTime' => null, 'audience' => CommuteAudience::WomenOnly, 'pickups' => [['lat' => 30.0590, 'lng' => 31.4700, 'label' => 'Rehab Mall 2 gate'], ['lat' => 30.0650, 'lng' => 31.4300, 'label' => 'Ring Road, Suez Road exit']], 'dropoffs' => [['lat' => 30.0710, 'lng' => 31.0300, 'label' => 'Smart Village main gate']], 'rules' => [CommuteRuleKey::Ac], 'promise' => true],
     ];
 
     /**
@@ -165,6 +166,7 @@ class DemoDataSeeder extends Seeder
 
         foreach (self::DRIVERS as $spec) {
             $this->fillDays($spec);
+            $this->promiseArrival($spec);
         }
 
         $mariam = User::query()->where('phone_e164', '+201033334444')->firstOrFail();
@@ -467,6 +469,8 @@ class DemoDataSeeder extends Seeder
             'origin_lng' => $origin->lng,
             'dest_lat' => $destination->lat,
             'dest_lng' => $destination->lng,
+            'origin_place_id' => $origin->id,
+            'destination_place_id' => $destination->id,
             'preferred_arrival_start' => '06:45:00',
             'preferred_arrival_end' => '08:00:00',
             'max_walk_minutes' => 12,
@@ -548,8 +552,15 @@ class DemoDataSeeder extends Seeder
 
             $added = $this->addSuggestions($offer, $spec);
             $filled = $this->fillDays($spec);
+            $promised = $this->promiseArrival($spec);
 
-            $report[] = sprintf('%s  %s  %d points, %d rules%s', $spec['phone'], $spec['first'], $added['points'], $added['rules'], $filled > 0 ? ", {$filled} days full" : '');
+            $report[] = sprintf('%s  %s  %d points, %d rules%s%s', $spec['phone'], $spec['first'], $added['points'], $added['rules'], $filled > 0 ? ", {$filled} days full" : '', $promised > 0 ? ", {$promised} days with a promised arrival" : '');
+        }
+
+        $linked = $this->linkDemandPlaces();
+
+        if ($linked > 0) {
+            $report[] = "{$linked} demand ends linked to catalogue places";
         }
 
         $organization = Organization::query()->first();
@@ -618,6 +629,72 @@ class DemoDataSeeder extends Seeder
         }
 
         return ['points' => $points, 'rules' => $rules];
+    }
+
+    private function linkDemandPlaces(): int
+    {
+        $places = app(SearchPlacesAction::class);
+        $linked = 0;
+
+        $demands = CommuteDemand::query()
+            ->where(fn ($query) => $query->whereNull('origin_place_id')->orWhereNull('destination_place_id'))
+            ->get();
+
+        foreach ($demands as $demand) {
+            $changes = [];
+
+            if ($demand->origin_place_id === null) {
+                $changes['origin_place_id'] = $places->nearest(new Coordinate(lat: (float) $demand->origin_lat, lng: (float) $demand->origin_lng))?->id;
+            }
+
+            if ($demand->destination_place_id === null) {
+                $changes['destination_place_id'] = $places->nearest(new Coordinate(lat: (float) $demand->dest_lat, lng: (float) $demand->dest_lng))?->id;
+            }
+
+            $changes = array_filter($changes);
+
+            if ($changes !== []) {
+                $demand->forceFill($changes)->save();
+                $linked += count($changes);
+            }
+        }
+
+        return $linked;
+    }
+
+    /**
+     * @param  array<string, mixed>  $spec
+     */
+    private function promiseArrival(array $spec): int
+    {
+        if (! ($spec['promise'] ?? false)) {
+            return 0;
+        }
+
+        $offer = CommuteOffer::query()
+            ->whereHas('driverProfile.user', fn ($user) => $user->where('phone_e164', $spec['phone']))
+            ->first();
+
+        if ($offer === null) {
+            return 0;
+        }
+
+        $minutes = (int) (ceil(((int) $offer->route_duration_seconds / 60 + 10) / 5) * 5);
+        $days = 0;
+
+        $trips = ScheduledTrip::query()
+            ->where('commute_offer_id', $offer->id)
+            ->where('status', ScheduledTripStatus::Scheduled)
+            ->where('departure_at', '>', now())
+            ->whereNull('promised_arrival_at')
+            ->get();
+
+        foreach ($trips as $trip) {
+            $trip->forceFill(['promised_arrival_at' => $trip->departure_at->copy()->addMinutes($minutes)])->save();
+            $days++;
+        }
+
+        return $days;
     }
 
     /**

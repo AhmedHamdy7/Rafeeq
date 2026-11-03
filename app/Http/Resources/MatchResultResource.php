@@ -156,7 +156,7 @@ final class MatchResultResource extends JsonResource
             'meetingPoint' => [
                 'lat' => (float) $this->meetingPoint->lat,
                 'lng' => (float) $this->meetingPoint->lng,
-                'address' => $this->meetingPoint->address,
+                'address' => LocalisedLabel::location($this->meetingPoint),
                 'walkMinutes' => (int) round($this->score->walkMinutes),
                 /*
                  * When the car should be there that day — "Rehab Gate 2 · est. 07:05" (DISCOVER-14).
@@ -175,7 +175,7 @@ final class MatchResultResource extends JsonResource
             'dropOffPoint' => $this->dropOffPoint === null ? null : [
                 'lat' => (float) $this->dropOffPoint->lat,
                 'lng' => (float) $this->dropOffPoint->lng,
-                'address' => $this->dropOffPoint->address,
+                'address' => LocalisedLabel::location($this->dropOffPoint),
                 'walkMinutes' => (int) round((float) $this->dropOffWalkMinutes),
                 'estimatedArrivalAt' => $this->at($this->dropOffSeconds)?->toIso8601String(),
                 'estimatedArrivalLocal' => PickupEta::local($this->trip, $this->at($this->dropOffSeconds)),

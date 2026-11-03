@@ -12,6 +12,7 @@ use App\Domains\Commute\Models\ScheduledTrip;
 use App\Domains\Geo\Contracts\GeoQueryEngine;
 use App\Domains\Geo\Support\Haversine;
 use App\Domains\Identity\Models\User;
+use App\Domains\Matching\Models\CommuteDemand;
 use App\Domains\Matching\Models\MatchNotification;
 use App\Domains\Matching\Support\PassengerStanding;
 use App\Domains\Shared\ValueObjects\Coordinate;
@@ -49,7 +50,8 @@ final class MatchNotificationResource extends JsonResource
     public static function relations(): array
     {
         return [
-            'commuteDemand',
+            'commuteDemand.originPlace',
+            'commuteDemand.destinationPlace',
             'commuteOffer.vehicle',
             'commuteOffer.rules',
             'commuteOffer.locations.place',
@@ -61,6 +63,18 @@ final class MatchNotificationResource extends JsonResource
                 ->where('departure_at', '>', now())
                 ->orderBy('departure_at'),
         ];
+    }
+
+    public static function demandTitle(?CommuteDemand $demand): ?string
+    {
+        if ($demand === null) {
+            return null;
+        }
+
+        $origin = LocalisedLabel::place($demand->relationLoaded('originPlace') ? $demand->originPlace : null, $demand->origin_label);
+        $destination = LocalisedLabel::place($demand->relationLoaded('destinationPlace') ? $demand->destinationPlace : null, $demand->destination_label);
+
+        return $origin !== null && $destination !== null ? "{$origin} → {$destination}" : null;
     }
 
     private ?PassengerStanding $standing = null;
@@ -115,6 +129,7 @@ final class MatchNotificationResource extends JsonResource
         return [
             'id' => $this->id,
             'demandId' => $this->commute_demand_id,
+            'demandTitle' => self::demandTitle($this->resource->relationLoaded('commuteDemand') ? $this->commuteDemand : null),
             'commuteId' => $offer->id,
             // The score when the match was found. The commute may have changed
             // since; this records why the interruption was justified.
@@ -264,7 +279,7 @@ final class MatchNotificationResource extends JsonResource
         return [
             'lat' => (float) $location->lat,
             'lng' => (float) $location->lng,
-            'address' => $location->address,
+            'address' => LocalisedLabel::location($location),
             'walkMinutes' => Distance::fromMetres((int) round($metres))->asWalkTime()->minutes,
             'estimatedAt' => $at?->toIso8601String(),
             'estimatedLocal' => $trip === null ? null : PickupEta::local($trip, $at),
@@ -289,7 +304,7 @@ final class MatchNotificationResource extends JsonResource
         return [
             'lat' => (float) $location->lat,
             'lng' => (float) $location->lng,
-            'address' => $location->address,
+            'address' => LocalisedLabel::location($location),
             'walkMinutes' => Distance::fromMetres((int) round($metres))->asWalkTime()->minutes,
             'estimatedArrivalAt' => $at?->toIso8601String(),
             'estimatedArrivalLocal' => $trip === null ? null : PickupEta::local($trip, $at),
