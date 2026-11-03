@@ -164,13 +164,7 @@ class DemoDataSeeder extends Seeder
         $this->command?->call('commutes:generate-trips');
 
         foreach (self::DRIVERS as $spec) {
-            if ($spec['full'] ?? false) {
-                ScheduledTrip::query()
-                    ->whereIn('commute_offer_id', CommuteOffer::query()
-                        ->whereHas('driverProfile.user', fn ($user) => $user->where('phone_e164', $spec['phone']))
-                        ->select('id'))
-                    ->update(['seats_taken' => DB::raw('seats_total')]);
-            }
+            $this->fillDays($spec);
         }
 
         $mariam = User::query()->where('phone_e164', '+201033334444')->firstOrFail();
@@ -300,29 +294,7 @@ class DemoDataSeeder extends Seeder
             'driver_share_piastres' => $quote->driverSharePiastres,
         ])->save();
 
-        $sequence = 1;
-
-        foreach ([[CommuteLocationType::Pickup, $spec['pickups'] ?? []], [CommuteLocationType::Dropoff, $spec['dropoffs'] ?? []]] as [$type, $points]) {
-            foreach ($points as $point) {
-                CommuteLocation::create([
-                    'commute_offer_id' => $offer->id,
-                    'type' => $type,
-                    'point' => new Coordinate(lat: $point['lat'], lng: $point['lng']),
-                    'lat' => $point['lat'],
-                    'lng' => $point['lng'],
-                    'address' => $point['label'],
-                    'sequence' => $sequence++,
-                ]);
-            }
-        }
-
-        foreach ($spec['rules'] ?? [] as $key) {
-            CommuteRule::create([
-                'commute_offer_id' => $offer->id,
-                'rule_key' => $key,
-                'rule_value' => true,
-            ]);
-        }
+        $this->addSuggestions($offer, $spec);
 
         foreach ([
             [$origin, CommuteLocationType::Origin, 'الرحاب، بوابة ٢', 0],
@@ -549,6 +521,121 @@ class DemoDataSeeder extends Seeder
         }
 
         return $report;
+    }
+
+    /**
+     * Adds the match states (suggested points, rules, a full commute, a man tester) to a demo
+     * environment that was seeded before they existed, without touching anything else. Safe to
+     * run again: a commute that already has suggestions or a rule is left as it is.
+     *
+     * @return list<string>
+     */
+    public function addMatchStates(): array
+    {
+        $report = [];
+
+        foreach (self::DRIVERS as $spec) {
+            $offer = CommuteOffer::query()
+                ->whereHas('driverProfile.user', fn ($user) => $user->where('phone_e164', $spec['phone']))
+                ->first();
+
+            if ($offer === null) {
+                $report[] = "{$spec['phone']}  no commute, skipped";
+
+                continue;
+            }
+
+            $added = $this->addSuggestions($offer, $spec);
+            $filled = $this->fillDays($spec);
+
+            $report[] = sprintf('%s  %s  %d points, %d rules%s', $spec['phone'], $spec['first'], $added['points'], $added['rules'], $filled > 0 ? ", {$filled} days full" : '');
+        }
+
+        $organization = Organization::query()->first();
+        $admin = AdminUser::query()->first();
+        $origin = Place::query()->where('name', 'like', '%الرحاب%')->first() ?? Place::query()->first();
+        $destination = $origin === null ? null : Place::query()->where('id', '!=', $origin->id)->first();
+
+        foreach (self::TESTERS as $spec) {
+            if (User::query()->where('phone_e164', $spec['phone'])->exists()) {
+                continue;
+            }
+
+            if ($organization === null || $admin === null || $origin === null || $destination === null) {
+                $report[] = "{$spec['phone']}  not created: no organisation, admin or places";
+
+                continue;
+            }
+
+            $this->seedTester($spec, $organization, $admin, $origin, $destination);
+            $report[] = "{$spec['phone']}  {$spec['first']}  tester created";
+        }
+
+        return $report;
+    }
+
+    /**
+     * @param  array<string, mixed>  $spec
+     * @return array{points: int, rules: int}
+     */
+    private function addSuggestions(CommuteOffer $offer, array $spec): array
+    {
+        $points = 0;
+        $rules = 0;
+
+        $hasSuggestions = CommuteLocation::query()
+            ->where('commute_offer_id', $offer->id)
+            ->whereIn('type', [CommuteLocationType::Pickup, CommuteLocationType::Dropoff])
+            ->exists();
+
+        if (! $hasSuggestions) {
+            $sequence = 1;
+
+            foreach ([[CommuteLocationType::Pickup, $spec['pickups'] ?? []], [CommuteLocationType::Dropoff, $spec['dropoffs'] ?? []]] as [$type, $list]) {
+                foreach ($list as $point) {
+                    CommuteLocation::create([
+                        'commute_offer_id' => $offer->id,
+                        'type' => $type,
+                        'point' => new Coordinate(lat: $point['lat'], lng: $point['lng']),
+                        'lat' => $point['lat'],
+                        'lng' => $point['lng'],
+                        'address' => $point['label'],
+                        'sequence' => $sequence++,
+                    ]);
+                    $points++;
+                }
+            }
+        }
+
+        foreach ($spec['rules'] ?? [] as $key) {
+            $rule = CommuteRule::query()->firstOrCreate(
+                ['commute_offer_id' => $offer->id, 'rule_key' => $key],
+                ['rule_value' => true],
+            );
+
+            $rules += $rule->wasRecentlyCreated ? 1 : 0;
+        }
+
+        return ['points' => $points, 'rules' => $rules];
+    }
+
+    /**
+     * @param  array<string, mixed>  $spec
+     */
+    private function fillDays(array $spec): int
+    {
+        if (! ($spec['full'] ?? false)) {
+            return 0;
+        }
+
+        return ScheduledTrip::query()
+            ->whereIn('commute_offer_id', CommuteOffer::query()
+                ->whereHas('driverProfile.user', fn ($user) => $user->where('phone_e164', $spec['phone']))
+                ->select('id'))
+            ->where('status', ScheduledTripStatus::Scheduled)
+            ->where('departure_at', '>', now())
+            ->whereColumn('seats_taken', '<', 'seats_total')
+            ->update(['seats_taken' => DB::raw('seats_total')]);
     }
 
     /**
