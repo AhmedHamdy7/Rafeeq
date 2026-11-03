@@ -118,3 +118,37 @@ it('works out the meeting preference when the app leaves it out', function () {
 
     expect($pin->json('data.meetingPreference'))->toBe('custom');
 });
+
+it('names her meeting point in the request language when it is a catalogue place', function () {
+    $place = Place::factory()->create(['name' => 'Rehab Main Gate', 'name_ar' => 'بوابة الرحاب الرئيسية', 'district' => 'القاهرة الجديدة']);
+    CommuteLocation::query()->where('commute_offer_id', $this->commuteId)->where('type', 'origin')->update(['place_id' => $place->id]);
+
+    $criteria = searchCriteria(['origin' => ['lat' => 30.0594, 'lng' => 31.4913]]);
+
+    $en = test()->flushHeaders()->withToken($this->paxToken)->withHeader('Accept-Language', 'en')
+        ->getJson('/api/v1/search/commutes?'.http_build_query($criteria))->assertOk()->json('data.0.meetingPoint.address');
+    $ar = test()->flushHeaders()->withToken($this->paxToken)->withHeader('Accept-Language', 'ar')
+        ->getJson('/api/v1/search/commutes?'.http_build_query($criteria))->assertOk()->json('data.0.meetingPoint.address');
+
+    expect($en)->toBe('Rehab Main Gate')->and($ar)->not->toBe('Rehab Main Gate');
+});
+
+it('names the demand a match came from, in the request language', function () {
+    $from = Place::factory()->create(['name' => 'Rehab', 'name_ar' => 'الرحاب', 'lat' => 30.0594, 'lng' => 31.4913]);
+    $to = Place::factory()->create(['name' => 'Smart Village', 'name_ar' => 'القرية الذكية', 'lat' => 30.0714, 'lng' => 30.9716]);
+
+    test()->flushHeaders()->withToken($this->paxToken)->postJson('/api/v1/commute-demands', [
+        'origin' => ['lat' => 30.0594, 'lng' => 31.4913, 'placeId' => $from->id],
+        'destination' => ['lat' => 30.0714, 'lng' => 30.9716, 'placeId' => $to->id],
+        'daysMask' => 62,
+        'arrivalWindowStart' => '07:05',
+        'arrivalWindowEnd' => '07:05',
+        'flexibilityMinutes' => 30,
+    ])->assertStatus(201);
+
+    $title = fn (string $language) => test()->flushHeaders()->withToken($this->paxToken)->withHeader('Accept-Language', $language)
+        ->getJson('/api/v1/matches')->assertOk()->json('data.0.demandTitle');
+
+    expect($title('en'))->toBe('Rehab → Smart Village')
+        ->and($title('ar'))->toBe('الرحاب → القرية الذكية');
+});

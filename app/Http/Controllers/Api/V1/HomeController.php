@@ -615,7 +615,8 @@ final class HomeController extends Controller
                 'commuteOffer.locations.place',
                 'commuteOffer.schedule',
                 'commuteOffer.driverProfile',
-                'commuteDemand',
+                'commuteDemand.originPlace',
+                'commuteDemand.destinationPlace',
             ])
             ->orderByDesc('score')
             ->orderByDesc('id')
@@ -646,9 +647,7 @@ final class HomeController extends Controller
                  * is named by the route she typed; null when either end was never labelled, and
                  * the row then says "Matches your demand".
                  */
-                'demandTitle' => $demand?->origin_label !== null && $demand->destination_label !== null
-                    ? "{$demand->origin_label} → {$demand->destination_label}"
-                    : null,
+                'demandTitle' => MatchNotificationResource::demandTitle($demand),
 
                 /*
                  * "2 seats left" — on the commute's SOONEST day still open to booking, which is the
