@@ -77,10 +77,10 @@ final readonly class SearchCriteria
             origin: new Coordinate((float) $input['origin']['lat'], (float) $input['origin']['lng']),
             destination: new Coordinate((float) $input['destination']['lat'], (float) $input['destination']['lng']),
             days: DaysMask::fromBits((int) $input['daysMask']),
-            arrivalWindowStart: $input['arrivalWindowStart'],
-            arrivalWindowEnd: $input['arrivalWindowEnd'],
-            maxWalk: WalkTime::fromMinutes((int) $input['maxWalkMinutes']),
-            maxDetourMinutes: (int) $input['maxDetourMinutes'],
+            arrivalWindowStart: self::withSeconds($input['arrivalWindowStart']),
+            arrivalWindowEnd: self::withSeconds($input['arrivalWindowEnd']),
+            maxWalk: WalkTime::fromMinutes((int) ($input['maxWalkMinutes'] ?? config('rafeeq.matching.demand_default_walk_minutes'))),
+            maxDetourMinutes: (int) ($input['maxDetourMinutes'] ?? config('rafeeq.matching.demand_default_detour_minutes')),
             seatsNeeded: (int) ($input['seatsNeeded'] ?? 1),
             audiencePreference: isset($input['audiencePreference'])
                 ? CommuteAudience::from($input['audiencePreference'])
@@ -168,5 +168,10 @@ final readonly class SearchCriteria
             $this->womenOnly ? 'women-only' : 'any-audience',
             $this->tier?->value ?? 'any-tier',
         ]));
+    }
+
+    private static function withSeconds(string $time): string
+    {
+        return strlen($time) === 5 ? "{$time}:00" : $time;
     }
 }

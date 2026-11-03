@@ -2,6 +2,8 @@
 
 use App\Domains\Driver\Models\Vehicle;
 use App\Domains\Geo\Models\Place;
+use App\Domains\Identity\Enums\Gender;
+use App\Domains\Identity\Models\User;
 use App\Domains\Matching\Enums\CommuteDemandStatus;
 use App\Domains\Matching\Models\CommuteDemand;
 use App\Domains\Shared\ValueObjects\Coordinate;
@@ -155,4 +157,45 @@ it('adds the Greater Cairo places once', function () {
     test()->flushHeaders()->withToken($this->paxToken)->getJson('/api/v1/places?q=smart')
         ->assertOk()
         ->assertJsonPath('data.0.name', 'Smart Village');
+});
+
+it('tells the app whether the Women-only chip is hers, without sending her gender', function () {
+    $man = passenger('01112225566', gender: 'man', device: 'pax-man');
+
+    $woman = test()->flushHeaders()->withToken($this->paxToken)->getJson('/api/v1/auth/me')->assertOk();
+    $him = test()->flushHeaders()->withToken($man)->getJson('/api/v1/auth/me')->assertOk();
+
+    expect($woman->json('data.user.canChooseWomenOnly'))->toBeTrue()
+        ->and($him->json('data.user.canChooseWomenOnly'))->toBeFalse()
+        ->and($woman->getContent())->not->toContain('"gender"');
+});
+
+it('brings old demands into line: the chip shows exactly what matching does', function () {
+    $woman = User::query()->where('phone_e164', '+201112223344')->sole();
+    $man = User::query()->where('phone_e164', '+201112225566')->first()
+        ?? User::factory()->create(['gender' => Gender::Man]);
+
+    $hers = CommuteDemand::factory()->create(['passenger_user_id' => $woman->id, 'audience_preference' => 'women_only', 'women_only' => false]);
+    $his = CommuteDemand::factory()->create(['passenger_user_id' => $man->id, 'audience_preference' => 'women_only', 'women_only' => false]);
+    $flag = CommuteDemand::factory()->create(['passenger_user_id' => $woman->id, 'audience_preference' => 'any_verified', 'women_only' => true]);
+
+    (require base_path('database/migrations/2026_11_03_100000_align_women_only_on_commute_demands.php'))->up();
+
+    expect($hers->fresh()->women_only)->toBeTrue()
+        ->and($his->fresh()->women_only)->toBeFalse()
+        ->and($his->fresh()->audience_preference->value)->toBe('any_verified')
+        ->and($flag->fresh()->audience_preference->value)->toBe('women_only');
+});
+
+it('takes the same input on search as on a demand', function () {
+    $criteria = searchCriteria([
+        'arrivalWindowStart' => '08:00',
+        'arrivalWindowEnd' => '08:00',
+        'rules' => ['nonsmoking', 'quiet', 'ac', 'nofood', 'luggage', 'front', 'music'],
+    ]);
+    unset($criteria['maxWalkMinutes'], $criteria['maxDetourMinutes']);
+
+    test()->flushHeaders()->withToken($this->paxToken)
+        ->getJson('/api/v1/search/commutes?'.http_build_query($criteria))
+        ->assertOk();
 });

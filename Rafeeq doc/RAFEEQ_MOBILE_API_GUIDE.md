@@ -1389,6 +1389,7 @@ second attempt answers `422` with `error.fields.dispute: ["ALREADY_DISPUTED"]`; 
 | `orgType` / `organizationId` | Their claimed workplace or university. |
 | `preferredLanguage` | `ar` · `en`. |
 | `trustLevel` | `0`–`4`, recomputed from the rows rather than incremented. |
+| `canChooseWomenOnly` | `true` only for a woman: show the **Women-only** chip (demands, search) only when `true`. 🔒 Her gender itself is still never returned, not even here; this answers only what the screen needs. |
 | `outstandingConsents[]` | Which consents are stale at the current version. Non-empty means show the acceptance screen. |
 
 #### The `device` shape
@@ -1850,7 +1851,7 @@ confirmed seat (16h+: 0 · 10–16h: 10 % · < 10h: 25 %) — **show it first** 
 #### `GET /search/commutes` — active, profile complete
 
 **Query:** `origin[lat,lng]`, `destination[lat,lng]`, `daysMask`, `arrivalWindowStart`,
-`arrivalWindowEnd` (`HH:MM:SS`), `maxWalkMinutes` (0–45), `maxDetourMinutes` (0–45),
+`arrivalWindowEnd` (`HH:MM:SS` or `HH:MM`), `maxWalkMinutes` (0–45, optional, default 10), `maxDetourMinutes` (0–45, optional, default 15),
 `seatsNeeded`, `audiencePreference`, `womenOnly`, `flexibilityMinutes` (0–60),
 `wantsReturnTrip`, `rules[]`, `tier`, `minRating`. Optionally `origin[label]`, `origin[placeId]`,
 `destination[label]`, `destination[placeId]` — they change nothing about the search; they are kept
@@ -4564,6 +4565,7 @@ exist, and every live endpoint must be named here.
 | Date | Change |
 |---|---|
 | 2026-11-02 | 🧾 **Trips tabs (TRIPS-12 → 18).** `GET /seat-offers` items now carry the card: `originLabel`, `destinationLabel`, `driver` (person), `vehicle` (make, model, colour), `pickup.label`, `dropoff.label`, `promisedArrivalLocal`, `conflictingBookingId` (TRIPS-13). Seat requests carry `commute.commuteGroupId` and `joinedWaitlistAt` (TRIPS-12). `?status=` filters on `GET /seat-requests` and `GET /seat-offers` (TRIPS-14). New `GET /bookings/{booking}/cancel-preview`, her cancel fee before she confirms (TRIPS-18). New `PATCH /bookings/{booking}/pickup-note` and `pickupNote` on the booking (TRIPS-17). The commute-demand response is documented in full, with the rule keys confirmed (TRIPS-16). |
+| 2026-11-03 | 👤 **`user.canChooseWomenOnly`** on `/auth/me` (and every response with the `user` object): show the Women-only chip only when `true`; gender itself stays private. **`GET /search/commutes` takes the same input as a demand:** `HH:MM` times, `maxWalkMinutes` / `maxDetourMinutes` optional (10 / 15), and all 7 rule keys. Old demands with `audiencePreference: women_only` and `womenOnly: false` were brought into line (a woman's become `womenOnly: true`; anyone else's go back to `any_verified`). |
 | 2026-11-03 | 📌 **Commute demand gaps.** New `GET /commute-demands/{demand}`. The list leaves out deleted demands. `409 DEMAND_EXISTS` for a duplicate. Same From and To → `422`. `maxWalkMinutes` / `maxDetourMinutes` optional (10 / 15). `HH:MM` accepted. **The time window is her pickup time, widened by `flexibilityMinutes`** (search too). `womenOnly: true` only, women only. Resume and edit refresh `expiresAt`; an expired demand comes back. Labels follow `Accept-Language` when the end is a catalogue place, and a resolved label keeps its `placeId`. `matchCount` is right in the `201`. **`php artisan places:seed-greater-cairo`** adds 26 Greater Cairo places. |
 | 2026-11-03 | 🎵 **New rule key `music`** ("Music on") everywhere rules are accepted and returned: a commute's rules, search `rules[]`, demands, comfort preferences. **`meetingPreference` is optional** on `POST /commutes/{commute}/seat-requests`: left out, it is `landmark` for a driver's suggested pickup (`pickup.suggestionId`) and `custom` for her own pin. |
 | 2026-11-03 | 🧭 **Match gaps — additive.** `GET /commutes/{commute}/public` gains `requestEligibility {canRequest, reason}` and `upcomingTrips[].pointTimes[]`. `rules` is always an object (`{}` when empty) on the detail, search, `/matches` and `/home`. **Area names and car colours follow `Accept-Language`**: `route.start/end.label`, `vehicle.colour`, and `originLabel` / `destinationLabel` when the point is a catalogue place; driver-typed labels stay as typed. |

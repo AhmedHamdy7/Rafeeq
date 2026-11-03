@@ -5,6 +5,7 @@ namespace App\Http\Resources;
 use App\Domains\Identity\Actions\RecordConsentAction;
 use App\Domains\Identity\Enums\AccountStatus;
 use App\Domains\Identity\Enums\CapabilityStatus;
+use App\Domains\Identity\Enums\Gender;
 use App\Domains\Identity\Models\User;
 use App\Domains\Identity\Models\UserCapability;
 use Illuminate\Http\Request;
@@ -76,6 +77,7 @@ final class UserResource extends JsonResource
             'organizationId' => $this->organization_id,
             'preferredLanguage' => $this->preferred_language,
             'trustLevel' => $this->trust_level,
+            'canChooseWomenOnly' => $this->gender === Gender::Woman,
             // Drives the forced re-acceptance prompt when new terms ship.
             'outstandingConsents' => RecordConsentAction::outstandingFor($this->resource),
         ];

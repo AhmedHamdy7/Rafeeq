@@ -425,7 +425,7 @@ return [
         'demand_expiry_days' => 60,
 
         /*
-         * What a demand matches with when the app does not send `maxWalkMinutes` /
+         * What a search or a demand uses when the app does not send `maxWalkMinutes` /
          * `maxDetourMinutes`: the design never asks for either.
          */
         'demand_default_walk_minutes' => 10,
