@@ -61,8 +61,10 @@ final class RequestSeatRequest extends FormRequest
 
             // What kind of place you would rather meet at: the commute's own gate, a
             // street nearby, a landmark, or somewhere you propose yourself. A
-            // preference, not the point itself — that is `pickup` below.
-            'meetingPreference' => ['required', 'string', Rule::enum(MeetingPreference::class)],
+            // preference, not the point itself — that is `pickup` below. Optional:
+            // left out, it is `landmark` for a driver's suggested point and `custom`
+            // for your own pin.
+            'meetingPreference' => ['sometimes', 'nullable', 'string', Rule::enum(MeetingPreference::class)],
 
             // A known place to be picked up from, when you chose `custom`.
             'customPickupPlaceId' => ['nullable', 'string', 'size:26', 'exists:places,id'],

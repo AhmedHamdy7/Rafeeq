@@ -2,6 +2,7 @@
 
 namespace App\Domains\Booking\Actions;
 
+use App\Domains\Booking\Enums\MeetingPreference;
 use App\Domains\Booking\Enums\PaymentType;
 use App\Domains\Booking\Enums\SeatRequestCommitment;
 use App\Domains\Booking\Enums\SeatRequestKind;
@@ -145,7 +146,7 @@ final readonly class RequestSeatAction
                 'commitment' => $commitment->value,
                 'requested_days_mask' => $input['requestedDaysMask'] ?? null,
                 'seats' => $input['seats'] ?? 1,
-                'meeting_preference' => $input['meetingPreference'],
+                'meeting_preference' => $input['meetingPreference'] ?? MeetingPreference::forPickup($input['pickup'])->value,
                 'custom_pickup_place_id' => $input['customPickupPlaceId'] ?? null,
                 'intro_message' => $input['introMessage'] ?? null,
                 // Recorded as a moment, not a boolean: what matters in a dispute

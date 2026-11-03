@@ -10,4 +10,5 @@ enum CommuteRuleKey: string
     case NoFood = 'nofood';
     case Luggage = 'luggage';
     case Front = 'front';
+    case Music = 'music';
 }

@@ -1134,7 +1134,7 @@ PATCH  { mode: "passenger", rules: ["quiet", "nonsmoking"] }
 | Field | Values |
 |---|---|
 | `mode` | `passenger` · `driver` — **required.** |
-| `rules[]` | `nonsmoking` · `quiet` · `ac` · `nofood` · `luggage` · `front`. **Replaces** the saved list. |
+| `rules[]` | `nonsmoking` · `quiet` · `ac` · `nofood` · `luggage` · `front` · `music`. **Replaces** the saved list. |
 | `chosen` | Whether she has ever answered for that mode. |
 
 🔴 **These are the same six chips a commute offers and a search already accepts** — the exact values
@@ -1906,7 +1906,7 @@ stops Rafeeq being an auction on people.
 - **There is no single `arrivalTime`**: the arrival is the window `arrivalWindowStart`–`arrivalWindowEnd` (`HH:MM:SS`), bent by `flexibilityMinutes`.
 - **There is no `paused` field in the response**: a paused demand reads `status: "PAUSED"`. `paused` is only sent, in the `PATCH` body.
 - `audiencePreference`: `women_only` · `any_verified`.
-- **Rule keys** (`rules[]`), confirmed: **Non-smoking → `nonsmoking`, Quiet → `quiet`, A/C → `ac`**. Also accepted: `nofood`, `luggage`, `front`; the beta's chips use the first three plus `nofood` (PROF-29).
+- **Rule keys** (`rules[]`), confirmed: **Non-smoking → `nonsmoking`, Quiet → `quiet`, A/C → `ac`**. Also accepted: `nofood`, `luggage`, `front`, `music` ("Music on"); the beta's chips use the first three plus `nofood` (PROF-29).
 
 | Field | Meaning |
 |---|---|
@@ -2059,7 +2059,7 @@ deserves to see *why* one ranked above the other:
 
 **Request:** `commitment` (`trial`/`recurring`), `scheduledTripId` (**required for a trial**),
 `requestedDaysMask` (**required for recurring**), `seats` (1–4), **`pickup` (required)**,
-**`dropoff` (required)**, `meetingPreference` (`gate`/`street`/`landmark`/`custom`),
+**`dropoff` (required)**, `meetingPreference` (`gate`/`street`/`landmark`/`custom`; **optional** — left out, it is `landmark` when `pickup.suggestionId` is a driver's suggested point and `custom` for her own pin),
 `customPickupPlaceId`, `introMessage` (max 500), `paymentType` (`cash`/`online`), `agreedToRules`
 (**must be true**).
 
@@ -4555,6 +4555,7 @@ exist, and every live endpoint must be named here.
 | Date | Change |
 |---|---|
 | 2026-11-02 | 🧾 **Trips tabs (TRIPS-12 → 18).** `GET /seat-offers` items now carry the card: `originLabel`, `destinationLabel`, `driver` (person), `vehicle` (make, model, colour), `pickup.label`, `dropoff.label`, `promisedArrivalLocal`, `conflictingBookingId` (TRIPS-13). Seat requests carry `commute.commuteGroupId` and `joinedWaitlistAt` (TRIPS-12). `?status=` filters on `GET /seat-requests` and `GET /seat-offers` (TRIPS-14). New `GET /bookings/{booking}/cancel-preview`, her cancel fee before she confirms (TRIPS-18). New `PATCH /bookings/{booking}/pickup-note` and `pickupNote` on the booking (TRIPS-17). The commute-demand response is documented in full, with the rule keys confirmed (TRIPS-16). |
+| 2026-11-03 | 🎵 **New rule key `music`** ("Music on") everywhere rules are accepted and returned: a commute's rules, search `rules[]`, demands, comfort preferences. **`meetingPreference` is optional** on `POST /commutes/{commute}/seat-requests`: left out, it is `landmark` for a driver's suggested pickup (`pickup.suggestionId`) and `custom` for her own pin. |
 | 2026-11-03 | 🧭 **Match gaps — additive.** `GET /commutes/{commute}/public` gains `requestEligibility {canRequest, reason}` and `upcomingTrips[].pointTimes[]`. `rules` is always an object (`{}` when empty) on the detail, search, `/matches` and `/home`. **Area names and car colours follow `Accept-Language`**: `route.start/end.label`, `vehicle.colour`, and `originLabel` / `destinationLabel` when the point is a catalogue place; driver-typed labels stay as typed. |
 | 2026-11-01 | 🔎 **Discover gaps (DISCOVER-1 → 15) — all additive, nothing renamed or removed.** **2 new endpoints:** `GET /commutes/{commute}/public` — the commute as a passenger reads it: suggested `pickups[]` / `dropoffs[]` with the `id` a seat request takes as `suggestionId`, `schedule.daysMask`, `upcomingTrips[]` with seats left, rules, car, driver, and the route **trimmed ~1 km at each end with area names only** until she holds a confirmed seat (4.6) — and `DELETE /me/recent-searches/{search}` to remove one row. **Search results** gain `promisedArrivalAt/Local`, `dropOffPoint`, `daysMask`, `originLabel`/`destinationLabel`, `meetingPoint.estimatedAt/Local`, and per day `myStatus` (`none` · `pending_request` · `counteroffered` · `waitlisted` · `booked`) and `overlapsBooking`; `otherDays[]` gain `departureLocal`. `vehicle.tier` / `hasAc` and `rules` are confirmed on every result. **`person.ratingCount`.** **Recent searches** keep `label` / `placeId` on each end (send them with the search; otherwise the nearest catalogue place names it). **Demands** take and return `label` / `placeId`, `womenOnly`, `rules`, `tier` — and their alerts now honour them — plus `matchCount` (this week). **`/matches`** rows carry the whole match-result shape. **`GET /places`** with `lat`/`lng` and no `q` is the reverse lookup for a dropped pin: nearest first, with `distanceMetres`. **Seat requests** (her own view) gain the points' times and a `commute` summary; the shape is documented in full. **`pickup-preview`** returns `estimatedPickupAt/Local` (optional `scheduledTripId`); **bookings** return `pickupEta/Local`. 🔴 **The seat price is `seatPricePiastres` everywhere** — this file said `pricePerSeatPiastres` in four places the API never used; that name is now sent beside it as a deprecated alias. |
 | 2026-11-01 | 🕘 **No booking deadline, and the waiting-list flow written down (follow-ups 1.1–1.5, 2, 3, 6).** 🛑 **The 21:00-the-night-before cut-off is gone** (R-5): a day takes requests until it leaves, `bookingDeadlineAt` is **removed** from the scheduled-trip shape, and `BOOKING_DEADLINE_PASSED` now only means the day has departed. **New notification `waitlist_application_received`** to the driver when a request lands on a full day (it used to be `seat_requested`). The waiting-list cap (10, `BOOKING_WAITLIST_FULL`) is now an **admin setting**. 4.7 now documents what was already built: `kind` (`seat_request` / `waitlist_application`) and `hasOtherConfirmedCommute` on the driver's inbox, `/waitlist` as the yes to an application, **requests never expire**, one seat per passenger per time slot (`BOOKING_ALREADY_BOOKED` + `overlapsBookingId`), women-only commutes visible to everybody with `403 SEAT_REQUEST_WOMEN_ONLY`, and the new seat-request statuses. 4.5: deleting a commute cancels **every** upcoming day, booked ones too. 4.12: the block preview's `feePiastres` / `reason` are **real** (they said "always 0"). 4.14: one table of every notification type, including the commission, coupon and +5/+10 "driver late" ones. No new endpoints. |
