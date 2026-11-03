@@ -6,6 +6,9 @@ use App\Domains\Booking\Enums\BookingStatus;
 use App\Domains\Booking\Models\Booking;
 use App\Domains\Booking\Support\PickupEta;
 use App\Domains\Geo\Contracts\GeoQueryEngine;
+use App\Domains\Group\Enums\GroupMemberRole;
+use App\Domains\Group\Enums\GroupMemberStatus;
+use App\Domains\Group\Models\GroupMember;
 use App\Domains\Identity\Models\User;
 use App\Domains\Rating\Models\Rating;
 use App\Domains\Safety\Support\OtherParty;
@@ -48,6 +51,14 @@ final class BookingResource extends JsonResource
             'id' => $this->id,
             'tripId' => $this->scheduled_trip_id,
             'commuteGroupId' => $this->commute_group_id,
+
+            /*
+             * TRIPS-21: the passenger's membership of the commute this seat belongs to — the days she
+             * committed to ("Every Sun, Tue, Thu") and whether she is on a trial — so the Upcoming
+             * tab's one card per commute is drawn without a `GET /groups/{group}` per card. Null on a
+             * one-off seat or once she has left the group.
+             */
+            'membership' => $this->membershipSummary(),
 
             /*
              * HISTORY-1: where the journey went and who drove, on every booking of the passenger's
@@ -343,6 +354,35 @@ final class BookingResource extends JsonResource
     /**
      * @return array<string, mixed>|null
      */
+    /**
+     * TRIPS-21. One indexed lookup per row (`commute_group_id`, `user_id`); a page is at most fifty.
+     *
+     * @return array{committedDaysMask: int|null, commitment: string, status: string}|null
+     */
+    private function membershipSummary(): ?array
+    {
+        if ($this->commute_group_id === null) {
+            return null;
+        }
+
+        $member = GroupMember::query()
+            ->where('commute_group_id', $this->commute_group_id)
+            ->where('user_id', $this->passenger_user_id)
+            ->whereIn('status', [GroupMemberStatus::Active->value, GroupMemberStatus::NoticeGiven->value])
+            ->first();
+
+        if ($member === null) {
+            return null;
+        }
+
+        return [
+            'committedDaysMask' => $member->committed_days_mask,
+            // `trial` (her first days, R-5) or `recurring`.
+            'commitment' => $member->role === GroupMemberRole::Trial ? 'trial' : 'recurring',
+            'status' => strtoupper($member->status->value),
+        ];
+    }
+
     private function dropoffPoint(): ?array
     {
         return $this->placeOrNull($this->dropoff_point, $this->dropoff_label);

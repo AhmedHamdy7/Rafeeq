@@ -173,3 +173,51 @@ it('makes "away" within 12 hours a late cancel', function () {
 
     expect(MemberWarning::query()->sole()->kind)->toBe(WarningKind::LateCancel);
 });
+
+/*
+|--------------------------------------------------------------------------
+| TRIPS-20 → TRIPS-23: the Trips tabs' booking and group fields
+|--------------------------------------------------------------------------
+*/
+
+it('marks her own row in the attendance list, and nobody else\'s (TRIPS-23)', function () {
+    declareAttendance($this->paxToken, $this->groupId, $this->trip->id, 'coming')->assertSuccessful();
+
+    $rows = test()->withToken($this->paxToken)->getJson("/api/v1/groups/{$this->groupId}/attendance")
+        ->assertOk()->json('data');
+
+    expect($rows)->toHaveCount(1)->and($rows[0]['isMe'])->toBeTrue();
+
+    $asDriver = test()->withToken($this->driverToken)->getJson("/api/v1/groups/{$this->groupId}/attendance")
+        ->assertOk()->json('data');
+
+    expect($asDriver[0]['isMe'])->toBeFalse();
+});
+
+it('says how long a pause may be, and until when she is paused (TRIPS-22)', function () {
+    test()->withToken($this->paxToken)->getJson("/api/v1/groups/{$this->groupId}")
+        ->assertOk()
+        ->assertJsonPath('data.maxPauseDays', 31);
+
+    $to = $this->trip->trip_date->copy()->addDays(10)->toDateString();
+
+    test()->withToken($this->paxToken)->postJson("/api/v1/groups/{$this->groupId}/absences", [
+        'fromDate' => $this->trip->trip_date->toDateString(),
+        'toDate' => $to,
+    ])->assertSuccessful();
+
+    $request = test()->withToken($this->paxToken)->getJson('/api/v1/seat-requests')->assertOk()->json('data.0');
+
+    expect($request['status'])->toBe('WAITLISTED')
+        ->and($request['pausedAt'])->not->toBeNull()
+        ->and($request['pausedUntil'])->toBe($to);
+});
+
+it('carries the promised arrival and her membership on the booking (TRIPS-20, TRIPS-21)', function () {
+    $booking = test()->withToken($this->paxToken)->getJson('/api/v1/my-bookings')->assertOk()->json('data.0');
+
+    expect($booking['trip'])->toHaveKeys(['promisedArrivalAt', 'promisedArrivalLocal'])
+        ->and($booking['membership'])->not->toBeNull()
+        ->and($booking['membership'])->toHaveKeys(['committedDaysMask', 'commitment', 'status'])
+        ->and($booking['membership']['commitment'])->toBeIn(['trial', 'recurring']);
+});

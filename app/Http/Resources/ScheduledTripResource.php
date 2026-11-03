@@ -3,6 +3,7 @@
 namespace App\Http\Resources;
 
 use App\Domains\Commute\Models\ScheduledTrip;
+use App\Domains\Matching\Support\PassengerStanding;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
 
@@ -25,6 +26,9 @@ final class ScheduledTripResource extends JsonResource
             'tripDate' => $this->trip_date->toDateString(),
             'departureAt' => $this->departure_at->toIso8601String(),
             'departureLocal' => $this->departure_local->format('Y-m-d H:i:s'),
+            // TRIPS-20: the arrival the driver promised that day, or null on a day with no promise.
+            'promisedArrivalAt' => $this->promised_arrival_at?->toIso8601String(),
+            'promisedArrivalLocal' => PassengerStanding::promisedArrivalLocal($this->resource),
             'status' => strtoupper($this->status->value),
             'seatsTotal' => $this->seats_total,
             'seatsTaken' => $this->seats_taken,

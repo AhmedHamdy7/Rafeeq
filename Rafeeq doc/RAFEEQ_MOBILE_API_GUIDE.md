@@ -2651,6 +2651,12 @@ four points can appear here while `navigation-route` still returns two.
 
 #### `GET /my-bookings` — active, profile complete, paginated
 
+**Since 2026-11-04 (TRIPS-20, TRIPS-21):** each booking's `trip` carries **`promisedArrivalAt`** (UTC)
+and **`promisedArrivalLocal`** (`HH:MM`), both `null` on a day with no promise; and each booking
+carries **`membership`** — `{ committedDaysMask, commitment: "trial" | "recurring", status }` of
+her group membership on that commute, or `null` on a seat with no group (or after she left). Group
+the Upcoming tab by `commuteGroupId` and draw "Every Sun, Tue, Thu" from `committedDaysMask`.
+
 The caller's seats, newest first. See 4.7. Every item carries the History fields — `commuteId`,
 `originLabel`, `destinationLabel`, `driver` (first name only) and the pickup/drop-off as
 `meetingPoint`/`dropoffPoint` (HISTORY-1) — and `myRating` (HISTORY-4), so a History card needs no
@@ -3415,6 +3421,8 @@ leave her own group** (`GROUP_DRIVER_CANNOT_LEAVE`, 403); she pauses or archives
 
 #### `GET` / `POST /groups/{group}/attendance` — active, profile complete, paginated
 
+Each row has **`isMe`** (TRIPS-23): `true` on the caller's own row, so her chip reads "You".
+
 **This is screen 36.** The **declared** intention — "I'm coming tomorrow" — which is a different
 table from the boarding confirmation in 4.9, on purpose: only the check-in decides money.
 
@@ -3437,6 +3445,13 @@ on the button before she taps it.
 #### `GET` / `POST` / `DELETE /groups/{group}/absences/{absence}` — active, profile complete, paginated
 
 Planned absence — "I'm away next week".
+
+**TRIPS-22:** `GET /groups/{group}` carries **`maxPauseDays`** (31, an admin setting): the longest
+pause with an end date; longer means leaving `toDate` out (no end date). After pausing, her seat
+request reads `status: "WAITLISTED"` with **`pausedAt`** and **`pausedUntil`** (`YYYY-MM-DD`, the
+last day of the pause, or `null` = no end date) — "Paused until {date}". **A future-dated pause
+releases the seats at once**: every booked day from `fromDate` on is cancelled the moment she pauses
+(seat to the waiting list); days before `fromDate` stay hers.
 
 🔴 **This is the passenger PAUSE now** (R-7, BOOK-32, decision C5): up to a month, **or with no end
 date**. Her seat **always** goes back to the waiting list for those days, and she joins that waiting
@@ -4566,7 +4581,7 @@ exist, and every live endpoint must be named here.
 
 | Date | Change |
 |---|---|
-| 2026-11-02 | 🧾 **Trips tabs (TRIPS-12 → 18).** `GET /seat-offers` items now carry the card: `originLabel`, `destinationLabel`, `driver` (person), `vehicle` (make, model, colour), `pickup.label`, `dropoff.label`, `promisedArrivalLocal`, `conflictingBookingId` (TRIPS-13). Seat requests carry `commute.commuteGroupId` and `joinedWaitlistAt` (TRIPS-12). `?status=` filters on `GET /seat-requests` and `GET /seat-offers` (TRIPS-14). New `GET /bookings/{booking}/cancel-preview`, her cancel fee before she confirms (TRIPS-18). New `PATCH /bookings/{booking}/pickup-note` and `pickupNote` on the booking (TRIPS-17). The commute-demand response is documented in full, with the rule keys confirmed (TRIPS-16). |
+| 2026-11-02 | 🧾 **Trips tabs (TRIPS-12 → 18).** `GET /seat-offers` items now carry the card: `originLabel`, `destinationLabel`, `driver` (person), `vehicle` (make, model, colour), `pickup.label`, `dropoff.label`, `promisedArrivalLocal`, `conflictingBookingId` (TRIPS-13). Seat requests carry `commute.commuteGroupId`, `joinedWaitlistAt` (TRIPS-12), `pausedAt` and `pausedUntil` (TRIPS-22). Bookings carry `trip.promisedArrivalAt/Local` (TRIPS-20) and `membership` (TRIPS-21); groups carry `maxPauseDays` (TRIPS-22); attendance rows carry `isMe` (TRIPS-23). `?status=` filters on `GET /seat-requests` and `GET /seat-offers` (TRIPS-14). New `GET /bookings/{booking}/cancel-preview`, her cancel fee before she confirms (TRIPS-18). New `PATCH /bookings/{booking}/pickup-note` and `pickupNote` on the booking (TRIPS-17). The commute-demand response is documented in full, with the rule keys confirmed (TRIPS-16). |
 | 2026-11-03 | 🧭 **Discover follow-up.** `meetingPoint.address` and `dropOffPoint.address` follow `Accept-Language` when the point is a catalogue place (search, `/matches`, Home); a driver-typed point stays as typed. `GET /matches` rows carry `demandTitle`. `score` on `/matches` is the stored integer total (documented beside search's object). `promisedArrival*` is `null` when the driver set no promised arrival for that weekday — show the estimate (`dropOffPoint.estimatedArrivalLocal`) as approximate then. |
 | 2026-11-03 | 👤 **`user.gender`** (`woman` · `man` · `null`) and **`user.canChooseWomenOnly`** on `/auth/me` and every response with her own `user` object: show the Women-only chip only when `true`. Another person's gender is still never returned. **`GET /search/commutes` takes the same input as a demand:** `HH:MM` times, `maxWalkMinutes` / `maxDetourMinutes` optional (10 / 15), and all 7 rule keys. Old demands with `audiencePreference: women_only` and `womenOnly: false` were brought into line (a woman's become `womenOnly: true`; anyone else's go back to `any_verified`). |
 | 2026-11-03 | 📌 **Commute demand gaps.** New `GET /commute-demands/{demand}`. The list leaves out deleted demands. `409 DEMAND_EXISTS` for a duplicate. Same From and To → `422`. `maxWalkMinutes` / `maxDetourMinutes` optional (10 / 15). `HH:MM` accepted. **The time window is her pickup time, widened by `flexibilityMinutes`** (search too). `womenOnly: true` only, women only. Resume and edit refresh `expiresAt`; an expired demand comes back. Labels follow `Accept-Language` when the end is a catalogue place, and a resolved label keeps its `placeId`. `matchCount` is right in the `201`. **`php artisan places:seed-greater-cairo`** adds 26 Greater Cairo places. |

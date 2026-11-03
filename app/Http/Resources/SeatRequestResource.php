@@ -191,6 +191,10 @@ final class SeatRequestResource extends JsonResource
             'respondedAt' => $this->responded_at?->toIso8601String(),
             // TRIPS-12: when the driver put her on the waiting list — the moment she joined it — or
             // null when she is not on one.
+            // TRIPS-22: while she has paused her seat — `pausedUntil` is the last day of the pause
+            // (YYYY-MM-DD), or null with `pausedAt` set for "no end date".
+            'pausedAt' => $this->paused_at?->toIso8601String(),
+            'pausedUntil' => $this->paused_until?->toDateString(),
             'joinedWaitlistAt' => $this->status === SeatRequestStatus::Waitlisted
                 ? $this->responded_at?->toIso8601String()
                 : null,

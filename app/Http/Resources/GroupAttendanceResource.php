@@ -24,6 +24,9 @@ final class GroupAttendanceResource extends JsonResource
             'tripId' => $this->scheduled_trip_id,
             'status' => strtoupper($this->status->value),
             'markedAt' => $this->marked_at?->toIso8601String(),
+            // TRIPS-23: her own row, so the chip reads "You". A flag rather than a user id: the list
+            // still names nobody else by anything but a first name.
+            'isMe' => $request->user()?->id === $this->user_id,
 
             // 🔒 A public first name, as everywhere else a member appears.
             'person' => $this->when(

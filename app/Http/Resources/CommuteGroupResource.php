@@ -37,6 +37,9 @@ final class CommuteGroupResource extends JsonResource
             'minCommitmentDaysPerWeek' => $this->min_commitment_days_per_week,
             // How much warning leaving the group takes, in days.
             'noticePeriodDays' => $this->notice_period_days,
+            // TRIPS-22: the longest pause with an end date, in days (R-7). A longer one is a pause
+            // with no end date — `toDate` left out. `null` would mean no limit.
+            'maxPauseDays' => (int) config('rafeeq.group.max_absence_days'),
 
             /*
              * Recomputed periodically from completed trips (Phase 9 owns the
