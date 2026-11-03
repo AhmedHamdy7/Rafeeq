@@ -253,6 +253,8 @@ final readonly class SearchCommutesAction
                 continue;
             }
 
+            $meetingPointSeconds = PickupEta::secondsAlong($this->geo, $offer, $this->coordinateOf($candidate['meetingPoint']));
+
             $score = ScoringModel::score(
                 offer: $offer,
                 trip: $trip,
@@ -264,6 +266,7 @@ final readonly class SearchCommutesAction
                 driverOnTimeRate: $offer->driverProfile->on_time_rate === null
                     ? null
                     : (float) $offer->driverProfile->on_time_rate,
+                pickupSeconds: $meetingPointSeconds,
             );
 
             [$dropOff, $dropOffDistance] = $candidate['dropOff'] ?? [null, null];
@@ -280,7 +283,7 @@ final readonly class SearchCommutesAction
                  * already in hand, so the card can say "pickup around 07:05" without a provider
                  * call per result.
                  */
-                meetingPointSeconds: PickupEta::secondsAlong($this->geo, $offer, $this->coordinateOf($candidate['meetingPoint'])),
+                meetingPointSeconds: $meetingPointSeconds,
                 dropOffSeconds: $dropOff === null ? null : PickupEta::secondsAlong($this->geo, $offer, $this->coordinateOf($dropOff)),
             );
         }

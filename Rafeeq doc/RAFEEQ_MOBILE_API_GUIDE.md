@@ -14,7 +14,7 @@
 >
 > **Base URL:** `{host}/api/v1` · **Auth:** bearer token · **Format:** JSON only.
 
-**Last updated:** 2026-11-02 · **189 endpoints live** · Phases 0–7, 9 and 11 complete · 10, 12 and 13 all but a decision each
+**Last updated:** 2026-11-03 · **190 endpoints live** · Phases 0–7, 9 and 11 complete · 10, 12 and 13 all but a decision each
 
 ---
 
@@ -22,7 +22,7 @@
 
 ### What is ready
 
-**189 endpoints live** and tested, across the 47 designed screens:
+**190 endpoints live** and tested, across the 47 designed screens:
 
 | | Count | Covers |
 |---|---|---|
@@ -742,6 +742,7 @@ fails if this list and the running routes ever disagree in either direction.
 | `GET /commute-demands` | 4.6 Search, demands, saved searches |
 | `POST /commute-demands` | 4.6 Search, demands, saved searches |
 | `PATCH /commute-demands/{demand}` | 4.6 Search, demands, saved searches |
+| `GET /commute-demands/{demand}` | 4.6 Search, demands, saved searches |
 | `DELETE /commute-demands/{demand}` | 4.6 Search, demands, saved searches |
 | `GET /matches` | 4.6 Search, demands, saved searches |
 | `POST /matches/{match}/opened` | 4.6 Search, demands, saved searches |
@@ -1880,7 +1881,7 @@ that is not published, answers `404`. A women-only commute is shown to everybody
 | `requestEligibility` | `{canRequest, reason}` — whether she may ask for a seat on this commute. `reason`: `null` · `women_only` · `gender_not_set` · `own_commute` · `already_requested` · `account_restricted` (riding suspended for debt). Disable **Request Seat** with the reason when `canRequest` is `false`. A hint: `POST /commutes/{commute}/seat-requests` still makes the same checks. Per-day standing stays in `upcomingTrips[].myStatus`. |
 | `rules`, `vehicle`, `driver` | As on a match result. 🔒 No plate. `rules` is always an object — `{}` when the commute has none. |
 
-#### `GET` / `POST` / `PATCH` / `DELETE /commute-demands/{demand}` — active, profile complete
+#### `GET` / `POST` / `PATCH` / `DELETE /commute-demands/{demand}`, `GET /commute-demands/{demand}` — active, profile complete
 
 A saved request for when nothing matched. The platform tells the passenger when something turns up.
 
@@ -1903,26 +1904,34 @@ stops Rafeeq being an auction on people.
   "expiresAt": "2026-12-01T00:00:00+00:00", "createdAt": "2026-11-02T08:00:00+00:00" }
 ```
 
-- **There is no single `arrivalTime`**: the arrival is the window `arrivalWindowStart`–`arrivalWindowEnd` (`HH:MM:SS`), bent by `flexibilityMinutes`.
+- **The window is her PICKUP time.** `arrivalWindowStart`–`arrivalWindowEnd` is compared with when the car reaches her meeting point (`meetingPoint.estimatedLocal` on a match), widened by `flexibilityMinutes` on each side — not with the commute's departure or its arrival. The same applies to `GET /search/commutes`.
+- **A single time is fine:** `"08:00:00"`–`"08:00:00"` with `flexibilityMinutes: 30` matches exactly like `07:30:00`–`08:30:00`. `HH:MM` is accepted too and comes back as `HH:MM:SS`. With `flexibilityMinutes: 0` the card shows just the time.
+- **`maxWalkMinutes` / `maxDetourMinutes` are optional** on a demand: left out, 10 and 15. The values used come back.
+- **Same From and To is refused:** ends closer than 300 m, or the same `placeId` → `422` with `fields.destination`.
 - **There is no `paused` field in the response**: a paused demand reads `status: "PAUSED"`. `paused` is only sent, in the `PATCH` body.
+- **Women-only: send `womenOnly: true` only.** The server sets `audiencePreference: "women_only"` with it. The chip is on when `womenOnly` is `true`. Only a woman may set it: anyone else gets `422` with `fields.womenOnly`.
 - `audiencePreference`: `women_only` · `any_verified`.
 - **Rule keys** (`rules[]`), confirmed: **Non-smoking → `nonsmoking`, Quiet → `quiet`, A/C → `ac`**. Also accepted: `nofood`, `luggage`, `front`, `music` ("Music on"); the beta's chips use the first three plus `nofood` (PROF-29).
 
 | Field | Meaning |
 |---|---|
-| `status` | `ACTIVE` · `PAUSED` · `MATCHED` · `CANCELLED` · `EXPIRED`. |
+| `status` | `ACTIVE` · `PAUSED` · `EXPIRED` in the list (`GET` never returns `CANCELLED`; a deleted demand is gone). `MATCHED` is not used: a demand stays `ACTIVE` and keeps matching until she pauses, deletes or it expires. An `EXPIRED` demand comes back with `{paused: false}` or a full edit, as `ACTIVE` with a fresh `expiresAt`. |
 | `flexibilityMinutes` | How much the arrival window can bend. |
 | `wantsReturnTrip` | Recorded; return-leg matching itself is not built yet. |
-| `origin` / `destination` | `{lat, lng, label, placeId}` (DISCOVER-9). Send `label` and `placeId` with each end in the `POST` / `PATCH` body; an end sent without a label is named after the nearest catalogue place within 500 m, or stays `null`. |
+| `origin` / `destination` | `{lat, lng, label, placeId}` (DISCOVER-9). Send `label` and `placeId` with each end in the `POST` / `PATCH` body; an end sent without a label is named after the nearest catalogue place within 500 m (and keeps its `placeId`), or stays `null`. **When `placeId` is set, `label` comes in the request's language** (the place's English or Arabic name); otherwise it is the text she saved. Same on `/home` → `demandAlert`. |
 | `womenOnly`, `rules[]`, `tier` | Her preferences — the search's own fields, sent and returned the same way (DISCOVER-9). **The alerts this demand sends honour them.** |
-| `matchCount` | "3 matching commutes this week" (DISCOVER-10): the different commutes matched to this demand that are **still published and run in the next 7 days**. |
+| `matchCount` | "3 matching commutes this week" (DISCOVER-10): the different commutes matched to this demand that are **still published and run in the next 7 days**. **Already right in the `201` / `200`**: the first match runs during the request. |
 
 **`PATCH /commute-demands/{demand}`** (S-4, BOOK-06) — two shapes:
 
 - `{ "paused": true }` alone **pauses** it: nothing is notified until `{ "paused": false }`, which
-  matches it again at once. Nothing else changes.
-- The whole request again — exactly the `POST` body — **replaces** it (and is matched again), with
-  `paused` optional beside it.
+  matches it again at once and gives it a fresh `expiresAt`. Nothing else changes.
+- The whole request again — exactly the `POST` body — **replaces** it (matched again, fresh
+  `expiresAt`), with `paused` optional beside it.
+
+**Duplicates:** a `POST` (or full `PATCH`) with the same ends (to ~100 m), days and window as another of her live demands answers `409 DEMAND_EXISTS` with `fields.demandId: ["01…"]` — open that one.
+
+**`GET /commute-demands/{demand}`** — one demand, the same shape with `matchCount`. Owner only; `404` for anyone else's or a deleted one.
 
 A cancelled demand, or somebody else's, answers `404`. 🔴 **The budget is gone** (S-2, decision C11):
 the price is RAFEEQ's, so there is nothing to budget against; an old client that still sends
@@ -4555,6 +4564,7 @@ exist, and every live endpoint must be named here.
 | Date | Change |
 |---|---|
 | 2026-11-02 | 🧾 **Trips tabs (TRIPS-12 → 18).** `GET /seat-offers` items now carry the card: `originLabel`, `destinationLabel`, `driver` (person), `vehicle` (make, model, colour), `pickup.label`, `dropoff.label`, `promisedArrivalLocal`, `conflictingBookingId` (TRIPS-13). Seat requests carry `commute.commuteGroupId` and `joinedWaitlistAt` (TRIPS-12). `?status=` filters on `GET /seat-requests` and `GET /seat-offers` (TRIPS-14). New `GET /bookings/{booking}/cancel-preview`, her cancel fee before she confirms (TRIPS-18). New `PATCH /bookings/{booking}/pickup-note` and `pickupNote` on the booking (TRIPS-17). The commute-demand response is documented in full, with the rule keys confirmed (TRIPS-16). |
+| 2026-11-03 | 📌 **Commute demand gaps.** New `GET /commute-demands/{demand}`. The list leaves out deleted demands. `409 DEMAND_EXISTS` for a duplicate. Same From and To → `422`. `maxWalkMinutes` / `maxDetourMinutes` optional (10 / 15). `HH:MM` accepted. **The time window is her pickup time, widened by `flexibilityMinutes`** (search too). `womenOnly: true` only, women only. Resume and edit refresh `expiresAt`; an expired demand comes back. Labels follow `Accept-Language` when the end is a catalogue place, and a resolved label keeps its `placeId`. `matchCount` is right in the `201`. **`php artisan places:seed-greater-cairo`** adds 26 Greater Cairo places. |
 | 2026-11-03 | 🎵 **New rule key `music`** ("Music on") everywhere rules are accepted and returned: a commute's rules, search `rules[]`, demands, comfort preferences. **`meetingPreference` is optional** on `POST /commutes/{commute}/seat-requests`: left out, it is `landmark` for a driver's suggested pickup (`pickup.suggestionId`) and `custom` for her own pin. |
 | 2026-11-03 | 🧭 **Match gaps — additive.** `GET /commutes/{commute}/public` gains `requestEligibility {canRequest, reason}` and `upcomingTrips[].pointTimes[]`. `rules` is always an object (`{}` when empty) on the detail, search, `/matches` and `/home`. **Area names and car colours follow `Accept-Language`**: `route.start/end.label`, `vehicle.colour`, and `originLabel` / `destinationLabel` when the point is a catalogue place; driver-typed labels stay as typed. |
 | 2026-11-01 | 🔎 **Discover gaps (DISCOVER-1 → 15) — all additive, nothing renamed or removed.** **2 new endpoints:** `GET /commutes/{commute}/public` — the commute as a passenger reads it: suggested `pickups[]` / `dropoffs[]` with the `id` a seat request takes as `suggestionId`, `schedule.daysMask`, `upcomingTrips[]` with seats left, rules, car, driver, and the route **trimmed ~1 km at each end with area names only** until she holds a confirmed seat (4.6) — and `DELETE /me/recent-searches/{search}` to remove one row. **Search results** gain `promisedArrivalAt/Local`, `dropOffPoint`, `daysMask`, `originLabel`/`destinationLabel`, `meetingPoint.estimatedAt/Local`, and per day `myStatus` (`none` · `pending_request` · `counteroffered` · `waitlisted` · `booked`) and `overlapsBooking`; `otherDays[]` gain `departureLocal`. `vehicle.tier` / `hasAc` and `rules` are confirmed on every result. **`person.ratingCount`.** **Recent searches** keep `label` / `placeId` on each end (send them with the search; otherwise the nearest catalogue place names it). **Demands** take and return `label` / `placeId`, `womenOnly`, `rules`, `tier` — and their alerts now honour them — plus `matchCount` (this week). **`/matches`** rows carry the whole match-result shape. **`GET /places`** with `lat`/`lng` and no `q` is the reverse lookup for a dropped pin: nearest first, with `distanceMetres`. **Seat requests** (her own view) gain the points' times and a `commute` summary; the shape is documented in full. **`pickup-preview`** returns `estimatedPickupAt/Local` (optional `scheduledTripId`); **bookings** return `pickupEta/Local`. 🔴 **The seat price is `seatPricePiastres` everywhere** — this file said `pricePerSeatPiastres` in four places the API never used; that name is now sent beside it as a deprecated alias. |

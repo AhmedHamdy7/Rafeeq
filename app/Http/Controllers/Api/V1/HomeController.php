@@ -32,6 +32,7 @@ use App\Domains\Shared\Exceptions\DomainException;
 use App\Domains\Verification\Support\VerificationCentre;
 use App\Http\Controllers\Controller;
 use App\Http\Resources\BookingResource;
+use App\Http\Resources\CommuteDemandResource;
 use App\Http\Resources\HomeJourney;
 use App\Http\Resources\JourneyCard;
 use App\Http\Resources\LocalisedLabel;
@@ -552,6 +553,7 @@ final class HomeController extends Controller
     private function demandAlert(string $userId): ?array
     {
         $demand = CommuteDemand::query()
+            ->with(CommuteDemandResource::relations())
             ->where('passenger_user_id', $userId)
             ->where('status', CommuteDemandStatus::Active)
             ->select('commute_demands.*')
@@ -571,8 +573,8 @@ final class HomeController extends Controller
         return [
             'demandId' => $demand->id,
             'newMatchesCount' => (int) $demand->unopened_count,
-            'originLabel' => $demand->origin_label,
-            'destinationLabel' => $demand->destination_label,
+            'originLabel' => LocalisedLabel::place($demand->originPlace, $demand->origin_label),
+            'destinationLabel' => LocalisedLabel::place($demand->destinationPlace, $demand->destination_label),
             'daysMask' => (int) $demand->days_mask,
             // "08:00" — the start of the window she asked to arrive in; the end is beside it.
             'arrivalTimeLocal' => substr((string) $demand->preferred_arrival_start, 0, 5),

@@ -3,6 +3,7 @@
 namespace App\Domains\Matching\Support;
 
 use App\Domains\Geo\Actions\SearchPlacesAction;
+use App\Domains\Geo\Models\Place;
 use App\Domains\Shared\ValueObjects\Coordinate;
 
 /**
@@ -47,12 +48,20 @@ final readonly class PlaceLabels
      */
     public function resolved(SearchPlacesAction $places, Coordinate $origin, Coordinate $destination): self
     {
+        $originPlace = $this->originLabel === null && $this->originPlaceId === null ? $places->nearest($origin) : null;
+        $destinationPlace = $this->destinationLabel === null && $this->destinationPlaceId === null ? $places->nearest($destination) : null;
+
         return new self(
-            originLabel: $this->originLabel ?? $places->nearest($origin)?->name,
-            originPlaceId: $this->originPlaceId,
-            destinationLabel: $this->destinationLabel ?? $places->nearest($destination)?->name,
-            destinationPlaceId: $this->destinationPlaceId,
+            originLabel: $this->originLabel ?? self::nameOf($originPlace) ?? $places->nearest($origin)?->name,
+            originPlaceId: $this->originPlaceId ?? $originPlace?->id,
+            destinationLabel: $this->destinationLabel ?? self::nameOf($destinationPlace) ?? $places->nearest($destination)?->name,
+            destinationPlaceId: $this->destinationPlaceId ?? $destinationPlace?->id,
         );
+    }
+
+    private static function nameOf(?Place $place): ?string
+    {
+        return $place?->name;
     }
 
     private static function text(mixed $value): ?string

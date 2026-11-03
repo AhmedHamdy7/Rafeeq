@@ -5,6 +5,7 @@ namespace App\Domains\Matching\Models;
 use App\Domains\Commute\Enums\CommuteAudience;
 use App\Domains\Commute\Enums\CommuteType;
 use App\Domains\Driver\Enums\VehicleTier;
+use App\Domains\Geo\Models\Place;
 use App\Domains\Identity\Models\User;
 use App\Domains\Matching\Enums\CommuteDemandStatus;
 use App\Domains\Shared\Casts\SpatialPoint;
@@ -61,6 +62,16 @@ class CommuteDemand extends Model
     public function passenger(): BelongsTo
     {
         return $this->belongsTo(User::class, 'passenger_user_id');
+    }
+
+    public function originPlace(): BelongsTo
+    {
+        return $this->belongsTo(Place::class, 'origin_place_id');
+    }
+
+    public function destinationPlace(): BelongsTo
+    {
+        return $this->belongsTo(Place::class, 'destination_place_id');
     }
 
     public function daysMask(): DaysMask
