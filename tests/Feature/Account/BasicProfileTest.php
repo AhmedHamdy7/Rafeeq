@@ -36,14 +36,13 @@ it('completes the profile and opens the way Home', function () {
         ->and(User::sole()->profile_status)->toBe(ProfileStatus::BasicComplete);
 });
 
-it('stores gender without ever rendering it back', function () {
+it('stores gender and returns it to her own account', function () {
     $signIn = signIn();
 
     $response = completeProfile($signIn['session']['accessToken'], ['gender' => 'woman'])->assertOk();
 
-    expect($response->json('data.user'))->not->toHaveKey('gender')
-        ->and($response->getContent())->not->toContain('woman')
-        // It IS stored — it has to be, it drives the women-only filter.
+    expect($response->json('data.user.gender'))->toBe('woman')
+        ->and($response->json('data.user.canChooseWomenOnly'))->toBeTrue()
         ->and(User::sole()->gender->value)->toBe('woman');
 });
 

@@ -51,8 +51,8 @@ use Laravel\Sanctum\HasApiTokens;
     'registered_role', 'preferred_language',
 ])]
 // Hidden by DEFAULT so an accidental `return $user;` can never leak them
-// (pitfall #21/#30). `gender` is absolute — never exposed to anyone. The
-// other two are context-dependent: a Resource showing someone their OWN
+// (pitfall #21/#30). `gender` is never exposed about anyone else; only the
+// account's own UserResource returns it. The other two are context-dependent: a Resource showing someone their OWN
 // profile opts back in explicitly with ->makeVisible(), which keeps the
 // exposure decision auditable in one place instead of hoping every future
 // Resource remembers to strip them.

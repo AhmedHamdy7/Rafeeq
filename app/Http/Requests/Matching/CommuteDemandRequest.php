@@ -15,13 +15,7 @@ class CommuteDemandRequest extends FormRequest
 {
     public function rules(): array
     {
-        return [
-            ...(new SearchCommutesRequest)->rules(),
-            'arrivalWindowStart' => ['required', 'string', 'date_format:H:i:s,H:i'],
-            'arrivalWindowEnd' => ['required', 'string', 'date_format:H:i:s,H:i', 'after_or_equal:arrivalWindowStart'],
-            'maxWalkMinutes' => ['sometimes', 'integer', 'min:0', 'max:45'],
-            'maxDetourMinutes' => ['sometimes', 'integer', 'min:0', 'max:45'],
-        ];
+        return (new SearchCommutesRequest)->rules();
     }
 
     public function withValidator(Validator $validator): void
@@ -54,11 +48,6 @@ class CommuteDemandRequest extends FormRequest
     {
         $input = $this->safe()->except('paused');
 
-        $input['arrivalWindowStart'] = self::seconds($input['arrivalWindowStart']);
-        $input['arrivalWindowEnd'] = self::seconds($input['arrivalWindowEnd']);
-        $input['maxWalkMinutes'] ??= (int) config('rafeeq.matching.demand_default_walk_minutes');
-        $input['maxDetourMinutes'] ??= (int) config('rafeeq.matching.demand_default_detour_minutes');
-
         if (filter_var($input['womenOnly'] ?? false, FILTER_VALIDATE_BOOLEAN)) {
             $input['audiencePreference'] = CommuteAudience::WomenOnly->value;
         }
@@ -69,10 +58,5 @@ class CommuteDemandRequest extends FormRequest
     public function places(): PlaceLabels
     {
         return PlaceLabels::fromInput($this->validated());
-    }
-
-    private static function seconds(string $time): string
-    {
-        return strlen($time) === 5 ? "{$time}:00" : $time;
     }
 }

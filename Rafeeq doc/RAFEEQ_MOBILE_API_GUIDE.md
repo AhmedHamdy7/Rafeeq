@@ -1024,7 +1024,7 @@ Put this URL in the Play Console data-safety form.
 | `fullName` | **required unless you send `firstName`** | Arabic or Latin letters; spaces, `-`, `'`, `.` allowed; at least one letter. Length bounds are a platform setting. |
 | `firstName` | **required unless you send `fullName`** | ✅ **The design collects two fields, and this is the one.** Also what other members see — your screen says so: *"Only your first name and photo are shown to other members."* |
 | `lastName` | optional | Optional **even when sending `firstName`**, because a single name is a real name: somebody called only `Sara` must be able to finish signing up. |
-| `gender` | required | `woman` · `man` (AUTH-10). 🔒 Never returned by any endpoint. 🔴 **`prefer_not_to_say` is now a `422`** (F1-2). Accounts that already hold it keep working, but they are **not** women for the women-only rule: a seat request on a women-only commute answers `403 SEAT_REQUEST_WOMEN_ONLY` with **`error.fields.reason: ["GENDER_NOT_SET"]`**. On that reason, show the Woman / Man picker and send this endpoint again with the same name and the new `gender` (omit `registeredRole`). Nothing maps the old value to either answer for her. |
+| `gender` | required | `woman` · `man` (AUTH-10). 🔒 Returned only to her own account (`user.gender`); never about anybody else. 🔴 **`prefer_not_to_say` is now a `422`** (F1-2). Accounts that already hold it keep working, but they are **not** women for the women-only rule: a seat request on a women-only commute answers `403 SEAT_REQUEST_WOMEN_ONLY` with **`error.fields.reason: ["GENDER_NOT_SET"]`**. On that reason, show the Woman / Man picker and send this endpoint again with the same name and the new `gender` (omit `registeredRole`). Nothing maps the old value to either answer for her. |
 | `registeredRole` | **optional** | `driver` · `passenger` · `both`. 🔴 Was required. Send it to finish in one step and go straight to `HOME`; omit it and the response answers `nextStep: ROLE_SELECTION`, which you satisfy with `POST /account/initial-role`. Both paths are supported — nothing breaks if you keep sending it. |
 | `dateOfBirth` | optional | **`YYYY-MM-DD`** only. Must make the person at least the minimum age (18 today — a platform setting, do not hard-code it) and no more than 120. |
 | `publicFirstName` | optional | Up to 50 characters. Defaults to the first word of `fullName`. |
@@ -1389,6 +1389,8 @@ second attempt answers `422` with `error.fields.dispute: ["ALREADY_DISPUTED"]`; 
 | `orgType` / `organizationId` | Their claimed workplace or university. |
 | `preferredLanguage` | `ar` · `en`. |
 | `trustLevel` | `0`–`4`, recomputed from the rows rather than incremented. |
+| `gender` | `woman` · `man`, or `null` when she has not given one (including old `prefer_not_to_say` accounts). Her own only: 🔒 no endpoint returns another person's gender. |
+| `canChooseWomenOnly` | `true` only for a woman: show the **Women-only** chip (demands, search) only when `true`. |
 | `outstandingConsents[]` | Which consents are stale at the current version. Non-empty means show the acceptance screen. |
 
 #### The `device` shape
@@ -1850,7 +1852,7 @@ confirmed seat (16h+: 0 · 10–16h: 10 % · < 10h: 25 %) — **show it first** 
 #### `GET /search/commutes` — active, profile complete
 
 **Query:** `origin[lat,lng]`, `destination[lat,lng]`, `daysMask`, `arrivalWindowStart`,
-`arrivalWindowEnd` (`HH:MM:SS`), `maxWalkMinutes` (0–45), `maxDetourMinutes` (0–45),
+`arrivalWindowEnd` (`HH:MM:SS` or `HH:MM`), `maxWalkMinutes` (0–45, optional, default 10), `maxDetourMinutes` (0–45, optional, default 15),
 `seatsNeeded`, `audiencePreference`, `womenOnly`, `flexibilityMinutes` (0–60),
 `wantsReturnTrip`, `rules[]`, `tier`, `minRating`. Optionally `origin[label]`, `origin[placeId]`,
 `destination[label]`, `destination[placeId]` — they change nothing about the search; they are kept
@@ -4564,6 +4566,7 @@ exist, and every live endpoint must be named here.
 | Date | Change |
 |---|---|
 | 2026-11-02 | 🧾 **Trips tabs (TRIPS-12 → 18).** `GET /seat-offers` items now carry the card: `originLabel`, `destinationLabel`, `driver` (person), `vehicle` (make, model, colour), `pickup.label`, `dropoff.label`, `promisedArrivalLocal`, `conflictingBookingId` (TRIPS-13). Seat requests carry `commute.commuteGroupId` and `joinedWaitlistAt` (TRIPS-12). `?status=` filters on `GET /seat-requests` and `GET /seat-offers` (TRIPS-14). New `GET /bookings/{booking}/cancel-preview`, her cancel fee before she confirms (TRIPS-18). New `PATCH /bookings/{booking}/pickup-note` and `pickupNote` on the booking (TRIPS-17). The commute-demand response is documented in full, with the rule keys confirmed (TRIPS-16). |
+| 2026-11-03 | 👤 **`user.gender`** (`woman` · `man` · `null`) and **`user.canChooseWomenOnly`** on `/auth/me` and every response with her own `user` object: show the Women-only chip only when `true`. Another person's gender is still never returned. **`GET /search/commutes` takes the same input as a demand:** `HH:MM` times, `maxWalkMinutes` / `maxDetourMinutes` optional (10 / 15), and all 7 rule keys. Old demands with `audiencePreference: women_only` and `womenOnly: false` were brought into line (a woman's become `womenOnly: true`; anyone else's go back to `any_verified`). |
 | 2026-11-03 | 📌 **Commute demand gaps.** New `GET /commute-demands/{demand}`. The list leaves out deleted demands. `409 DEMAND_EXISTS` for a duplicate. Same From and To → `422`. `maxWalkMinutes` / `maxDetourMinutes` optional (10 / 15). `HH:MM` accepted. **The time window is her pickup time, widened by `flexibilityMinutes`** (search too). `womenOnly: true` only, women only. Resume and edit refresh `expiresAt`; an expired demand comes back. Labels follow `Accept-Language` when the end is a catalogue place, and a resolved label keeps its `placeId`. `matchCount` is right in the `201`. **`php artisan places:seed-greater-cairo`** adds 26 Greater Cairo places. |
 | 2026-11-03 | 🎵 **New rule key `music`** ("Music on") everywhere rules are accepted and returned: a commute's rules, search `rules[]`, demands, comfort preferences. **`meetingPreference` is optional** on `POST /commutes/{commute}/seat-requests`: left out, it is `landmark` for a driver's suggested pickup (`pickup.suggestionId`) and `custom` for her own pin. |
 | 2026-11-03 | 🧭 **Match gaps — additive.** `GET /commutes/{commute}/public` gains `requestEligibility {canRequest, reason}` and `upcomingTrips[].pointTimes[]`. `rules` is always an object (`{}` when empty) on the detail, search, `/matches` and `/home`. **Area names and car colours follow `Accept-Language`**: `route.start/end.label`, `vehicle.colour`, and `originLabel` / `destinationLabel` when the point is a catalogue place; driver-typed labels stay as typed. |

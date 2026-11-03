@@ -64,16 +64,16 @@ final class SearchCommutesRequest extends FormRequest
             // The earliest and latest departure you would accept, on your own
             // clock. Commutes inside the window score full marks for timing;
             // outside it, the score tapers.
-            'arrivalWindowStart' => ['required', 'string', 'date_format:H:i:s'],
-            'arrivalWindowEnd' => ['required', 'string', 'date_format:H:i:s', 'after_or_equal:arrivalWindowStart'],
+            'arrivalWindowStart' => ['required', 'string', 'date_format:H:i:s,H:i'],
+            'arrivalWindowEnd' => ['required', 'string', 'date_format:H:i:s,H:i', 'after_or_equal:arrivalWindowStart'],
 
             // How far you are willing to walk to the meeting point. Commutes whose
             // nearest pickup is further away are not returned at all.
-            'maxWalkMinutes' => ['required', 'integer', 'min:0', 'max:45'],
+            'maxWalkMinutes' => ['sometimes', 'integer', 'min:0', 'max:45'],
 
             // How much of a detour you consider reasonable for the driver to make
             // for you. Used to rank; the driver's own limit is applied separately.
-            'maxDetourMinutes' => ['required', 'integer', 'min:0', 'max:45'],
+            'maxDetourMinutes' => ['sometimes', 'integer', 'min:0', 'max:45'],
 
             // How many seats you need. Commutes with fewer available are excluded.
             'seatsNeeded' => ['sometimes', 'integer', 'min:1', 'max:4'],
@@ -113,7 +113,7 @@ final class SearchCommutesRequest extends FormRequest
 
             // House preferences you would like, for example `["nonsmoking",
             // "quiet"]`. These raise a commute's score; they do not exclude.
-            'rules' => ['sometimes', 'array', 'max:6'],
+            'rules' => ['sometimes', 'array', 'max:'.count(CommuteRuleKey::cases())],
             'rules.*' => ['string', Rule::enum(CommuteRuleKey::class)],
         ];
     }

@@ -445,6 +445,7 @@ class DemoDataSeeder extends Seeder
         CommuteDemand::factory()->create([
             'passenger_user_id' => $mariam->id,
             'days_mask' => DaysMask::weekdaysSunToThu()->value,
+            'women_only' => true,
             ...self::demandOnCorridor($origin, $destination),
         ]);
     }
