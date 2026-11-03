@@ -87,3 +87,34 @@ it('names areas and the car colour in the request language', function () {
         ->and($ar['route']['start']['label'])->toBe('القاهرة الجديدة')
         ->and($en['route']['start']['label'])->toBe('New Cairo');
 });
+
+it('accepts music as a commute rule and returns it', function () {
+    $draftId = createCommute($this->driverToken, Vehicle::sole()->id)->assertStatus(201)->json('data.id');
+
+    test()->flushHeaders()->withToken($this->driverToken)
+        ->patchJson("/api/v1/commutes/{$draftId}", ['rules' => ['music' => true, 'quiet' => true]])
+        ->assertOk()
+        ->assertJsonPath('data.rules.music', true);
+});
+
+it('works out the meeting preference when the app leaves it out', function () {
+    $detail = commuteDetail($this->paxToken, $this->commuteId)->json('data');
+    $days = $detail['upcomingTrips'];
+
+    $suggested = requestSeat($this->paxToken, $this->commuteId, [
+        'scheduledTripId' => $days[0]['id'],
+        'meetingPreference' => null,
+        'pickup' => ['suggestionId' => $detail['pickups'][0]['id']],
+    ])->assertStatus(201);
+
+    expect($suggested->json('data.meetingPreference'))->toBe('landmark');
+
+    $otherToken = verifiedPassenger('01112227788', device: 'pax-pin');
+
+    $pin = requestSeat($otherToken, $this->commuteId, [
+        'scheduledTripId' => $days[0]['id'],
+        'meetingPreference' => null,
+    ])->assertStatus(201);
+
+    expect($pin->json('data.meetingPreference'))->toBe('custom');
+});
