@@ -3,7 +3,6 @@
 namespace App\Http\Resources;
 
 use App\Domains\Booking\Enums\SeatRequestKind;
-use App\Domains\Booking\Enums\SeatRequestStatus;
 use App\Domains\Booking\Models\SeatRequest;
 use App\Domains\Booking\Support\OtherConfirmedCommutes;
 use App\Domains\Booking\Support\PickupEta;
@@ -36,6 +35,10 @@ final class SeatRequestResource extends JsonResource
      */
     private ?bool $hasOtherConfirmedCommute = null;
 
+    private bool $driverView = false;
+
+    private ?array $routeImpact = null;
+
     /**
      * The passenger's state, for the driver deciding on her request (Feature 03 R-2).
      */
@@ -53,6 +56,29 @@ final class SeatRequestResource extends JsonResource
      *
      * @return array<int|string, mixed>
      */
+    public function asDriverRow(?array $routeImpact): self
+    {
+        $this->driverView = true;
+        $this->routeImpact = $routeImpact;
+
+        return $this;
+    }
+
+    public static function driverRelations(): array
+    {
+        return [
+            'passenger.stats',
+            'passenger.verifications',
+            'scheduledTrip.commuteOffer.locations',
+            'commuteOffer.locations',
+            'commuteOffer.scheduledTrips' => fn ($query) => $query
+                ->where('status', ScheduledTripStatus::Scheduled->value)
+                ->where('departure_at', '>', now())
+                ->orderBy('departure_at')
+                ->limit(60),
+        ];
+    }
+
     public static function passengerRelations(): array
     {
         return [
@@ -101,6 +127,12 @@ final class SeatRequestResource extends JsonResource
              * confirmed her, or the day filled up), never back.
              */
             'kind' => ($this->kind ?? SeatRequestKind::SeatRequest)->value,
+
+            'tripDate' => $this->when($this->driverView, fn (): ?string => $this->dayInView()?->trip_date->toDateString()),
+            'departureLocal' => $this->when($this->driverView, fn (): ?string => $this->dayInView()?->departure_local?->format('Y-m-d H:i:s')),
+            'originLabel' => $this->when($this->driverView, fn (): ?string => JourneyCard::route($this->commuteOffer)['originLabel']),
+            'destinationLabel' => $this->when($this->driverView, fn (): ?string => JourneyCard::route($this->commuteOffer)['destinationLabel']),
+            'impact' => $this->when($this->driverView, fn (): ?array => $this->routeImpact),
 
             /*
              * Whether she already holds a confirmed future seat on ANOTHER commute (BOOK-34).
@@ -195,9 +227,7 @@ final class SeatRequestResource extends JsonResource
             // (YYYY-MM-DD), or null with `pausedAt` set for "no end date".
             'pausedAt' => $this->paused_at?->toIso8601String(),
             'pausedUntil' => $this->paused_until?->toDateString(),
-            'joinedWaitlistAt' => $this->status === SeatRequestStatus::Waitlisted
-                ? $this->responded_at?->toIso8601String()
-                : null,
+            'joinedWaitlistAt' => $this->resource->joinedWaitlistAt()?->toIso8601String(),
             // Only a request to join a run that is already moving has a deadline (three
             // minutes). Every other request is null here: it stays open until answered.
             'expiresAt' => $this->expires_at?->toIso8601String(),
@@ -227,7 +257,7 @@ final class SeatRequestResource extends JsonResource
      * The day her request is about right now: the one she asked for, or — for a recurring request
      * — the commute's next upcoming day on the weekdays she asked for.
      */
-    private function dayInView(): ?ScheduledTrip
+    public function dayInView(): ?ScheduledTrip
     {
         if ($this->scheduled_trip_id !== null && $this->scheduledTrip !== null) {
             return $this->scheduledTrip;

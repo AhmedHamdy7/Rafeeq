@@ -14,6 +14,7 @@ use App\Domains\Commute\Models\ScheduledTrip;
 use App\Domains\Geo\Models\Place;
 use App\Domains\Identity\Models\User;
 use App\Domains\Shared\Casts\SpatialPoint;
+use Carbon\CarbonInterface;
 use Database\Factories\SeatRequestFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Concerns\HasUlids;
@@ -188,5 +189,14 @@ class SeatRequest extends Model
     public function isPending(): bool
     {
         return $this->status === SeatRequestStatus::Pending;
+    }
+
+    public function joinedWaitlistAt(): ?CarbonInterface
+    {
+        if ($this->status !== SeatRequestStatus::Waitlisted) {
+            return null;
+        }
+
+        return $this->displaced_at ?? $this->paused_at ?? $this->responded_at ?? $this->created_at;
     }
 }

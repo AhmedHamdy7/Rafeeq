@@ -7,13 +7,18 @@ use App\Domains\Booking\Enums\SeatRequestStatus;
 use App\Domains\Booking\Models\Booking;
 use App\Domains\Booking\Models\SeatOffer;
 use App\Domains\Booking\Models\SeatRequest;
+use App\Domains\Booking\Support\DriverSeatOffers;
 use App\Domains\Booking\Support\OtherConfirmedCommutes;
+use App\Domains\Booking\Support\WaitlistEligibility;
+use App\Domains\Commute\Enums\ScheduledTripStatus;
 use App\Domains\Commute\Models\CommuteOffer;
 use App\Domains\Commute\Models\ScheduledTrip;
 use App\Domains\Shared\Exceptions\DomainException;
 use App\Domains\Shared\Support\ErrorCode;
 use App\Http\Controllers\Controller;
 use App\Http\OpenApi\ApiErrors;
+use App\Http\Requests\Booking\ListDriverSeatOffersRequest;
+use App\Http\Requests\Booking\ListDriverWaitlistRequest;
 use App\Http\Requests\Booking\OfferSeatsToWaitlistRequest;
 use App\Http\Resources\SeatOfferResource;
 use App\Http\Resources\WaitlistMemberResource;
@@ -38,6 +43,10 @@ use Illuminate\Support\Collection;
  */
 final class WaitlistController extends Controller
 {
+    private const int MAX_DAY_CHIPS = 14;
+
+    private const int UPCOMING_DAYS_SCANNED = 120;
+
     /**
      * GET /v1/driver/commutes/{commute}/waitlist — who is waiting, with what she needs to choose.
      */
@@ -51,32 +60,13 @@ final class WaitlistController extends Controller
             ->where('status', SeatRequestStatus::Waitlisted->value)
             // PersonSummary needs both: a driver deciding who rides reads the passenger's rating
             // and badges, not just her name.
-            ->with('passenger.stats', 'passenger.verifications')
+            ->with('passenger.stats', 'passenger.verifications', 'scheduledTrip', 'commuteOffer.locations')
             ->orderBy('waitlist_position')
             // Standard #42: a tiebreak, so a page boundary cannot show or hide the same person.
             ->orderBy('id')
             ->paginate(ApiResponse::perPage($request));
 
-        $passengerIds = collect($members->items())->pluck('passenger_user_id')->unique();
-
-        /*
-         * The two card signals, computed once for the page rather than per card. A resource that
-         * fetched them per row would be one query per waiting person, and this list is read on a
-         * screen where a driver may be looking at twenty of them.
-         */
-        $previous = $this->passengersWhoHaveRidden($offer, $passengerIds);
-        $elsewhere = OtherConfirmedCommutes::forPassengers($passengerIds);
-
-        $cards = [];
-
-        foreach ($members->items() as $member) {
-            $cards[] = WaitlistMemberResource::for(
-                $member,
-                $request->user(),
-                isPreviousPassenger: in_array($member->passenger_user_id, $previous, true),
-                hasOtherConfirmedCommute: OtherConfirmedCommutes::elsewhere($elsewhere, $member->passenger_user_id, $offer->getKey()),
-            );
-        }
+        $cards = $this->cards($request, collect($members->items()));
 
         return ApiResponse::paginated($members, $cards);
     }
@@ -88,6 +78,38 @@ final class WaitlistController extends Controller
      * still settled by server transaction order under that day's row lock, exactly as for an
      * automatic fan-out.
      */
+    #[ApiErrors(ErrorCode::NotFound)]
+    public function all(ListDriverWaitlistRequest $request): JsonResponse
+    {
+        $commutes = CommuteOffer::query()
+            ->where('driver_profile_id', $request->user()->id)
+            ->select('id');
+
+        $waiting = SeatRequest::query()
+            ->whereIn('commute_offer_id', $commutes)
+            ->where('status', SeatRequestStatus::Waitlisted->value)
+            ->get();
+
+        $days = $this->upcomingDays($commutes, $waiting);
+        $members = SeatRequest::query()
+            ->whereIn('id', $this->memberIds($request, $commutes, $waiting))
+            ->with('passenger.stats', 'passenger.verifications', 'scheduledTrip', 'commuteOffer.locations')
+            ->orderBy('commute_offer_id')
+            ->orderBy('waitlist_position')
+            ->orderBy('id')
+            ->paginate(ApiResponse::perPage($request));
+
+        return ApiResponse::paginated($members, $this->cards($request, collect($members->items())), [
+            'waitingCount' => $waiting->unique('passenger_user_id')->count(),
+            'days' => $days,
+        ]);
+    }
+
+    public function offers(ListDriverSeatOffersRequest $request): JsonResponse
+    {
+        return ApiResponse::success(DriverSeatOffers::rounds($request->user()->id, $request->statuses()));
+    }
+
     #[ApiErrors(ErrorCode::NotFound, ErrorCode::CommuteNotEditable)]
     public function offer(
         OfferSeatsToWaitlistRequest $request,
@@ -165,6 +187,88 @@ final class WaitlistController extends Controller
      * @param  Collection<int, string>  $passengerIds
      * @return list<string>
      */
+    private function cards(Request $request, Collection $members): array
+    {
+        $passengerIds = $members->pluck('passenger_user_id')->unique();
+        $elsewhere = OtherConfirmedCommutes::forPassengers($passengerIds);
+        $offers = DriverSeatOffers::latestForRequests($members->pluck('id'));
+        $previous = [];
+        $cards = [];
+
+        foreach ($members as $member) {
+            $previous[$member->commute_offer_id] ??= $this->passengersWhoHaveRidden($member->commuteOffer, $passengerIds);
+
+            $cards[] = WaitlistMemberResource::for(
+                $member,
+                $request->user(),
+                isPreviousPassenger: in_array($member->passenger_user_id, $previous[$member->commute_offer_id], true),
+                hasOtherConfirmedCommute: OtherConfirmedCommutes::elsewhere($elsewhere, $member->passenger_user_id, $member->commute_offer_id),
+                offer: $offers[$member->getKey()] ?? null,
+            );
+        }
+
+        return $cards;
+    }
+
+    private function memberIds(ListDriverWaitlistRequest $request, mixed $commutes, Collection $waiting): Collection
+    {
+        if (! $request->filled('tripId')) {
+            return $waiting->pluck('id');
+        }
+
+        $trip = ScheduledTrip::query()
+            ->whereKey($request->validated('tripId'))
+            ->whereIn('commute_offer_id', $commutes)
+            ->first()
+            ?? throw DomainException::of(ErrorCode::NotFound);
+
+        return $waiting
+            ->filter(fn (SeatRequest $member): bool => WaitlistEligibility::isForDay($member, $trip))
+            ->pluck('id');
+    }
+
+    private function upcomingDays(mixed $commutes, Collection $waiting): array
+    {
+        if ($waiting->isEmpty()) {
+            return [];
+        }
+
+        $trips = ScheduledTrip::query()
+            ->whereIn('commute_offer_id', $commutes)
+            ->where('status', ScheduledTripStatus::Scheduled->value)
+            ->where('departure_at', '>', now())
+            ->orderBy('departure_at')
+            ->orderBy('id')
+            ->limit(self::UPCOMING_DAYS_SCANNED)
+            ->get();
+
+        $days = [];
+
+        foreach ($trips as $trip) {
+            if (count($days) === self::MAX_DAY_CHIPS) {
+                break;
+            }
+
+            if (! $waiting->contains(fn (SeatRequest $member): bool => WaitlistEligibility::isForDay($member, $trip))) {
+                continue;
+            }
+
+            $days[] = [
+                'date' => $trip->trip_date->toDateString(),
+                'tripId' => $trip->id,
+                'commuteId' => $trip->commute_offer_id,
+                'departureLocal' => $trip->departure_local?->format('Y-m-d H:i:s'),
+                'isFull' => $trip->seats_taken >= $trip->seats_total,
+                'waitingCount' => $waiting
+                    ->filter(fn (SeatRequest $member): bool => WaitlistEligibility::isWaitingFor($member, $trip))
+                    ->unique('passenger_user_id')
+                    ->count(),
+            ];
+        }
+
+        return $days;
+    }
+
     private function passengersWhoHaveRidden(CommuteOffer $offer, $passengerIds): array
     {
         if ($passengerIds->isEmpty()) {

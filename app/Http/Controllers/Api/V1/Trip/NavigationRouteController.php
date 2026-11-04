@@ -3,11 +3,14 @@
 namespace App\Http\Controllers\Api\V1\Trip;
 
 use App\Domains\Booking\Models\SeatRequest;
+use App\Domains\Booking\Support\RequestRouteImpact;
+use App\Domains\Commute\Enums\ScheduledTripStatus;
 use App\Domains\Commute\Models\CommuteOffer;
 use App\Domains\Commute\Models\ScheduledTrip;
 use App\Domains\Shared\Exceptions\DomainException;
 use App\Domains\Shared\Support\ErrorCode;
 use App\Domains\Shared\ValueObjects\Coordinate;
+use App\Domains\Shared\ValueObjects\DaysMask;
 use App\Domains\Trip\Actions\BuildNavigationItineraryAction;
 use App\Http\Controllers\Controller;
 use App\Http\OpenApi\ApiErrors;
@@ -86,7 +89,7 @@ final class NavigationRouteController extends Controller
      * and previewing twenty mornings would be twenty provider calls to answer one question.
      */
     #[ApiErrors(ErrorCode::NotFound, ErrorCode::CommuteRouteInvalid)]
-    public function preview(Request $request, string $seatRequest, BuildNavigationItineraryAction $action): JsonResponse
+    public function preview(Request $request, string $seatRequest, BuildNavigationItineraryAction $action, RequestRouteImpact $impact): JsonResponse
     {
         $pending = SeatRequest::query()
             ->whereKey($seatRequest)
@@ -106,7 +109,10 @@ final class NavigationRouteController extends Controller
             $pending->requested_dropoff_label,
         );
 
-        return ApiResponse::success(NavigationRouteResource::preview($itinerary));
+        return ApiResponse::success([
+            ...NavigationRouteResource::preview($itinerary),
+            'impact' => $impact->for($pending, $day),
+        ]);
     }
 
     /**
@@ -118,14 +124,17 @@ final class NavigationRouteController extends Controller
             return ScheduledTrip::query()->whereKey($pending->scheduled_trip_id)->firstOrFail();
         }
 
+        $mask = $pending->requested_days_mask === null ? null : DaysMask::fromBits((int) $pending->requested_days_mask);
+
         return ScheduledTrip::query()
             ->where('commute_offer_id', $pending->commute_offer_id)
+            ->where('status', ScheduledTripStatus::Scheduled->value)
             ->where('departure_at', '>', now())
             ->orderBy('departure_at')
-            // Standard #42: a tiebreak, so two days departing at the same minute always preview
-            // the same one.
             ->orderBy('id')
-            ->first()
+            ->limit(60)
+            ->get()
+            ->first(fn (ScheduledTrip $trip): bool => $mask === null || $mask->includesDate($trip->trip_date))
             /*
              * No future day to preview against. A refusal rather than an empty itinerary: an
              * itinerary with no day is not "no impact", it is a question that cannot be answered,

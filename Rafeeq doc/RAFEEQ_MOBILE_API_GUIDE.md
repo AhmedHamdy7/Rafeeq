@@ -14,7 +14,7 @@
 >
 > **Base URL:** `{host}/api/v1` · **Auth:** bearer token · **Format:** JSON only.
 
-**Last updated:** 2026-11-04 · **190 endpoints live** · Phases 0–7, 9 and 11 complete · 10, 12 and 13 all but a decision each
+**Last updated:** 2026-11-04 · **193 endpoints live** · Phases 0–7, 9 and 11 complete · 10, 12 and 13 all but a decision each
 
 ---
 
@@ -22,7 +22,7 @@
 
 ### What is ready
 
-**190 endpoints live** and tested, across the 47 designed screens:
+**193 endpoints live** and tested, across the 47 designed screens:
 
 | | Count | Covers |
 |---|---|---|
@@ -770,8 +770,11 @@ fails if this list and the running routes ever disagree in either direction.
 | `POST /driver/seat-requests/{seatRequest}/reject` | 4.7 Seat requests and bookings |
 | `POST /driver/seat-requests/{seatRequest}/waitlist` | 4.7 Seat requests and bookings |
 | `POST /driver/seat-requests/{seatRequest}/counteroffer` | 4.7 Seat requests and bookings |
+| `GET /driver/seat-requests/{seatRequest}/counteroffer-options` | 4.7 Seat requests and bookings |
 | `POST /seat-requests/{seatRequest}/counteroffer/accept` | 4.7 Seat requests and bookings |
 | `POST /seat-requests/{seatRequest}/counteroffer/decline` | 4.7 Seat requests and bookings |
+| `GET /driver/waitlist` | 4.7 Seat requests and bookings |
+| `GET /driver/seat-offers` | 4.7 Seat requests and bookings |
 | `GET /driver/commutes/{commute}/waitlist` | 4.7 Seat requests and bookings |
 | `POST /driver/commutes/{commute}/waitlist/offers` | 4.7 Seat requests and bookings |
 | `DELETE /driver/seat-offers/{offer}` | 4.7 Seat requests and bookings |
@@ -2234,13 +2237,33 @@ Withdraws it, freeing the one-open-request slot.
 
 #### `GET /driver/seat-requests` — active, profile complete, paginated
 
-The driver's inbox, **newest first**. Each carries a `passenger` (5.1) and two fields only this
+The driver's inbox, **newest first**. Each carries a `passenger` (5.1) and these fields only this
 list has meaning for:
 
 | Field | Meaning |
 |---|---|
-| `kind` | `seat_request` → his buttons are **Approve** (`/approve`), **Waitlist** (`/waitlist`) and **Decline** (`/reject`). `waitlist_application` → the day has no seat for her, so his yes is **Add to waiting list** (`/waitlist`) and his no is **Decline**; do not offer Approve. |
-| `hasOtherConfirmedCommute` | A bare boolean: she already holds a confirmed future seat on **another** commute. Show it as a hint ("Already rides with someone") — nothing is blocked on it, and nothing more is published. |
+| `kind` | `seat_request` → his buttons are **Accept** (`/approve`), **Counteroffer** (`/counteroffer`) and **Reject** (`/reject`) (BOOK-11, COM-13). `waitlist_application` → the day has no seat for her, so his yes is **Add to waiting list** (`/waitlist`) and his no is **Reject**. Never call `/approve` on an application. |
+| `hasOtherConfirmedCommute` | A bare boolean: she already holds a confirmed future seat on **another** commute. Show it as a hint ("In another commute"). Nothing is blocked on it, and nothing more is published (SAFE-18, COM-29). |
+| `tripDate` · `departureLocal` | The day in view: the requested day for a trial, the next requested weekday for a recurring request. `null` when no day remains. |
+| `originLabel` · `destinationLabel` | The commute this request is on. |
+| `impact` | **`PENDING` rows only**, `null` otherwise, and `null` when no day remains: what accepting does to that day. See below. |
+
+**`?status=`**: a comma-separated list, any case, as on `GET /seat-requests`, e.g.
+`?status=PENDING,COUNTEROFFERED`. Paging and `meta.total` describe the filtered list. An unknown status
+→ `422 VALIDATION_FAILED`. Left out: every status. `pendingRequests.count` on `/driver/home` counts
+`PENDING` only, both kinds, so it equals `meta.total` of `?status=PENDING`.
+
+| `impact` field | Meaning |
+|---|---|
+| `tripId` · `tripDate` | The day the numbers are for. |
+| `addedMinutes` | How much longer that day's run gets, measured against the confirmed stops. |
+| `maxDetourMinutes` · `withinLimit` | RAFEEQ's whole-trip cap (COM-31), which is also limited by kilometres. Use `withinLimit`, don't compare the numbers. |
+| `promisedArrivalLocal` · `projectedArrivalLocal` | The promised arrival, `null` on a day with no promise, and when the run would arrive with her on board. |
+| `canAccept` | `false` when `/approve` would answer `409 BOOKING_BREAKS_FROZEN_PROMISE` today. Disable Accept and offer Counteroffer and Reject (BOOK-15). Always `true` on a `waitlist_application`. |
+| `blockReason` | `promised_arrival` when `canAccept` is `false`, otherwise `null`. |
+
+⚠️ `canAccept` is a read, not a reservation. Keep handling the `409`, because the run can change between
+the read and the tap.
 
 🔴 **Requests never expire** (R-4, BOOK-36). There is no 48-hour clock any more: a request stays
 until he answers, she withdraws, or — for a one-day request — its day passes (then
@@ -2257,9 +2280,9 @@ One call handles both a trial and a recurring membership.
 | `membership` | The group member row created or upgraded. |
 | `bookings[]` | **A trial produces one; a recurring membership produces one per committed day.** Do not assume a single booking. |
 | `seatedDays` | How many days were successfully booked. |
-| `skippedDays` | Days that could not be booked because they were already full. **Show these** — a member who thinks they have five days and has four will find out on the wrong morning. |
+| `skippedDays` | `[{tripDate, reason}]`: days that could not be booked, and the error code that refused each. **Show these** — a member who thinks they have five days and has four will find out on the wrong morning. |
 
-Refusals to handle: `SEAT_UNAVAILABLE` (the day filled — offer **Waitlist** instead),
+Refusals to handle: `SEAT_UNAVAILABLE` (the day filled — reload, and a trial row now reads `kind: waitlist_application`),
 `SEAT_REQUEST_NOT_PENDING`, **`BOOKING_ALREADY_BOOKED`** (409 — she already holds a seat at an
 overlapping time; `error.fields.overlapsBookingId` is hers and is **not** shown to the driver, so
 just say she is no longer free then), `BOOKING_DEADLINE_PASSED` (the day has left),
@@ -2366,6 +2389,26 @@ booking on an affected day.
 > everybody on it (`waitlist_cleared_by_change`) to apply again, their requests moving to
 > `TERMS_CHANGED`. Even the ones that still look compatible: we cannot tell from a 07:05 application
 > whether 07:30 works for her. **Nothing is cleared if the proposal is rejected or never applies.**
+
+#### `GET /driver/seat-requests/{seatRequest}/counteroffer-options` — active, profile complete
+
+The Counteroffer screen in one read: each of the commute's advertised stops, costed for this passenger
+as a pair with her other point. `409 SEAT_REQUEST_NOT_PENDING` once the request is answered, `404` for
+anybody else's request.
+
+| Field | Meaning |
+|---|---|
+| `tripDate` · `departureLocal` | The day in view, as on the inbox row. |
+| `maxDetourMinutes` | RAFEEQ's whole-trip cap. |
+| `canDropPin` | `true`: the driver can also place his own pin (C04), and send it as `{lat, lng, label}`. |
+| `requested` | `{pickup, dropoff, addedMinutes, withinLimit}`: what she asked for. |
+| `route` | `{polyline, distanceMeters, durationSeconds}`: the published route, for the map. |
+| `pickups[]` · `dropoffs[]` | The options: `{suggestionId, label, lat, lng, addedMinutes, changeFromRequestedMinutes, walkMeters, withinLimit, refusalCode}`. Her own suggested point is left out. |
+
+`changeFromRequestedMinutes` is negative when the option saves time ("saves 6 min"). `walkMeters` is the
+straight-line distance from the point she asked for, so show it as approximate. `refusalCode` is the code
+`/counteroffer` would answer for this option, or `null`: disable the option when it is set. Send the
+choice as `{suggestionId}`. The driver's own start and end are never options.
 
 #### `POST /driver/seat-requests/{seatRequest}/counteroffer` — active, profile complete
 
@@ -2569,6 +2612,40 @@ exclude her from a morning she fully intended to ride.
 A request that is not on a waiting list answers **`409 SEAT_REQUEST_NOT_WAITLISTED`** with the
 current status in `error.fields.status`. Somebody else's answers **`404`**.
 
+#### `GET /driver/waitlist` — active, profile complete, paginated
+
+The driver's whole waiting list, across all her commutes, with the same row as the per-commute list
+below. Empty, never refused, for a driver with no commute.
+
+**`?tripId=`** returns the members who asked for that day, including anybody not available that day.
+`404` for a day on another driver's commute.
+
+| `meta` field | Meaning |
+|---|---|
+| `total` | Rows, after `tripId`. One person on two of her commutes is two rows. |
+| `waitingCount` | People, counted once each, whatever `tripId` says. Equals `waitlist.count` on `/driver/home`. Use this for the tab count. |
+| `days[]` | The chips: up to 14 upcoming days someone asked for, `{date, tripId, commuteId, departureLocal, isFull, waitingCount}`. Here `waitingCount` leaves out anybody paused or not available that day, and equals `waitlistCount` on the run. |
+
+#### `GET /driver/seat-offers` — active, profile complete
+
+One item per seat round on an upcoming day, soonest first. Not paginated. An item leaves this list when
+its day leaves. **`?status=`**: comma-separated `OPEN`, `ACCEPTED`, `CLOSED`, any case.
+
+| Field | Meaning |
+|---|---|
+| `releaseEventId` | The round. A second seat on the same day is a second item. |
+| `tripId` · `commuteId` · `date` · `departureLocal` | The day. |
+| `status` | `OPEN` · `ACCEPTED` · `CLOSED`. |
+| `recipientsCount` | How many members were offered it. "Seat offered to 2 members". |
+| `acceptedBy` | `{seatRequestId, publicFirstName}` of who got it, or `null`. |
+| `members[]` | `{offerId, seatRequestId, publicFirstName, status}`, where `status` is `OFFERED` · `CONFIRMED` · `OFFER_CLOSED`. |
+
+🔒 **A decline is never shown.** A member who declined reads `OFFERED` until someone accepts, then
+`OFFER_CLOSED`, the same as everybody else who missed it.
+
+⚠️ Someone who accepted is no longer on the waiting list, so her "Confirmed" card comes from `members[]`
+here, not from `GET /driver/waitlist`.
+
 #### `GET /driver/commutes/{commute}/waitlist` — active, profile complete, paginated
 
 Her own waiting list, as the screen where she chooses who to offer a seat to. **404** for anybody
@@ -2579,7 +2656,12 @@ else's commute.
 | `seatRequestId` · `commuteId` · `tripId` | `tripId` is set only for a trial, which wants one specific day. |
 | `commitment` | `trial` or `recurring` — **show it.** A recurring member is being invited back into the group; a trial to one morning. |
 | `requestedDaysMask` · `seats` | |
-| `waitlistPosition` · `joinedWaitlistAt` | Position is an estimate, as everywhere else. |
+| `waitlistPosition` · `joinedWaitlistAt` | Position is an estimate, as everywhere else. `joinedWaitlistAt` is when she was added to the list, as on the seat-request shape: when the driver approved her, or when the platform or her own pause put her back. |
+| `tripDate` | The day, for a trial. `null` on a recurring row. |
+| `originLabel` · `destinationLabel` | The commute this row is on. |
+| `pickup.label` · `dropoff.label` | Her two points. |
+| `availableToday` | `false` when she marked **Not available today** (BOOK-23). |
+| `offer` | Her latest offer on an upcoming day, `{id, tripId, date, status}`, or `null`. `status` is as on `GET /driver/seat-offers`. |
 | `isPreviousPassenger` | 🔴 **The "Previous Passenger" badge.** True for somebody who has held a seat in this car before — including anybody the platform displaced when the commute was paused or the vehicle replaced. |
 | `displacedAt` · `displacedReason` | Non-null when the *platform* put her back on the list, not her own choice. `commute_paused` or `vehicle_replaced`. |
 | `hasOtherConfirmedCommute` | A bare boolean: she already holds a confirmed future seat somewhere. **Nothing more is published** — not whose commute, not which days. It is there so the driver is not surprised when somebody declines, and nothing is blocked on it. |
@@ -2667,6 +2749,9 @@ request's two points. Same shape as above, with two differences.
 |---|---|
 | `status` | 🔴 **`PREVIEW_NOT_CONFIRMED`.** Show it as a proposal. |
 | `stops[].isProposed` | True on exactly the two points being proposed. `stops[].id` is null throughout — these rows do not exist, so there is nothing to act on. |
+
+The response also carries **`impact`**, the same object as on the inbox row. The day previewed is the
+next requested weekday for a recurring request, and `tripDate` says which.
 
 Nothing is written. The official itinerary stays at its current point count until she accepts —
 four points can appear here while `navigation-route` still returns two.
@@ -4622,6 +4707,7 @@ exist, and every live endpoint must be named here.
 
 | Date | Change |
 |---|---|
+| 2026-11-04 | 📥 **Driver Requests gaps.** **3 new endpoints:** `GET /driver/waitlist`, `GET /driver/seat-offers` and `GET /driver/seat-requests/{seatRequest}/counteroffer-options`. `GET /driver/seat-requests` takes `?status=` and each row gains `tripDate`, `departureLocal`, `originLabel`, `destinationLabel` and `impact`. `route-preview` gains `impact` and now previews the next **requested** weekday. Waiting-list rows gain `tripDate`, `originLabel`, `destinationLabel`, `pickup.label`, `dropoff.label`, `availableToday` and `offer`. 🛑 `joinedWaitlistAt` on a waiting-list row is now when she was added to the list, not when she asked, and matches the seat-request shape. |
 | 2026-11-04 | 🚗 **Driver Home round 2.** New `pausedCommutes` and `pausedCommuteReasons` on `GET /driver/home`. 🛑 Car items of a suspended driver read `suspended`, not `action_needed`. 🛑 A licence waiting on an application that was rejected or withdrawn reads `in_progress`, not `under_review`. |
 | 2026-11-04 | 🪪 **The licence follows the application.** `POST /driver/application/submit` now sends the licence to review, and approving the driver approves it with the typed date, so `licenceExpiresAt`, `expiring` and `renewal_required` work and an approved driver reads 5 of 5. A reviewer's rejected licence blocks approval until replaced. **Days of a paused commute are gone from `nextRun` and `laterThisWeek`**, and the lateness sweep skips them. `demo:driver-home-states` gains `--state` and `--phone`, and covers every state in `FLUTTER_DRIVER_HOME_RESPONSES.md`. |
 | 2026-11-04 | 🚗 **A reviewer can reject the car's registration or details on their own.** `GET /driver/verification` returns the reason on that item, and `actionItem.key` is `vehicle_registration` or `vehicle_details` instead of `application`. `driver_item_rejected` now also carries those two `itemKey`s. Replacing the item clears the reason and returns the application to `DRAFT`; until then, submit lists the item in `missing` (4.4, 4.14). |

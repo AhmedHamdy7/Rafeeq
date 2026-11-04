@@ -50,7 +50,7 @@ use App\Domains\Verification\Models\UserVerification;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Facades\Artisan;
 
-final class DriverHomeStatesSeeder extends DemoDataSeeder
+class DriverHomeStatesSeeder extends DemoDataSeeder
 {
     /**
      * @var array<string, array{0: string, 1: string}>
@@ -145,7 +145,7 @@ final class DriverHomeStatesSeeder extends DemoDataSeeder
     /**
      * @param  list<Capability>  $capabilities
      */
-    private function person(string $phone, string $first, array $capabilities): User
+    protected function person(string $phone, string $first, array $capabilities): User
     {
         $user = User::query()->where('phone_e164', $phone)->first() ?? User::factory()->woman()->create([
             'phone_e164' => $phone,
@@ -210,7 +210,7 @@ final class DriverHomeStatesSeeder extends DemoDataSeeder
         };
     }
 
-    private function commuteDriver(string $state, string $phone): User
+    protected function commuteDriver(string $state, string $phone): User
     {
         $driver = User::query()->where('phone_e164', $phone)->first();
 
@@ -245,7 +245,7 @@ final class DriverHomeStatesSeeder extends DemoDataSeeder
         return $driver;
     }
 
-    private function resetDriver(User $driver, CommuteOffer $offer): void
+    protected function resetDriver(User $driver, CommuteOffer $offer): void
     {
         if ($driver->account_status === AccountStatus::Suspended) {
             app(SuspendMemberAction::class)->reinstate($driver, AdminUser::query()->firstOrFail(), 'Demo state reset.');
@@ -322,7 +322,7 @@ final class DriverHomeStatesSeeder extends DemoDataSeeder
             ]);
     }
 
-    private function moveFirstDay(CommuteOffer $offer, int $minutesFromNow, bool $promise): ScheduledTrip
+    protected function moveFirstDay(CommuteOffer $offer, int $minutesFromNow, bool $promise): ScheduledTrip
     {
         $timezone = $offer->schedule->timezone;
         $today = now($timezone)->toDateString();
@@ -373,7 +373,7 @@ final class DriverHomeStatesSeeder extends DemoDataSeeder
         ])->save();
     }
 
-    private function seatOnce(User $rider, ScheduledTrip $trip): void
+    protected function seatOnce(User $rider, ScheduledTrip $trip): void
     {
         $booking = Booking::query()
             ->where('scheduled_trip_id', $trip->id)

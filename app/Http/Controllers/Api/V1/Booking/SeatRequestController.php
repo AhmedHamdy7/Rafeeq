@@ -9,7 +9,9 @@ use App\Domains\Booking\Actions\RespondToSeatRequestAction;
 use App\Domains\Booking\Actions\SetStandbyAvailabilityAction;
 use App\Domains\Booking\Enums\SeatRequestStatus;
 use App\Domains\Booking\Models\SeatRequest;
+use App\Domains\Booking\Support\CounterofferOptions;
 use App\Domains\Booking\Support\OtherConfirmedCommutes;
+use App\Domains\Booking\Support\RequestRouteImpact;
 use App\Domains\Commute\Models\CommuteOffer;
 use App\Domains\Shared\Exceptions\DomainException;
 use App\Domains\Shared\Support\ErrorCode;
@@ -111,20 +113,20 @@ final class SeatRequestController extends Controller
      * Each row carries the passenger's state (Feature 03 R-2, BOOK-34): `kind` — a seat request
      * or an application to join the waiting list — and `hasOtherConfirmedCommute`.
      */
-    public function inbox(Request $request): JsonResponse
+    public function inbox(ListSeatRequestsRequest $request, RequestRouteImpact $impact): JsonResponse
     {
+        $statuses = $request->statuses();
+
         $requests = SeatRequest::query()
             ->whereIn('commute_offer_id', CommuteOffer::query()
                 ->where('driver_profile_id', $request->user()->id)
                 ->select('id'))
-            // PersonSummary needs both: a driver deciding who rides reads the
-            // passenger's rating and badges, not just their name.
-            ->with('passenger.stats', 'passenger.verifications')
+            ->when($statuses !== [], fn ($query) => $query->whereIn('status', $statuses))
+            ->with(SeatRequestResource::driverRelations())
             ->latest('created_at')
             ->orderByDesc('id')
             ->paginate(ApiResponse::perPage($request));
 
-        // Once for the page, not per row — see OtherConfirmedCommutes.
         $elsewhere = OtherConfirmedCommutes::forPassengers(
             collect($requests->items())->pluck('passenger_user_id'),
         );
@@ -137,6 +139,10 @@ final class SeatRequestController extends Controller
                 $row->resource->passenger_user_id,
                 $row->resource->commute_offer_id,
             ));
+
+            $row->asDriverRow($row->resource->status === SeatRequestStatus::Pending
+                ? $impact->for($row->resource, $row->dayInView())
+                : null);
         }
 
         return ApiResponse::paginated($requests, $rows);
@@ -346,6 +352,15 @@ final class SeatRequestController extends Controller
      * A request on one of the caller's OWN commutes. 404 for anybody else's — a 403
      * would confirm the id exists (Bible §6, IDOR).
      */
+    #[ApiErrors(ErrorCode::SeatRequestNotPending, ErrorCode::NotFound)]
+    public function counterofferOptions(Request $request, string $seatRequest, CounterofferOptions $options): JsonResponse
+    {
+        $pending = $this->forMyCommute($request, $seatRequest);
+        $pending->load(SeatRequestResource::driverRelations());
+
+        return ApiResponse::success($options->for($pending, (new SeatRequestResource($pending))->dayInView()));
+    }
+
     private function forMyCommute(Request $request, string $seatRequestId): SeatRequest
     {
         return SeatRequest::query()

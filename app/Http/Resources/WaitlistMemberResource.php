@@ -3,6 +3,7 @@
 namespace App\Http\Resources;
 
 use App\Domains\Booking\Models\SeatRequest;
+use App\Domains\Booking\Support\StandbyAvailability;
 use App\Domains\Identity\Models\User;
 
 /**
@@ -36,6 +37,7 @@ final class WaitlistMemberResource
         ?User $viewer,
         bool $isPreviousPassenger,
         bool $hasOtherConfirmedCommute,
+        ?array $offer = null,
     ): array {
         return [
             // Cast, so the published contract says `string` rather than leaving the mobile team a
@@ -53,7 +55,19 @@ final class WaitlistMemberResource
             'seats' => $member->seats,
 
             'waitlistPosition' => $member->waitlist_position,
-            'joinedWaitlistAt' => $member->created_at->toIso8601String(),
+            'joinedWaitlistAt' => $member->joinedWaitlistAt()?->toIso8601String(),
+            'tripDate' => $member->scheduledTrip?->trip_date->toDateString(),
+            'originLabel' => JourneyCard::route($member->commuteOffer)['originLabel'],
+            'destinationLabel' => JourneyCard::route($member->commuteOffer)['destinationLabel'],
+            'pickup' => ['label' => $member->requested_pickup_label],
+            'dropoff' => ['label' => $member->requested_dropoff_label],
+            'availableToday' => StandbyAvailability::isAvailableToday($member),
+            'offer' => $offer === null ? null : [
+                'id' => (string) $offer['id'],
+                'tripId' => (string) $offer['tripId'],
+                'date' => (string) $offer['date'],
+                'status' => (string) $offer['status'],
+            ],
 
             /*
              * 🔴 The **Previous Passenger** label. v5 lets the driver "prioritize

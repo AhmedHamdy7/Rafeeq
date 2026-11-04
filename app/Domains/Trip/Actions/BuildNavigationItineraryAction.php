@@ -138,6 +138,21 @@ final readonly class BuildNavigationItineraryAction
     /**
      * @return Collection<int, NavigationStop>
      */
+    public function currentDurationSeconds(ScheduledTrip $trip): int
+    {
+        [$start, $startLabel, $end, $endLabel] = $this->driverEndpoints($trip);
+
+        return NavigationItinerary::compose(
+            $this->geo,
+            $start,
+            $startLabel,
+            $end,
+            $endLabel,
+            $this->confirmedPassengerPoints($trip),
+            $trip->departure_at === null ? null : CarbonImmutable::parse($trip->departure_at),
+        )->durationSeconds;
+    }
+
     private function rebuild(ScheduledTrip $trip): Collection
     {
         [$start, $startLabel, $end, $endLabel] = $this->driverEndpoints($trip);
