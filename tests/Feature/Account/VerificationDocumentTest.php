@@ -101,6 +101,33 @@ it('refuses a file that is a valid image and something else at once', function (
     expect(IdentityDocument::count())->toBe(0);
 });
 
+it('accepts a camera photo whose compressed bytes happen to contain short executable signatures', function () {
+    mt_srand(42);
+    $image = imagecreatetruecolor(1200, 900);
+
+    for ($y = 0; $y < 900; $y += 2) {
+        for ($x = 0; $x < 1200; $x += 2) {
+            imagefilledrectangle($image, $x, $y, $x + 1, $y + 1, mt_rand(0, 0xFFFFFF));
+        }
+    }
+
+    mt_srand();
+
+    ob_start();
+    imagejpeg($image, null, 85);
+    $photo = (string) ob_get_clean();
+
+    expect(str_contains($photo, 'MZ'))->toBeTrue()
+        ->and(str_contains($photo, '#!'))->toBeTrue();
+
+    uploadVerificationDocument(
+        $this->token, 'driving_licence', 'licence_front',
+        UploadedFile::fake()->createWithContent('licence_front.jpg', $photo),
+    )->assertCreated();
+
+    expect(IdentityDocument::count())->toBe(1);
+});
+
 it('never writes anything to disk for a refused upload', function () {
     uploadVerificationDocument(
         $this->token, 'government_id', 'national_id_front',

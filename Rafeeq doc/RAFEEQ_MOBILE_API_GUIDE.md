@@ -1620,6 +1620,10 @@ moment with none active, and never one with two.
 
 **Request:** `type`, `file`, `expiresAt`.
 
+**Upload limits, on this endpoint and `POST /account/verifications/{type}/documents`:** a file up to
+**8 MB** and **16 megapixels**. Over 8 MB answers `422 VALIDATION_FAILED`; a whole request over
+**12 MB** answers `413 PAYLOAD_TOO_LARGE`, in the standard error envelope.
+
 | `type` | |
 |---|---|
 | `registration_front` · `registration_back` | **The car licence, both sides (F2-4).** The only car paper required. |
@@ -4581,6 +4585,7 @@ exist, and every live endpoint must be named here.
 
 | Date | Change |
 |---|---|
+| 2026-11-04 | 📷 **Document uploads over about 16 KB no longer fail with a 500 (F2-1).** nginx could not write a large request body to its temp folder, so any real photo failed on `/account/verifications/{type}/documents` and `/driver/vehicles/{vehicle}/documents` before reaching the application. Errors nginx raises itself on `/api/*` (`413`, `500`, `502`, `504`) now use the standard error envelope with `PAYLOAD_TOO_LARGE` or `SERVER_ERROR`, in the language from `Accept-Language`. |
 | 2026-11-02 | 🧾 **Trips tabs (TRIPS-12 → 18).** `GET /seat-offers` items now carry the card: `originLabel`, `destinationLabel`, `driver` (person), `vehicle` (make, model, colour), `pickup.label`, `dropoff.label`, `promisedArrivalLocal`, `conflictingBookingId` (TRIPS-13). Seat requests carry `commute.commuteGroupId`, `joinedWaitlistAt` (TRIPS-12), `pausedAt` and `pausedUntil` (TRIPS-22). Bookings carry `trip.promisedArrivalAt/Local` (TRIPS-20) and `membership` (TRIPS-21); groups carry `maxPauseDays` (TRIPS-22); attendance rows carry `isMe` (TRIPS-23). `?status=` filters on `GET /seat-requests` and `GET /seat-offers` (TRIPS-14). New `GET /bookings/{booking}/cancel-preview`, her cancel fee before she confirms (TRIPS-18). New `PATCH /bookings/{booking}/pickup-note` and `pickupNote` on the booking (TRIPS-17). The commute-demand response is documented in full, with the rule keys confirmed (TRIPS-16). |
 | 2026-11-03 | 🧭 **Discover follow-up.** `meetingPoint.address` and `dropOffPoint.address` follow `Accept-Language` when the point is a catalogue place (search, `/matches`, Home); a driver-typed point stays as typed. `GET /matches` rows carry `demandTitle`. `score` on `/matches` is the stored integer total (documented beside search's object). `promisedArrival*` is `null` when the driver set no promised arrival for that weekday — show the estimate (`dropOffPoint.estimatedArrivalLocal`) as approximate then. |
 | 2026-11-03 | 👤 **`user.gender`** (`woman` · `man` · `null`) and **`user.canChooseWomenOnly`** on `/auth/me` and every response with her own `user` object: show the Women-only chip only when `true`. Another person's gender is still never returned. **`GET /search/commutes` takes the same input as a demand:** `HH:MM` times, `maxWalkMinutes` / `maxDetourMinutes` optional (10 / 15), and all 7 rule keys. Old demands with `audiencePreference: women_only` and `womenOnly: false` were brought into line (a woman's become `womenOnly: true`; anyone else's go back to `any_verified`). |

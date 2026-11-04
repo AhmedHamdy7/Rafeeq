@@ -35,10 +35,6 @@ final class SignatureVirusScanner implements VirusScanner
      * header-only check.
      */
     private const array EXECUTABLE_MARKERS = [
-        'MZ',            // Windows PE
-        "\x7FELF",       // Linux ELF
-        "\xCA\xFE\xBA\xBE", // Mach-O fat binary
-        '#!',            // shell script
         '<?php',
         '<script',
     ];

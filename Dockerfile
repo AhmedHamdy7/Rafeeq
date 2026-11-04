@@ -59,7 +59,7 @@ RUN chmod +x /usr/local/bin/entrypoint
 # Alpine's php-fpm image runs as root by default; the app's own files belong to the web user so a
 # runtime write (a log, a cached view, an uploaded document) is possible without widening
 # permissions on the whole tree.
-RUN chown -R www-data:www-data storage bootstrap/cache
+RUN chown -R www-data:www-data storage bootstrap/cache /var/lib/nginx
 
 # OPcache, because every request otherwise recompiles the framework. `validate_timestamps=0` is
 # safe here and only here: the code in an image never changes, and a deploy is a new image.
