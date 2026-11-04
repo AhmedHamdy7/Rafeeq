@@ -9,6 +9,10 @@ use App\Domains\Identity\Enums\SecurityEventType;
 use App\Domains\Identity\Support\SecurityLog;
 use App\Domains\Shared\Exceptions\DomainException;
 use App\Domains\Shared\Support\ErrorCode;
+use App\Domains\Verification\Actions\SubmitVerificationAction;
+use App\Domains\Verification\Enums\VerificationStatus;
+use App\Domains\Verification\Enums\VerificationType;
+use App\Domains\Verification\Models\UserVerification;
 use Illuminate\Support\Facades\DB;
 
 /**
@@ -21,6 +25,8 @@ use Illuminate\Support\Facades\DB;
  */
 final readonly class SubmitDriverApplicationAction
 {
+    public function __construct(private SubmitVerificationAction $submitVerification) {}
+
     public function submit(DriverProfile $profile): DriverProfile
     {
         if ($profile->status === DriverProfileStatus::PendingReview) {
@@ -57,6 +63,15 @@ final readonly class SubmitDriverApplicationAction
             $profile->status = DriverProfileStatus::PendingReview->value;
             $profile->rejection_reason = null;
             $profile->save();
+
+            $licence = UserVerification::query()
+                ->where('user_id', $profile->user_id)
+                ->where('type', VerificationType::DrivingLicence->value)
+                ->first();
+
+            if ($licence !== null && $licence->status !== VerificationStatus::Approved) {
+                $this->submitVerification->execute($profile->user, VerificationType::DrivingLicence);
+            }
 
             SecurityLog::record(SecurityEventType::DriverApplicationSubmitted, $profile->user);
 

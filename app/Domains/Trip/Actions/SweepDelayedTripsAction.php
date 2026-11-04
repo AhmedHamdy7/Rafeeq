@@ -7,6 +7,7 @@ use App\Domains\Booking\Enums\BookingEventType;
 use App\Domains\Booking\Enums\BookingStatus;
 use App\Domains\Booking\Models\Booking;
 use App\Domains\Booking\Support\BookingEventLog;
+use App\Domains\Commute\Enums\CommuteOfferStatus;
 use App\Domains\Commute\Enums\ScheduledTripStatus;
 use App\Domains\Commute\Models\ScheduledTrip;
 use App\Domains\Identity\Models\User;
@@ -73,6 +74,7 @@ final readonly class SweepDelayedTripsAction
             ->where('status', ScheduledTripStatus::Scheduled->value)
             ->whereNotNull('departure_at')
             ->where('departure_at', '<=', $now->subMinutes(self::reminderMinutes()))
+            ->whereHas('commuteOffer', fn ($offer) => $offer->where('status', CommuteOfferStatus::Published->value))
             ->with('commuteOffer.driverProfile.user')
             ->orderBy('departure_at')
             ->orderBy('id')

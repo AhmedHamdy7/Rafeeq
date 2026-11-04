@@ -19,7 +19,10 @@ use App\Domains\Notification\Models\Notification;
 use App\Domains\Notification\Support\Notifier;
 use App\Domains\Shared\Exceptions\DomainException;
 use App\Domains\Shared\Support\ErrorCode;
+use App\Domains\Verification\Actions\ReviewVerificationAction;
+use App\Domains\Verification\Enums\VerificationStatus;
 use App\Domains\Verification\Enums\VerificationType;
+use App\Domains\Verification\Models\UserVerification;
 use App\Domains\Verification\Support\VerificationCentre;
 use Illuminate\Support\Facades\DB;
 
@@ -36,7 +39,10 @@ use Illuminate\Support\Facades\DB;
  */
 final readonly class ReviewDriverApplicationAction
 {
-    public function __construct(private ChangeCommuteStatusAction $commutes) {}
+    public function __construct(
+        private ChangeCommuteStatusAction $commutes,
+        private ReviewVerificationAction $reviewVerification,
+    ) {}
 
     public function approve(DriverProfile $profile, AdminUser $reviewer): DriverProfile
     {
@@ -62,8 +68,24 @@ final readonly class ReviewDriverApplicationAction
             ]);
         }
 
-        return DB::transaction(function () use ($profile, $reviewer): DriverProfile {
+        $licence = UserVerification::query()
+            ->where('user_id', $profile->user_id)
+            ->where('type', VerificationType::DrivingLicence->value)
+            ->first();
+
+        if ($licence?->status === VerificationStatus::ActionNeeded) {
+            throw DomainException::of(ErrorCode::DriverApplicationIncomplete, fields: [
+                'missing' => [VerificationType::DrivingLicence->value],
+            ]);
+        }
+
+        return DB::transaction(function () use ($profile, $reviewer, $licence): DriverProfile {
             $previous = $profile->status;
+
+            if ($licence !== null && $licence->status !== VerificationStatus::Approved) {
+                $licence->forceFill(['status' => VerificationStatus::Pending->value])->save();
+                $this->reviewVerification->approve($licence, $reviewer, notify: false);
+            }
 
             $profile->status = DriverProfileStatus::Approved->value;
             $profile->reviewer_id = $reviewer->id;

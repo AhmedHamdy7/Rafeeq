@@ -6,6 +6,7 @@ use App\Domains\Commute\Models\CommuteRule;
 use App\Domains\Commute\Models\ScheduledTrip;
 use App\Domains\Identity\Models\User;
 use Database\Seeders\DemoDataSeeder;
+use Database\Seeders\DriverHomeStatesSeeder;
 
 /**
  * `demo:refresh` — a long-lived demo environment where the calendar has moved on.
@@ -72,29 +73,55 @@ it('refuses to add match states in production', function () {
     $this->artisan('demo:match-states')->assertFailed();
 });
 
-it('seeds one driver per Driver Home state, and resets them when run again', function () {
+it('seeds every Driver Home state through the real flows, and resets them when run again', function () {
     $this->artisan('demo:driver-home-states')->assertSuccessful();
     $this->artisan('demo:driver-home-states')->assertSuccessful();
 
-    $home = function (string $phone): array {
-        $driver = User::query()->where('phone_e164', $phone)->sole();
+    $home = function (string $state): array {
+        $driver = User::query()->where('phone_e164', DriverHomeStatesSeeder::STATES[$state][0])->sole();
 
         return $this->actingAs($driver, 'sanctum')->getJson('/api/v1/driver/home')->assertOk()->json('data');
     };
 
-    expect($home('+201055557001')['nextRun']['phase'])->toBe('scheduled')
-        ->and($home('+201055557001')['nextRun']['waitlistCount'])->toBeGreaterThanOrEqual(1)
-        ->and($home('+201055557002')['nextRun']['phase'])->toBe('starting_soon')
-        ->and($home('+201055557003')['nextRun']['phase'])->toBe('in_progress')
-        ->and($home('+201055557004')['nextRun']['phase'])->toBe('not_started')
-        ->and($home('+201055557005')['nextRun']['phase'])->toBe('late')
-        ->and($home('+201055557006')['expiredRun'])->not->toBeNull()
-        ->and($home('+201055557007')['notices'][0]['kind'])->toBe('seat_opened')
-        ->and($home('+201055557008')['notices'][0]['rejoinedWaitlist'])->toBeTrue()
-        ->and($home('+201055557009')['notices'][0]['rejoinedWaitlist'])->toBeFalse()
-        ->and($home('+201055557011')['verification']['overall'])->toBe('under_review')
-        ->and($home('+201055557012')['verification']['overall'])->toBe('action_required')
-        ->and($home('+201055557013')['verification']['overall'])->toBe('expiring')
-        ->and($home('+201055557014')['verification']['overall'])->toBe('renewal_required')
-        ->and($home('+201055557015')['verification']['overall'])->toBe('suspended');
+    expect($home('F3D-01')['nextRun']['phase'])->toBe('scheduled')
+        ->and($home('F3D-01')['nextRun']['canStart'])->toBeFalse()
+        ->and($home('F3D-01')['verification']['completed'])->toBe(5)
+        ->and($home('F3D-01-CAN-START')['nextRun']['canStart'])->toBeTrue()
+        ->and($home('F3D-02')['nextRun']['phase'])->toBe('starting_soon')
+        ->and($home('F3D-03-PREPARING')['nextRun']['status'])->toBe('PREPARING')
+        ->and($home('F3D-03-EN-ROUTE')['nextRun']['status'])->toBe('EN_ROUTE')
+        ->and($home('F3D-03-IN-PROGRESS')['nextRun']['status'])->toBe('IN_PROGRESS')
+        ->and($home('F3D-04')['nextRun']['phase'])->toBe('not_started')
+        ->and($home('F3D-05')['nextRun']['phase'])->toBe('late')
+        ->and($home('F3D-06')['expiredRun'])->not->toBeNull()
+        ->and($home('F3D-06')['nextRun'])->not->toBeNull()
+        ->and($home('F3D-07')['notices'][0]['kind'])->toBe('seat_opened')
+        ->and($home('F3D-08-REJOINED')['notices'][0]['rejoinedWaitlist'])->toBeTrue()
+        ->and($home('F3D-08-LEFT')['notices'][0]['rejoinedWaitlist'])->toBeFalse()
+        ->and($home('NO-PROMISE')['nextRun']['promisedArrivalLocal'])->toBeNull()
+        ->and(collect($home('LATER-WAITLIST')['laterThisWeek'])->pluck('waitlistCount')->unique()->sort()->values()->all())->toBe([0, 1])
+        ->and($home('SAME-PERSON-TWO-DAYS')['waitlist']['count'])->toBe(1)
+        ->and($home('NO-COMMUTES')['nextRun'])->toBeNull()
+        ->and($home('NO-COMMUTES')['verification']['overall'])->toBe('verified')
+        ->and($home('NO-COMMUTES')['verification']['completed'])->toBe(5)
+        ->and($home('NO-COMMUTES')['verification']['licenceExpiresAt'])->not->toBeNull()
+        ->and($home('NOT-STARTED')['verification']['overall'])->toBe('not_started')
+        ->and($home('IN-PROGRESS')['verification']['overall'])->toBe('in_progress')
+        ->and($home('COMPLETE-DRAFT')['verification']['overall'])->toBe('in_progress')
+        ->and($home('UNDER-REVIEW')['verification']['overall'])->toBe('under_review')
+        ->and($home('VERIFIED')['verification']['overall'])->toBe('verified')
+        ->and($home('EXPIRING')['verification']['overall'])->toBe('expiring')
+        ->and($home('RENEWAL-LICENCE')['verification']['actionItem']['key'])->toBe('driving_licence')
+        ->and($home('RENEWAL-LICENCE')['nextRun'])->toBeNull()
+        ->and($home('RENEWAL-REGISTRATION')['verification']['actionItem']['key'])->toBe('vehicle_registration')
+        ->and($home('REJECTED-LICENCE')['verification']['actionItem']['key'])->toBe('driving_licence')
+        ->and($home('REJECTED-REGISTRATION')['verification']['actionItem']['key'])->toBe('vehicle_registration')
+        ->and($home('REJECTED-DETAILS')['verification']['actionItem']['key'])->toBe('vehicle_details')
+        ->and($home('REJECTED-APPLICATION')['verification']['actionItem']['key'])->toBe('application')
+        ->and($home('SUSPENDED')['verification']['suspensionReason'])->toBe('Repeated no-show reports.')
+        ->and($home('SUSPENDED')['nextRun'])->toBeNull();
+
+    $this->artisan('demo:driver-home-states', ['--state' => 'F3D-05', '--phone' => '+201055557005'])->assertSuccessful();
+    $this->artisan('demo:driver-home-states', ['--state' => 'F3D-05', '--phone' => '+201055557001'])->assertFailed();
+    $this->artisan('demo:driver-home-states', ['--state' => 'NOPE'])->assertFailed();
 });

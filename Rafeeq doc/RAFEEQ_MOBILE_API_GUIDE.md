@@ -1482,6 +1482,8 @@ whatever order the driver likes, all as drafts. Two checks stay, at the end:
 
 - **Submit** needs all five **uploaded and sent**: the ID and the selfie submitted (`under_review`
   or `approved`), the licence details and both licence sides, a car with its registration.
+  **Submit also sends the licence to review**, so don't call
+  `POST /account/verifications/driving_licence/submit` yourself. Approving the driver approves the licence too.
 - **Approval** (staff) needs the ID **and the selfie approved** (F2-2). The checklist shows which.
 
 Publishing a commute (4.5) still needs `verified:government_id`.
@@ -1549,10 +1551,7 @@ and the one that explains why her commutes stopped.
 | `actionItem` | `{key, status, rejectionReason}` for the first item that needs the driver, so you do not have to read all five: `status` is `action_needed` or `expired`. `key` is an item key, car items included, or **`application`** only when the reviewer rejected the application as a whole. `null` when nothing is waiting, and for a suspended driver. |
 | `suspensionReason` | One sentence for a suspended driver, written by staff. `null` otherwise. |
 
-> ⚠️ **`completed` can be 4 while `overall` is `verified`.** Approval today requires a valid licence
-> and a reviewer's decision — it does **not** require a selfie — so an approved driver may still
-> have an outstanding item. Render the count honestly; it is not a bug. We have flagged this as a
-> gap in the approval gate rather than hiding it here.
+`completed` reads 5 for an approved driver, and 4 when one document has expired.
 
 #### `GET /driver/eligibility` — active, profile complete
 
@@ -3550,7 +3549,7 @@ role switch lives on this screen, and a 404 would make tapping "drive" look brok
 | Field | Meaning |
 |---|---|
 | `greetingName` | |
-| `verification` | `{overall, completed, of, licenceExpiresAt, actionItem, suspensionReason}` — the checklist of 4.4 without `items`. `null` for an account that is not a driver. It also answers for a suspended account, which `GET /driver/verification` refuses. |
+| `verification` | `{overall, completed, of, licenceExpiresAt, actionItem, suspensionReason}` — the checklist of 4.4 without `items`. `null` for an account that is not a driver. |
 | `expiredRun` | The run that expired today, or `null`: `{tripId, commuteId, originLabel, destinationLabel, departureAt, departureLocal, expiredAt, expiredLocal}`. Goes away by itself at the end of that local day. |
 | `nextRun` | The soonest run that has not finished, on **any** day, or `null`. A run not started after its departure stays here, on its own local day, until the sweep expires it. |
 | `nextRun.commuteId` / `tripId` / `groupId` | |
@@ -4620,6 +4619,7 @@ exist, and every live endpoint must be named here.
 
 | Date | Change |
 |---|---|
+| 2026-11-04 | 🪪 **The licence follows the application.** `POST /driver/application/submit` now sends the licence to review, and approving the driver approves it with the typed date, so `licenceExpiresAt`, `expiring` and `renewal_required` work and an approved driver reads 5 of 5. A reviewer's rejected licence blocks approval until replaced. **Days of a paused commute are gone from `nextRun` and `laterThisWeek`**, and the lateness sweep skips them. `demo:driver-home-states` gains `--state` and `--phone`, and covers every state in `FLUTTER_DRIVER_HOME_RESPONSES.md`. |
 | 2026-11-04 | 🚗 **A reviewer can reject the car's registration or details on their own.** `GET /driver/verification` returns the reason on that item, and `actionItem.key` is `vehicle_registration` or `vehicle_details` instead of `application`. `driver_item_rejected` now also carries those two `itemKey`s. Replacing the item clears the reason and returns the application to `DRAFT`; until then, submit lists the item in `missing` (4.4, 4.14). |
 | 2026-11-04 | 🚗 **Driver Home gaps (DH-1 → DH-17).** `GET /driver/home` is additive except where noted: `verification`, `expiredRun`, `waitlist.count`; on `nextRun`: `phase`, `promisedArrivalAt`/`Local`, `startedAt`/`Local`, `canStart`, `startOpensAt`/`Local`, `startDeadlines`, `waitlistCount`; `waitlistCount` on `laterThisWeek[]`; `rejoinedWaitlist` on `notices[]`. 🛑 **Behaviour:** a run not started stays on `nextRun` past its departure until it expires. 🛑 `overall` is `under_review` only once submitted; a complete draft stays `in_progress`, and car items read `in_progress` until then. A rejected car or application reads `action_required`. `GET /driver/verification` gains `actionItem` and `suspensionReason`. The licence date falls back to the typed one once approved. `capabilities` is backfilled from `registeredRole`, and a passenger who adds driving keeps `PASSENGER`. New `php artisan demo:driver-home-states` for test accounts. |
 | 2026-11-04 | 🛑 **An expired licence and a driver suspension now stop upcoming trips (COM-26, PROF-20, PROF-27, D-0018).** A daily sweep moves a driver whose licence has expired to `EXPIRED_DOCUMENTS` and `renewal_required`, pauses every published commute (`pausedReason: licence_expired`) and cancels upcoming seats, inside the 16-hour lock too, with no fee; riders go back on the waiting list. Resume, publish and start answer `422 DRIVER_LICENCE_EXPIRED` until the renewed licence is approved. Staff can now suspend a driver from the dashboard: same cancellation, with the new `pausedReason: driver_suspended`. New notifications `driver_licence_expired` and `driver_suspended`. `rejectionReason` on a suspended application holds the staff member's words (4.4, 4.14). |

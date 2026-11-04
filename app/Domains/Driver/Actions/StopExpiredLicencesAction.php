@@ -38,7 +38,7 @@ final readonly class StopExpiredLicencesAction
         return $stopped;
     }
 
-    private function stop(string $userId): bool
+    public function stop(string $userId): bool
     {
         return DB::transaction(function () use ($userId): bool {
             $profile = DriverProfile::query()->whereKey($userId)->lockForUpdate()->first();

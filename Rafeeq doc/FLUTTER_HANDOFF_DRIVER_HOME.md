@@ -172,7 +172,7 @@ The run that expired today. It goes away by itself at the end of that local day,
 
 ## 4. Verification
 
-`verification` on Home is `GET /driver/verification` without `items`. Home also answers for a suspended account, which `GET /driver/verification` refuses with `403 ACCOUNT_SUSPENDED`.
+`verification` on Home is `GET /driver/verification` without `items`. A suspended account can read both, because reads still pass; only a permanent ban is refused.
 
 ```json
 {
@@ -264,7 +264,7 @@ For an expired licence, the driver resends the licence and submits. Resume answe
 | DH-15: ID and selfie counted without the driver capability? | **Intended.** They are the same documents on the same account. |
 | DH-16: automatic submit? | **No, the driver submits** (PROF-16). |
 | DH-17: does the admin always send a date? | **No, it never did.** The typed date is now copied at approval, and existing approved licences are backfilled. |
-| Can a driver who can't drive still have runs? | **Those days get cancelled** (section 5). Until the daily job runs, `nextRun` may still show a run, so keep ignoring it in `suspended` and `renewal_required`. `canStart` is `false` there. |
+| Can a driver who can't drive still have runs? | **Those days get cancelled** (section 5). Until the daily job runs, `nextRun` may still show a run for an expired licence, so keep ignoring it in `suspended` and `renewal_required`. `canStart` is `false` there. Days of a paused commute no longer appear on `nextRun` or `laterThisWeek`. |
 | `Level X of 5`? | **Show the API's number.** It counts approved items only. |
 
 ## 7. Guide corrections
@@ -289,32 +289,22 @@ All four are fixed in the guide.
 
 ## 9. Test accounts
 
-Sign in with the dev OTP. These work once the branch is deployed and this has been run on staging:
+Every state, its phone number and its real responses are in [FLUTTER_DRIVER_HOME_RESPONSES.md](FLUTTER_DRIVER_HOME_RESPONSES.md).
+
+Reset every account, or one account when a late state has run out:
 
 ```bash
 php artisan demo:driver-home-states
 ```
 
-Departures are set relative to the moment it runs, so **run it again just before testing `F3D-04` and `F3D-05`**. With the scheduler on, those two only last a few minutes before the sweep moves them on.
+```bash
+php artisan demo:driver-home-states --state=F3D-05 --phone=+201055557005
+```
 
-| Phone | State |
-|---|---|
-| +201055557001 | `F3D-01` scheduled, +130 min, with people waiting |
-| +201055557002 | `F3D-02` starting soon, +25 min |
-| +201055557003 | `F3D-03` started |
-| +201055557004 | `F3D-04` not started, +1 min |
-| +201055557005 | `F3D-05` late, +10 min |
-| +201055557006 | `F3D-06` expired today, next commute later |
-| +201055557007 | `F3D-07` passenger cancelled |
-| +201055557008 | `F3D-08` switched and rejoined the list |
-| +201055557009 | `F3D-08` switched, did not rejoin |
-| +201055557011 | `under_review` |
-| +201055557012 | `action_required` |
-| +201055557013 | `expiring` |
-| +201055557014 | `renewal_required` |
-| +201055557015 | `suspended` |
+## 10. Does the app submit the licence?
 
-**What these accounts don't show:**
-- They are set up directly, not through the real flows. +201055557015 is marked suspended without its trips being cancelled, so it still has a `nextRun`. +201055557014 keeps its run until the daily job picks it up.
-- Their `completed` counts are low (for example `3 of 5` while `verified`) because the demo drivers don't have every document.
-- There is no account yet for a rejected car item.
+**No. Don't call `POST /account/verifications/driving_licence/submit`.** PROF-16 has one submit, so the backend handles it:
+
+- `POST /driver/application/submit` also sends the licence to review.
+- Approving the driver approves the licence with the typed date, so `licenceExpiresAt`, `expiring` and `renewal_required` work.
+- If a reviewer sent the licence back, the driver can't be approved until it is replaced and resubmitted.
