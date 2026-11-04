@@ -277,8 +277,10 @@ it('gives a suspended driver the reason on both endpoints', function () {
 });
 
 it('reads a rejected car as action required, with the reason', function () {
-    DriverProfile::query()->sole()->forceFill(['rejection_reason' => 'The car photo is unreadable.'])->save();
-    Vehicle::query()->sole()->forceFill(['verification_status' => VehicleVerificationStatus::Rejected->value])->save();
+    Vehicle::query()->sole()->forceFill([
+        'verification_status' => VehicleVerificationStatus::Rejected->value,
+        'rejection_reason' => 'The car photo is unreadable.',
+    ])->save();
 
     $checklist = test()->withToken($this->driverToken)->getJson('/api/v1/driver/verification')->assertOk()->json('data');
     $items = collect($checklist['items'])->keyBy('key');

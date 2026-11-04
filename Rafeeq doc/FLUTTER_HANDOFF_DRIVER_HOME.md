@@ -2,7 +2,7 @@
 
 > **Replies to:** `driver_home_backend_gaps.md` · **Date:** 2026-11-04 · **Branch:** `fix/home-driver-gaps`
 
-All new fields are in Mobile API Guide §4.4 and §4.11. Only behaviour changes are DH-1, DH-13 and DH-16.
+All new fields are in Mobile API Guide §4.4 and §4.11. Behaviour changes are DH-1, DH-13 and DH-16, plus the trip cancellations under "No field 1". New notifications `driver_licence_expired` and `driver_suspended` are in §4.14.
 
 ## What changed
 
@@ -20,7 +20,7 @@ All new fields are in Mobile API Guide §4.4 and §4.11. Only behaviour changes 
 | DH-10 | Done. `canStart`, `startOpensAt` / `Local`. |
 | DH-11 | Done. Top-level `verification`. It also has the `actionItem` `status`, so you can tell rejected from expired. |
 | DH-12 | Done. `suspensionReason` on both endpoints. |
-| DH-13 | Done, with one limit below. |
+| DH-13 | Done. A reviewer can reject just the registration or the car details, with a reason on that item. Rejecting the whole application still gives `actionItem.key: "application"`. |
 | DH-14 | Not added. Use the full label with an ellipsis. |
 | DH-15 | Fixed. See below. |
 | DH-16 | Done. A complete draft stays `in_progress` (PROF-15 has no other status for it). When `GET /driver/application` answers `missing: []`, send the driver to submit. |
@@ -45,13 +45,8 @@ All new fields are in Mobile API Guide §4.4 and §4.11. Only behaviour changes 
 | DH-15: ID and selfie counted without the driver capability? | **Intended.** They are the same documents on the same account. |
 | DH-16: automatic submit? | **No, the driver submits** (PROF-16). |
 | DH-17: does the admin always send a date? | **No, it never does.** The typed date is now copied at approval, and existing approved licences are backfilled. |
-| No field 1: can a driver who can't drive have runs? | **Yes, for now, so ignore `nextRun`** in `suspended` and `renewal_required`, as you planned. `canStart` is `false` there. See the limits below. |
+| No field 1: can a driver who can't drive have runs? | **No, those days get cancelled.** An expired licence (COM-26, a daily job) and a driver suspension (PROF-27) pause every published commute and cancel upcoming seats with no fee. `pausedReason` is `licence_expired` or `driver_suspended`. Until the daily job runs, `nextRun` may still show a run, so keep ignoring it in `suspended` and `renewal_required`. `canStart` is `false` there. |
 | No field 3: `Level X of 5`? | **Show the API's number.** It counts approved items only. |
-
-## Limits to know
-
-- **Cars are not rejected item by item.** The admin screen rejects the whole application, so you get `actionItem.key: "application"` with the reason, and the app cannot say which car paper is at fault.
-- **An expired licence does not cancel upcoming days yet**, although COM-26 says it should.
 
 ## Decisions still with the product owner
 
