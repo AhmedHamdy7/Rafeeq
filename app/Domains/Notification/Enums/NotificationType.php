@@ -410,6 +410,8 @@ enum NotificationType: string
      * "Expiring"). Once per expiry date. `data.itemKey` + `data.expiresAt`. Replaces `licence_expiring`.
      */
     case DriverItemExpiring = 'driver_item_expiring';
+    case DriverLicenceExpired = 'driver_licence_expired';
+    case DriverSuspended = 'driver_suspended';
 
     /**
      * To the driver: RAFEEQ moved his departure for one day because a rider joined or left
@@ -432,7 +434,9 @@ enum NotificationType: string
             self::DriverItemRejected,
             self::DriverVerified,
             self::DriverDocumentsRejected,
-            self::DriverItemExpiring => NotificationCategory::Safety,
+            self::DriverItemExpiring,
+            self::DriverLicenceExpired,
+            self::DriverSuspended => NotificationCategory::Safety,
 
             self::DebtDueTomorrow,
             self::DebtOverdue,

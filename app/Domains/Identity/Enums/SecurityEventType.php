@@ -49,6 +49,7 @@ enum SecurityEventType: string
     case DriverApproved = 'driver_approved';
     case DriverRejected = 'driver_rejected';
     case DriverSuspended = 'driver_suspended';
+    case DriverLicenceExpired = 'driver_licence_expired';
 
     // ---- OTP lock (F1-5) ------------------------------------------------
     // Three wrong codes locked the number for this purpose (AUTH-08).

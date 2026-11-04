@@ -78,6 +78,7 @@ final class SettingsCatalogue
 
         // ---- The trip itself (Chapter 8) ---------------------------------
         'trip.start_window_minutes' => ['group' => 'trip', 'min' => 15, 'max' => 240, 'unit' => 'minutes'],
+        'trip.driver_starting_soon_minutes' => ['group' => 'trip', 'min' => 5, 'max' => 120, 'unit' => 'minutes'],
         'trip.wait_grace_seconds' => ['group' => 'trip', 'min' => 60, 'max' => 900, 'unit' => 'seconds'],
         // The "+2 min" extension is gone (TRIP-11): every passenger gets the same grace.
         'trip.arrival_radius_meters' => ['group' => 'trip', 'min' => 50, 'max' => 1_000, 'unit' => 'meters'],

@@ -79,6 +79,7 @@ class ScheduledTrip extends Model
             'delay_driver_reminded_at' => 'datetime',
             'delay_passengers_warned_at' => 'datetime',
             'delay_violation_at' => 'datetime',
+            'expired_at' => 'datetime',
 
             /*
              * The navigation itinerary for this day (Feature 03 v5 §3).

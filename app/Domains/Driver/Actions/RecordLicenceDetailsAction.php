@@ -8,6 +8,9 @@ use App\Domains\Identity\Enums\SecurityEventType;
 use App\Domains\Identity\Support\SecurityLog;
 use App\Domains\Shared\Exceptions\DomainException;
 use App\Domains\Shared\Support\ErrorCode;
+use App\Domains\Verification\Enums\VerificationStatus;
+use App\Domains\Verification\Enums\VerificationType;
+use App\Domains\Verification\Models\UserVerification;
 use Carbon\CarbonImmutable;
 use Illuminate\Support\Facades\DB;
 
@@ -50,6 +53,13 @@ final readonly class RecordLicenceDetailsAction
             $profile->licence_number = $licenceNumber;
             $profile->licence_expiry = $licenceExpiry;
             $profile->save();
+
+            UserVerification::query()
+                ->where('user_id', $profile->user_id)
+                ->where('type', VerificationType::DrivingLicence->value)
+                ->where('status', VerificationStatus::Approved->value)
+                ->whereNull('expires_at')
+                ->update(['expires_at' => $licenceExpiry]);
 
             return $profile;
         });

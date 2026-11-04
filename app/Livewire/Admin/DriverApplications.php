@@ -7,6 +7,7 @@ use App\Domains\Admin\Support\AdminActionLog;
 use App\Domains\Driver\Actions\ReviewDriverApplicationAction;
 use App\Domains\Driver\Actions\ReviewVehicleAction;
 use App\Domains\Driver\Enums\DriverProfileStatus;
+use App\Domains\Driver\Enums\VehicleRejectedItem;
 use App\Domains\Driver\Enums\VehicleTier;
 use App\Domains\Driver\Models\DriverProfile;
 use App\Domains\Driver\Support\VehicleSettings;
@@ -14,6 +15,7 @@ use App\Domains\Shared\Exceptions\DomainException;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Validation\Rule;
 use Livewire\Attributes\Layout;
 use Livewire\Component;
 use Livewire\WithPagination;
@@ -51,6 +53,10 @@ class DriverApplications extends Component
     public ?string $openId = null;
 
     public string $reason = '';
+
+    public ?string $carRejectionVehicleId = null;
+
+    public ?string $carRejectionItem = null;
 
     /**
      * The car review being filled in, keyed by vehicle id:
@@ -157,6 +163,77 @@ class DriverApplications extends Component
         $this->closeAndFlash(__('admin.drivers.rejected', ['name' => $profile->user->full_name]));
     }
 
+    public function openCarRejection(string $vehicleId, string $item): void
+    {
+        $this->authorizeTo(AdminPermission::DriverDecide);
+
+        $this->openId = null;
+        $this->carRejectionVehicleId = $vehicleId;
+        $this->carRejectionItem = $item;
+        $this->reason = '';
+        $this->resetErrorBag();
+    }
+
+    public function closeCarRejection(): void
+    {
+        $this->carRejectionVehicleId = null;
+        $this->carRejectionItem = null;
+    }
+
+    public function updatedOpenId(): void
+    {
+        $this->closeCarRejection();
+    }
+
+    public function rejectCar(string $id, ReviewDriverApplicationAction $action): void
+    {
+        $this->authorizeTo(AdminPermission::DriverDecide);
+
+        $this->validate([
+            'reason' => ['required', 'string', 'min:10', 'max:255'],
+            'carRejectionItem' => ['required', Rule::enum(VehicleRejectedItem::class)],
+        ], attributes: ['reason' => __('admin.queue.reason')]);
+
+        $profile = $this->pending($id);
+        $vehicle = $profile->vehicles->firstWhere('id', $this->carRejectionVehicleId);
+
+        abort_if($vehicle === null, 404);
+
+        $item = VehicleRejectedItem::from($this->carRejectionItem);
+        $admin = Auth::guard('admin')->user();
+
+        try {
+            $before = ['status' => $profile->status->value, 'verification_status' => $vehicle->verification_status?->value];
+
+            $action->rejectVehicle($profile, $vehicle, $admin, $item, $this->reason);
+
+            AdminActionLog::record(
+                $admin,
+                'driver.reject_car',
+                $profile,
+                before: $before,
+                after: [
+                    'status' => $profile->fresh()->status->value,
+                    'verification_status' => $vehicle->fresh()->verification_status->value,
+                    'rejected_item' => $item->value,
+                    'vehicle_id' => $vehicle->id,
+                ],
+                reason: $this->reason,
+            );
+        } catch (DomainException $e) {
+            $this->addError('reason', __('errors.'.$e->errorCode->value));
+
+            return;
+        }
+
+        $this->reason = '';
+
+        $this->closeAndFlash(__('admin.drivers.car.rejected', [
+            'name' => $profile->user->full_name,
+            'item' => __('notifications.driver_items.'.$item->value),
+        ]));
+    }
+
     /**
      * The car review for every car on the application, or null if any car has no approved
      * seats yet. The range itself is ReviewVehicleAction's to check, so the rule has one home.
@@ -214,6 +291,7 @@ class DriverApplications extends Component
     private function closeAndFlash(string $message): void
     {
         $this->openId = null;
+        $this->closeCarRejection();
 
         session()->flash('status', $message);
 

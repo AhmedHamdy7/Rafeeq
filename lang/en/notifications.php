@@ -373,4 +373,12 @@ return [
         'title' => 'Your driving licence expires soon',
         'body' => 'It expires on :date. Upload the renewed licence to keep driving.',
     ],
+    'driver_licence_expired' => [
+        'title' => 'Your driving licence has expired',
+        'body' => 'Your commutes are paused and upcoming trips are cancelled. Send your renewed licence for review to drive again.',
+    ],
+    'driver_suspended' => [
+        'title' => 'Your driving is suspended',
+        'body' => 'Your commutes are paused and upcoming trips are cancelled, with no fee. You can still ride as a passenger. Contact support.',
+    ],
 ];

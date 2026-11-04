@@ -14,7 +14,7 @@
 >
 > **Base URL:** `{host}/api/v1` · **Auth:** bearer token · **Format:** JSON only.
 
-**Last updated:** 2026-11-03 · **190 endpoints live** · Phases 0–7, 9 and 11 complete · 10, 12 and 13 all but a decision each
+**Last updated:** 2026-11-04 · **190 endpoints live** · Phases 0–7, 9 and 11 complete · 10, 12 and 13 all but a decision each
 
 ---
 
@@ -1492,7 +1492,9 @@ Publishing a commute (4.5) still needs `verified:government_id`.
 on purpose: it is the screen that explains what is missing.
 
 ```
-{ overall: "in_progress", completed: 3, of: 5, licenceExpiresAt: null,
+{ overall: "action_required", completed: 3, of: 5, licenceExpiresAt: null,
+  actionItem: { key: "driving_licence", status: "action_needed", rejectionReason: "The licence photo is too blurry to read." },
+  suspensionReason: null,
   items: [ { key: "government_id",       status: "approved",     rejectionReason: null, expiresAt: "..." },
            { key: "selfie",              status: "not_started",  ... },
            { key: "driving_licence",     status: "action_needed", rejectionReason: "The licence photo is too blurry to read.", ... },
@@ -1506,27 +1508,46 @@ on purpose: it is the screen that explains what is missing.
 | `status` | Means |
 |---|---|
 | `not_started` | Nothing submitted. |
-| `in_progress` | Something uploaded, not submitted for review. |
+| `in_progress` | Something uploaded, not submitted for review. **The two car items stay here until the application is submitted**, even when everything is uploaded. |
 | `under_review` | With a reviewer. |
 | `approved` | Checked and accepted. |
-| `action_needed` | Rejected — **`rejectionReason` says which document and why.** |
+| `action_needed` | Rejected — **`rejectionReason` says which document and why.** A reviewer can reject the car's registration or its details on their own, and only that item reads this way; a suspended car reads this way on both. The reason is the reviewer's own words: show it as its own sentence, not inside yours. |
 | `expired` | Was approved; the date has passed. |
 
 🔴 **`rejectionReason` is per item, so you can say "replace only that document".** Rejecting one
 item never clears the others — a test holds that. Do not send somebody back to re-upload all five.
 
+🚗 **A rejected car paper.** The reviewer picks `vehicle_registration` or `vehicle_details` and writes
+one reason. That item reads `action_needed` with the reason, `actionItem.key` names it, and the
+application goes to `REJECTED` so it can be edited; the other car item reads `in_progress`. To fix it:
+
+- `vehicle_registration`: `POST /driver/vehicles/{vehicle}/documents` with any registration type.
+- `vehicle_details`: `PATCH /driver/vehicles/{vehicle}` with a change. A save that changes nothing does
+  not count.
+
+The reason clears on that call: the item stops being `action_needed`, `actionItem` goes `null`, and the
+application reads `DRAFT`. Then the driver submits again. Until the item is fixed, submit answers
+`422 DRIVER_APPLICATION_INCOMPLETE` with that item's key in `missing`.
+
 | `overall` | Headline to show |
 |---|---|
 | `not_started` | "Complete driver verification" |
-| `in_progress` | "Finish the remaining steps in any order, then submit for review" |
-| `under_review` | "Driver verification in review" |
+| `in_progress` | "Finish the remaining steps in any order, then submit for review". **Includes a complete draft nobody is reviewing yet:** when `GET /driver/application` answers `missing: []`, send the driver to submit. The driver always taps it; the app does not submit by itself. |
+| `under_review` | "Driver verification in review". **Only once the application has been submitted.** |
+| `action_required` | One item needs replacing, or the application was rejected. `actionItem` says which. |
 | `verified` | Approved. |
 | `expiring` | "Licence expires soon" — ⚠️ **still verified.** Show the warning, keep the verified badge, and use `licenceExpiresAt` for the date. |
-| `renewal_required` | Licence expired. Publishing and driving are paused. |
-| `suspended` | Driver access suspended — **passenger mode still works** (see 4.1 on `nextStep`). |
+| `renewal_required` | A document expired: **`actionItem.key` says which**, `driving_licence` or `vehicle_registration`. Publishing and driving are paused. For a licence, every published commute is also paused (`pausedReason: licence_expired`) and upcoming seats are cancelled. `status` on the application is `EXPIRED_DOCUMENTS`, which reopens the licence for editing: resend it, submit, and Resume answers `422 DRIVER_LICENCE_EXPIRED` until a reviewer approves. |
+| `suspended` | Driver access suspended — **passenger mode still works** (see 4.1 on `nextStep`). Every published commute is paused (`pausedReason: driver_suspended`) and every upcoming seat is cancelled, inside the 16-hour lock too, with no fee. |
 
 **`suspended` outranks everything**, including an expired licence: it is the state a person decided,
 and the one that explains why her commutes stopped.
+
+| Field | Meaning |
+|---|---|
+| `licenceExpiresAt` / the licence item's `expiresAt` | The date on the approved licence. If the reviewer gave none, the date the driver typed. `null` until the licence is approved. |
+| `actionItem` | `{key, status, rejectionReason}` for the first item that needs the driver, so you do not have to read all five: `status` is `action_needed` or `expired`. `key` is an item key, car items included, or **`application`** only when the reviewer rejected the application as a whole. `null` when nothing is waiting, and for a suspended driver. |
+| `suspensionReason` | One sentence for a suspended driver, written by staff. `null` otherwise. |
 
 > ⚠️ **`completed` can be 4 while `overall` is `verified`.** Approval today requires a valid licence
 > and a reviewer's decision — it does **not** require a selfie — so an approved driver may still
@@ -1566,7 +1587,8 @@ missing, so gating it would leave them with a refusal and no explanation.
 `422 DRIVER_APPLICATION_INCOMPLETE` lists what is missing in `error.fields.missing`: any of
 `government_id` · `selfie` (not yet submitted) · `national_id` · `licence_number` · `licence_expiry` ·
 `licence_front` · `licence_back` · `vehicle` · `vehicle_registration` (no registration at all) ·
-`registration_front` / `registration_back` (one side sent, this one missing). **Never** `insurance` or
+`registration_front` / `registration_back` (one side sent, this one missing) · `vehicle_registration` /
+`vehicle_details` (a reviewer rejected it and it has not been replaced). **Never** `insurance` or
 `inspection` (F2-15).
 
 #### `GET` / `POST /driver/vehicles` · `PATCH /driver/vehicles/{vehicle}` — active, profile complete
@@ -1840,7 +1862,7 @@ confirmed seat (16h+: 0 · 10–16h: 10 % · < 10h: 25 %) — **show it first** 
 | `audience`, `minTrustLevel` | Who may join. |
 | `allowsCustomPickup` | **Defaults to false.** |
 | `routePolyline`, `routeDistanceMeters`, `routeDurationSeconds` | Computed at publish; `null` on a draft. **Only ever returned to the commute's own driver.** |
-| `publishedAt`, `pausedAt`, `pausedReason`, `archivedAt` | `pausedReason` is `by_driver` · `vehicle_suspended` · `licence_expired` · `commission_unpaid` · `account_suspended` — the last four are automatic, so show the right copy. `account_suspended` means staff suspended her account (F1-3); once it is lifted she resumes the commute herself. `commission_unpaid` means a week's commission missed two Fridays (PAY-45): show the debt screen; after paying she resumes the commute herself. |
+| `publishedAt`, `pausedAt`, `pausedReason`, `archivedAt` | `pausedReason` is `by_driver` · `vehicle_suspended` · `licence_expired` · `commission_unpaid` · `account_suspended` · `driver_suspended` — all but `by_driver` are automatic, so show the right copy. `licence_expired` means her licence lapsed (COM-26): she can resume after the renewed licence is approved. `driver_suspended` means staff suspended her driving only (PROF-27): Resume answers `403 DRIVER_NOT_ELIGIBLE` and Passenger mode still works. `account_suspended` means staff suspended her account (F1-3); once it is lifted she resumes the commute herself. `commission_unpaid` means a week's commission missed two Fridays (PAY-45): show the debt screen; after paying she resumes the commute herself. |
 | `missing[]` | What still has to be done before it can be published. Drive the wizard from this. |
 | `locations[]` | `{id, type, lat, lng, address, placeId, sequence}`; type is `origin` · `pickup` · `dropoff` · `destination`. |
 | `schedule` | `{daysMask, departureTime, timezone, startDate, endDate, generatedUntil}`. `generatedUntil` is **how far ahead bookable days currently exist**, rolled forward daily — not the end of the commute. |
@@ -3528,23 +3550,34 @@ role switch lives on this screen, and a 404 would make tapping "drive" look brok
 | Field | Meaning |
 |---|---|
 | `greetingName` | |
-| `nextRun` | Today's run, or `null`. |
+| `verification` | `{overall, completed, of, licenceExpiresAt, actionItem, suspensionReason}` — the checklist of 4.4 without `items`. `null` for an account that is not a driver. It also answers for a suspended account, which `GET /driver/verification` refuses. |
+| `expiredRun` | The run that expired today, or `null`: `{tripId, commuteId, originLabel, destinationLabel, departureAt, departureLocal, expiredAt, expiredLocal}`. Goes away by itself at the end of that local day. |
+| `nextRun` | The soonest run that has not finished, on **any** day, or `null`. A run not started after its departure stays here, on its own local day, until the sweep expires it. |
+| `nextRun.commuteId` / `tripId` / `groupId` | |
+| `nextRun.phase` | **Switch on this.** `scheduled` (more than 30 min away) · `starting_soon` (within 30 min, D-0032) · `in_progress` (`PREPARING`, `EN_ROUTE`, `IN_PROGRESS`) · `not_started` (past departure) · `late` (at or past `startDeadlines.lateAt`). The 30 min is a server setting. |
 | `nextRun.originLabel` / `destinationLabel` | |
 | `nextRun.departureAt` / `departureLocal` / `departsInMinutes` | `departsInMinutes` is the server's countdown; see 1.5. |
 | `nextRun.isToday` | Derived from the **local** clock of the journey, not the server's. |
-| `nextRun.status` | The trip's status (`SCHEDULED`, `PREPARING`, `EN_ROUTE`, `IN_PROGRESS`…). |
+| `nextRun.status` | The trip's status (`SCHEDULED`, `PREPARING`, `EN_ROUTE`, `IN_PROGRESS`…). The car at a pickup reads `EN_ROUTE`. |
+| `nextRun.promisedArrivalAt` / `promisedArrivalLocal` | The day's promise, per-day overrides included. `null` when none was promised: drop "arrive by". |
+| `nextRun.startedAt` / `startedLocal` | When the driver tapped start. `null` until then. |
+| `nextRun.canStart` | The checks `POST /trips/{trip}/start` runs, so it is not refused when this is `true` (short of something changing between the two calls). |
+| `nextRun.startOpensAt` / `startOpensLocal` | When the start window opens. `null` once started. |
+| `nextRun.startDeadlines` | `{warningAt, warningLocal, lateAt, lateLocal, expiresAt, expiresLocal}` from the server's settings: do not hard-code 5, 10 and 20. For a run not started that is within 3 h or late; `null` otherwise. **Leaving free starts at `warningAt`**, not `lateAt`. |
 | `nextRun.leaveBy` | `{at, local, lateWarning}` — "Leave by 7:10" from the traffic-aware route to the day's promised arrival (TRIP-29). Only for a run not started yet, leaving within 3 h, with a promised arrival; `null` otherwise. `lateWarning: true` when traffic means leaving at the scheduled departure would be late. Refreshed every 5 min. |
 | `nextRun.seatsTotal` / `seatsTaken` / `seatsOpen` | |
+| `nextRun.waitlistCount` | People waiting who could take **this date**: a recurring member whose days include it, or a one-day request for this trip. Not somebody who paused or said she is away that day. `0`, never `null`. |
 | `nextRun.attendance` | The same four counts as above. |
 | `nextRun.collectPiastres` | **What to take at the door** — the sum of the frozen prices. |
 | `nextRun.keepPiastres` | **What is hers** once the platform's fee is settled. Two figures because with cash they are different numbers and she needs both. Both sum what was frozen per booking, so a price change tomorrow moves neither. |
 | `nextRun.passengers[]` | `bookingId`, `person` (5.1), `commitment`, `requestedDaysMask`, `seatsReserved`, `pickup`, `attendanceStatus`. |
 | `nextRun.passengers[].pickup` | `{lat, lng}` exactly — she has to drive there, and she approved it. **`null` means the standard meeting point**, i.e. the run's origin. |
 | `nextRun.passengers[].attendanceStatus` | The **declared** answer (`coming`/`away`), or `null` when they have not answered. Null is not "away". |
-| `laterThisWeek[]` | Up to 7 of her runs in the next 7 days after `nextRun` (TRIP-02): `{commuteId, tripId, originLabel, destinationLabel, departureAt, departureLocal, seatsTotal, seatsTaken, seatsOpen}`. |
-| `notices[]` | Up to 5, newest first, from the last 24 h, on runs that have not left: `{kind, bookingId, tripId, commuteId, person, seatsReleased, seatsOpen, departureAt, departureLocal, at}`. `kind` is `seat_opened` (a passenger cancelled or left without a fee) or `passenger_switched` (she moved to another commute). |
+| `laterThisWeek[]` | Up to 7 of her runs in the next 7 days after `nextRun` (TRIP-02): `{commuteId, tripId, originLabel, destinationLabel, departureAt, departureLocal, seatsTotal, seatsTaken, seatsOpen, waitlistCount}`. Labels are the full label, as on the card: ellipsise on one line. |
+| `notices[]` | Up to 5, newest first, from the last 24 h, on runs that have not left: `{kind, rejoinedWaitlist, bookingId, tripId, commuteId, person, seatsReleased, seatsOpen, departureAt, departureLocal, at}`. `kind` is `seat_opened` (a passenger cancelled or left without a fee) or `passenger_switched` (she moved to another commute). **One event, one notice:** a switch also opened a seat, offered to the waiting list automatically, and has no second `seat_opened` notice. `rejoinedWaitlist` says she is on this commute's list for that day now; always `false` on `seat_opened`. |
 | `pendingRequests.count` | **Every** waiting request, not the length of the list. A driver with eleven should see 11. |
 | `pendingRequests.items[]` | The first 5, oldest first, each a seat request (4.7) with its `passenger`. |
+| `waitlist.count` | Distinct people waiting across all this driver's commutes: one person waiting on two days counts once. |
 | `stats.onTimeRate` | `null` until it has been computed from completed runs. **Show a dash, not 0%** — a 0% badge on somebody's first morning is a number nobody earned. |
 | `stats.completedTrips` | |
 | `stats.avgDetourMinutes` | Averaged over approved custom pickups. `0` is true and means nobody has one; `null` means she has no commutes at all. |
@@ -4186,10 +4219,12 @@ hold must still be able to read the notice that says so.
 | `rating_due` · `rating_due_riders` · `rating_reminder` | passenger / driver | rate (4.13) | `bookingId` or `tripId` |
 | `sos_picked_up` · `report_resolved` · `report_closed` | the reporter | the SOS / report | `sosId` / `incidentId` |
 | `account_on_hold` · `account_reinstated` | the member (safety) | — | *no ids* |
-| `driver_item_approved` · `driver_item_rejected` | driver (safety), per verification item | that item on `GET /driver/verification` — replace only it | `itemKey` (`government_id` · `selfie` · `driving_licence`), + `rejectionReason` on a rejection |
+| `driver_item_approved` · `driver_item_rejected` | driver (safety), per verification item | that item on `GET /driver/verification` — replace only it | `itemKey` (`government_id` · `selfie` · `driving_licence`, and on a rejection also `vehicle_registration` · `vehicle_details`), + `rejectionReason` on a rejection |
 | `driver_verified` | driver (safety), once — the whole verification became `verified` (replaces `driver_documents_approved`) | driver mode | `driverProfileId` |
 | `driver_documents_rejected` | driver (safety) — the application as a whole was sent back | the application | `driverProfileId` |
 | `driver_item_expiring` | driver (safety), once per expiry date (replaces `licence_expiring`) | the licence item | `itemKey`, `expiresAt` |
+| `driver_licence_expired` | driver (safety), once when the licence lapses | the licence item | `itemKey`, `expiresAt` |
+| `driver_suspended` | driver (safety), when staff suspend driving | driver home | `driverProfileId` |
 
 🔴 The debt reminders fire **once a day at most**, from `debt.reminder_hour` (an admin setting, 18:00
 Cairo shipped), and never for somebody who owes nothing.
@@ -4573,7 +4608,7 @@ Do not design around either side of these. Ask before you build the screen.
 | 6 | **Attendance cut-off**: screen 20 says a fixed 9 PM; the implementation uses two hours before departure. Two different models. | 20, 36 |
 | 7 | **The group `calendar` tab** is designed but was never built in the prototype. | 20 |
 | 8 | **Role switching** (passenger ⇄ driver) on screen 21 needs a product decision. | 21 |
-| 9 | **Waitlist copy**: screen 20 says seats fill "automatically". They do not — the promotion goes to the driver's inbox as a decision, because she decides who rides in her car. **The screen text needs to change.** | 20 |
+| 9 | ~~**Waitlist copy**~~ Answered in 4.7: a freed seat is offered to everybody eligible automatically and the first acceptance wins. Screen 20's text is right. | 20 |
 
 ---
 
@@ -4585,6 +4620,9 @@ exist, and every live endpoint must be named here.
 
 | Date | Change |
 |---|---|
+| 2026-11-04 | 🚗 **A reviewer can reject the car's registration or details on their own.** `GET /driver/verification` returns the reason on that item, and `actionItem.key` is `vehicle_registration` or `vehicle_details` instead of `application`. `driver_item_rejected` now also carries those two `itemKey`s. Replacing the item clears the reason and returns the application to `DRAFT`; until then, submit lists the item in `missing` (4.4, 4.14). |
+| 2026-11-04 | 🚗 **Driver Home gaps (DH-1 → DH-17).** `GET /driver/home` is additive except where noted: `verification`, `expiredRun`, `waitlist.count`; on `nextRun`: `phase`, `promisedArrivalAt`/`Local`, `startedAt`/`Local`, `canStart`, `startOpensAt`/`Local`, `startDeadlines`, `waitlistCount`; `waitlistCount` on `laterThisWeek[]`; `rejoinedWaitlist` on `notices[]`. 🛑 **Behaviour:** a run not started stays on `nextRun` past its departure until it expires. 🛑 `overall` is `under_review` only once submitted; a complete draft stays `in_progress`, and car items read `in_progress` until then. A rejected car or application reads `action_required`. `GET /driver/verification` gains `actionItem` and `suspensionReason`. The licence date falls back to the typed one once approved. `capabilities` is backfilled from `registeredRole`, and a passenger who adds driving keeps `PASSENGER`. New `php artisan demo:driver-home-states` for test accounts. |
+| 2026-11-04 | 🛑 **An expired licence and a driver suspension now stop upcoming trips (COM-26, PROF-20, PROF-27, D-0018).** A daily sweep moves a driver whose licence has expired to `EXPIRED_DOCUMENTS` and `renewal_required`, pauses every published commute (`pausedReason: licence_expired`) and cancels upcoming seats, inside the 16-hour lock too, with no fee; riders go back on the waiting list. Resume, publish and start answer `422 DRIVER_LICENCE_EXPIRED` until the renewed licence is approved. Staff can now suspend a driver from the dashboard: same cancellation, with the new `pausedReason: driver_suspended`. New notifications `driver_licence_expired` and `driver_suspended`. `rejectionReason` on a suspended application holds the staff member's words (4.4, 4.14). |
 | 2026-11-04 | 📷 **Document uploads over about 16 KB no longer fail with a 500 (F2-1).** nginx could not write a large request body to its temp folder, so any real photo failed on `/account/verifications/{type}/documents` and `/driver/vehicles/{vehicle}/documents` before reaching the application. Errors nginx raises itself on `/api/*` (`413`, `500`, `502`, `504`) now use the standard error envelope with `PAYLOAD_TOO_LARGE` or `SERVER_ERROR`, in the language from `Accept-Language`. |
 | 2026-11-02 | 🧾 **Trips tabs (TRIPS-12 → 18).** `GET /seat-offers` items now carry the card: `originLabel`, `destinationLabel`, `driver` (person), `vehicle` (make, model, colour), `pickup.label`, `dropoff.label`, `promisedArrivalLocal`, `conflictingBookingId` (TRIPS-13). Seat requests carry `commute.commuteGroupId`, `joinedWaitlistAt` (TRIPS-12), `pausedAt` and `pausedUntil` (TRIPS-22). Bookings carry `trip.promisedArrivalAt/Local` (TRIPS-20) and `membership` (TRIPS-21); groups carry `maxPauseDays` (TRIPS-22); attendance rows carry `isMe` (TRIPS-23). `?status=` filters on `GET /seat-requests` and `GET /seat-offers` (TRIPS-14). New `GET /bookings/{booking}/cancel-preview`, her cancel fee before she confirms (TRIPS-18). New `PATCH /bookings/{booking}/pickup-note` and `pickupNote` on the booking (TRIPS-17). The commute-demand response is documented in full, with the rule keys confirmed (TRIPS-16). |
 | 2026-11-03 | 🧭 **Discover follow-up.** `meetingPoint.address` and `dropOffPoint.address` follow `Accept-Language` when the point is a catalogue place (search, `/matches`, Home); a driver-typed point stays as typed. `GET /matches` rows carry `demandTitle`. `score` on `/matches` is the stored integer total (documented beside search's object). `promisedArrival*` is `null` when the driver set no promised arrival for that weekday — show the estimate (`dropOffPoint.estimatedArrivalLocal`) as approximate then. |

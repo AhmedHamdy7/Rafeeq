@@ -3,6 +3,7 @@
 namespace App\Domains\Driver\Actions;
 
 use App\Domains\Driver\Enums\VehicleDocumentType;
+use App\Domains\Driver\Enums\VehicleRejectedItem;
 use App\Domains\Driver\Models\DriverProfile;
 use App\Domains\Driver\Models\Vehicle;
 use App\Domains\Driver\Models\VehicleDocument;
@@ -26,6 +27,7 @@ final readonly class UploadVehicleDocumentAction
     public function __construct(
         private DocumentIntake $intake,
         private DocumentStorage $storage,
+        private ClearVehicleRejectionAction $clearRejection,
     ) {}
 
     /**
@@ -48,7 +50,7 @@ final readonly class UploadVehicleDocumentAction
             'document_type' => $type->value,
         ]);
 
-        return DB::transaction(function () use ($vehicle, $type, $stored, $expiresAt): VehicleDocument {
+        return DB::transaction(function () use ($profile, $vehicle, $type, $stored, $expiresAt): VehicleDocument {
             // One document per type: re-uploading a blurry registration
             // replaces it rather than leaving a reviewer two to choose from.
             $this->replaceExisting($vehicle, $type);
@@ -67,6 +69,10 @@ final readonly class UploadVehicleDocumentAction
             ]);
 
             $document->save();
+
+            if ($type->isRegistration()) {
+                $this->clearRejection->execute($profile, $vehicle, VehicleRejectedItem::Registration);
+            }
 
             return $document;
         });

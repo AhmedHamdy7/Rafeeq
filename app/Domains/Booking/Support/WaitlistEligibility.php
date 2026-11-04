@@ -9,6 +9,7 @@ use App\Domains\Booking\Enums\SeatRequestStatus;
 use App\Domains\Booking\Models\SeatRequest;
 use App\Domains\Commute\Enums\ScheduledTripStatus;
 use App\Domains\Commute\Models\ScheduledTrip;
+use App\Domains\Shared\ValueObjects\DaysMask;
 use Illuminate\Database\Eloquent\Builder;
 
 /**
@@ -78,6 +79,35 @@ final class WaitlistEligibility
              */
             ->orderBy('waitlist_position')
             ->orderBy('id');
+    }
+
+    public static function isWaitingFor(SeatRequest $request, ScheduledTrip $trip): bool
+    {
+        if ($request->commute_offer_id !== $trip->commute_offer_id) {
+            return false;
+        }
+
+        if ($request->scheduled_trip_id !== null) {
+            if ($request->scheduled_trip_id !== $trip->getKey()) {
+                return false;
+            }
+        } elseif ($request->requested_days_mask !== null
+            && ! DaysMask::fromBits($request->requested_days_mask)->includesDate($trip->trip_date)) {
+            return false;
+        }
+
+        $date = $trip->trip_date->toDateString();
+
+        if ($request->unavailable_on?->toDateString() === $date) {
+            return false;
+        }
+
+        if ($request->paused_at !== null
+            && ($request->paused_until === null || $request->paused_until->toDateString() >= $date)) {
+            return false;
+        }
+
+        return $request->expires_at === null || $request->expires_at->isFuture();
     }
 
     /**

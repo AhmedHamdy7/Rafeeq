@@ -231,6 +231,11 @@ Schedule::command('licences:warn-expiring')
     ->timezone('Africa/Cairo')
     ->withoutOverlapping();
 
+Schedule::command('licences:stop-expired')
+    ->dailyAt('00:10')
+    ->timezone('UTC')
+    ->withoutOverlapping();
+
 /*
  * 🔒 Deletes GPS trails past their retention date (ERD §23.4: 90 days).
  *

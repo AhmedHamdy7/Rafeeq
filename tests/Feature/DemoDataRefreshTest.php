@@ -71,3 +71,30 @@ it('refuses to add match states in production', function () {
 
     $this->artisan('demo:match-states')->assertFailed();
 });
+
+it('seeds one driver per Driver Home state, and resets them when run again', function () {
+    $this->artisan('demo:driver-home-states')->assertSuccessful();
+    $this->artisan('demo:driver-home-states')->assertSuccessful();
+
+    $home = function (string $phone): array {
+        $driver = User::query()->where('phone_e164', $phone)->sole();
+
+        return $this->actingAs($driver, 'sanctum')->getJson('/api/v1/driver/home')->assertOk()->json('data');
+    };
+
+    expect($home('+201055557001')['nextRun']['phase'])->toBe('scheduled')
+        ->and($home('+201055557001')['nextRun']['waitlistCount'])->toBeGreaterThanOrEqual(1)
+        ->and($home('+201055557002')['nextRun']['phase'])->toBe('starting_soon')
+        ->and($home('+201055557003')['nextRun']['phase'])->toBe('in_progress')
+        ->and($home('+201055557004')['nextRun']['phase'])->toBe('not_started')
+        ->and($home('+201055557005')['nextRun']['phase'])->toBe('late')
+        ->and($home('+201055557006')['expiredRun'])->not->toBeNull()
+        ->and($home('+201055557007')['notices'][0]['kind'])->toBe('seat_opened')
+        ->and($home('+201055557008')['notices'][0]['rejoinedWaitlist'])->toBeTrue()
+        ->and($home('+201055557009')['notices'][0]['rejoinedWaitlist'])->toBeFalse()
+        ->and($home('+201055557011')['verification']['overall'])->toBe('under_review')
+        ->and($home('+201055557012')['verification']['overall'])->toBe('action_required')
+        ->and($home('+201055557013')['verification']['overall'])->toBe('expiring')
+        ->and($home('+201055557014')['verification']['overall'])->toBe('renewal_required')
+        ->and($home('+201055557015')['verification']['overall'])->toBe('suspended');
+});

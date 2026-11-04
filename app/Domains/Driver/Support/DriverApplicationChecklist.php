@@ -3,6 +3,7 @@
 namespace App\Domains\Driver\Support;
 
 use App\Domains\Driver\Enums\VehicleDocumentType;
+use App\Domains\Driver\Enums\VehicleVerificationStatus;
 use App\Domains\Driver\Models\DriverProfile;
 use App\Domains\Driver\Models\Vehicle;
 use App\Domains\Verification\Enums\VerificationStatus;
@@ -63,6 +64,12 @@ final class DriverApplicationChecklist
         } else {
             foreach (self::missingVehicleDocuments($vehicle) as $kind) {
                 $missing[] = $kind;
+            }
+        }
+
+        foreach ($profile->vehicles()->where('verification_status', VehicleVerificationStatus::Rejected->value)->get() as $rejected) {
+            if ($rejected->rejected_item !== null && ! in_array($rejected->rejected_item->value, $missing, true)) {
+                $missing[] = $rejected->rejected_item->value;
             }
         }
 

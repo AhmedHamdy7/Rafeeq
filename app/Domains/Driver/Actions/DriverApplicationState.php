@@ -76,6 +76,11 @@ final class DriverApplicationState
         return $status === DriverProfileStatus::PendingReview;
     }
 
+    public static function isSuspendable(DriverProfileStatus $status): bool
+    {
+        return $status !== DriverProfileStatus::Draft && $status !== DriverProfileStatus::Suspended;
+    }
+
     public static function isDecidable(DriverProfileStatus $status): bool
     {
         return $status === DriverProfileStatus::PendingReview;

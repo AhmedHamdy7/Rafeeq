@@ -3,7 +3,10 @@
 namespace App\Domains\Driver\Actions;
 
 use App\Domains\Admin\Models\AdminUser;
+use App\Domains\Commute\Actions\ChangeCommuteStatusAction;
+use App\Domains\Commute\Enums\CommutePausedReason;
 use App\Domains\Driver\Enums\DriverProfileStatus;
+use App\Domains\Driver\Enums\VehicleRejectedItem;
 use App\Domains\Driver\Enums\VehicleVerificationStatus;
 use App\Domains\Driver\Enums\VerificationLogAction;
 use App\Domains\Driver\Models\DriverProfile;
@@ -33,6 +36,8 @@ use Illuminate\Support\Facades\DB;
  */
 final readonly class ReviewDriverApplicationAction
 {
+    public function __construct(private ChangeCommuteStatusAction $commutes) {}
+
     public function approve(DriverProfile $profile, AdminUser $reviewer): DriverProfile
     {
         $this->assertDecidable($profile);
@@ -144,6 +149,67 @@ final readonly class ReviewDriverApplicationAction
         });
     }
 
+    public function rejectVehicle(
+        DriverProfile $profile,
+        Vehicle $vehicle,
+        AdminUser $reviewer,
+        VehicleRejectedItem $item,
+        string $reason,
+    ): DriverProfile {
+        $this->assertDecidable($profile);
+
+        if (trim($reason) === '') {
+            throw DomainException::of(ErrorCode::ValidationFailed, fields: [
+                'reason' => [__('validation.required', ['attribute' => 'reason'])],
+            ]);
+        }
+
+        return DB::transaction(function () use ($profile, $vehicle, $reviewer, $item, $reason): DriverProfile {
+            $previous = $profile->status;
+            $previousVehicleStatus = $vehicle->verification_status;
+
+            $vehicle->forceFill([
+                'verification_status' => VehicleVerificationStatus::Rejected->value,
+                'rejected_item' => $item->value,
+                'rejection_reason' => $reason,
+            ])->save();
+
+            VerificationLog::create([
+                'entity_type' => 'vehicle',
+                'entity_id' => $vehicle->id,
+                'admin_id' => $reviewer->id,
+                'action' => VerificationLogAction::Reject->value,
+                'old_value' => ['verification_status' => $previousVehicleStatus?->value],
+                'new_value' => [
+                    'verification_status' => VehicleVerificationStatus::Rejected->value,
+                    'rejected_item' => $item->value,
+                ],
+                'reason' => $reason,
+            ]);
+
+            $profile->status = DriverProfileStatus::Rejected->value;
+            $profile->reviewer_id = $reviewer->id;
+            $profile->rejection_reason = $reason;
+            $profile->save();
+
+            $this->log($profile, $reviewer, VerificationLogAction::Reject, $previous, $reason);
+
+            SecurityLog::record(SecurityEventType::DriverRejected, $profile->user, metadata: [
+                'reviewer_id' => $reviewer->id,
+            ]);
+
+            $user = $profile->user;
+            $label = __('notifications.driver_items.'.$item->value, [], $user->preferred_language ?: config('app.locale'));
+
+            Notifier::send($user, NotificationType::DriverItemRejected, params: ['item' => $label], data: [
+                'itemKey' => $item->value,
+                'rejectionReason' => $reason,
+            ]);
+
+            return $profile;
+        });
+    }
+
     /**
      * Suspending an already-approved driver — a safety decision rather than a
      * verification one, so it applies from any state except draft.
@@ -151,6 +217,12 @@ final readonly class ReviewDriverApplicationAction
     public function suspend(DriverProfile $profile, AdminUser $reviewer, string $reason): DriverProfile
     {
         return DB::transaction(function () use ($profile, $reviewer, $reason): DriverProfile {
+            $profile = DriverProfile::query()->whereKey($profile->getKey())->lockForUpdate()->firstOrFail();
+
+            if (! DriverApplicationState::isSuspendable($profile->status)) {
+                throw DomainException::of(ErrorCode::DriverApplicationLocked);
+            }
+
             $previous = $profile->status;
 
             $profile->status = DriverProfileStatus::Suspended->value;
@@ -170,8 +242,14 @@ final readonly class ReviewDriverApplicationAction
 
             $this->log($profile, $reviewer, VerificationLogAction::Suspend, $previous, $reason);
 
+            $this->commutes->pauseUnpublishableOffers($profile, CommutePausedReason::DriverSuspended);
+
             SecurityLog::record(SecurityEventType::DriverSuspended, $profile->user, metadata: [
                 'reviewer_id' => $reviewer->id,
+            ]);
+
+            Notifier::send($profile->user, NotificationType::DriverSuspended, data: [
+                'driverProfileId' => (string) $profile->getKey(),
             ]);
 
             return $profile;

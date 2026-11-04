@@ -6,7 +6,11 @@ use App\Domains\Admin\Actions\ResolveSuspensionAppealAction;
 use App\Domains\Admin\Actions\SuspendMemberAction;
 use App\Domains\Admin\Enums\AdminPermission;
 use App\Domains\Admin\Models\AdminUser;
+use App\Domains\Admin\Support\AdminActionLog;
 use App\Domains\Admin\Support\MemberDirectory;
+use App\Domains\Driver\Actions\DriverApplicationState;
+use App\Domains\Driver\Actions\ReviewDriverApplicationAction;
+use App\Domains\Driver\Enums\DriverProfileStatus;
 use App\Domains\Identity\Enums\SuspensionReason;
 use App\Domains\Identity\Models\SuspensionAppeal;
 use App\Domains\Identity\Models\User;
@@ -90,7 +94,7 @@ class Members extends Component
         $this->authorizeTo(AdminPermission::MemberSuspend);
 
         $this->closeForm();
-        $this->mode = in_array($mode, ['suspend', 'reinstate', 'appeal'], true) ? $mode : '';
+        $this->mode = in_array($mode, ['suspend', 'suspend_driver', 'reinstate', 'appeal'], true) ? $mode : '';
     }
 
     public function suspend(SuspendMemberAction $action): void
@@ -126,6 +130,47 @@ class Members extends Component
             'name' => $member->full_name,
             'case' => $suspension->case_number,
         ]));
+    }
+
+    public function suspendDriver(ReviewDriverApplicationAction $action): void
+    {
+        $this->authorizeTo(AdminPermission::MemberSuspend);
+
+        $this->validate([
+            'note' => ['required', 'string', 'min:10', 'max:255'],
+        ], attributes: ['note' => __('admin.members.note')]);
+
+        $member = $this->member();
+        $profile = $member->driverProfile ?? abort(404);
+
+        $before = ['status' => $profile->status->value];
+        $days = MemberDirectory::bookedDaysAsDriver($member);
+        $passengers = MemberDirectory::bookedPassengersAsDriver($member);
+
+        try {
+            $action->suspend($profile, $this->admin(), $this->note);
+        } catch (DomainException $e) {
+            $this->addError('note', __('errors.'.$e->errorCode->value));
+
+            return;
+        }
+
+        AdminActionLog::record(
+            $this->admin(),
+            'driver.suspend',
+            $profile,
+            before: $before,
+            after: [
+                'status' => DriverProfileStatus::Suspended->value,
+                'days_cancelled' => $days,
+                'passengers_affected' => $passengers,
+            ],
+            reason: $this->note,
+        );
+
+        $this->closeForm();
+
+        session()->flash('status', __('admin.members.driver_suspended', ['name' => $member->full_name]));
     }
 
     public function reinstate(SuspendMemberAction $action): void
@@ -224,6 +269,9 @@ class Members extends Component
                 ->orderBy('id')
                 ->get(),
             'strandedDays' => $opened === null ? 0 : MemberDirectory::bookedDaysAsDriver($opened),
+            'strandedPassengers' => $opened === null ? 0 : MemberDirectory::bookedPassengersAsDriver($opened),
+            'driverSuspendable' => $opened?->driverProfile !== null && DriverApplicationState::isSuspendable($opened->driverProfile->status),
+            'driverSuspended' => $opened?->driverProfile?->status === DriverProfileStatus::Suspended,
             'reasons' => SuspensionReason::cases(),
             'mayAct' => $this->admin()?->can(AdminPermission::MemberSuspend->value) === true,
             'maySeeSafety' => $this->admin()?->can(AdminPermission::SafetyView->value) === true,

@@ -7,6 +7,7 @@ use App\Domains\Booking\Enums\DisplacementReason;
 use App\Domains\Commute\Actions\CreateCommuteOfferAction;
 use App\Domains\Commute\Enums\CommuteOfferStatus;
 use App\Domains\Commute\Models\CommuteOffer;
+use App\Domains\Driver\Enums\VehicleRejectedItem;
 use App\Domains\Driver\Enums\VehicleVerificationStatus;
 use App\Domains\Driver\Models\DriverProfile;
 use App\Domains\Driver\Models\Vehicle;
@@ -27,7 +28,10 @@ use Illuminate\Support\Facades\DB;
  */
 final readonly class ManageVehicleAction
 {
-    public function __construct(private DisplaceConfirmedBookingsAction $displace) {}
+    public function __construct(
+        private DisplaceConfirmedBookingsAction $displace,
+        private ClearVehicleRejectionAction $clearRejection,
+    ) {}
 
     /**
      * @param  array<string, mixed>  $attributes  already validated upstream
@@ -84,10 +88,16 @@ final readonly class ManageVehicleAction
             $this->assertPlateIsFree($attributes['plateNumber'], exceptVehicleId: $vehicle->id);
         }
 
-        $vehicle->fill($this->columns($attributes));
-        $vehicle->save();
+        return DB::transaction(function () use ($profile, $vehicle, $attributes): Vehicle {
+            $vehicle->fill($this->columns($attributes));
+            $vehicle->save();
 
-        return $vehicle;
+            if ($vehicle->wasChanged()) {
+                $this->clearRejection->execute($profile, $vehicle, VehicleRejectedItem::Details);
+            }
+
+            return $vehicle;
+        });
     }
 
     /**

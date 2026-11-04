@@ -10,13 +10,16 @@ use App\Domains\Booking\Enums\SwitchReason;
 use App\Domains\Booking\Models\Booking;
 use App\Domains\Booking\Models\PickupPointRequest;
 use App\Domains\Booking\Models\SeatRequest;
+use App\Domains\Booking\Support\WaitlistEligibility;
 use App\Domains\Commute\Enums\ScheduledTripStatus;
 use App\Domains\Commute\Models\CommuteOffer;
 use App\Domains\Commute\Models\ScheduledTrip;
 use App\Domains\Commute\Support\ComputedDeparture;
 use App\Domains\Driver\Models\DriverProfile;
+use App\Domains\Driver\Support\DriverChecklist;
 use App\Domains\Group\Models\CommuteGroup;
 use App\Domains\Group\Models\GroupMember;
+use App\Domains\Identity\Enums\AccountStatus;
 use App\Domains\Identity\Models\User;
 use App\Domains\Matching\Actions\SuggestAlternativesAction;
 use App\Domains\Matching\Enums\CommuteDemandStatus;
@@ -29,10 +32,12 @@ use App\Domains\Notification\Enums\NotificationChannel;
 use App\Domains\Notification\Models\Notification;
 use App\Domains\Rating\Actions\SubmitRatingAction;
 use App\Domains\Shared\Exceptions\DomainException;
+use App\Domains\Trip\Actions\StartTripAction;
 use App\Domains\Verification\Support\VerificationCentre;
 use App\Http\Controllers\Controller;
 use App\Http\Resources\BookingResource;
 use App\Http\Resources\CommuteDemandResource;
+use App\Http\Resources\DriverRun;
 use App\Http\Resources\HomeJourney;
 use App\Http\Resources\JourneyCard;
 use App\Http\Resources\LocalisedLabel;
@@ -158,7 +163,7 @@ final class HomeController extends Controller
      * The largest card in the product: today's run, who is on it, what is owed, and
      * what is still waiting to be answered.
      */
-    public function driver(Request $request, ComputedDeparture $departures): JsonResponse
+    public function driver(Request $request, ComputedDeparture $departures, StartTripAction $start): JsonResponse
     {
         $profile = DriverProfile::query()
             ->whereKey($request->user()->id)
@@ -173,20 +178,28 @@ final class HomeController extends Controller
         if ($profile === null) {
             return ApiResponse::success([
                 'greetingName' => $request->user()->public_first_name,
+                'verification' => VerificationCentre::appliesTo($request->user()) ? DriverChecklist::summary($request->user()) : null,
+                'expiredRun' => null,
                 'nextRun' => null,
                 'laterThisWeek' => [],
                 'notices' => [],
                 'pendingRequests' => ['count' => 0, 'items' => []],
+                'waitlist' => ['count' => 0],
                 'stats' => ['onTimeRate' => null, 'completedTrips' => 0, 'avgDetourMinutes' => null],
             ]);
         }
 
+        $waiting = $this->waitingOn($profile);
+
         return ApiResponse::success([
             'greetingName' => $request->user()->public_first_name,
-            'nextRun' => $nextRun = $this->nextRun($request, $profile, $departures),
-            'laterThisWeek' => $this->laterThisWeek($profile, $nextRun['tripId'] ?? null),
+            'verification' => DriverChecklist::summary($request->user()),
+            'expiredRun' => $this->expiredRun($profile),
+            'nextRun' => $nextRun = $this->nextRun($request, $profile, $departures, $start, $waiting),
+            'laterThisWeek' => $this->laterThisWeek($profile, $nextRun['tripId'] ?? null, $waiting),
             'notices' => $this->driverNotices($request, $profile),
             'pendingRequests' => $this->pendingRequests($request, $profile->user_id),
+            'waitlist' => ['count' => $waiting->unique('passenger_user_id')->count()],
 
             /*
              * The three figures in a row under the card: "98% reliability · +6′ avg
@@ -758,30 +771,47 @@ final class HomeController extends Controller
      *
      * @return array<string, mixed>|null
      */
-    private function nextRun(Request $request, DriverProfile $profile, ComputedDeparture $departures): ?array
-    {
+    private function nextRun(
+        Request $request,
+        DriverProfile $profile,
+        ComputedDeparture $departures,
+        StartTripAction $start,
+        Collection $waiting,
+    ): ?array {
         $trip = ScheduledTrip::query()
             ->whereIn('commute_offer_id', CommuteOffer::query()
                 ->where('driver_profile_id', $profile->user_id)
                 ->select('id'))
-            ->where(fn (Builder $query) => $this->currentTrips($query, 'scheduled_trips'))
+            ->where(fn (Builder $query) => $query
+                ->where(fn (Builder $current) => $this->currentTrips($current, 'scheduled_trips'))
+                ->orWhere(fn (Builder $late) => $late
+                    ->where('status', ScheduledTripStatus::Scheduled)
+                    ->where('departure_at', '<', now())
+                    ->where('departure_at', '>=', now()->subDay())))
             ->orderBy('departure_at')
             ->orderBy('id')
-            ->with([
-                'commuteSchedule',
-                'commuteOffer.locations.place',
-                'commuteOffer.vehicle',
-                'commuteOffer.group.activeMembers',
-                'commuteOffer.group.attendances',
-                'bookings.passenger.stats',
-                'bookings.passenger.verifications',
-                'bookings.seatRequest',
-            ])
-            ->first();
+            ->with('commuteSchedule')
+            ->limit(10)
+            ->get()
+            ->first(fn (ScheduledTrip $candidate): bool => $candidate->status !== ScheduledTripStatus::Scheduled
+                || $candidate->departure_at->isFuture()
+                || $this->isTodayFor($candidate));
 
         if ($trip === null) {
             return null;
         }
+
+        $trip->load([
+            'tripSession',
+            'commuteOffer.driverProfile',
+            'commuteOffer.locations.place',
+            'commuteOffer.vehicle',
+            'commuteOffer.group.activeMembers',
+            'commuteOffer.group.attendances',
+            'bookings.passenger.stats',
+            'bookings.passenger.verifications',
+            'bookings.seatRequest',
+        ]);
 
         $offer = $trip->commuteOffer;
         $group = $offer->group;
@@ -795,9 +825,14 @@ final class HomeController extends Controller
             'tripId' => $trip->id,
             'groupId' => $group?->id,
             'status' => strtoupper($trip->status->value),
+            'phase' => DriverRun::phase($trip),
 
             ...JourneyCard::route($offer),
             ...JourneyCard::timing($trip),
+            ...DriverRun::promise($trip),
+            ...DriverRun::started($trip),
+            ...DriverRun::startWindow($trip, $this->canStart($request->user(), $trip, $start)),
+            'startDeadlines' => DriverRun::startDeadlines($trip),
             'leaveBy' => $this->leaveBy($trip, $departures),
             'attendance' => JourneyCard::attendance($group, $trip),
 
@@ -806,6 +841,7 @@ final class HomeController extends Controller
             // "1 seat open" — cast because max() returns the wider of its arguments'
             // types, which the contract would then describe as untyped.
             'seatsOpen' => (int) max(0, $trip->seats_total - $trip->seats_taken),
+            'waitlistCount' => $this->waitlistCount($waiting, $trip),
 
             /*
              * 🔴 Two figures, not the screen's one "You collect EGP 240", because with a
@@ -821,6 +857,67 @@ final class HomeController extends Controller
 
             'passengers' => $this->runPassengers($request, $confirmed, $group, $trip),
         ];
+    }
+
+    private function canStart(User $user, ScheduledTrip $trip, StartTripAction $start): bool
+    {
+        if ($user->account_status === AccountStatus::Suspended) {
+            return false;
+        }
+
+        try {
+            $start->assertMayStart($trip);
+
+            return true;
+        } catch (DomainException) {
+            return false;
+        }
+    }
+
+    /**
+     * @return Collection<int, SeatRequest>
+     */
+    private function waitingOn(DriverProfile $profile): Collection
+    {
+        return SeatRequest::query()
+            ->whereIn('commute_offer_id', CommuteOffer::query()
+                ->where('driver_profile_id', $profile->user_id)
+                ->select('id'))
+            ->where('status', SeatRequestStatus::Waitlisted)
+            ->get()
+            ->toBase();
+    }
+
+    /**
+     * @param  Collection<int, SeatRequest>  $waiting
+     */
+    private function waitlistCount(Collection $waiting, ScheduledTrip $trip): int
+    {
+        return $waiting
+            ->filter(fn (SeatRequest $request): bool => WaitlistEligibility::isWaitingFor($request, $trip))
+            ->unique('passenger_user_id')
+            ->count();
+    }
+
+    /**
+     * @return array{tripId: string, commuteId: string, originLabel: string|null, destinationLabel: string|null, departureAt: string, departureLocal: string, expiredAt: string|null, expiredLocal: string|null}|null
+     */
+    private function expiredRun(DriverProfile $profile): ?array
+    {
+        $trip = ScheduledTrip::query()
+            ->whereIn('commute_offer_id', CommuteOffer::query()
+                ->where('driver_profile_id', $profile->user_id)
+                ->select('id'))
+            ->where('status', ScheduledTripStatus::Expired)
+            ->where('expired_at', '>=', now()->subDay())
+            ->orderByDesc('expired_at')
+            ->orderByDesc('id')
+            ->limit(5)
+            ->with(['commuteSchedule', 'commuteOffer.locations.place'])
+            ->get()
+            ->first(fn (ScheduledTrip $candidate): bool => DriverRun::expiredToday($candidate));
+
+        return $trip === null ? null : DriverRun::expired($trip);
     }
 
     /**
@@ -858,7 +955,7 @@ final class HomeController extends Controller
     /**
      * @return array<int, array<string, mixed>>
      */
-    private function laterThisWeek(DriverProfile $profile, ?string $nextTripId): array
+    private function laterThisWeek(DriverProfile $profile, ?string $nextTripId, Collection $waiting): array
     {
         $trips = ScheduledTrip::query()
             ->whereIn('commute_offer_id', CommuteOffer::query()
@@ -886,6 +983,7 @@ final class HomeController extends Controller
                 'seatsTotal' => $trip->seats_total,
                 'seatsTaken' => $trip->seats_taken,
                 'seatsOpen' => (int) max(0, $trip->seats_total - $trip->seats_taken),
+                'waitlistCount' => $this->waitlistCount($waiting, $trip),
             ];
         }
 
@@ -924,11 +1022,23 @@ final class HomeController extends Controller
         $switches = [SwitchReason::Voluntary->value, SwitchReason::DriverDelay->value];
         $notices = [];
 
+        $rejoined = SeatRequest::query()
+            ->whereIn('passenger_user_id', $bookings->pluck('passenger_user_id')->all())
+            ->whereIn('commute_offer_id', $bookings->pluck('scheduledTrip.commute_offer_id')->all())
+            ->where('status', SeatRequestStatus::Waitlisted)
+            ->get(['passenger_user_id', 'commute_offer_id', 'scheduled_trip_id']);
+
         foreach ($bookings as $booking) {
             $trip = $booking->scheduledTrip;
+            $switched = in_array($booking->cancelled_reason, $switches, true);
 
             $notices[] = [
-                'kind' => in_array($booking->cancelled_reason, $switches, true) ? 'passenger_switched' : 'seat_opened',
+                'kind' => $switched ? 'passenger_switched' : 'seat_opened',
+                'rejoinedWaitlist' => $switched && $rejoined->contains(
+                    fn (SeatRequest $request): bool => $request->passenger_user_id === $booking->passenger_user_id
+                        && $request->commute_offer_id === $trip->commute_offer_id
+                        && ($request->scheduled_trip_id === null || $request->scheduled_trip_id === $trip->id),
+                ),
                 'bookingId' => $booking->id,
                 'tripId' => $trip->id,
                 'commuteId' => $trip->commute_offer_id,
