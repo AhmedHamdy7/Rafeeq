@@ -509,6 +509,7 @@ return [
             'pricing__min_seat_divisor' => 'Price never divided by fewer seats than',
             'driver__min_approved_seats' => 'Fewest seats a car can be approved for',
             'trip__start_window_minutes' => 'How early a driver may start a run',
+            'trip__driver_starting_soon_minutes' => 'When Driver Home starts showing Starting soon',
             'trip__wait_grace_seconds' => 'Driver wait before a no-show',
             'trip__arrival_radius_meters' => 'How close the driver must be to say “I’ve arrived”',
             'commute__match_radius_meters' => 'How far a rider’s point may be from the route',

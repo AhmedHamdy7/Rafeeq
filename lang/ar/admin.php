@@ -506,6 +506,7 @@ return [
             'pricing__min_seat_divisor' => 'السعر مايتقسمش على أقل من',
             'driver__min_approved_seats' => 'أقل عدد مقاعد ممكن تتعتمد للعربية',
             'trip__start_window_minutes' => 'أبكر وقت السائق يبدأ فيه الرحلة',
+            'trip__driver_starting_soon_minutes' => 'إمتى الرئيسية بتاعة السائق تبدأ تعرض قربت الرحلة',
             'trip__wait_grace_seconds' => 'انتظار السائق قبل الغياب',
             'trip__arrival_radius_meters' => 'أقصى بُعد للسائق عن نقطة الركوب عشان «وصلت» تتقبل',
             'commute__match_radius_meters' => 'أقصى بُعد لنقطة الراكب عن طريق السائق',
