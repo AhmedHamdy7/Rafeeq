@@ -42,7 +42,7 @@ function driverHome(): array
     return test()->withToken(test()->driverToken)->getJson('/api/v1/driver/home')->assertOk()->json('data');
 }
 
-function waitingFor(string $commuteId, array $attributes = []): SeatRequest
+function waitlistEntry(string $commuteId, array $attributes = []): SeatRequest
 {
     return SeatRequest::factory()->waitlisted()->create([
         'commute_offer_id' => $commuteId,
@@ -186,10 +186,10 @@ it('counts the waiting list per day and across the driver, one person once', fun
     $bit = DaysMask::bitForDate($trip->trip_date);
     $otherDays = DaysMask::fromBits(127 & ~$bit)->value;
 
-    $both = waitingFor($this->commuteId, ['requested_days_mask' => null, 'scheduled_trip_id' => null]);
-    waitingFor($this->commuteId, ['requested_days_mask' => $otherDays, 'scheduled_trip_id' => null]);
-    waitingFor($this->commuteId, ['requested_days_mask' => null, 'scheduled_trip_id' => $this->tripId]);
-    waitingFor($this->commuteId, ['requested_days_mask' => null, 'scheduled_trip_id' => null, 'paused_at' => now()]);
+    $both = waitlistEntry($this->commuteId, ['requested_days_mask' => null, 'scheduled_trip_id' => null]);
+    waitlistEntry($this->commuteId, ['requested_days_mask' => $otherDays, 'scheduled_trip_id' => null]);
+    waitlistEntry($this->commuteId, ['requested_days_mask' => null, 'scheduled_trip_id' => $this->tripId]);
+    waitlistEntry($this->commuteId, ['requested_days_mask' => null, 'scheduled_trip_id' => null, 'paused_at' => now()]);
 
     SeatRequest::factory()->create(['commute_offer_id' => $this->commuteId, 'passenger_user_id' => $both->passenger_user_id, 'status' => SeatRequestStatus::Pending]);
 
@@ -227,7 +227,7 @@ it('says whether a passenger who switched rejoined the list', function () {
 
     expect($notice['kind'])->toBe('passenger_switched')->and($notice['rejoinedWaitlist'])->toBeFalse();
 
-    waitingFor($this->commuteId, ['passenger_user_id' => $booking->passenger_user_id, 'scheduled_trip_id' => $this->tripId]);
+    waitlistEntry($this->commuteId, ['passenger_user_id' => $booking->passenger_user_id, 'scheduled_trip_id' => $this->tripId]);
 
     expect(driverHome()['notices'][0]['rejoinedWaitlist'])->toBeTrue();
 });
