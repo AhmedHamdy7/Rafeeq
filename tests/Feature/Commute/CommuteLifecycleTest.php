@@ -1,7 +1,6 @@
 <?php
 
 use App\Domains\Admin\Models\AdminUser;
-use App\Domains\Commute\Actions\ChangeCommuteStatusAction;
 use App\Domains\Commute\Enums\CommuteOfferStatus;
 use App\Domains\Commute\Enums\CommutePausedReason;
 use App\Domains\Commute\Enums\ScheduledTripStatus;
@@ -146,14 +145,8 @@ it('pauses a driver published commutes when they are suspended', function () {
         'Safety report under investigation.',
     );
 
-    $paused = app(ChangeCommuteStatusAction::class)->pauseUnpublishableOffers(
-        DriverProfile::sole(),
-        CommutePausedReason::VehicleSuspended,
-    );
-
-    expect($paused)->toBe(1)
-        ->and(CommuteOffer::sole()->status)->toBe(CommuteOfferStatus::Paused)
-        ->and(CommuteOffer::sole()->paused_reason)->toBe(CommutePausedReason::VehicleSuspended);
+    expect(CommuteOffer::sole()->status)->toBe(CommuteOfferStatus::Paused)
+        ->and(CommuteOffer::sole()->paused_reason)->toBe(CommutePausedReason::DriverSuspended);
 });
 
 /**

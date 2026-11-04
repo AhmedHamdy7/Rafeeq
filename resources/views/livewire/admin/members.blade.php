@@ -149,12 +149,19 @@
                     </ul>
                 @endif
 
+                @if ($driverSuspended)
+                    <p class="rq-note" style="margin-top:13px">{{ __('admin.members.driver_is_suspended') }}</p>
+                @endif
+
                 @if ($mayAct)
                     <div class="rq-actions">
                         @if ($opened->account_status->value === 'active')
                             <button type="button" class="rq-btn rq-btn--danger" wire:click="startForm('suspend')">{{ __('admin.members.suspend') }}</button>
                         @elseif ($opened->account_status->value === 'suspended')
                             <button type="button" class="rq-btn rq-btn--approve" wire:click="startForm('reinstate')">{{ __('admin.members.reinstate') }}</button>
+                        @endif
+                        @if ($driverSuspendable)
+                            <button type="button" class="rq-btn rq-btn--danger" wire:click="startForm('suspend_driver')">{{ __('admin.members.suspend_driver') }}</button>
                         @endif
                     </div>
 
@@ -198,6 +205,20 @@
 
                             <div class="rq-actions">
                                 <button type="submit" class="rq-btn rq-btn--danger" wire:loading.attr="disabled">{{ __('admin.members.confirm_suspend') }}</button>
+                                <button type="button" class="rq-btn rq-btn--quiet" wire:click="startForm('')">{{ __('admin.queue.cancel') }}</button>
+                            </div>
+                        </form>
+                    @elseif ($mode === 'suspend_driver')
+                        <form wire:submit="suspendDriver" style="margin-top:13px">
+                            <textarea class="rq-field" wire:model="note" rows="3" required
+                                      placeholder="{{ __('admin.members.driver_suspend_placeholder') }}"></textarea>
+                            @error('note') <p class="rq-error">{{ $message }}</p> @enderror
+                            <p class="rq-note" style="margin:6px 0 0">{{ __('admin.members.driver_suspend_hint') }}</p>
+                            @if ($strandedDays > 0)
+                                <p class="rq-error" style="margin-top:10px">{{ __('admin.members.driver_suspend_impact', ['days' => $strandedDays, 'passengers' => $strandedPassengers]) }}</p>
+                            @endif
+                            <div class="rq-actions">
+                                <button type="submit" class="rq-btn rq-btn--danger" wire:loading.attr="disabled">{{ __('admin.members.confirm_suspend_driver') }}</button>
                                 <button type="button" class="rq-btn rq-btn--quiet" wire:click="startForm('')">{{ __('admin.queue.cancel') }}</button>
                             </div>
                         </form>
