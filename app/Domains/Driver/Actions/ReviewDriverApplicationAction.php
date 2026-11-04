@@ -6,6 +6,7 @@ use App\Domains\Admin\Models\AdminUser;
 use App\Domains\Commute\Actions\ChangeCommuteStatusAction;
 use App\Domains\Commute\Enums\CommutePausedReason;
 use App\Domains\Driver\Enums\DriverProfileStatus;
+use App\Domains\Driver\Enums\VehicleRejectedItem;
 use App\Domains\Driver\Enums\VehicleVerificationStatus;
 use App\Domains\Driver\Enums\VerificationLogAction;
 use App\Domains\Driver\Models\DriverProfile;
@@ -142,6 +143,67 @@ final readonly class ReviewDriverApplicationAction
              */
             Notifier::send($profile->user, NotificationType::DriverDocumentsRejected, data: [
                 'driverProfileId' => (string) $profile->getKey(),
+            ]);
+
+            return $profile;
+        });
+    }
+
+    public function rejectVehicle(
+        DriverProfile $profile,
+        Vehicle $vehicle,
+        AdminUser $reviewer,
+        VehicleRejectedItem $item,
+        string $reason,
+    ): DriverProfile {
+        $this->assertDecidable($profile);
+
+        if (trim($reason) === '') {
+            throw DomainException::of(ErrorCode::ValidationFailed, fields: [
+                'reason' => [__('validation.required', ['attribute' => 'reason'])],
+            ]);
+        }
+
+        return DB::transaction(function () use ($profile, $vehicle, $reviewer, $item, $reason): DriverProfile {
+            $previous = $profile->status;
+            $previousVehicleStatus = $vehicle->verification_status;
+
+            $vehicle->forceFill([
+                'verification_status' => VehicleVerificationStatus::Rejected->value,
+                'rejected_item' => $item->value,
+                'rejection_reason' => $reason,
+            ])->save();
+
+            VerificationLog::create([
+                'entity_type' => 'vehicle',
+                'entity_id' => $vehicle->id,
+                'admin_id' => $reviewer->id,
+                'action' => VerificationLogAction::Reject->value,
+                'old_value' => ['verification_status' => $previousVehicleStatus?->value],
+                'new_value' => [
+                    'verification_status' => VehicleVerificationStatus::Rejected->value,
+                    'rejected_item' => $item->value,
+                ],
+                'reason' => $reason,
+            ]);
+
+            $profile->status = DriverProfileStatus::Rejected->value;
+            $profile->reviewer_id = $reviewer->id;
+            $profile->rejection_reason = $reason;
+            $profile->save();
+
+            $this->log($profile, $reviewer, VerificationLogAction::Reject, $previous, $reason);
+
+            SecurityLog::record(SecurityEventType::DriverRejected, $profile->user, metadata: [
+                'reviewer_id' => $reviewer->id,
+            ]);
+
+            $user = $profile->user;
+            $label = __('notifications.driver_items.'.$item->value, [], $user->preferred_language ?: config('app.locale'));
+
+            Notifier::send($user, NotificationType::DriverItemRejected, params: ['item' => $label], data: [
+                'itemKey' => $item->value,
+                'rejectionReason' => $reason,
             ]);
 
             return $profile;

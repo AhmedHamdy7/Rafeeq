@@ -41,6 +41,7 @@ final class AdminActionLog
     private const array REQUIRES_REASON = [
         'verification.request_info',
         'driver.reject',
+        'driver.reject_car',
         'account.suspend',
         'account.suspension_appeal_decide',
         'account.reactivate',

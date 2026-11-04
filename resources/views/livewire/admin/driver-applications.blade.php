@@ -49,6 +49,35 @@
                                 {{ __('admin.drivers.car.has_ac') }}
                             </label>
                         </li>
+                        <li class="rq-check">
+                            <button type="button" class="rq-btn rq-btn--quiet"
+                                    wire:click="openCarRejection('{{ $vehicle->id }}', 'vehicle_registration')">
+                                {{ __('admin.drivers.car.reject_registration') }}
+                            </button>
+                            <button type="button" class="rq-btn rq-btn--quiet"
+                                    wire:click="openCarRejection('{{ $vehicle->id }}', 'vehicle_details')">
+                                {{ __('admin.drivers.car.reject_details') }}
+                            </button>
+                        </li>
+                        @if ($carRejectionVehicleId === $vehicle->id)
+                            <li>
+                                <form wire:submit="rejectCar('{{ $application->user_id }}')" style="margin-top:13px">
+                                    <p class="rq-note">{{ __('notifications.driver_items.'.$carRejectionItem) }}</p>
+                                    <textarea class="rq-field" wire:model="reason" rows="3" required
+                                              placeholder="{{ __('admin.queue.reason_placeholder') }}"></textarea>
+                                    @error('reason') <p class="rq-error">{{ $message }}</p> @enderror
+                                    @error('carRejectionItem') <p class="rq-error">{{ $message }}</p> @enderror
+                                    <div class="rq-actions">
+                                        <button type="submit" class="rq-btn rq-btn--danger" wire:loading.attr="disabled">
+                                            {{ __('admin.drivers.confirm_reject') }}
+                                        </button>
+                                        <button type="button" class="rq-btn rq-btn--quiet" wire:click="closeCarRejection">
+                                            {{ __('admin.queue.cancel') }}
+                                        </button>
+                                    </div>
+                                </form>
+                            </li>
+                        @endif
                     @endif
                 @endforeach
             </ul>

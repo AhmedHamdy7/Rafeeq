@@ -4,6 +4,7 @@ namespace App\Domains\Driver\Models;
 
 use App\Domains\Driver\Enums\FuelType;
 use App\Domains\Driver\Enums\Transmission;
+use App\Domains\Driver\Enums\VehicleRejectedItem;
 use App\Domains\Driver\Enums\VehicleTier;
 use App\Domains\Driver\Enums\VehicleVerificationStatus;
 use Database\Factories\VehicleFactory;
@@ -41,6 +42,7 @@ class Vehicle extends Model
             'fuel_type' => FuelType::class,
             'transmission' => Transmission::class,
             'verification_status' => VehicleVerificationStatus::class,
+            'rejected_item' => VehicleRejectedItem::class,
         ];
     }
 

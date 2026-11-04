@@ -104,6 +104,9 @@ return [
             'has_ac' => 'Air conditioning works',
             'required' => 'Set the approved seats for every car before approving.',
             'seats_out_of_range' => 'Approved seats must be between :min and :max.',
+            'reject_registration' => 'Reject registration',
+            'reject_details' => 'Reject car details',
+            'rejected' => 'Rejected :item for :name.',
         ],
     ],
 

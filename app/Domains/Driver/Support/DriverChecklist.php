@@ -4,6 +4,7 @@ namespace App\Domains\Driver\Support;
 
 use App\Domains\Driver\Enums\DriverProfileStatus;
 use App\Domains\Driver\Enums\VehicleDocumentType;
+use App\Domains\Driver\Enums\VehicleRejectedItem;
 use App\Domains\Driver\Enums\VehicleVerificationStatus;
 use App\Domains\Driver\Models\DriverProfile;
 use App\Domains\Driver\Models\Vehicle;
@@ -58,7 +59,9 @@ final class DriverChecklist
         );
 
         $profile = $user->driverProfile;
-        $vehicle = $profile?->vehicles->firstWhere('is_active', true) ?? $profile?->vehicles->first();
+        $vehicle = $profile?->vehicles->firstWhere('verification_status', VehicleVerificationStatus::Rejected)
+            ?? $profile?->vehicles->firstWhere('is_active', true)
+            ?? $profile?->vehicles->first();
 
         $items = [
             self::fromVerification('government_id', $verifications->get(VerificationType::GovernmentId->value)),
@@ -189,14 +192,16 @@ final class DriverChecklist
         return [
             'key' => 'vehicle_registration',
             'status' => match (true) {
-                $vehicle === null || $document === null => 'not_started',
+                $vehicle === null => 'not_started',
+                self::isRejected($vehicle, VehicleRejectedItem::Registration) => 'action_needed',
+                $document === null => 'not_started',
                 ! $complete => 'in_progress',
                 $expired => 'expired',
                 // A vehicle document is approved with the vehicle it belongs to: the reviewer
                 // decides on the car, not on each page of its paperwork separately.
-                default => self::carStatus($vehicle, $profile),
+                default => self::carStatus($vehicle, $profile, VehicleRejectedItem::Registration),
             },
-            'rejectionReason' => self::carRejection($vehicle, $profile),
+            'rejectionReason' => self::carRejection($vehicle, VehicleRejectedItem::Registration),
             'expiresAt' => $document?->expires_at?->toIso8601String(),
         ];
     }
@@ -213,29 +218,33 @@ final class DriverChecklist
             'key' => 'vehicle_details',
             'status' => match (true) {
                 $vehicle === null => 'not_started',
-                default => self::carStatus($vehicle, $profile),
+                default => self::carStatus($vehicle, $profile, VehicleRejectedItem::Details),
             },
-            'rejectionReason' => self::carRejection($vehicle, $profile),
+            'rejectionReason' => self::carRejection($vehicle, VehicleRejectedItem::Details),
             'expiresAt' => null,
         ];
     }
 
-    private static function carStatus(Vehicle $vehicle, ?DriverProfile $profile): string
+    private static function carStatus(Vehicle $vehicle, ?DriverProfile $profile, VehicleRejectedItem $item): string
     {
         return match (true) {
             $vehicle->verification_status === VehicleVerificationStatus::Approved => 'approved',
-            $vehicle->verification_status === VehicleVerificationStatus::Rejected,
+            self::isRejected($vehicle, $item),
             $vehicle->verification_status === VehicleVerificationStatus::Suspended => 'action_needed',
             in_array($profile?->status, [DriverProfileStatus::PendingReview, DriverProfileStatus::Approved], true) => 'under_review',
             default => 'in_progress',
         };
     }
 
-    private static function carRejection(?Vehicle $vehicle, ?DriverProfile $profile): ?string
+    private static function carRejection(?Vehicle $vehicle, VehicleRejectedItem $item): ?string
     {
-        return $vehicle?->verification_status === VehicleVerificationStatus::Rejected
-            ? $profile?->rejection_reason
-            : null;
+        return $vehicle !== null && self::isRejected($vehicle, $item) ? $vehicle->rejection_reason : null;
+    }
+
+    private static function isRejected(Vehicle $vehicle, VehicleRejectedItem $item): bool
+    {
+        return $vehicle->verification_status === VehicleVerificationStatus::Rejected
+            && ($vehicle->rejected_item === null || $vehicle->rejected_item === $item);
     }
 
     /**

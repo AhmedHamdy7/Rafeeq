@@ -102,6 +102,9 @@ return [
             'has_ac' => 'التكييف شغّال',
             'required' => 'حدّد المقاعد المعتمدة لكل عربية قبل الاعتماد.',
             'seats_out_of_range' => 'المقاعد المعتمدة لازم تكون بين :min و :max.',
+            'reject_registration' => 'رفض رخصة العربية',
+            'reject_details' => 'رفض بيانات العربية',
+            'rejected' => 'اترفض :item لـ :name.',
         ],
     ],
 

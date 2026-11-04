@@ -1511,11 +1511,23 @@ on purpose: it is the screen that explains what is missing.
 | `in_progress` | Something uploaded, not submitted for review. **The two car items stay here until the application is submitted**, even when everything is uploaded. |
 | `under_review` | With a reviewer. |
 | `approved` | Checked and accepted. |
-| `action_needed` | Rejected — **`rejectionReason` says which document and why.** A rejected or suspended car reads this way too. The reason is the reviewer's own words: show it as its own sentence, not inside yours. |
+| `action_needed` | Rejected — **`rejectionReason` says which document and why.** A reviewer can reject the car's registration or its details on their own, and only that item reads this way; a suspended car reads this way on both. The reason is the reviewer's own words: show it as its own sentence, not inside yours. |
 | `expired` | Was approved; the date has passed. |
 
 🔴 **`rejectionReason` is per item, so you can say "replace only that document".** Rejecting one
 item never clears the others — a test holds that. Do not send somebody back to re-upload all five.
+
+🚗 **A rejected car paper.** The reviewer picks `vehicle_registration` or `vehicle_details` and writes
+one reason. That item reads `action_needed` with the reason, `actionItem.key` names it, and the
+application goes to `REJECTED` so it can be edited; the other car item reads `in_progress`. To fix it:
+
+- `vehicle_registration`: `POST /driver/vehicles/{vehicle}/documents` with any registration type.
+- `vehicle_details`: `PATCH /driver/vehicles/{vehicle}` with a change. A save that changes nothing does
+  not count.
+
+The reason clears on that call: the item stops being `action_needed`, `actionItem` goes `null`, and the
+application reads `DRAFT`. Then the driver submits again. Until the item is fixed, submit answers
+`422 DRIVER_APPLICATION_INCOMPLETE` with that item's key in `missing`.
 
 | `overall` | Headline to show |
 |---|---|
@@ -1534,7 +1546,7 @@ and the one that explains why her commutes stopped.
 | Field | Meaning |
 |---|---|
 | `licenceExpiresAt` / the licence item's `expiresAt` | The date on the approved licence. If the reviewer gave none, the date the driver typed. `null` until the licence is approved. |
-| `actionItem` | `{key, status, rejectionReason}` for the first item that needs the driver, so you do not have to read all five: `status` is `action_needed` or `expired`. `key` is an item key, or **`application`** when the reviewer rejected the application as a whole. `null` when nothing is waiting, and for a suspended driver. |
+| `actionItem` | `{key, status, rejectionReason}` for the first item that needs the driver, so you do not have to read all five: `status` is `action_needed` or `expired`. `key` is an item key, car items included, or **`application`** only when the reviewer rejected the application as a whole. `null` when nothing is waiting, and for a suspended driver. |
 | `suspensionReason` | One sentence for a suspended driver, written by staff. `null` otherwise. |
 
 > ⚠️ **`completed` can be 4 while `overall` is `verified`.** Approval today requires a valid licence
@@ -1575,7 +1587,8 @@ missing, so gating it would leave them with a refusal and no explanation.
 `422 DRIVER_APPLICATION_INCOMPLETE` lists what is missing in `error.fields.missing`: any of
 `government_id` · `selfie` (not yet submitted) · `national_id` · `licence_number` · `licence_expiry` ·
 `licence_front` · `licence_back` · `vehicle` · `vehicle_registration` (no registration at all) ·
-`registration_front` / `registration_back` (one side sent, this one missing). **Never** `insurance` or
+`registration_front` / `registration_back` (one side sent, this one missing) · `vehicle_registration` /
+`vehicle_details` (a reviewer rejected it and it has not been replaced). **Never** `insurance` or
 `inspection` (F2-15).
 
 #### `GET` / `POST /driver/vehicles` · `PATCH /driver/vehicles/{vehicle}` — active, profile complete
@@ -4206,7 +4219,7 @@ hold must still be able to read the notice that says so.
 | `rating_due` · `rating_due_riders` · `rating_reminder` | passenger / driver | rate (4.13) | `bookingId` or `tripId` |
 | `sos_picked_up` · `report_resolved` · `report_closed` | the reporter | the SOS / report | `sosId` / `incidentId` |
 | `account_on_hold` · `account_reinstated` | the member (safety) | — | *no ids* |
-| `driver_item_approved` · `driver_item_rejected` | driver (safety), per verification item | that item on `GET /driver/verification` — replace only it | `itemKey` (`government_id` · `selfie` · `driving_licence`), + `rejectionReason` on a rejection |
+| `driver_item_approved` · `driver_item_rejected` | driver (safety), per verification item | that item on `GET /driver/verification` — replace only it | `itemKey` (`government_id` · `selfie` · `driving_licence`, and on a rejection also `vehicle_registration` · `vehicle_details`), + `rejectionReason` on a rejection |
 | `driver_verified` | driver (safety), once — the whole verification became `verified` (replaces `driver_documents_approved`) | driver mode | `driverProfileId` |
 | `driver_documents_rejected` | driver (safety) — the application as a whole was sent back | the application | `driverProfileId` |
 | `driver_item_expiring` | driver (safety), once per expiry date (replaces `licence_expiring`) | the licence item | `itemKey`, `expiresAt` |
@@ -4607,6 +4620,7 @@ exist, and every live endpoint must be named here.
 
 | Date | Change |
 |---|---|
+| 2026-11-04 | 🚗 **A reviewer can reject the car's registration or details on their own.** `GET /driver/verification` returns the reason on that item, and `actionItem.key` is `vehicle_registration` or `vehicle_details` instead of `application`. `driver_item_rejected` now also carries those two `itemKey`s. Replacing the item clears the reason and returns the application to `DRAFT`; until then, submit lists the item in `missing` (4.4, 4.14). |
 | 2026-11-04 | 🚗 **Driver Home gaps (DH-1 → DH-17).** `GET /driver/home` is additive except where noted: `verification`, `expiredRun`, `waitlist.count`; on `nextRun`: `phase`, `promisedArrivalAt`/`Local`, `startedAt`/`Local`, `canStart`, `startOpensAt`/`Local`, `startDeadlines`, `waitlistCount`; `waitlistCount` on `laterThisWeek[]`; `rejoinedWaitlist` on `notices[]`. 🛑 **Behaviour:** a run not started stays on `nextRun` past its departure until it expires. 🛑 `overall` is `under_review` only once submitted; a complete draft stays `in_progress`, and car items read `in_progress` until then. A rejected car or application reads `action_required`. `GET /driver/verification` gains `actionItem` and `suspensionReason`. The licence date falls back to the typed one once approved. `capabilities` is backfilled from `registeredRole`, and a passenger who adds driving keeps `PASSENGER`. New `php artisan demo:driver-home-states` for test accounts. |
 | 2026-11-04 | 🛑 **An expired licence and a driver suspension now stop upcoming trips (COM-26, PROF-20, PROF-27, D-0018).** A daily sweep moves a driver whose licence has expired to `EXPIRED_DOCUMENTS` and `renewal_required`, pauses every published commute (`pausedReason: licence_expired`) and cancels upcoming seats, inside the 16-hour lock too, with no fee; riders go back on the waiting list. Resume, publish and start answer `422 DRIVER_LICENCE_EXPIRED` until the renewed licence is approved. Staff can now suspend a driver from the dashboard: same cancellation, with the new `pausedReason: driver_suspended`. New notifications `driver_licence_expired` and `driver_suspended`. `rejectionReason` on a suspended application holds the staff member's words (4.4, 4.14). |
 | 2026-11-04 | 📷 **Document uploads over about 16 KB no longer fail with a 500 (F2-1).** nginx could not write a large request body to its temp folder, so any real photo failed on `/account/verifications/{type}/documents` and `/driver/vehicles/{vehicle}/documents` before reaching the application. Errors nginx raises itself on `/api/*` (`413`, `500`, `502`, `504`) now use the standard error envelope with `PAYLOAD_TOO_LARGE` or `SERVER_ERROR`, in the language from `Accept-Language`. |
