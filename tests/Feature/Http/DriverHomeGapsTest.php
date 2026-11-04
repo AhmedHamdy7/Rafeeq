@@ -6,7 +6,9 @@ use App\Domains\Booking\Enums\SeatRequestStatus;
 use App\Domains\Booking\Enums\SwitchReason;
 use App\Domains\Booking\Models\Booking;
 use App\Domains\Booking\Models\SeatRequest;
+use App\Domains\Commute\Enums\CommuteOfferStatus;
 use App\Domains\Commute\Enums\ScheduledTripStatus;
+use App\Domains\Commute\Models\CommuteOffer;
 use App\Domains\Commute\Models\ScheduledTrip;
 use App\Domains\Driver\Actions\ReviewDriverApplicationAction;
 use App\Domains\Driver\Enums\DriverProfileStatus;
@@ -391,4 +393,19 @@ it('backfills capabilities from the registered role and the driver profile', fun
 
     expect($values($passenger))->toBe(['passenger'])
         ->and($values($driverPassenger))->toBe(['driver', 'passenger']);
+});
+
+it('leaves the days of a paused commute off Driver Home, and out of the sweep', function () {
+    runLeavingIn($this->tripId, -2);
+
+    CommuteOffer::query()->whereKey($this->commuteId)->update(['status' => CommuteOfferStatus::Paused->value]);
+
+    $home = driverHome();
+
+    expect($home['nextRun'])->toBeNull()->and($home['laterThisWeek'])->toBe([]);
+
+    runLeavingIn($this->tripId, -21);
+    app(SweepDelayedTripsAction::class)->sweep();
+
+    expect(ScheduledTrip::query()->findOrFail($this->tripId)->status)->toBe(ScheduledTripStatus::Scheduled);
 });

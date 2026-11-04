@@ -11,6 +11,7 @@ use App\Domains\Booking\Models\Booking;
 use App\Domains\Booking\Models\PickupPointRequest;
 use App\Domains\Booking\Models\SeatRequest;
 use App\Domains\Booking\Support\WaitlistEligibility;
+use App\Domains\Commute\Enums\CommuteOfferStatus;
 use App\Domains\Commute\Enums\ScheduledTripStatus;
 use App\Domains\Commute\Models\CommuteOffer;
 use App\Domains\Commute\Models\ScheduledTrip;
@@ -788,6 +789,12 @@ final class HomeController extends Controller
                     ->where('status', ScheduledTripStatus::Scheduled)
                     ->where('departure_at', '<', now())
                     ->where('departure_at', '>=', now()->subDay())))
+            ->where(fn (Builder $query) => $query
+                ->where('status', '!=', ScheduledTripStatus::Scheduled)
+                ->orWhereIn('commute_offer_id', CommuteOffer::query()
+                    ->where('driver_profile_id', $profile->user_id)
+                    ->where('status', CommuteOfferStatus::Published)
+                    ->select('id')))
             ->orderBy('departure_at')
             ->orderBy('id')
             ->with('commuteSchedule')
@@ -960,6 +967,7 @@ final class HomeController extends Controller
         $trips = ScheduledTrip::query()
             ->whereIn('commute_offer_id', CommuteOffer::query()
                 ->where('driver_profile_id', $profile->user_id)
+                ->where('status', CommuteOfferStatus::Published)
                 ->select('id'))
             ->where('status', ScheduledTripStatus::Scheduled)
             ->where('departure_at', '>=', now())

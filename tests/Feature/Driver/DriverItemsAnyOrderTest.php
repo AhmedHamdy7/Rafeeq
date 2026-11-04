@@ -10,7 +10,10 @@ use App\Domains\Driver\Models\Vehicle;
 use App\Domains\Identity\Models\User;
 use App\Domains\Notification\Models\Notification;
 use App\Domains\Shared\Exceptions\DomainException;
+use App\Domains\Verification\Actions\ReviewVerificationAction;
+use App\Domains\Verification\Enums\VerificationStatus;
 use App\Domains\Verification\Enums\VerificationType;
+use App\Domains\Verification\Models\UserVerification;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Storage;
 
@@ -202,4 +205,57 @@ it('sends driver_verified once, on the first approval only', function () {
     app(ReviewDriverApplicationAction::class)->approve($profile->refresh(), $reviewer);
 
     expect(Notification::query()->where('user_id', $driver->id)->where('type', 'driver_verified')->count())->toBe(1);
+});
+
+it('sends the licence with the application, and approves it with the driver', function () {
+    $token = readyDriverApplicant(phone: '01012345777', devicePublicId: 'licence-with-application');
+    completeDriverApplication($token, seed: 7);
+
+    $licence = UserVerification::query()->where('type', VerificationType::DrivingLicence->value)->sole();
+
+    expect($licence->status)->not->toBe(VerificationStatus::Pending);
+
+    test()->withToken($token)->postJson('/api/v1/driver/application/submit')->assertOk();
+
+    expect($licence->refresh()->status)->toBe(VerificationStatus::Pending);
+
+    $profile = DriverProfile::query()->sole();
+    $reviewer = AdminUser::factory()->create();
+
+    foreach ($profile->vehicles()->get() as $vehicle) {
+        app(ReviewVehicleAction::class)->execute($vehicle, $reviewer, 3, VehicleTier::Standard, true);
+    }
+
+    app(ReviewDriverApplicationAction::class)->approve($profile, $reviewer);
+
+    expect($licence->refresh()->status)->toBe(VerificationStatus::Approved)
+        ->and($licence->expires_at->toDateString())->toBe($profile->refresh()->licence_expiry->toDateString());
+
+    $data = test()->withToken($token)->getJson('/api/v1/driver/verification')->assertOk()->json('data');
+
+    expect($data['completed'])->toBe(5)->and($data['licenceExpiresAt'])->not->toBeNull();
+});
+
+it('refuses to approve a driver whose licence a reviewer sent back', function () {
+    $token = readyDriverApplicant(phone: '01012345778', devicePublicId: 'licence-sent-back');
+    completeDriverApplication($token, seed: 8);
+
+    test()->withToken($token)->postJson('/api/v1/driver/application/submit')->assertOk();
+
+    $reviewer = AdminUser::factory()->create();
+
+    app(ReviewVerificationAction::class)->requestMoreInfo(
+        UserVerification::query()->where('type', VerificationType::DrivingLicence->value)->sole(),
+        $reviewer,
+        'The licence photo is too blurry.',
+    );
+
+    $profile = DriverProfile::query()->sole();
+
+    foreach ($profile->vehicles()->get() as $vehicle) {
+        app(ReviewVehicleAction::class)->execute($vehicle, $reviewer, 3, VehicleTier::Standard, true);
+    }
+
+    expect(fn () => app(ReviewDriverApplicationAction::class)->approve($profile, $reviewer))
+        ->toThrow(DomainException::class);
 });

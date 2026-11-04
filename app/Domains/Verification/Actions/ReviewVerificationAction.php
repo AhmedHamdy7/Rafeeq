@@ -36,7 +36,7 @@ final readonly class ReviewVerificationAction
         private DeriveAvatarAction $deriveAvatar,
     ) {}
 
-    public function approve(UserVerification $verification, AdminUser $reviewer, ?\DateTimeInterface $expiresAt = null): UserVerification
+    public function approve(UserVerification $verification, AdminUser $reviewer, ?\DateTimeInterface $expiresAt = null, bool $notify = true): UserVerification
     {
         $this->assertUnderReview($verification);
 
@@ -44,7 +44,7 @@ final readonly class ReviewVerificationAction
             $expiresAt = DriverProfile::query()->whereKey($verification->user_id)->first()?->licence_expiry;
         }
 
-        return DB::transaction(function () use ($verification, $reviewer, $expiresAt): UserVerification {
+        return DB::transaction(function () use ($verification, $reviewer, $expiresAt, $notify): UserVerification {
             $verification->status = VerificationStatus::Approved->value;
             $verification->reviewed_by = $reviewer->id;
             $verification->reviewed_at = now();
@@ -77,7 +77,9 @@ final readonly class ReviewVerificationAction
                 'reviewer_id' => $reviewer->id,
             ]);
 
-            self::tellDriver($verification, NotificationType::DriverItemApproved);
+            if ($notify) {
+                self::tellDriver($verification, NotificationType::DriverItemApproved);
+            }
 
             return $verification;
         });

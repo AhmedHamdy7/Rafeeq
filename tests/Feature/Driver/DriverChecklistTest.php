@@ -54,14 +54,14 @@ it('is readable before any identity is verified', function () {
  * approved, and the `driving_licence` row still short. `ReviewDriverApplicationAction::approve()`
  * decides the licence as part of the application — it does not mark that verification row approved.
  */
-it('reads four of five for an approved driver, the selfie included since F2-2', function () {
+it('reads five of five for an approved driver, since approval also approves the licence', function () {
     $token = approvedDriver();
 
     $data = checklist($token)->assertOk()->json('data');
     $items = collect($data['items'])->keyBy('key');
 
     expect($data['of'])->toBe(5)
-        ->and($data['completed'])->toBe(4)
+        ->and($data['completed'])->toBe(5)
         ->and($data['overall'])->toBe('verified')
         ->and($items['selfie']['status'])->toBe('approved')
         ->and($items['government_id']['status'])->toBe('approved')
@@ -139,9 +139,8 @@ it('warns that a licence is about to expire without calling her unverified', fun
 
     $data = checklist($token)->assertOk()->json('data');
 
-    // 4 of 5: setting an expiry on the still-pending licence row does not approve it.
     expect($data['overall'])->toBe('expiring')
-        ->and($data['completed'])->toBe(4)
+        ->and($data['completed'])->toBe(5)
         ->and($data['licenceExpiresAt'])->not->toBeNull();
 });
 
