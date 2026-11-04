@@ -12,6 +12,7 @@ use App\Domains\Booking\Models\Booking;
 use App\Domains\Booking\Models\SeatRequest;
 use App\Domains\Commute\Enums\CommuteAudience;
 use App\Domains\Commute\Enums\CommuteOfferStatus;
+use App\Domains\Commute\Enums\CommutePausedReason;
 use App\Domains\Commute\Enums\ScheduledTripStatus;
 use App\Domains\Commute\Models\CommuteOffer;
 use App\Domains\Commute\Models\ScheduledTrip;
@@ -76,6 +77,7 @@ final class DriverHomeStatesSeeder extends DemoDataSeeder
         'RENEWAL-REGISTRATION' => ['+201055557026', 'run'],
         'SUSPENDED' => ['+201055557015', 'run'],
         'ACCOUNT-SUSPENDED' => ['+201055557027', 'run'],
+        'NO-RUN-ACTIVITY' => ['+201055557028', 'run'],
         'NO-COMMUTES' => ['+201055557023', 'applicant'],
         'NOT-STARTED' => ['+201055557201', 'applicant'],
         'IN-PROGRESS' => ['+201055557202', 'applicant'],
@@ -184,7 +186,7 @@ final class DriverHomeStatesSeeder extends DemoDataSeeder
             $this->waitOnce($riders[1], $offer, $later);
         } elseif ($state === 'SAME-PERSON-TWO-DAYS') {
             $this->waitOnce($riders[1], $offer, null);
-        } elseif (str_starts_with($state, 'F3D-') || $state === 'RENEWAL-LICENCE' || $state === 'SUSPENDED') {
+        } elseif (str_starts_with($state, 'F3D-') || in_array($state, ['RENEWAL-LICENCE', 'SUSPENDED', 'NO-RUN-ACTIVITY'], true)) {
             $this->waitOnce($riders[1], $offer, null);
             $this->waitOnce($riders[2], $offer, $trip);
         }
@@ -203,6 +205,7 @@ final class DriverHomeStatesSeeder extends DemoDataSeeder
             'RENEWAL-REGISTRATION' => $this->lapseRegistration($offer),
             'SUSPENDED' => app(ReviewDriverApplicationAction::class)->suspend($profile, $admin, 'Repeated no-show reports.'),
             'ACCOUNT-SUSPENDED' => app(SuspendMemberAction::class)->suspend($driver->refresh(), $admin, SuspensionReason::SafetyReport, 'Demo account for the whole-account suspension state.'),
+            'NO-RUN-ACTIVITY' => $this->pauseWithActivity($riders, $trip, $offer),
             default => null,
         };
     }
@@ -295,7 +298,7 @@ final class DriverHomeStatesSeeder extends DemoDataSeeder
 
         SeatRequest::query()
             ->where('commute_offer_id', $offer->id)
-            ->where('status', SeatRequestStatus::Waitlisted->value)
+            ->whereIn('status', [SeatRequestStatus::Waitlisted->value, SeatRequestStatus::Pending->value])
             ->update(['status' => SeatRequestStatus::Expired->value, 'waitlist_position' => null]);
 
         Booking::query()
@@ -341,7 +344,33 @@ final class DriverHomeStatesSeeder extends DemoDataSeeder
             'promised_arrival_at' => $promise ? $departure->copy()->addMinutes(70) : null,
         ])->save();
 
+        foreach (ScheduledTrip::query()->where('commute_offer_id', $offer->id)->whereKeyNot($trip->id)->get() as $day) {
+            $day->forceFill(['promised_arrival_at' => $promise ? $day->departure_at->copy()->addMinutes(70) : null])->save();
+        }
+
         return $trip->refresh();
+    }
+
+    /**
+     * @param  list<User>  $riders
+     */
+    private function pauseWithActivity(array $riders, ScheduledTrip $trip, CommuteOffer $offer): void
+    {
+        $this->endSeat($riders[0], $trip, null);
+
+        SeatRequest::factory()->create([
+            'passenger_user_id' => $riders[0]->id,
+            'commute_offer_id' => $offer->id,
+            'scheduled_trip_id' => $trip->id,
+            'status' => SeatRequestStatus::Pending,
+            'commitment' => SeatRequestCommitment::Trial,
+        ]);
+
+        $offer->forceFill([
+            'status' => CommuteOfferStatus::Paused->value,
+            'paused_at' => now(),
+            'paused_reason' => CommutePausedReason::ByDriver->value,
+        ])->save();
     }
 
     private function seatOnce(User $rider, ScheduledTrip $trip): void

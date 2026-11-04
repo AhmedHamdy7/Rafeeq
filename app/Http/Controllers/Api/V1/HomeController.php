@@ -186,6 +186,8 @@ final class HomeController extends Controller
                 'notices' => [],
                 'pendingRequests' => ['count' => 0, 'items' => []],
                 'waitlist' => ['count' => 0],
+                'pausedCommutes' => 0,
+                'pausedCommuteReasons' => [],
                 'stats' => ['onTimeRate' => null, 'completedTrips' => 0, 'avgDetourMinutes' => null],
             ]);
         }
@@ -201,6 +203,11 @@ final class HomeController extends Controller
             'notices' => $this->driverNotices($request, $profile),
             'pendingRequests' => $this->pendingRequests($request, $profile->user_id),
             'waitlist' => ['count' => $waiting->unique('passenger_user_id')->count()],
+            'pausedCommutes' => CommuteOffer::query()
+                ->where('driver_profile_id', $profile->user_id)
+                ->where('status', CommuteOfferStatus::Paused)
+                ->count(),
+            'pausedCommuteReasons' => $this->pausedCommuteReasons($profile),
 
             /*
              * The three figures in a row under the card: "98% reliability · +6′ avg
@@ -884,6 +891,24 @@ final class HomeController extends Controller
     /**
      * @return Collection<int, SeatRequest>
      */
+    /**
+     * @return list<string>
+     */
+    private function pausedCommuteReasons(DriverProfile $profile): array
+    {
+        return CommuteOffer::query()
+            ->where('driver_profile_id', $profile->user_id)
+            ->where('status', CommuteOfferStatus::Paused)
+            ->whereNotNull('paused_reason')
+            ->toBase()
+            ->distinct()
+            ->orderBy('paused_reason')
+            ->pluck('paused_reason')
+            ->map(fn ($reason): string => (string) $reason)
+            ->values()
+            ->all();
+    }
+
     private function waitingOn(DriverProfile $profile): Collection
     {
         return SeatRequest::query()

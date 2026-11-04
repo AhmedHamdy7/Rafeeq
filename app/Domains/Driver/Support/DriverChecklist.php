@@ -66,7 +66,7 @@ final class DriverChecklist
         $items = [
             self::fromVerification('government_id', $verifications->get(VerificationType::GovernmentId->value)),
             self::fromVerification('selfie', $verifications->get(VerificationType::Selfie->value)),
-            self::fromVerification('driving_licence', $verifications->get(VerificationType::DrivingLicence->value), self::licenceExpiry($verifications, $profile)),
+            self::licenceItem($verifications->get(VerificationType::DrivingLicence->value), self::licenceExpiry($verifications, $profile), $profile),
             self::vehicleRegistration($vehicle, $profile),
             self::vehicleDetails($vehicle, $profile),
         ];
@@ -177,6 +177,20 @@ final class DriverChecklist
     /**
      * @return array<string, mixed>
      */
+    private static function licenceItem(?UserVerification $licence, ?CarbonInterface $expiry, ?DriverProfile $profile): array
+    {
+        $item = self::fromVerification('driving_licence', $licence, $expiry);
+
+        if ($item['status'] === 'under_review' && in_array($profile?->status, [DriverProfileStatus::Draft, DriverProfileStatus::Rejected], true)) {
+            $item['status'] = 'in_progress';
+        }
+
+        return $item;
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
     private static function vehicleRegistration(?Vehicle $vehicle, ?DriverProfile $profile): array
     {
         // F2-4: the single legacy image, or the two sides. One side alone is a start, not a finish.
@@ -229,8 +243,8 @@ final class DriverChecklist
     {
         return match (true) {
             $vehicle->verification_status === VehicleVerificationStatus::Approved => 'approved',
-            self::isRejected($vehicle, $item),
-            $vehicle->verification_status === VehicleVerificationStatus::Suspended => 'action_needed',
+            self::isRejected($vehicle, $item) => 'action_needed',
+            $vehicle->verification_status === VehicleVerificationStatus::Suspended => 'suspended',
             in_array($profile?->status, [DriverProfileStatus::PendingReview, DriverProfileStatus::Approved], true) => 'under_review',
             default => 'in_progress',
         };

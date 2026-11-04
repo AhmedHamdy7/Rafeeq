@@ -7,6 +7,7 @@ use App\Domains\Booking\Enums\SwitchReason;
 use App\Domains\Booking\Models\Booking;
 use App\Domains\Booking\Models\SeatRequest;
 use App\Domains\Commute\Enums\CommuteOfferStatus;
+use App\Domains\Commute\Enums\CommutePausedReason;
 use App\Domains\Commute\Enums\ScheduledTripStatus;
 use App\Domains\Commute\Models\CommuteOffer;
 use App\Domains\Commute\Models\ScheduledTrip;
@@ -409,3 +410,50 @@ it('leaves the days of a paused commute off Driver Home, and out of the sweep', 
 
     expect(ScheduledTrip::query()->findOrFail($this->tripId)->status)->toBe(ScheduledTripStatus::Scheduled);
 });
+
+it('counts paused commutes, and keeps requests, the list and notices with no next run', function () {
+    runLeavingIn($this->tripId, 130);
+
+    expect(driverHome()['pausedCommutes'])->toBe(0);
+
+    waitlistEntry($this->commuteId);
+    SeatRequest::factory()->create(['commute_offer_id' => $this->commuteId, 'status' => SeatRequestStatus::Pending]);
+    Booking::factory()->create([
+        'scheduled_trip_id' => $this->tripId,
+        'status' => BookingStatus::CancelledByPassenger,
+        'cancelled_at' => now(),
+    ]);
+
+    CommuteOffer::query()->whereKey($this->commuteId)->update(['status' => CommuteOfferStatus::Paused->value, 'paused_at' => now()]);
+
+    $home = driverHome();
+
+    expect($home['nextRun'])->toBeNull()
+        ->and($home['pausedCommutes'])->toBe(1)
+        ->and($home['waitlist']['count'])->toBe(1)
+        ->and($home['pendingRequests']['count'])->toBe(1)
+        ->and($home['notices'])->toHaveCount(1);
+});
+
+it('returns the suspension shape on the account, not on Driver Home', function () {
+    User::query()->whereHas('driverProfile')->sole()->forceFill(['account_status' => AccountStatus::Suspended->value, 'suspension_reason' => 'safety_report'])->save();
+
+    $user = test()->withToken($this->driverToken)->getJson('/api/v1/auth/me')->assertOk()->json('data.user');
+    $home = driverHome();
+
+    expect($user['accountStatus'])->toBe('SUSPENDED')
+        ->and($user['suspension'])->toHaveKeys(['caseNumber', 'reasonCode', 'suspendedAt', 'reviewDueAt', 'permanent'])
+        ->and($home['verification']['suspensionReason'])->toBeNull();
+});
+
+it('says why commutes are paused, so a debt suspension does not read as the driver pausing', function (CommutePausedReason $reason) {
+    expect(driverHome()['pausedCommuteReasons'])->toBe([]);
+
+    CommuteOffer::query()->whereKey($this->commuteId)->update([
+        'status' => CommuteOfferStatus::Paused->value,
+        'paused_at' => now(),
+        'paused_reason' => $reason->value,
+    ]);
+
+    expect(driverHome()['pausedCommuteReasons'])->toBe([$reason->value]);
+})->with([CommutePausedReason::ByDriver, CommutePausedReason::CommissionUnpaid, CommutePausedReason::DriverSuspended]);

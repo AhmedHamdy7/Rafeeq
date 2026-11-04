@@ -1,6 +1,7 @@
 <?php
 
 use App\Domains\Admin\Enums\AdminRole;
+use App\Domains\Driver\Actions\ReviewDriverApplicationAction;
 use App\Domains\Driver\Enums\DriverProfileStatus;
 use App\Domains\Driver\Models\DriverProfile;
 use App\Domains\Driver\Models\Vehicle;
@@ -196,3 +197,45 @@ it('follows the vehicle once one is added', function () {
     expect(Vehicle::query()->where('is_active', true)->count())->toBe(1)
         ->and(checklist($token)->assertOk()->json('data.overall'))->toBe('verified');
 });
+
+it('reads the car items as suspended, with nothing for the driver to do', function () {
+    $token = approvedDriver();
+
+    app(ReviewDriverApplicationAction::class)->suspend(
+        DriverProfile::sole(),
+        adminWithRole(AdminRole::Verification),
+        'Repeated no-show reports.',
+    );
+
+    $data = checklist($token)->assertOk()->json('data');
+    $items = collect($data['items'])->keyBy('key');
+
+    expect($data['overall'])->toBe('suspended')
+        ->and($data['actionItem'])->toBeNull()
+        ->and($data['suspensionReason'])->toBe('Repeated no-show reports.')
+        ->and($items['vehicle_registration']['status'])->toBe('suspended')
+        ->and($items['vehicle_details']['status'])->toBe('suspended')
+        ->and($items['vehicle_details']['rejectionReason'])->toBeNull()
+        ->and($items['driving_licence']['status'])->toBe('approved');
+});
+
+it('takes the licence out of review while no reviewer has the application', function (DriverProfileStatus $status, string $expected) {
+    $token = approvedDriver();
+
+    UserVerification::query()
+        ->where('type', VerificationType::DrivingLicence->value)
+        ->sole()
+        ->forceFill(['status' => 'pending'])
+        ->save();
+
+    DriverProfile::sole()->forceFill(['status' => $status->value])->save();
+
+    $items = collect(checklist($token)->assertOk()->json('data.items'))->keyBy('key');
+
+    expect($items['driving_licence']['status'])->toBe($expected);
+})->with([
+    'rejected' => [DriverProfileStatus::Rejected, 'in_progress'],
+    'withdrawn to draft' => [DriverProfileStatus::Draft, 'in_progress'],
+    'with a reviewer' => [DriverProfileStatus::PendingReview, 'under_review'],
+    'approved, renewing' => [DriverProfileStatus::Approved, 'under_review'],
+]);
