@@ -3,6 +3,8 @@
 namespace App\Domains\Driver\Actions;
 
 use App\Domains\Admin\Models\AdminUser;
+use App\Domains\Commute\Actions\ChangeCommuteStatusAction;
+use App\Domains\Commute\Enums\CommutePausedReason;
 use App\Domains\Driver\Enums\DriverProfileStatus;
 use App\Domains\Driver\Enums\VehicleVerificationStatus;
 use App\Domains\Driver\Enums\VerificationLogAction;
@@ -33,6 +35,8 @@ use Illuminate\Support\Facades\DB;
  */
 final readonly class ReviewDriverApplicationAction
 {
+    public function __construct(private ChangeCommuteStatusAction $commutes) {}
+
     public function approve(DriverProfile $profile, AdminUser $reviewer): DriverProfile
     {
         $this->assertDecidable($profile);
@@ -151,6 +155,12 @@ final readonly class ReviewDriverApplicationAction
     public function suspend(DriverProfile $profile, AdminUser $reviewer, string $reason): DriverProfile
     {
         return DB::transaction(function () use ($profile, $reviewer, $reason): DriverProfile {
+            $profile = DriverProfile::query()->whereKey($profile->getKey())->lockForUpdate()->firstOrFail();
+
+            if (! DriverApplicationState::isSuspendable($profile->status)) {
+                throw DomainException::of(ErrorCode::DriverApplicationLocked);
+            }
+
             $previous = $profile->status;
 
             $profile->status = DriverProfileStatus::Suspended->value;
@@ -170,8 +180,14 @@ final readonly class ReviewDriverApplicationAction
 
             $this->log($profile, $reviewer, VerificationLogAction::Suspend, $previous, $reason);
 
+            $this->commutes->pauseUnpublishableOffers($profile, CommutePausedReason::DriverSuspended);
+
             SecurityLog::record(SecurityEventType::DriverSuspended, $profile->user, metadata: [
                 'reviewer_id' => $reviewer->id,
+            ]);
+
+            Notifier::send($profile->user, NotificationType::DriverSuspended, data: [
+                'driverProfileId' => (string) $profile->getKey(),
             ]);
 
             return $profile;

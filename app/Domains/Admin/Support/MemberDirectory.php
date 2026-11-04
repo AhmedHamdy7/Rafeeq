@@ -75,12 +75,20 @@ final class MemberDirectory
      */
     public static function bookedDaysAsDriver(User $member): int
     {
+        return self::upcomingSeatsAsDriver($member)->distinct()->count('scheduled_trip_id');
+    }
+
+    public static function bookedPassengersAsDriver(User $member): int
+    {
+        return self::upcomingSeatsAsDriver($member)->distinct()->count('passenger_user_id');
+    }
+
+    private static function upcomingSeatsAsDriver(User $member): Builder
+    {
         return Booking::query()
             ->where('driver_profile_id', $member->id)
             ->where('status', BookingStatus::Confirmed->value)
-            ->whereHas('scheduledTrip', fn (Builder $trip) => $trip->where('departure_at', '>', now()))
-            ->distinct()
-            ->count('scheduled_trip_id');
+            ->whereHas('scheduledTrip', fn (Builder $trip) => $trip->where('departure_at', '>', now()));
     }
 
     /**

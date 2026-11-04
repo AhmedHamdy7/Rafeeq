@@ -74,6 +74,10 @@ final readonly class CreateCommuteOfferAction
      */
     public static function assertDriverMayPublish(DriverProfile $profile): void
     {
+        if ($profile->status === DriverProfileStatus::ExpiredDocuments) {
+            throw DomainException::of(ErrorCode::LicenceExpired);
+        }
+
         if ($profile->status !== DriverProfileStatus::Approved) {
             throw DomainException::of(ErrorCode::DriverNotEligible, fields: [
                 'driver' => [strtoupper($profile->status->value)],

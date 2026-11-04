@@ -184,7 +184,7 @@ final class DriverChecklist
 
         $statuses = array_column($items, 'status');
 
-        if (in_array('expired', $statuses, true)) {
+        if ($status === DriverProfileStatus::ExpiredDocuments || in_array('expired', $statuses, true)) {
             // The design calls this `renewal`: "publishing and driving are paused until your
             // renewed licence is approved".
             return 'renewal_required';

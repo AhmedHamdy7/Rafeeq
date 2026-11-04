@@ -20,4 +20,5 @@ enum CommutePausedReason: string
      * upcoming day is cancelled with no fee for anybody; lifting the hold does not resume it.
      */
     case AccountSuspended = 'account_suspended';
+    case DriverSuspended = 'driver_suspended';
 }
