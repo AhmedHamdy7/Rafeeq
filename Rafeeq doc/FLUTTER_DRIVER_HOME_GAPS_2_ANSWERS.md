@@ -10,8 +10,8 @@ Branch `fix/driver-home-gaps-2`. Real responses are in `FLUTTER_DRIVER_HOME_RESP
 | 4 | Licence item after a rejection | Now `in_progress` | ✅ Done |
 | 5 | `user.suspension` | On `GET /auth/me`. Captured | ✅ Done |
 | 6 | Passenger gender | Won't be added. Keep using the name | ✅ Final |
-| 7 | `canStart` at T-2 h 10 | Disable the button until starting is allowed. Wording not decided | 🟡 Rule done, wording waiting on Product |
-| 8 | Suspended driver with paused commutes | Two different messages. New `pausedCommutes` and `pausedCommuteReasons`. Wording not decided | 🟡 Field done, wording waiting on Product |
+| 7 | `canStart` at T-2 h 10 | Disable the button until starting is allowed. Wording below | ✅ Done |
+| 8 | Suspended driver with paused commutes | Two different messages. New `pausedCommutes` and `pausedCommuteReasons`. Wording below | ✅ Done |
 | 9 | Stats and notices with no `nextRun` | Yes, they can have content. Show them | ✅ Done |
 
 ## 1. Demo accounts on the live server
@@ -59,7 +59,12 @@ The moved-passenger card is `F3D-08` (`passenger_switched`). `F3D-07` is `seat_o
 
 ## 7. `canStart` at T-2 h 10 (DH-10)
 
-Product decided: the button is disabled until starting is allowed, and says why (TRIP-02, D-0033). The wording for the disabled state is still to come.
+Product decided: the button is disabled until starting is allowed, and says why (TRIP-02, D-0033).
+
+- **English:** You can start at 05:30
+- **Arabic:** يمكنك البدء الساعة 05:30
+
+The time comes from `startOpensLocal`.
 
 Disable it while the current time is before `startOpensAt`. Don't use `canStart` alone: it is also `false` for an expired licence or a suspension, and an unverified driver who taps Start must still see the verification gate (PROF-19).
 
@@ -67,14 +72,14 @@ Disable it while the current time is before `startOpensAt`. Don't use `canStart`
 
 `GET /driver/home` now returns `pausedCommutes`, a count of this driver's paused commutes for any reason. It is `0` when there are none, and it covers a non-suspended driver who paused everything too.
 
-Product decided: a driver with paused commutes never sees "No commutes yet", and a suspended driver and a driver who paused see different messages (TRIP-02, D-0033). The wording is still to come.
+Product decided: a driver with paused commutes never sees "No commutes yet", and a suspended driver and a driver who paused see different messages (TRIP-02, D-0033).
 
 `pausedCommuteReasons` lists why, each reason once. Choose the message from it, because `verification.overall` stays `verified` for a debt suspension and a whole-account suspension:
 
 | Reason | Message |
 |---|---|
-| `by_driver` | Driver paused |
-| `commission_unpaid`, `driver_suspended`, `account_suspended` | Suspended |
+| `by_driver` | Your commutes are paused. Resume one to start driving again. / رحلاتك متوقفة. استأنف إحداها لتعود إلى القيادة. |
+| `commission_unpaid`, `driver_suspended`, `account_suspended` | Your commutes are paused because your driving is suspended. / رحلاتك متوقفة لأن القيادة موقوفة على حسابك. |
 | `licence_expired`, `vehicle_suspended` | Keep the verification card you already show |
 
 If the list has both, the suspended message wins.
