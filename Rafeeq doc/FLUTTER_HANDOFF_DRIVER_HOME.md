@@ -133,6 +133,8 @@ An account with no driver profile gets the same keys, empty: `nextRun` and `expi
 
 `waitlist.count` is distinct people across all this driver's commutes, so one person waiting on two days counts once.
 
+`pausedCommutes` is how many of this driver's commutes are paused. `nextRun` can be `null` while this is above 0, and `pendingRequests`, `waitlist` and `notices` can still have content, so show them when they do.
+
 ### `expiredRun`
 
 The run that expired today. It goes away by itself at the end of that local day, and there is nothing to call.

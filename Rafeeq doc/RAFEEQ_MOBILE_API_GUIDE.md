@@ -1510,11 +1510,12 @@ on purpose: it is the screen that explains what is missing.
 | `status` | Means |
 |---|---|
 | `not_started` | Nothing submitted. |
-| `in_progress` | Something uploaded, not submitted for review. **The two car items stay here until the application is submitted**, even when everything is uploaded. |
+| `in_progress` | Something uploaded, not submitted for review. **The two car items and the licence stay here until the application is submitted**, even when everything is uploaded, and go back here if it is rejected or withdrawn. |
 | `under_review` | With a reviewer. |
 | `approved` | Checked and accepted. |
-| `action_needed` | Rejected — **`rejectionReason` says which document and why.** A reviewer can reject the car's registration or its details on their own, and only that item reads this way; a suspended car reads this way on both. The reason is the reviewer's own words: show it as its own sentence, not inside yours. |
+| `action_needed` | Rejected — **`rejectionReason` says which document and why.** A reviewer can reject the car's registration or its details on their own, and only that item reads this way. The reason is the reviewer's own words: show it as its own sentence, not inside yours. |
 | `expired` | Was approved; the date has passed. |
+| `suspended` | Car items only, while the driver is suspended. Nothing to replace: the reason is `suspensionReason`. |
 
 🔴 **`rejectionReason` is per item, so you can say "replace only that document".** Rejecting one
 item never clears the others — a test holds that. Do not send somebody back to re-upload all five.
@@ -3577,6 +3578,8 @@ role switch lives on this screen, and a 404 would make tapping "drive" look brok
 | `pendingRequests.count` | **Every** waiting request, not the length of the list. A driver with eleven should see 11. |
 | `pendingRequests.items[]` | The first 5, oldest first, each a seat request (4.7) with its `passenger`. |
 | `waitlist.count` | Distinct people waiting across all this driver's commutes: one person waiting on two days counts once. |
+| `pausedCommutes` | How many of this driver's commutes are paused, for any reason. `nextRun` can be `null` with this above 0. |
+| `pausedCommuteReasons` | Why they are paused, each reason once: `by_driver`, `commission_unpaid`, `driver_suspended`, `account_suspended`, `licence_expired`, `vehicle_suspended`. Read this to choose the message: `overall` stays `verified` for a debt suspension. |
 | `stats.onTimeRate` | `null` until it has been computed from completed runs. **Show a dash, not 0%** — a 0% badge on somebody's first morning is a number nobody earned. |
 | `stats.completedTrips` | |
 | `stats.avgDetourMinutes` | Averaged over approved custom pickups. `0` is true and means nobody has one; `null` means she has no commutes at all. |
@@ -4619,6 +4622,7 @@ exist, and every live endpoint must be named here.
 
 | Date | Change |
 |---|---|
+| 2026-11-04 | 🚗 **Driver Home round 2.** New `pausedCommutes` and `pausedCommuteReasons` on `GET /driver/home`. 🛑 Car items of a suspended driver read `suspended`, not `action_needed`. 🛑 A licence waiting on an application that was rejected or withdrawn reads `in_progress`, not `under_review`. |
 | 2026-11-04 | 🪪 **The licence follows the application.** `POST /driver/application/submit` now sends the licence to review, and approving the driver approves it with the typed date, so `licenceExpiresAt`, `expiring` and `renewal_required` work and an approved driver reads 5 of 5. A reviewer's rejected licence blocks approval until replaced. **Days of a paused commute are gone from `nextRun` and `laterThisWeek`**, and the lateness sweep skips them. `demo:driver-home-states` gains `--state` and `--phone`, and covers every state in `FLUTTER_DRIVER_HOME_RESPONSES.md`. |
 | 2026-11-04 | 🚗 **A reviewer can reject the car's registration or details on their own.** `GET /driver/verification` returns the reason on that item, and `actionItem.key` is `vehicle_registration` or `vehicle_details` instead of `application`. `driver_item_rejected` now also carries those two `itemKey`s. Replacing the item clears the reason and returns the application to `DRAFT`; until then, submit lists the item in `missing` (4.4, 4.14). |
 | 2026-11-04 | 🚗 **Driver Home gaps (DH-1 → DH-17).** `GET /driver/home` is additive except where noted: `verification`, `expiredRun`, `waitlist.count`; on `nextRun`: `phase`, `promisedArrivalAt`/`Local`, `startedAt`/`Local`, `canStart`, `startOpensAt`/`Local`, `startDeadlines`, `waitlistCount`; `waitlistCount` on `laterThisWeek[]`; `rejoinedWaitlist` on `notices[]`. 🛑 **Behaviour:** a run not started stays on `nextRun` past its departure until it expires. 🛑 `overall` is `under_review` only once submitted; a complete draft stays `in_progress`, and car items read `in_progress` until then. A rejected car or application reads `action_required`. `GET /driver/verification` gains `actionItem` and `suspensionReason`. The licence date falls back to the typed one once approved. `capabilities` is backfilled from `registeredRole`, and a passenger who adds driving keeps `PASSENGER`. New `php artisan demo:driver-home-states` for test accounts. |

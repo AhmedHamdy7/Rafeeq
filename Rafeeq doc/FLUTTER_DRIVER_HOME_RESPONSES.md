@@ -3,7 +3,7 @@
 Full, unedited JSON from a running server. Nothing is masked or shortened.
 
 - **Captured on:** a local server after seeding, with `Accept-Language: en`. Not captured on staging.
-- **Code:** branch `fix/driver-home-responses`, based on `3e4b5db`.
+- **Code:** branch `fix/driver-home-gaps-2`, based on `6989a5a`.
 - **Test accounts:** run `php artisan demo:driver-home-states`, or reset one account with `php artisan demo:driver-home-states --state=F3D-05 --phone=+201055557005`.
 - **Every account was re-seeded just before its capture**, so times are relative to that moment. Ids differ on each server.
 - **`NOT-STARTED` has no driver profile**, so its `GET /driver/application` is a real `404`.
@@ -29,6 +29,7 @@ Full, unedited JSON from a running server. Nothing is masked or shortened.
 | laterThisWeek with waitlistCount 0 and more than 0 | `LATER-WAITLIST` | `+201055557022` |
 | Verified driver with no commutes | `NO-COMMUTES` | `+201055557023` |
 | One person waiting on two days | `SAME-PERSON-TWO-DAYS` | `+201055557024` |
+| No nextRun, with notices, requests and a waiting list | `NO-RUN-ACTIVITY` | `+201055557028` |
 | not_started | `NOT-STARTED` | `+201055557201` |
 | in_progress | `IN-PROGRESS` | `+201055557202` |
 | Complete draft (missing: []) | `COMPLETE-DRAFT` | `+201055557203` |
@@ -50,7 +51,7 @@ Full, unedited JSON from a running server. Nothing is masked or shortened.
 
 - **State:** `F3D-01`
 - **Phone:** `+201055557001`
-- **Captured:** 2026-11-04 05:31:58 UTC
+- **Captured:** 2026-11-04 15:35:11 UTC
 
 **GET /driver/home** → `200`
 
@@ -76,28 +77,28 @@ Full, unedited JSON from a running server. Nothing is masked or shortened.
       "phase": "scheduled",
       "originLabel": "Rehab Gate 2",
       "destinationLabel": "Smart Village B6",
-      "departureAt": "2026-11-04T07:41:00+00:00",
-      "departureLocal": "2026-11-04 09:41:00",
-      "departsInMinutes": 129,
+      "departureAt": "2026-11-04T17:45:00+00:00",
+      "departureLocal": "2026-11-04 19:45:00",
+      "departsInMinutes": 130,
       "isToday": true,
-      "promisedArrivalAt": "2026-11-04T08:51:00+00:00",
-      "promisedArrivalLocal": "2026-11-04 10:51:00",
+      "promisedArrivalAt": "2026-11-04T18:55:00+00:00",
+      "promisedArrivalLocal": "2026-11-04 20:55:00",
       "startedAt": null,
       "startedLocal": null,
       "canStart": false,
-      "startOpensAt": "2026-11-04T06:11:00+00:00",
-      "startOpensLocal": "2026-11-04 08:11:00",
+      "startOpensAt": "2026-11-04T16:15:00+00:00",
+      "startOpensLocal": "2026-11-04 18:15:00",
       "startDeadlines": {
-        "warningAt": "2026-11-04T07:46:00+00:00",
-        "warningLocal": "2026-11-04 09:46:00",
-        "lateAt": "2026-11-04T07:51:00+00:00",
-        "lateLocal": "2026-11-04 09:51:00",
-        "expiresAt": "2026-11-04T08:01:00+00:00",
-        "expiresLocal": "2026-11-04 10:01:00"
+        "warningAt": "2026-11-04T17:50:00+00:00",
+        "warningLocal": "2026-11-04 19:50:00",
+        "lateAt": "2026-11-04T17:55:00+00:00",
+        "lateLocal": "2026-11-04 19:55:00",
+        "expiresAt": "2026-11-04T18:05:00+00:00",
+        "expiresLocal": "2026-11-04 20:05:00"
       },
       "leaveBy": {
-        "at": "2026-11-04T07:12:00+00:00",
-        "local": "2026-11-04 09:12:00",
+        "at": "2026-11-04T17:16:00+00:00",
+        "local": "2026-11-04 19:16:00",
         "lateWarning": true
       },
       "attendance": {
@@ -203,6 +204,8 @@ Full, unedited JSON from a running server. Nothing is masked or shortened.
     "waitlist": {
       "count": 2
     },
+    "pausedCommutes": 0,
+    "pausedCommuteReasons": [],
     "stats": {
       "onTimeRate": 95,
       "completedTrips": 40,
@@ -270,7 +273,7 @@ Full, unedited JSON from a running server. Nothing is masked or shortened.
     "licenceExpiry": "2029-11-04",
     "hasNationalId": true,
     "hasLicenceNumber": true,
-    "verifiedAt": "2026-11-04T05:31:57+00:00",
+    "verifiedAt": "2026-11-04T15:35:10+00:00",
     "rejectionReason": null,
     "missing": [],
     "vehicles": [
@@ -320,7 +323,7 @@ Full, unedited JSON from a running server. Nothing is masked or shortened.
 
 - **State:** `F3D-01-CAN-START`
 - **Phone:** `+201055557016`
-- **Captured:** 2026-11-04 05:32:00 UTC
+- **Captured:** 2026-11-04 15:35:12 UTC
 
 **GET /driver/home** → `200`
 
@@ -346,28 +349,28 @@ Full, unedited JSON from a running server. Nothing is masked or shortened.
       "phase": "scheduled",
       "originLabel": "Rehab Gate 2",
       "destinationLabel": "Smart Village B6",
-      "departureAt": "2026-11-04T06:31:00+00:00",
-      "departureLocal": "2026-11-04 08:31:00",
-      "departsInMinutes": 59,
+      "departureAt": "2026-11-04T16:35:00+00:00",
+      "departureLocal": "2026-11-04 18:35:00",
+      "departsInMinutes": 60,
       "isToday": true,
-      "promisedArrivalAt": "2026-11-04T07:41:00+00:00",
-      "promisedArrivalLocal": "2026-11-04 09:41:00",
+      "promisedArrivalAt": "2026-11-04T17:45:00+00:00",
+      "promisedArrivalLocal": "2026-11-04 19:45:00",
       "startedAt": null,
       "startedLocal": null,
       "canStart": true,
-      "startOpensAt": "2026-11-04T05:01:00+00:00",
-      "startOpensLocal": "2026-11-04 07:01:00",
+      "startOpensAt": "2026-11-04T15:05:00+00:00",
+      "startOpensLocal": "2026-11-04 17:05:00",
       "startDeadlines": {
-        "warningAt": "2026-11-04T06:36:00+00:00",
-        "warningLocal": "2026-11-04 08:36:00",
-        "lateAt": "2026-11-04T06:41:00+00:00",
-        "lateLocal": "2026-11-04 08:41:00",
-        "expiresAt": "2026-11-04T06:51:00+00:00",
-        "expiresLocal": "2026-11-04 08:51:00"
+        "warningAt": "2026-11-04T16:40:00+00:00",
+        "warningLocal": "2026-11-04 18:40:00",
+        "lateAt": "2026-11-04T16:45:00+00:00",
+        "lateLocal": "2026-11-04 18:45:00",
+        "expiresAt": "2026-11-04T16:55:00+00:00",
+        "expiresLocal": "2026-11-04 18:55:00"
       },
       "leaveBy": {
-        "at": "2026-11-04T06:02:00+00:00",
-        "local": "2026-11-04 08:02:00",
+        "at": "2026-11-04T16:06:00+00:00",
+        "local": "2026-11-04 18:06:00",
         "lateWarning": true
       },
       "attendance": {
@@ -473,6 +476,8 @@ Full, unedited JSON from a running server. Nothing is masked or shortened.
     "waitlist": {
       "count": 2
     },
+    "pausedCommutes": 0,
+    "pausedCommuteReasons": [],
     "stats": {
       "onTimeRate": 95,
       "completedTrips": 40,
@@ -540,7 +545,7 @@ Full, unedited JSON from a running server. Nothing is masked or shortened.
     "licenceExpiry": "2029-11-04",
     "hasNationalId": true,
     "hasLicenceNumber": true,
-    "verifiedAt": "2026-11-04T05:31:59+00:00",
+    "verifiedAt": "2026-11-04T15:35:11+00:00",
     "rejectionReason": null,
     "missing": [],
     "vehicles": [
@@ -590,7 +595,7 @@ Full, unedited JSON from a running server. Nothing is masked or shortened.
 
 - **State:** `F3D-02`
 - **Phone:** `+201055557002`
-- **Captured:** 2026-11-04 05:32:01 UTC
+- **Captured:** 2026-11-04 15:35:13 UTC
 
 **GET /driver/home** → `200`
 
@@ -616,28 +621,28 @@ Full, unedited JSON from a running server. Nothing is masked or shortened.
       "phase": "starting_soon",
       "originLabel": "Rehab Gate 2",
       "destinationLabel": "Smart Village B6",
-      "departureAt": "2026-11-04T05:57:00+00:00",
-      "departureLocal": "2026-11-04 07:57:00",
+      "departureAt": "2026-11-04T16:00:00+00:00",
+      "departureLocal": "2026-11-04 18:00:00",
       "departsInMinutes": 25,
       "isToday": true,
-      "promisedArrivalAt": "2026-11-04T07:07:00+00:00",
-      "promisedArrivalLocal": "2026-11-04 09:07:00",
+      "promisedArrivalAt": "2026-11-04T17:10:00+00:00",
+      "promisedArrivalLocal": "2026-11-04 19:10:00",
       "startedAt": null,
       "startedLocal": null,
       "canStart": true,
-      "startOpensAt": "2026-11-04T04:27:00+00:00",
-      "startOpensLocal": "2026-11-04 06:27:00",
+      "startOpensAt": "2026-11-04T14:30:00+00:00",
+      "startOpensLocal": "2026-11-04 16:30:00",
       "startDeadlines": {
-        "warningAt": "2026-11-04T06:02:00+00:00",
-        "warningLocal": "2026-11-04 08:02:00",
-        "lateAt": "2026-11-04T06:07:00+00:00",
-        "lateLocal": "2026-11-04 08:07:00",
-        "expiresAt": "2026-11-04T06:17:00+00:00",
-        "expiresLocal": "2026-11-04 08:17:00"
+        "warningAt": "2026-11-04T16:05:00+00:00",
+        "warningLocal": "2026-11-04 18:05:00",
+        "lateAt": "2026-11-04T16:10:00+00:00",
+        "lateLocal": "2026-11-04 18:10:00",
+        "expiresAt": "2026-11-04T16:20:00+00:00",
+        "expiresLocal": "2026-11-04 18:20:00"
       },
       "leaveBy": {
-        "at": "2026-11-04T05:28:00+00:00",
-        "local": "2026-11-04 07:28:00",
+        "at": "2026-11-04T15:31:00+00:00",
+        "local": "2026-11-04 17:31:00",
         "lateWarning": true
       },
       "attendance": {
@@ -743,6 +748,8 @@ Full, unedited JSON from a running server. Nothing is masked or shortened.
     "waitlist": {
       "count": 2
     },
+    "pausedCommutes": 0,
+    "pausedCommuteReasons": [],
     "stats": {
       "onTimeRate": 95,
       "completedTrips": 40,
@@ -810,7 +817,7 @@ Full, unedited JSON from a running server. Nothing is masked or shortened.
     "licenceExpiry": "2029-11-04",
     "hasNationalId": true,
     "hasLicenceNumber": true,
-    "verifiedAt": "2026-11-04T05:32:00+00:00",
+    "verifiedAt": "2026-11-04T15:35:13+00:00",
     "rejectionReason": null,
     "missing": [],
     "vehicles": [
@@ -860,7 +867,7 @@ Full, unedited JSON from a running server. Nothing is masked or shortened.
 
 - **State:** `F3D-03-PREPARING`
 - **Phone:** `+201055557003`
-- **Captured:** 2026-11-04 05:32:02 UTC
+- **Captured:** 2026-11-04 15:35:15 UTC
 
 **GET /driver/home** → `200`
 
@@ -886,14 +893,14 @@ Full, unedited JSON from a running server. Nothing is masked or shortened.
       "phase": "in_progress",
       "originLabel": "Rehab Gate 2",
       "destinationLabel": "Smart Village B6",
-      "departureAt": "2026-11-04T05:24:00+00:00",
-      "departureLocal": "2026-11-04 07:24:00",
+      "departureAt": "2026-11-04T15:27:00+00:00",
+      "departureLocal": "2026-11-04 17:27:00",
       "departsInMinutes": -8,
       "isToday": true,
-      "promisedArrivalAt": "2026-11-04T06:34:00+00:00",
-      "promisedArrivalLocal": "2026-11-04 08:34:00",
-      "startedAt": "2026-11-04T05:22:01+00:00",
-      "startedLocal": "2026-11-04 07:22:01",
+      "promisedArrivalAt": "2026-11-04T16:37:00+00:00",
+      "promisedArrivalLocal": "2026-11-04 18:37:00",
+      "startedAt": "2026-11-04T15:25:14+00:00",
+      "startedLocal": "2026-11-04 17:25:14",
       "canStart": false,
       "startOpensAt": null,
       "startOpensLocal": null,
@@ -1002,6 +1009,8 @@ Full, unedited JSON from a running server. Nothing is masked or shortened.
     "waitlist": {
       "count": 2
     },
+    "pausedCommutes": 0,
+    "pausedCommuteReasons": [],
     "stats": {
       "onTimeRate": 95,
       "completedTrips": 40,
@@ -1069,7 +1078,7 @@ Full, unedited JSON from a running server. Nothing is masked or shortened.
     "licenceExpiry": "2029-11-04",
     "hasNationalId": true,
     "hasLicenceNumber": true,
-    "verifiedAt": "2026-11-04T05:32:01+00:00",
+    "verifiedAt": "2026-11-04T15:35:14+00:00",
     "rejectionReason": null,
     "missing": [],
     "vehicles": [
@@ -1119,7 +1128,7 @@ Full, unedited JSON from a running server. Nothing is masked or shortened.
 
 - **State:** `F3D-03-EN-ROUTE`
 - **Phone:** `+201055557017`
-- **Captured:** 2026-11-04 05:32:03 UTC
+- **Captured:** 2026-11-04 15:35:16 UTC
 
 **GET /driver/home** → `200`
 
@@ -1145,14 +1154,14 @@ Full, unedited JSON from a running server. Nothing is masked or shortened.
       "phase": "in_progress",
       "originLabel": "Rehab Gate 2",
       "destinationLabel": "Smart Village B6",
-      "departureAt": "2026-11-04T05:24:00+00:00",
-      "departureLocal": "2026-11-04 07:24:00",
+      "departureAt": "2026-11-04T15:27:00+00:00",
+      "departureLocal": "2026-11-04 17:27:00",
       "departsInMinutes": -8,
       "isToday": true,
-      "promisedArrivalAt": "2026-11-04T06:34:00+00:00",
-      "promisedArrivalLocal": "2026-11-04 08:34:00",
-      "startedAt": "2026-11-04T05:22:03+00:00",
-      "startedLocal": "2026-11-04 07:22:03",
+      "promisedArrivalAt": "2026-11-04T16:37:00+00:00",
+      "promisedArrivalLocal": "2026-11-04 18:37:00",
+      "startedAt": "2026-11-04T15:25:15+00:00",
+      "startedLocal": "2026-11-04 17:25:15",
       "canStart": false,
       "startOpensAt": null,
       "startOpensLocal": null,
@@ -1261,6 +1270,8 @@ Full, unedited JSON from a running server. Nothing is masked or shortened.
     "waitlist": {
       "count": 2
     },
+    "pausedCommutes": 0,
+    "pausedCommuteReasons": [],
     "stats": {
       "onTimeRate": 95,
       "completedTrips": 40,
@@ -1328,7 +1339,7 @@ Full, unedited JSON from a running server. Nothing is masked or shortened.
     "licenceExpiry": "2029-11-04",
     "hasNationalId": true,
     "hasLicenceNumber": true,
-    "verifiedAt": "2026-11-04T05:32:03+00:00",
+    "verifiedAt": "2026-11-04T15:35:15+00:00",
     "rejectionReason": null,
     "missing": [],
     "vehicles": [
@@ -1378,7 +1389,7 @@ Full, unedited JSON from a running server. Nothing is masked or shortened.
 
 - **State:** `F3D-03-IN-PROGRESS`
 - **Phone:** `+201055557018`
-- **Captured:** 2026-11-04 05:32:05 UTC
+- **Captured:** 2026-11-04 15:35:17 UTC
 
 **GET /driver/home** → `200`
 
@@ -1404,14 +1415,14 @@ Full, unedited JSON from a running server. Nothing is masked or shortened.
       "phase": "in_progress",
       "originLabel": "Rehab Gate 2",
       "destinationLabel": "Smart Village B6",
-      "departureAt": "2026-11-04T05:24:00+00:00",
-      "departureLocal": "2026-11-04 07:24:00",
+      "departureAt": "2026-11-04T15:27:00+00:00",
+      "departureLocal": "2026-11-04 17:27:00",
       "departsInMinutes": -8,
       "isToday": true,
-      "promisedArrivalAt": "2026-11-04T06:34:00+00:00",
-      "promisedArrivalLocal": "2026-11-04 08:34:00",
-      "startedAt": "2026-11-04T05:22:04+00:00",
-      "startedLocal": "2026-11-04 07:22:04",
+      "promisedArrivalAt": "2026-11-04T16:37:00+00:00",
+      "promisedArrivalLocal": "2026-11-04 18:37:00",
+      "startedAt": "2026-11-04T15:25:17+00:00",
+      "startedLocal": "2026-11-04 17:25:17",
       "canStart": false,
       "startOpensAt": null,
       "startOpensLocal": null,
@@ -1520,6 +1531,8 @@ Full, unedited JSON from a running server. Nothing is masked or shortened.
     "waitlist": {
       "count": 2
     },
+    "pausedCommutes": 0,
+    "pausedCommuteReasons": [],
     "stats": {
       "onTimeRate": 95,
       "completedTrips": 40,
@@ -1587,7 +1600,7 @@ Full, unedited JSON from a running server. Nothing is masked or shortened.
     "licenceExpiry": "2029-11-04",
     "hasNationalId": true,
     "hasLicenceNumber": true,
-    "verifiedAt": "2026-11-04T05:32:04+00:00",
+    "verifiedAt": "2026-11-04T15:35:16+00:00",
     "rejectionReason": null,
     "missing": [],
     "vehicles": [
@@ -1637,7 +1650,7 @@ Full, unedited JSON from a running server. Nothing is masked or shortened.
 
 - **State:** `F3D-04`
 - **Phone:** `+201055557004`
-- **Captured:** 2026-11-04 05:32:06 UTC
+- **Captured:** 2026-11-04 15:35:19 UTC
 
 **GET /driver/home** → `200`
 
@@ -1663,24 +1676,24 @@ Full, unedited JSON from a running server. Nothing is masked or shortened.
       "phase": "not_started",
       "originLabel": "Rehab Gate 2",
       "destinationLabel": "Smart Village B6",
-      "departureAt": "2026-11-04T05:31:00+00:00",
-      "departureLocal": "2026-11-04 07:31:00",
+      "departureAt": "2026-11-04T15:34:00+00:00",
+      "departureLocal": "2026-11-04 17:34:00",
       "departsInMinutes": -1,
       "isToday": true,
-      "promisedArrivalAt": "2026-11-04T06:41:00+00:00",
-      "promisedArrivalLocal": "2026-11-04 08:41:00",
+      "promisedArrivalAt": "2026-11-04T16:44:00+00:00",
+      "promisedArrivalLocal": "2026-11-04 18:44:00",
       "startedAt": null,
       "startedLocal": null,
       "canStart": true,
-      "startOpensAt": "2026-11-04T04:01:00+00:00",
-      "startOpensLocal": "2026-11-04 06:01:00",
+      "startOpensAt": "2026-11-04T14:04:00+00:00",
+      "startOpensLocal": "2026-11-04 16:04:00",
       "startDeadlines": {
-        "warningAt": "2026-11-04T05:36:00+00:00",
-        "warningLocal": "2026-11-04 07:36:00",
-        "lateAt": "2026-11-04T05:41:00+00:00",
-        "lateLocal": "2026-11-04 07:41:00",
-        "expiresAt": "2026-11-04T05:51:00+00:00",
-        "expiresLocal": "2026-11-04 07:51:00"
+        "warningAt": "2026-11-04T15:39:00+00:00",
+        "warningLocal": "2026-11-04 17:39:00",
+        "lateAt": "2026-11-04T15:44:00+00:00",
+        "lateLocal": "2026-11-04 17:44:00",
+        "expiresAt": "2026-11-04T15:54:00+00:00",
+        "expiresLocal": "2026-11-04 17:54:00"
       },
       "leaveBy": null,
       "attendance": {
@@ -1786,6 +1799,8 @@ Full, unedited JSON from a running server. Nothing is masked or shortened.
     "waitlist": {
       "count": 2
     },
+    "pausedCommutes": 0,
+    "pausedCommuteReasons": [],
     "stats": {
       "onTimeRate": 95,
       "completedTrips": 40,
@@ -1853,7 +1868,7 @@ Full, unedited JSON from a running server. Nothing is masked or shortened.
     "licenceExpiry": "2029-11-04",
     "hasNationalId": true,
     "hasLicenceNumber": true,
-    "verifiedAt": "2026-11-04T05:32:05+00:00",
+    "verifiedAt": "2026-11-04T15:35:18+00:00",
     "rejectionReason": null,
     "missing": [],
     "vehicles": [
@@ -1903,7 +1918,7 @@ Full, unedited JSON from a running server. Nothing is masked or shortened.
 
 - **State:** `F3D-05`
 - **Phone:** `+201055557005`
-- **Captured:** 2026-11-04 05:32:07 UTC
+- **Captured:** 2026-11-04 15:35:20 UTC
 
 **GET /driver/home** → `200`
 
@@ -1929,24 +1944,24 @@ Full, unedited JSON from a running server. Nothing is masked or shortened.
       "phase": "late",
       "originLabel": "Rehab Gate 2",
       "destinationLabel": "Smart Village B6",
-      "departureAt": "2026-11-04T05:22:00+00:00",
-      "departureLocal": "2026-11-04 07:22:00",
+      "departureAt": "2026-11-04T15:25:00+00:00",
+      "departureLocal": "2026-11-04 17:25:00",
       "departsInMinutes": -10,
       "isToday": true,
-      "promisedArrivalAt": "2026-11-04T06:32:00+00:00",
-      "promisedArrivalLocal": "2026-11-04 08:32:00",
+      "promisedArrivalAt": "2026-11-04T16:35:00+00:00",
+      "promisedArrivalLocal": "2026-11-04 18:35:00",
       "startedAt": null,
       "startedLocal": null,
       "canStart": true,
-      "startOpensAt": "2026-11-04T03:52:00+00:00",
-      "startOpensLocal": "2026-11-04 05:52:00",
+      "startOpensAt": "2026-11-04T13:55:00+00:00",
+      "startOpensLocal": "2026-11-04 15:55:00",
       "startDeadlines": {
-        "warningAt": "2026-11-04T05:27:00+00:00",
-        "warningLocal": "2026-11-04 07:27:00",
-        "lateAt": "2026-11-04T05:32:00+00:00",
-        "lateLocal": "2026-11-04 07:32:00",
-        "expiresAt": "2026-11-04T05:42:00+00:00",
-        "expiresLocal": "2026-11-04 07:42:00"
+        "warningAt": "2026-11-04T15:30:00+00:00",
+        "warningLocal": "2026-11-04 17:30:00",
+        "lateAt": "2026-11-04T15:35:00+00:00",
+        "lateLocal": "2026-11-04 17:35:00",
+        "expiresAt": "2026-11-04T15:45:00+00:00",
+        "expiresLocal": "2026-11-04 17:45:00"
       },
       "leaveBy": null,
       "attendance": {
@@ -2052,6 +2067,8 @@ Full, unedited JSON from a running server. Nothing is masked or shortened.
     "waitlist": {
       "count": 2
     },
+    "pausedCommutes": 0,
+    "pausedCommuteReasons": [],
     "stats": {
       "onTimeRate": 95,
       "completedTrips": 40,
@@ -2119,7 +2136,7 @@ Full, unedited JSON from a running server. Nothing is masked or shortened.
     "licenceExpiry": "2029-11-04",
     "hasNationalId": true,
     "hasLicenceNumber": true,
-    "verifiedAt": "2026-11-04T05:32:06+00:00",
+    "verifiedAt": "2026-11-04T15:35:19+00:00",
     "rejectionReason": null,
     "missing": [],
     "vehicles": [
@@ -2169,7 +2186,7 @@ Full, unedited JSON from a running server. Nothing is masked or shortened.
 
 - **State:** `F3D-06`
 - **Phone:** `+201055557006`
-- **Captured:** 2026-11-04 05:32:08 UTC
+- **Captured:** 2026-11-04 15:35:21 UTC
 
 **GET /driver/home** → `200`
 
@@ -2191,10 +2208,10 @@ Full, unedited JSON from a running server. Nothing is masked or shortened.
       "commuteId": "01m6jbcg8qkk646emk0nc9g2z4",
       "originLabel": "Rehab Gate 2",
       "destinationLabel": "Smart Village B6",
-      "departureAt": "2026-11-04T05:02:00+00:00",
-      "departureLocal": "2026-11-04 07:02:00",
-      "expiredAt": "2026-11-04T05:22:08+00:00",
-      "expiredLocal": "2026-11-04 07:22:08"
+      "departureAt": "2026-11-04T15:05:00+00:00",
+      "departureLocal": "2026-11-04 17:05:00",
+      "expiredAt": "2026-11-04T15:25:20+00:00",
+      "expiredLocal": "2026-11-04 17:25:20"
     },
     "nextRun": {
       "commuteId": "01m6jbcg8qkk646emk0nc9g2z4",
@@ -2206,10 +2223,10 @@ Full, unedited JSON from a running server. Nothing is masked or shortened.
       "destinationLabel": "Smart Village B6",
       "departureAt": "2026-11-05T05:00:00+00:00",
       "departureLocal": "2026-11-05 07:00:00",
-      "departsInMinutes": 1408,
+      "departsInMinutes": 805,
       "isToday": false,
-      "promisedArrivalAt": null,
-      "promisedArrivalLocal": null,
+      "promisedArrivalAt": "2026-11-05T06:10:00+00:00",
+      "promisedArrivalLocal": "2026-11-05 08:10:00",
       "startedAt": null,
       "startedLocal": null,
       "canStart": false,
@@ -2289,6 +2306,8 @@ Full, unedited JSON from a running server. Nothing is masked or shortened.
     "waitlist": {
       "count": 2
     },
+    "pausedCommutes": 0,
+    "pausedCommuteReasons": [],
     "stats": {
       "onTimeRate": 95,
       "completedTrips": 40,
@@ -2356,7 +2375,7 @@ Full, unedited JSON from a running server. Nothing is masked or shortened.
     "licenceExpiry": "2029-11-04",
     "hasNationalId": true,
     "hasLicenceNumber": true,
-    "verifiedAt": "2026-11-04T05:32:08+00:00",
+    "verifiedAt": "2026-11-04T15:35:20+00:00",
     "rejectionReason": null,
     "missing": [],
     "vehicles": [
@@ -2406,7 +2425,7 @@ Full, unedited JSON from a running server. Nothing is masked or shortened.
 
 - **State:** `F3D-07`
 - **Phone:** `+201055557007`
-- **Captured:** 2026-11-04 05:32:10 UTC
+- **Captured:** 2026-11-04 15:35:22 UTC
 
 **GET /driver/home** → `200`
 
@@ -2432,28 +2451,28 @@ Full, unedited JSON from a running server. Nothing is masked or shortened.
       "phase": "scheduled",
       "originLabel": "Rehab Gate 2",
       "destinationLabel": "Smart Village B6",
-      "departureAt": "2026-11-04T07:42:00+00:00",
-      "departureLocal": "2026-11-04 09:42:00",
+      "departureAt": "2026-11-04T17:45:00+00:00",
+      "departureLocal": "2026-11-04 19:45:00",
       "departsInMinutes": 130,
       "isToday": true,
-      "promisedArrivalAt": "2026-11-04T08:52:00+00:00",
-      "promisedArrivalLocal": "2026-11-04 10:52:00",
+      "promisedArrivalAt": "2026-11-04T18:55:00+00:00",
+      "promisedArrivalLocal": "2026-11-04 20:55:00",
       "startedAt": null,
       "startedLocal": null,
       "canStart": false,
-      "startOpensAt": "2026-11-04T06:12:00+00:00",
-      "startOpensLocal": "2026-11-04 08:12:00",
+      "startOpensAt": "2026-11-04T16:15:00+00:00",
+      "startOpensLocal": "2026-11-04 18:15:00",
       "startDeadlines": {
-        "warningAt": "2026-11-04T07:47:00+00:00",
-        "warningLocal": "2026-11-04 09:47:00",
-        "lateAt": "2026-11-04T07:52:00+00:00",
-        "lateLocal": "2026-11-04 09:52:00",
-        "expiresAt": "2026-11-04T08:02:00+00:00",
-        "expiresLocal": "2026-11-04 10:02:00"
+        "warningAt": "2026-11-04T17:50:00+00:00",
+        "warningLocal": "2026-11-04 19:50:00",
+        "lateAt": "2026-11-04T17:55:00+00:00",
+        "lateLocal": "2026-11-04 19:55:00",
+        "expiresAt": "2026-11-04T18:05:00+00:00",
+        "expiresLocal": "2026-11-04 20:05:00"
       },
       "leaveBy": {
-        "at": "2026-11-04T07:13:00+00:00",
-        "local": "2026-11-04 09:13:00",
+        "at": "2026-11-04T17:16:00+00:00",
+        "local": "2026-11-04 19:16:00",
         "lateWarning": true
       },
       "attendance": {
@@ -2551,9 +2570,9 @@ Full, unedited JSON from a running server. Nothing is masked or shortened.
         },
         "seatsReleased": 1,
         "seatsOpen": 3,
-        "departureAt": "2026-11-04T07:42:00+00:00",
-        "departureLocal": "2026-11-04 09:42:00",
-        "at": "2026-11-04T05:32:09+00:00"
+        "departureAt": "2026-11-04T17:45:00+00:00",
+        "departureLocal": "2026-11-04 19:45:00",
+        "at": "2026-11-04T15:35:22+00:00"
       }
     ],
     "pendingRequests": {
@@ -2563,6 +2582,8 @@ Full, unedited JSON from a running server. Nothing is masked or shortened.
     "waitlist": {
       "count": 2
     },
+    "pausedCommutes": 0,
+    "pausedCommuteReasons": [],
     "stats": {
       "onTimeRate": 95,
       "completedTrips": 40,
@@ -2630,7 +2651,7 @@ Full, unedited JSON from a running server. Nothing is masked or shortened.
     "licenceExpiry": "2029-11-04",
     "hasNationalId": true,
     "hasLicenceNumber": true,
-    "verifiedAt": "2026-11-04T05:32:09+00:00",
+    "verifiedAt": "2026-11-04T15:35:22+00:00",
     "rejectionReason": null,
     "missing": [],
     "vehicles": [
@@ -2680,7 +2701,7 @@ Full, unedited JSON from a running server. Nothing is masked or shortened.
 
 - **State:** `F3D-08-REJOINED`
 - **Phone:** `+201055557008`
-- **Captured:** 2026-11-04 05:32:11 UTC
+- **Captured:** 2026-11-04 15:35:24 UTC
 
 **GET /driver/home** → `200`
 
@@ -2706,28 +2727,28 @@ Full, unedited JSON from a running server. Nothing is masked or shortened.
       "phase": "scheduled",
       "originLabel": "Rehab Gate 2",
       "destinationLabel": "Smart Village B6",
-      "departureAt": "2026-11-04T07:42:00+00:00",
-      "departureLocal": "2026-11-04 09:42:00",
+      "departureAt": "2026-11-04T17:45:00+00:00",
+      "departureLocal": "2026-11-04 19:45:00",
       "departsInMinutes": 130,
       "isToday": true,
-      "promisedArrivalAt": "2026-11-04T08:52:00+00:00",
-      "promisedArrivalLocal": "2026-11-04 10:52:00",
+      "promisedArrivalAt": "2026-11-04T18:55:00+00:00",
+      "promisedArrivalLocal": "2026-11-04 20:55:00",
       "startedAt": null,
       "startedLocal": null,
       "canStart": false,
-      "startOpensAt": "2026-11-04T06:12:00+00:00",
-      "startOpensLocal": "2026-11-04 08:12:00",
+      "startOpensAt": "2026-11-04T16:15:00+00:00",
+      "startOpensLocal": "2026-11-04 18:15:00",
       "startDeadlines": {
-        "warningAt": "2026-11-04T07:47:00+00:00",
-        "warningLocal": "2026-11-04 09:47:00",
-        "lateAt": "2026-11-04T07:52:00+00:00",
-        "lateLocal": "2026-11-04 09:52:00",
-        "expiresAt": "2026-11-04T08:02:00+00:00",
-        "expiresLocal": "2026-11-04 10:02:00"
+        "warningAt": "2026-11-04T17:50:00+00:00",
+        "warningLocal": "2026-11-04 19:50:00",
+        "lateAt": "2026-11-04T17:55:00+00:00",
+        "lateLocal": "2026-11-04 19:55:00",
+        "expiresAt": "2026-11-04T18:05:00+00:00",
+        "expiresLocal": "2026-11-04 20:05:00"
       },
       "leaveBy": {
-        "at": "2026-11-04T07:13:00+00:00",
-        "local": "2026-11-04 09:13:00",
+        "at": "2026-11-04T17:16:00+00:00",
+        "local": "2026-11-04 19:16:00",
         "lateWarning": true
       },
       "attendance": {
@@ -2825,9 +2846,9 @@ Full, unedited JSON from a running server. Nothing is masked or shortened.
         },
         "seatsReleased": 1,
         "seatsOpen": 3,
-        "departureAt": "2026-11-04T07:42:00+00:00",
-        "departureLocal": "2026-11-04 09:42:00",
-        "at": "2026-11-04T05:32:10+00:00"
+        "departureAt": "2026-11-04T17:45:00+00:00",
+        "departureLocal": "2026-11-04 19:45:00",
+        "at": "2026-11-04T15:35:23+00:00"
       }
     ],
     "pendingRequests": {
@@ -2837,6 +2858,8 @@ Full, unedited JSON from a running server. Nothing is masked or shortened.
     "waitlist": {
       "count": 3
     },
+    "pausedCommutes": 0,
+    "pausedCommuteReasons": [],
     "stats": {
       "onTimeRate": 95,
       "completedTrips": 40,
@@ -2904,7 +2927,7 @@ Full, unedited JSON from a running server. Nothing is masked or shortened.
     "licenceExpiry": "2029-11-04",
     "hasNationalId": true,
     "hasLicenceNumber": true,
-    "verifiedAt": "2026-11-04T05:32:10+00:00",
+    "verifiedAt": "2026-11-04T15:35:23+00:00",
     "rejectionReason": null,
     "missing": [],
     "vehicles": [
@@ -2954,7 +2977,7 @@ Full, unedited JSON from a running server. Nothing is masked or shortened.
 
 - **State:** `F3D-08-LEFT`
 - **Phone:** `+201055557009`
-- **Captured:** 2026-11-04 05:32:12 UTC
+- **Captured:** 2026-11-04 15:35:25 UTC
 
 **GET /driver/home** → `200`
 
@@ -2980,28 +3003,28 @@ Full, unedited JSON from a running server. Nothing is masked or shortened.
       "phase": "scheduled",
       "originLabel": "Rehab Gate 2",
       "destinationLabel": "Smart Village B6",
-      "departureAt": "2026-11-04T07:42:00+00:00",
-      "departureLocal": "2026-11-04 09:42:00",
+      "departureAt": "2026-11-04T17:45:00+00:00",
+      "departureLocal": "2026-11-04 19:45:00",
       "departsInMinutes": 130,
       "isToday": true,
-      "promisedArrivalAt": "2026-11-04T08:52:00+00:00",
-      "promisedArrivalLocal": "2026-11-04 10:52:00",
+      "promisedArrivalAt": "2026-11-04T18:55:00+00:00",
+      "promisedArrivalLocal": "2026-11-04 20:55:00",
       "startedAt": null,
       "startedLocal": null,
       "canStart": false,
-      "startOpensAt": "2026-11-04T06:12:00+00:00",
-      "startOpensLocal": "2026-11-04 08:12:00",
+      "startOpensAt": "2026-11-04T16:15:00+00:00",
+      "startOpensLocal": "2026-11-04 18:15:00",
       "startDeadlines": {
-        "warningAt": "2026-11-04T07:47:00+00:00",
-        "warningLocal": "2026-11-04 09:47:00",
-        "lateAt": "2026-11-04T07:52:00+00:00",
-        "lateLocal": "2026-11-04 09:52:00",
-        "expiresAt": "2026-11-04T08:02:00+00:00",
-        "expiresLocal": "2026-11-04 10:02:00"
+        "warningAt": "2026-11-04T17:50:00+00:00",
+        "warningLocal": "2026-11-04 19:50:00",
+        "lateAt": "2026-11-04T17:55:00+00:00",
+        "lateLocal": "2026-11-04 19:55:00",
+        "expiresAt": "2026-11-04T18:05:00+00:00",
+        "expiresLocal": "2026-11-04 20:05:00"
       },
       "leaveBy": {
-        "at": "2026-11-04T07:13:00+00:00",
-        "local": "2026-11-04 09:13:00",
+        "at": "2026-11-04T17:16:00+00:00",
+        "local": "2026-11-04 19:16:00",
         "lateWarning": true
       },
       "attendance": {
@@ -3099,9 +3122,9 @@ Full, unedited JSON from a running server. Nothing is masked or shortened.
         },
         "seatsReleased": 1,
         "seatsOpen": 3,
-        "departureAt": "2026-11-04T07:42:00+00:00",
-        "departureLocal": "2026-11-04 09:42:00",
-        "at": "2026-11-04T05:32:11+00:00"
+        "departureAt": "2026-11-04T17:45:00+00:00",
+        "departureLocal": "2026-11-04 19:45:00",
+        "at": "2026-11-04T15:35:24+00:00"
       }
     ],
     "pendingRequests": {
@@ -3111,6 +3134,8 @@ Full, unedited JSON from a running server. Nothing is masked or shortened.
     "waitlist": {
       "count": 2
     },
+    "pausedCommutes": 0,
+    "pausedCommuteReasons": [],
     "stats": {
       "onTimeRate": 95,
       "completedTrips": 40,
@@ -3178,7 +3203,7 @@ Full, unedited JSON from a running server. Nothing is masked or shortened.
     "licenceExpiry": "2029-11-04",
     "hasNationalId": true,
     "hasLicenceNumber": true,
-    "verifiedAt": "2026-11-04T05:32:11+00:00",
+    "verifiedAt": "2026-11-04T15:35:24+00:00",
     "rejectionReason": null,
     "missing": [],
     "vehicles": [
@@ -3230,7 +3255,7 @@ Full, unedited JSON from a running server. Nothing is masked or shortened.
 
 - **State:** `NO-PROMISE`
 - **Phone:** `+201055557021`
-- **Captured:** 2026-11-04 05:32:14 UTC
+- **Captured:** 2026-11-04 15:35:26 UTC
 
 **GET /driver/home** → `200`
 
@@ -3256,8 +3281,8 @@ Full, unedited JSON from a running server. Nothing is masked or shortened.
       "phase": "scheduled",
       "originLabel": "Rehab Gate 2",
       "destinationLabel": "Smart Village B6",
-      "departureAt": "2026-11-04T07:42:00+00:00",
-      "departureLocal": "2026-11-04 09:42:00",
+      "departureAt": "2026-11-04T17:45:00+00:00",
+      "departureLocal": "2026-11-04 19:45:00",
       "departsInMinutes": 130,
       "isToday": true,
       "promisedArrivalAt": null,
@@ -3265,15 +3290,15 @@ Full, unedited JSON from a running server. Nothing is masked or shortened.
       "startedAt": null,
       "startedLocal": null,
       "canStart": false,
-      "startOpensAt": "2026-11-04T06:12:00+00:00",
-      "startOpensLocal": "2026-11-04 08:12:00",
+      "startOpensAt": "2026-11-04T16:15:00+00:00",
+      "startOpensLocal": "2026-11-04 18:15:00",
       "startDeadlines": {
-        "warningAt": "2026-11-04T07:47:00+00:00",
-        "warningLocal": "2026-11-04 09:47:00",
-        "lateAt": "2026-11-04T07:52:00+00:00",
-        "lateLocal": "2026-11-04 09:52:00",
-        "expiresAt": "2026-11-04T08:02:00+00:00",
-        "expiresLocal": "2026-11-04 10:02:00"
+        "warningAt": "2026-11-04T17:50:00+00:00",
+        "warningLocal": "2026-11-04 19:50:00",
+        "lateAt": "2026-11-04T17:55:00+00:00",
+        "lateLocal": "2026-11-04 19:55:00",
+        "expiresAt": "2026-11-04T18:05:00+00:00",
+        "expiresLocal": "2026-11-04 20:05:00"
       },
       "leaveBy": null,
       "attendance": {
@@ -3379,6 +3404,8 @@ Full, unedited JSON from a running server. Nothing is masked or shortened.
     "waitlist": {
       "count": 0
     },
+    "pausedCommutes": 0,
+    "pausedCommuteReasons": [],
     "stats": {
       "onTimeRate": 95,
       "completedTrips": 40,
@@ -3446,7 +3473,7 @@ Full, unedited JSON from a running server. Nothing is masked or shortened.
     "licenceExpiry": "2029-11-04",
     "hasNationalId": true,
     "hasLicenceNumber": true,
-    "verifiedAt": "2026-11-04T05:32:13+00:00",
+    "verifiedAt": "2026-11-04T15:35:25+00:00",
     "rejectionReason": null,
     "missing": [],
     "vehicles": [
@@ -3496,7 +3523,7 @@ Full, unedited JSON from a running server. Nothing is masked or shortened.
 
 - **State:** `LATER-WAITLIST`
 - **Phone:** `+201055557022`
-- **Captured:** 2026-11-04 05:32:15 UTC
+- **Captured:** 2026-11-04 15:35:28 UTC
 
 **GET /driver/home** → `200`
 
@@ -3522,28 +3549,28 @@ Full, unedited JSON from a running server. Nothing is masked or shortened.
       "phase": "scheduled",
       "originLabel": "Rehab Gate 2",
       "destinationLabel": "Smart Village B6",
-      "departureAt": "2026-11-04T07:42:00+00:00",
-      "departureLocal": "2026-11-04 09:42:00",
+      "departureAt": "2026-11-04T17:45:00+00:00",
+      "departureLocal": "2026-11-04 19:45:00",
       "departsInMinutes": 130,
       "isToday": true,
-      "promisedArrivalAt": "2026-11-04T08:52:00+00:00",
-      "promisedArrivalLocal": "2026-11-04 10:52:00",
+      "promisedArrivalAt": "2026-11-04T18:55:00+00:00",
+      "promisedArrivalLocal": "2026-11-04 20:55:00",
       "startedAt": null,
       "startedLocal": null,
       "canStart": false,
-      "startOpensAt": "2026-11-04T06:12:00+00:00",
-      "startOpensLocal": "2026-11-04 08:12:00",
+      "startOpensAt": "2026-11-04T16:15:00+00:00",
+      "startOpensLocal": "2026-11-04 18:15:00",
       "startDeadlines": {
-        "warningAt": "2026-11-04T07:47:00+00:00",
-        "warningLocal": "2026-11-04 09:47:00",
-        "lateAt": "2026-11-04T07:52:00+00:00",
-        "lateLocal": "2026-11-04 09:52:00",
-        "expiresAt": "2026-11-04T08:02:00+00:00",
-        "expiresLocal": "2026-11-04 10:02:00"
+        "warningAt": "2026-11-04T17:50:00+00:00",
+        "warningLocal": "2026-11-04 19:50:00",
+        "lateAt": "2026-11-04T17:55:00+00:00",
+        "lateLocal": "2026-11-04 19:55:00",
+        "expiresAt": "2026-11-04T18:05:00+00:00",
+        "expiresLocal": "2026-11-04 20:05:00"
       },
       "leaveBy": {
-        "at": "2026-11-04T07:13:00+00:00",
-        "local": "2026-11-04 09:13:00",
+        "at": "2026-11-04T17:16:00+00:00",
+        "local": "2026-11-04 19:16:00",
         "lateWarning": true
       },
       "attendance": {
@@ -3649,6 +3676,8 @@ Full, unedited JSON from a running server. Nothing is masked or shortened.
     "waitlist": {
       "count": 1
     },
+    "pausedCommutes": 0,
+    "pausedCommuteReasons": [],
     "stats": {
       "onTimeRate": 95,
       "completedTrips": 40,
@@ -3716,7 +3745,7 @@ Full, unedited JSON from a running server. Nothing is masked or shortened.
     "licenceExpiry": "2029-11-04",
     "hasNationalId": true,
     "hasLicenceNumber": true,
-    "verifiedAt": "2026-11-04T05:32:14+00:00",
+    "verifiedAt": "2026-11-04T15:35:27+00:00",
     "rejectionReason": null,
     "missing": [],
     "vehicles": [
@@ -3766,7 +3795,7 @@ Full, unedited JSON from a running server. Nothing is masked or shortened.
 
 - **State:** `NO-COMMUTES`
 - **Phone:** `+201055557023`
-- **Captured:** 2026-11-04 05:32:16 UTC
+- **Captured:** 2026-11-04 15:35:29 UTC
 
 **GET /driver/home** → `200`
 
@@ -3794,6 +3823,8 @@ Full, unedited JSON from a running server. Nothing is masked or shortened.
     "waitlist": {
       "count": 0
     },
+    "pausedCommutes": 0,
+    "pausedCommuteReasons": [],
     "stats": {
       "onTimeRate": null,
       "completedTrips": 0,
@@ -3861,7 +3892,7 @@ Full, unedited JSON from a running server. Nothing is masked or shortened.
     "licenceExpiry": "2029-11-04",
     "hasNationalId": true,
     "hasLicenceNumber": true,
-    "verifiedAt": "2026-11-04T05:32:15+00:00",
+    "verifiedAt": "2026-11-04T15:35:28+00:00",
     "rejectionReason": null,
     "missing": [],
     "vehicles": [
@@ -3911,7 +3942,7 @@ Full, unedited JSON from a running server. Nothing is masked or shortened.
 
 - **State:** `SAME-PERSON-TWO-DAYS`
 - **Phone:** `+201055557024`
-- **Captured:** 2026-11-04 05:32:17 UTC
+- **Captured:** 2026-11-04 15:35:30 UTC
 
 **GET /driver/home** → `200`
 
@@ -3937,28 +3968,28 @@ Full, unedited JSON from a running server. Nothing is masked or shortened.
       "phase": "scheduled",
       "originLabel": "Rehab Gate 2",
       "destinationLabel": "Smart Village B6",
-      "departureAt": "2026-11-04T07:42:00+00:00",
-      "departureLocal": "2026-11-04 09:42:00",
-      "departsInMinutes": 130,
+      "departureAt": "2026-11-04T17:45:00+00:00",
+      "departureLocal": "2026-11-04 19:45:00",
+      "departsInMinutes": 129,
       "isToday": true,
-      "promisedArrivalAt": "2026-11-04T08:52:00+00:00",
-      "promisedArrivalLocal": "2026-11-04 10:52:00",
+      "promisedArrivalAt": "2026-11-04T18:55:00+00:00",
+      "promisedArrivalLocal": "2026-11-04 20:55:00",
       "startedAt": null,
       "startedLocal": null,
       "canStart": false,
-      "startOpensAt": "2026-11-04T06:12:00+00:00",
-      "startOpensLocal": "2026-11-04 08:12:00",
+      "startOpensAt": "2026-11-04T16:15:00+00:00",
+      "startOpensLocal": "2026-11-04 18:15:00",
       "startDeadlines": {
-        "warningAt": "2026-11-04T07:47:00+00:00",
-        "warningLocal": "2026-11-04 09:47:00",
-        "lateAt": "2026-11-04T07:52:00+00:00",
-        "lateLocal": "2026-11-04 09:52:00",
-        "expiresAt": "2026-11-04T08:02:00+00:00",
-        "expiresLocal": "2026-11-04 10:02:00"
+        "warningAt": "2026-11-04T17:50:00+00:00",
+        "warningLocal": "2026-11-04 19:50:00",
+        "lateAt": "2026-11-04T17:55:00+00:00",
+        "lateLocal": "2026-11-04 19:55:00",
+        "expiresAt": "2026-11-04T18:05:00+00:00",
+        "expiresLocal": "2026-11-04 20:05:00"
       },
       "leaveBy": {
-        "at": "2026-11-04T07:13:00+00:00",
-        "local": "2026-11-04 09:13:00",
+        "at": "2026-11-04T17:16:00+00:00",
+        "local": "2026-11-04 19:16:00",
         "lateWarning": true
       },
       "attendance": {
@@ -4064,6 +4095,8 @@ Full, unedited JSON from a running server. Nothing is masked or shortened.
     "waitlist": {
       "count": 1
     },
+    "pausedCommutes": 0,
+    "pausedCommuteReasons": [],
     "stats": {
       "onTimeRate": 95,
       "completedTrips": 40,
@@ -4131,7 +4164,7 @@ Full, unedited JSON from a running server. Nothing is masked or shortened.
     "licenceExpiry": "2029-11-04",
     "hasNationalId": true,
     "hasLicenceNumber": true,
-    "verifiedAt": "2026-11-04T05:32:16+00:00",
+    "verifiedAt": "2026-11-04T15:35:29+00:00",
     "rejectionReason": null,
     "missing": [],
     "vehicles": [
@@ -4177,13 +4210,242 @@ Full, unedited JSON from a running server. Nothing is masked or shortened.
 }
 ```
 
+### No nextRun, with notices, requests and a waiting list
+
+- **State:** `NO-RUN-ACTIVITY`
+- **Phone:** `+201055557028`
+- **Captured:** 2026-11-04 15:35:31 UTC
+
+**GET /driver/home** → `200`
+
+```json
+{
+  "success": true,
+  "data": {
+    "greetingName": "Norunactivity",
+    "verification": {
+      "overall": "verified",
+      "completed": 5,
+      "of": 5,
+      "licenceExpiresAt": "2029-11-04T00:00:00+00:00",
+      "actionItem": null,
+      "suspensionReason": null
+    },
+    "expiredRun": null,
+    "nextRun": null,
+    "laterThisWeek": [],
+    "notices": [
+      {
+        "kind": "seat_opened",
+        "rejoinedWaitlist": false,
+        "bookingId": "01m6keyesdrtnw0c0bm03azxdx",
+        "tripId": "01m6keyep76qbrtsk1xrvt3060",
+        "commuteId": "01m6keyejgp45ft0jg7h6sppxn",
+        "person": {
+          "publicFirstName": "ليلى",
+          "trustLevel": 2,
+          "verifiedLevels": [],
+          "sameOrganisation": false,
+          "rating": null,
+          "ratingCount": 0,
+          "completedTrips": 0,
+          "onTimeRate": null
+        },
+        "seatsReleased": 1,
+        "seatsOpen": 3,
+        "departureAt": "2026-11-04T17:45:00+00:00",
+        "departureLocal": "2026-11-04 19:45:00",
+        "at": "2026-11-04T15:35:30+00:00"
+      }
+    ],
+    "pendingRequests": {
+      "count": 1,
+      "items": [
+        {
+          "id": "01m6kk6ydvphr0h2saycgjg260",
+          "commuteId": "01m6keyejgp45ft0jg7h6sppxn",
+          "tripId": "01m6keyep76qbrtsk1xrvt3060",
+          "status": "PENDING",
+          "commitment": "trial",
+          "kind": "seat_request",
+          "hasOtherConfirmedCommute": {},
+          "requestedDuringRide": false,
+          "requestedDaysMask": null,
+          "seats": 1,
+          "meetingPreference": "gate",
+          "pickup": {
+            "lat": 30.0624,
+            "lng": 31.3614,
+            "label": "Ring Road, Rehab exit",
+            "source": "custom_map",
+            "suggestionId": null,
+            "estimatedAt": null,
+            "estimatedLocal": null
+          },
+          "dropoff": {
+            "lat": 30.0684,
+            "lng": 31.1015,
+            "label": "Mehwar, Sheikh Zayed",
+            "source": "custom_map",
+            "suggestionId": null,
+            "estimatedArrivalAt": null,
+            "estimatedArrivalLocal": null,
+            "promisedArrivalLocal": null
+          },
+          "counteroffer": {},
+          "introMessage": "أهلاً! بتنقل يوميًا نفس الطريق وحابة أجرب مجموعتك.",
+          "paymentType": "cash",
+          "agreedToRulesAt": "2026-11-04T15:35:31+00:00",
+          "waitlistPosition": null,
+          "availableToday": true,
+          "responseNote": null,
+          "respondedAt": null,
+          "pausedAt": null,
+          "pausedUntil": null,
+          "joinedWaitlistAt": null,
+          "expiresAt": null,
+          "createdAt": "2026-11-04T15:35:31+00:00",
+          "passenger": {
+            "publicFirstName": "ليلى",
+            "trustLevel": 2,
+            "verifiedLevels": [],
+            "sameOrganisation": false,
+            "rating": null,
+            "ratingCount": 0,
+            "completedTrips": 0,
+            "onTimeRate": null
+          },
+          "commute": {}
+        }
+      ]
+    },
+    "waitlist": {
+      "count": 2
+    },
+    "pausedCommutes": 1,
+    "pausedCommuteReasons": [
+      "by_driver"
+    ],
+    "stats": {
+      "onTimeRate": 95,
+      "completedTrips": 40,
+      "avgDetourMinutes": 0
+    }
+  }
+}
+```
+
+**GET /driver/verification** → `200`
+
+```json
+{
+  "success": true,
+  "data": {
+    "overall": "verified",
+    "completed": 5,
+    "of": 5,
+    "items": [
+      {
+        "key": "government_id",
+        "status": "approved",
+        "rejectionReason": null,
+        "expiresAt": null
+      },
+      {
+        "key": "selfie",
+        "status": "approved",
+        "rejectionReason": null,
+        "expiresAt": null
+      },
+      {
+        "key": "driving_licence",
+        "status": "approved",
+        "rejectionReason": null,
+        "expiresAt": "2029-11-04T00:00:00+00:00"
+      },
+      {
+        "key": "vehicle_registration",
+        "status": "approved",
+        "rejectionReason": null,
+        "expiresAt": "2027-11-04T00:00:00+00:00"
+      },
+      {
+        "key": "vehicle_details",
+        "status": "approved",
+        "rejectionReason": null,
+        "expiresAt": null
+      }
+    ],
+    "licenceExpiresAt": "2029-11-04T00:00:00+00:00",
+    "actionItem": null,
+    "suspensionReason": null
+  }
+}
+```
+
+**GET /driver/application** → `200`
+
+```json
+{
+  "success": true,
+  "data": {
+    "status": "APPROVED",
+    "licenceExpiry": "2029-11-04",
+    "hasNationalId": true,
+    "hasLicenceNumber": true,
+    "verifiedAt": "2026-11-04T15:35:30+00:00",
+    "rejectionReason": null,
+    "missing": [],
+    "vehicles": [
+      {
+        "id": "01m6keyejam6a7dkmy715fx8qp",
+        "make": "Toyota",
+        "model": "Corolla",
+        "year": 2020,
+        "colour": "White",
+        "plateNumber": "DH 7028",
+        "seats": 4,
+        "approvedSeats": 3,
+        "tier": "standard",
+        "hasAc": true,
+        "transmission": "manual",
+        "fuelType": "petrol",
+        "isActive": true,
+        "status": "APPROVED",
+        "documents": [
+          {
+            "id": "01m6keyeq8ct6zwcw4jstb52ck",
+            "type": "registration",
+            "status": "APPROVED",
+            "expiresAt": "2027-11-04"
+          }
+        ]
+      }
+    ]
+  }
+}
+```
+
+**capabilities from GET /auth/me** → `200`
+
+```json
+{
+  "capabilities": [
+    "DRIVER",
+    "PASSENGER"
+  ],
+  "registeredRole": "driver",
+  "nextStep": "HOME"
+}
+```
+
 ## Verification states
 
 ### not_started
 
 - **State:** `NOT-STARTED`
 - **Phone:** `+201055557201`
-- **Captured:** 2026-11-04 05:32:18 UTC
+- **Captured:** 2026-11-04 15:35:33 UTC
 
 **GET /driver/home** → `200`
 
@@ -4211,6 +4473,8 @@ Full, unedited JSON from a running server. Nothing is masked or shortened.
     "waitlist": {
       "count": 0
     },
+    "pausedCommutes": 0,
+    "pausedCommuteReasons": [],
     "stats": {
       "onTimeRate": null,
       "completedTrips": 0,
@@ -4298,7 +4562,7 @@ Full, unedited JSON from a running server. Nothing is masked or shortened.
 
 - **State:** `IN-PROGRESS`
 - **Phone:** `+201055557202`
-- **Captured:** 2026-11-04 05:32:20 UTC
+- **Captured:** 2026-11-04 15:35:34 UTC
 
 **GET /driver/home** → `200`
 
@@ -4326,6 +4590,8 @@ Full, unedited JSON from a running server. Nothing is masked or shortened.
     "waitlist": {
       "count": 0
     },
+    "pausedCommutes": 0,
+    "pausedCommuteReasons": [],
     "stats": {
       "onTimeRate": null,
       "completedTrips": 0,
@@ -4422,7 +4688,7 @@ Full, unedited JSON from a running server. Nothing is masked or shortened.
 
 - **State:** `COMPLETE-DRAFT`
 - **Phone:** `+201055557203`
-- **Captured:** 2026-11-04 05:32:21 UTC
+- **Captured:** 2026-11-04 15:35:35 UTC
 
 **GET /driver/home** → `200`
 
@@ -4450,6 +4716,8 @@ Full, unedited JSON from a running server. Nothing is masked or shortened.
     "waitlist": {
       "count": 0
     },
+    "pausedCommutes": 0,
+    "pausedCommuteReasons": [],
     "stats": {
       "onTimeRate": null,
       "completedTrips": 0,
@@ -4567,7 +4835,7 @@ Full, unedited JSON from a running server. Nothing is masked or shortened.
 
 - **State:** `UNDER-REVIEW`
 - **Phone:** `+201055557204`
-- **Captured:** 2026-11-04 05:32:22 UTC
+- **Captured:** 2026-11-04 15:35:36 UTC
 
 **GET /driver/home** → `200`
 
@@ -4595,6 +4863,8 @@ Full, unedited JSON from a running server. Nothing is masked or shortened.
     "waitlist": {
       "count": 0
     },
+    "pausedCommutes": 0,
+    "pausedCommuteReasons": [],
     "stats": {
       "onTimeRate": null,
       "completedTrips": 0,
@@ -4712,7 +4982,7 @@ Full, unedited JSON from a running server. Nothing is masked or shortened.
 
 - **State:** `VERIFIED`
 - **Phone:** `+201055557025`
-- **Captured:** 2026-11-04 05:32:23 UTC
+- **Captured:** 2026-11-04 15:35:37 UTC
 
 **GET /driver/home** → `200`
 
@@ -4738,28 +5008,28 @@ Full, unedited JSON from a running server. Nothing is masked or shortened.
       "phase": "scheduled",
       "originLabel": "Rehab Gate 2",
       "destinationLabel": "Smart Village B6",
-      "departureAt": "2026-11-04T07:42:00+00:00",
-      "departureLocal": "2026-11-04 09:42:00",
-      "departsInMinutes": 130,
+      "departureAt": "2026-11-04T17:45:00+00:00",
+      "departureLocal": "2026-11-04 19:45:00",
+      "departsInMinutes": 129,
       "isToday": true,
-      "promisedArrivalAt": "2026-11-04T08:52:00+00:00",
-      "promisedArrivalLocal": "2026-11-04 10:52:00",
+      "promisedArrivalAt": "2026-11-04T18:55:00+00:00",
+      "promisedArrivalLocal": "2026-11-04 20:55:00",
       "startedAt": null,
       "startedLocal": null,
       "canStart": false,
-      "startOpensAt": "2026-11-04T06:12:00+00:00",
-      "startOpensLocal": "2026-11-04 08:12:00",
+      "startOpensAt": "2026-11-04T16:15:00+00:00",
+      "startOpensLocal": "2026-11-04 18:15:00",
       "startDeadlines": {
-        "warningAt": "2026-11-04T07:47:00+00:00",
-        "warningLocal": "2026-11-04 09:47:00",
-        "lateAt": "2026-11-04T07:52:00+00:00",
-        "lateLocal": "2026-11-04 09:52:00",
-        "expiresAt": "2026-11-04T08:02:00+00:00",
-        "expiresLocal": "2026-11-04 10:02:00"
+        "warningAt": "2026-11-04T17:50:00+00:00",
+        "warningLocal": "2026-11-04 19:50:00",
+        "lateAt": "2026-11-04T17:55:00+00:00",
+        "lateLocal": "2026-11-04 19:55:00",
+        "expiresAt": "2026-11-04T18:05:00+00:00",
+        "expiresLocal": "2026-11-04 20:05:00"
       },
       "leaveBy": {
-        "at": "2026-11-04T07:13:00+00:00",
-        "local": "2026-11-04 09:13:00",
+        "at": "2026-11-04T17:16:00+00:00",
+        "local": "2026-11-04 19:16:00",
         "lateWarning": true
       },
       "attendance": {
@@ -4865,6 +5135,8 @@ Full, unedited JSON from a running server. Nothing is masked or shortened.
     "waitlist": {
       "count": 0
     },
+    "pausedCommutes": 0,
+    "pausedCommuteReasons": [],
     "stats": {
       "onTimeRate": 95,
       "completedTrips": 40,
@@ -4932,7 +5204,7 @@ Full, unedited JSON from a running server. Nothing is masked or shortened.
     "licenceExpiry": "2029-11-04",
     "hasNationalId": true,
     "hasLicenceNumber": true,
-    "verifiedAt": "2026-11-04T05:32:22+00:00",
+    "verifiedAt": "2026-11-04T15:35:37+00:00",
     "rejectionReason": null,
     "missing": [],
     "vehicles": [
@@ -4982,7 +5254,7 @@ Full, unedited JSON from a running server. Nothing is masked or shortened.
 
 - **State:** `EXPIRING`
 - **Phone:** `+201055557013`
-- **Captured:** 2026-11-04 05:32:25 UTC
+- **Captured:** 2026-11-04 15:35:39 UTC
 
 **GET /driver/home** → `200`
 
@@ -5008,28 +5280,28 @@ Full, unedited JSON from a running server. Nothing is masked or shortened.
       "phase": "scheduled",
       "originLabel": "Rehab Gate 2",
       "destinationLabel": "Smart Village B6",
-      "departureAt": "2026-11-04T07:42:00+00:00",
-      "departureLocal": "2026-11-04 09:42:00",
-      "departsInMinutes": 130,
+      "departureAt": "2026-11-04T17:45:00+00:00",
+      "departureLocal": "2026-11-04 19:45:00",
+      "departsInMinutes": 129,
       "isToday": true,
-      "promisedArrivalAt": "2026-11-04T08:52:00+00:00",
-      "promisedArrivalLocal": "2026-11-04 10:52:00",
+      "promisedArrivalAt": "2026-11-04T18:55:00+00:00",
+      "promisedArrivalLocal": "2026-11-04 20:55:00",
       "startedAt": null,
       "startedLocal": null,
       "canStart": false,
-      "startOpensAt": "2026-11-04T06:12:00+00:00",
-      "startOpensLocal": "2026-11-04 08:12:00",
+      "startOpensAt": "2026-11-04T16:15:00+00:00",
+      "startOpensLocal": "2026-11-04 18:15:00",
       "startDeadlines": {
-        "warningAt": "2026-11-04T07:47:00+00:00",
-        "warningLocal": "2026-11-04 09:47:00",
-        "lateAt": "2026-11-04T07:52:00+00:00",
-        "lateLocal": "2026-11-04 09:52:00",
-        "expiresAt": "2026-11-04T08:02:00+00:00",
-        "expiresLocal": "2026-11-04 10:02:00"
+        "warningAt": "2026-11-04T17:50:00+00:00",
+        "warningLocal": "2026-11-04 19:50:00",
+        "lateAt": "2026-11-04T17:55:00+00:00",
+        "lateLocal": "2026-11-04 19:55:00",
+        "expiresAt": "2026-11-04T18:05:00+00:00",
+        "expiresLocal": "2026-11-04 20:05:00"
       },
       "leaveBy": {
-        "at": "2026-11-04T07:13:00+00:00",
-        "local": "2026-11-04 09:13:00",
+        "at": "2026-11-04T17:16:00+00:00",
+        "local": "2026-11-04 19:16:00",
         "lateWarning": true
       },
       "attendance": {
@@ -5135,6 +5407,8 @@ Full, unedited JSON from a running server. Nothing is masked or shortened.
     "waitlist": {
       "count": 0
     },
+    "pausedCommutes": 0,
+    "pausedCommuteReasons": [],
     "stats": {
       "onTimeRate": 95,
       "completedTrips": 40,
@@ -5202,7 +5476,7 @@ Full, unedited JSON from a running server. Nothing is masked or shortened.
     "licenceExpiry": "2026-11-14",
     "hasNationalId": true,
     "hasLicenceNumber": true,
-    "verifiedAt": "2026-11-04T05:32:24+00:00",
+    "verifiedAt": "2026-11-04T15:35:38+00:00",
     "rejectionReason": null,
     "missing": [],
     "vehicles": [
@@ -5252,7 +5526,7 @@ Full, unedited JSON from a running server. Nothing is masked or shortened.
 
 - **State:** `RENEWAL-LICENCE`
 - **Phone:** `+201055557014`
-- **Captured:** 2026-11-04 05:32:26 UTC
+- **Captured:** 2026-11-04 15:35:40 UTC
 
 **GET /driver/home** → `200`
 
@@ -5284,6 +5558,10 @@ Full, unedited JSON from a running server. Nothing is masked or shortened.
     "waitlist": {
       "count": 2
     },
+    "pausedCommutes": 1,
+    "pausedCommuteReasons": [
+      "licence_expired"
+    ],
     "stats": {
       "onTimeRate": 95,
       "completedTrips": 40,
@@ -5355,7 +5633,7 @@ Full, unedited JSON from a running server. Nothing is masked or shortened.
     "licenceExpiry": "2026-11-03",
     "hasNationalId": true,
     "hasLicenceNumber": true,
-    "verifiedAt": "2026-11-04T05:32:25+00:00",
+    "verifiedAt": "2026-11-04T15:35:39+00:00",
     "rejectionReason": null,
     "missing": [],
     "vehicles": [
@@ -5405,7 +5683,7 @@ Full, unedited JSON from a running server. Nothing is masked or shortened.
 
 - **State:** `RENEWAL-REGISTRATION`
 - **Phone:** `+201055557026`
-- **Captured:** 2026-11-04 05:32:27 UTC
+- **Captured:** 2026-11-04 15:35:41 UTC
 
 **GET /driver/home** → `200`
 
@@ -5435,28 +5713,28 @@ Full, unedited JSON from a running server. Nothing is masked or shortened.
       "phase": "scheduled",
       "originLabel": "Rehab Gate 2",
       "destinationLabel": "Smart Village B6",
-      "departureAt": "2026-11-04T07:42:00+00:00",
-      "departureLocal": "2026-11-04 09:42:00",
-      "departsInMinutes": 130,
+      "departureAt": "2026-11-04T17:45:00+00:00",
+      "departureLocal": "2026-11-04 19:45:00",
+      "departsInMinutes": 129,
       "isToday": true,
-      "promisedArrivalAt": "2026-11-04T08:52:00+00:00",
-      "promisedArrivalLocal": "2026-11-04 10:52:00",
+      "promisedArrivalAt": "2026-11-04T18:55:00+00:00",
+      "promisedArrivalLocal": "2026-11-04 20:55:00",
       "startedAt": null,
       "startedLocal": null,
       "canStart": false,
-      "startOpensAt": "2026-11-04T06:12:00+00:00",
-      "startOpensLocal": "2026-11-04 08:12:00",
+      "startOpensAt": "2026-11-04T16:15:00+00:00",
+      "startOpensLocal": "2026-11-04 18:15:00",
       "startDeadlines": {
-        "warningAt": "2026-11-04T07:47:00+00:00",
-        "warningLocal": "2026-11-04 09:47:00",
-        "lateAt": "2026-11-04T07:52:00+00:00",
-        "lateLocal": "2026-11-04 09:52:00",
-        "expiresAt": "2026-11-04T08:02:00+00:00",
-        "expiresLocal": "2026-11-04 10:02:00"
+        "warningAt": "2026-11-04T17:50:00+00:00",
+        "warningLocal": "2026-11-04 19:50:00",
+        "lateAt": "2026-11-04T17:55:00+00:00",
+        "lateLocal": "2026-11-04 19:55:00",
+        "expiresAt": "2026-11-04T18:05:00+00:00",
+        "expiresLocal": "2026-11-04 20:05:00"
       },
       "leaveBy": {
-        "at": "2026-11-04T07:13:00+00:00",
-        "local": "2026-11-04 09:13:00",
+        "at": "2026-11-04T17:16:00+00:00",
+        "local": "2026-11-04 19:16:00",
         "lateWarning": true
       },
       "attendance": {
@@ -5562,6 +5840,8 @@ Full, unedited JSON from a running server. Nothing is masked or shortened.
     "waitlist": {
       "count": 0
     },
+    "pausedCommutes": 0,
+    "pausedCommuteReasons": [],
     "stats": {
       "onTimeRate": 95,
       "completedTrips": 40,
@@ -5633,7 +5913,7 @@ Full, unedited JSON from a running server. Nothing is masked or shortened.
     "licenceExpiry": "2029-11-04",
     "hasNationalId": true,
     "hasLicenceNumber": true,
-    "verifiedAt": "2026-11-04T05:32:26+00:00",
+    "verifiedAt": "2026-11-04T15:35:40+00:00",
     "rejectionReason": null,
     "missing": [],
     "vehicles": [
@@ -5683,7 +5963,7 @@ Full, unedited JSON from a running server. Nothing is masked or shortened.
 
 - **State:** `REJECTED-LICENCE`
 - **Phone:** `+201055557205`
-- **Captured:** 2026-11-04 05:32:29 UTC
+- **Captured:** 2026-11-04 15:35:43 UTC
 
 **GET /driver/home** → `200`
 
@@ -5715,6 +5995,8 @@ Full, unedited JSON from a running server. Nothing is masked or shortened.
     "waitlist": {
       "count": 0
     },
+    "pausedCommutes": 0,
+    "pausedCommuteReasons": [],
     "stats": {
       "onTimeRate": null,
       "completedTrips": 0,
@@ -5836,7 +6118,7 @@ Full, unedited JSON from a running server. Nothing is masked or shortened.
 
 - **State:** `REJECTED-REGISTRATION`
 - **Phone:** `+201055557206`
-- **Captured:** 2026-11-04 05:32:30 UTC
+- **Captured:** 2026-11-04 15:35:44 UTC
 
 **GET /driver/home** → `200`
 
@@ -5868,6 +6150,8 @@ Full, unedited JSON from a running server. Nothing is masked or shortened.
     "waitlist": {
       "count": 0
     },
+    "pausedCommutes": 0,
+    "pausedCommuteReasons": [],
     "stats": {
       "onTimeRate": null,
       "completedTrips": 0,
@@ -5901,7 +6185,7 @@ Full, unedited JSON from a running server. Nothing is masked or shortened.
       },
       {
         "key": "driving_licence",
-        "status": "under_review",
+        "status": "in_progress",
         "rejectionReason": null,
         "expiresAt": null
       },
@@ -5991,7 +6275,7 @@ Full, unedited JSON from a running server. Nothing is masked or shortened.
 
 - **State:** `REJECTED-DETAILS`
 - **Phone:** `+201055557207`
-- **Captured:** 2026-11-04 05:32:32 UTC
+- **Captured:** 2026-11-04 15:35:45 UTC
 
 **GET /driver/home** → `200`
 
@@ -6023,6 +6307,8 @@ Full, unedited JSON from a running server. Nothing is masked or shortened.
     "waitlist": {
       "count": 0
     },
+    "pausedCommutes": 0,
+    "pausedCommuteReasons": [],
     "stats": {
       "onTimeRate": null,
       "completedTrips": 0,
@@ -6056,7 +6342,7 @@ Full, unedited JSON from a running server. Nothing is masked or shortened.
       },
       {
         "key": "driving_licence",
-        "status": "under_review",
+        "status": "in_progress",
         "rejectionReason": null,
         "expiresAt": null
       },
@@ -6146,7 +6432,7 @@ Full, unedited JSON from a running server. Nothing is masked or shortened.
 
 - **State:** `REJECTED-APPLICATION`
 - **Phone:** `+201055557208`
-- **Captured:** 2026-11-04 05:32:33 UTC
+- **Captured:** 2026-11-04 15:35:46 UTC
 
 **GET /driver/home** → `200`
 
@@ -6178,6 +6464,8 @@ Full, unedited JSON from a running server. Nothing is masked or shortened.
     "waitlist": {
       "count": 0
     },
+    "pausedCommutes": 0,
+    "pausedCommuteReasons": [],
     "stats": {
       "onTimeRate": null,
       "completedTrips": 0,
@@ -6211,7 +6499,7 @@ Full, unedited JSON from a running server. Nothing is masked or shortened.
       },
       {
         "key": "driving_licence",
-        "status": "under_review",
+        "status": "in_progress",
         "rejectionReason": null,
         "expiresAt": null
       },
@@ -6299,7 +6587,7 @@ Full, unedited JSON from a running server. Nothing is masked or shortened.
 
 - **State:** `SUSPENDED`
 - **Phone:** `+201055557015`
-- **Captured:** 2026-11-04 05:32:35 UTC
+- **Captured:** 2026-11-04 15:35:48 UTC
 
 **GET /driver/home** → `200`
 
@@ -6327,6 +6615,10 @@ Full, unedited JSON from a running server. Nothing is masked or shortened.
     "waitlist": {
       "count": 2
     },
+    "pausedCommutes": 1,
+    "pausedCommuteReasons": [
+      "driver_suspended"
+    ],
     "stats": {
       "onTimeRate": 95,
       "completedTrips": 40,
@@ -6366,13 +6658,13 @@ Full, unedited JSON from a running server. Nothing is masked or shortened.
       },
       {
         "key": "vehicle_registration",
-        "status": "action_needed",
+        "status": "suspended",
         "rejectionReason": null,
         "expiresAt": "2027-11-04T00:00:00+00:00"
       },
       {
         "key": "vehicle_details",
-        "status": "action_needed",
+        "status": "suspended",
         "rejectionReason": null,
         "expiresAt": null
       }
@@ -6394,7 +6686,7 @@ Full, unedited JSON from a running server. Nothing is masked or shortened.
     "licenceExpiry": "2029-11-04",
     "hasNationalId": true,
     "hasLicenceNumber": true,
-    "verifiedAt": "2026-11-04T05:32:33+00:00",
+    "verifiedAt": "2026-11-04T15:35:47+00:00",
     "rejectionReason": "Repeated no-show reports.",
     "missing": [],
     "vehicles": [
@@ -6440,11 +6732,61 @@ Full, unedited JSON from a running server. Nothing is masked or shortened.
 }
 ```
 
+**GET /auth/me, in full** → `200`
+
+```json
+{
+  "success": true,
+  "data": {
+    "user": {
+      "id": "01m6jbcggn5ahkycemndepqg6g",
+      "phone": "+201055557015",
+      "phoneVerified": true,
+      "fullName": "Suspended Demo",
+      "publicFirstName": "Suspended",
+      "profilePhotoPath": null,
+      "dateOfBirth": "1987-05-19",
+      "email": "ena03@example.org",
+      "accountStatus": "ACTIVE",
+      "profileStatus": "BASIC_COMPLETE",
+      "capabilities": [
+        "DRIVER",
+        "PASSENGER"
+      ],
+      "initialRoleSelected": true,
+      "registeredRole": "driver",
+      "orgType": "work",
+      "organizationId": "01m6hf9f31te7x9wamvjqpjvyw",
+      "preferredLanguage": "ar",
+      "trustLevel": 3,
+      "gender": "woman",
+      "canChooseWomenOnly": true,
+      "outstandingConsents": [
+        "terms",
+        "privacy"
+      ]
+    },
+    "device": {
+      "id": "01m6jgmjpv8sjv8482gw79w0zq",
+      "platform": "android",
+      "model": null,
+      "osVersion": null,
+      "appVersion": "1.0.0",
+      "isTrusted": false,
+      "biometricEnabled": false,
+      "lastSeenAt": "2026-11-04T15:35:48+00:00",
+      "revokedAt": null
+    },
+    "nextStep": "HOME"
+  }
+}
+```
+
 ### Whole account suspended
 
 - **State:** `ACCOUNT-SUSPENDED`
 - **Phone:** `+201055557027`
-- **Captured:** 2026-11-04 05:32:36 UTC
+- **Captured:** 2026-11-04 15:35:49 UTC
 
 **GET /driver/home** → `200`
 
@@ -6472,6 +6814,10 @@ Full, unedited JSON from a running server. Nothing is masked or shortened.
     "waitlist": {
       "count": 0
     },
+    "pausedCommutes": 1,
+    "pausedCommuteReasons": [
+      "account_suspended"
+    ],
     "stats": {
       "onTimeRate": 95,
       "completedTrips": 40,
@@ -6539,7 +6885,7 @@ Full, unedited JSON from a running server. Nothing is masked or shortened.
     "licenceExpiry": "2029-11-04",
     "hasNationalId": true,
     "hasLicenceNumber": true,
-    "verifiedAt": "2026-11-04T05:32:35+00:00",
+    "verifiedAt": "2026-11-04T15:35:48+00:00",
     "rejectionReason": null,
     "missing": [],
     "vehicles": [
@@ -6585,13 +6931,77 @@ Full, unedited JSON from a running server. Nothing is masked or shortened.
 }
 ```
 
+**GET /auth/me, in full** → `200`
+
+```json
+{
+  "success": true,
+  "data": {
+    "user": {
+      "id": "01m6jfzhbf7rme2e0w4vmn5jj0",
+      "phone": "+201055557027",
+      "phoneVerified": true,
+      "fullName": "Accountsuspended Demo",
+      "publicFirstName": "Accountsuspended",
+      "profilePhotoPath": null,
+      "dateOfBirth": "1986-01-21",
+      "email": "jflatley@example.net",
+      "accountStatus": "SUSPENDED",
+      "suspensionReason": "A safety report is under review, so new bookings are paused.",
+      "suspension": {
+        "caseNumber": "RF-672432",
+        "reasonCode": "safety_report",
+        "suspendedAt": "2026-11-04T15:35:48+00:00",
+        "reviewDueAt": "2026-11-05T15:35:48+00:00",
+        "permanent": false,
+        "appeal": {
+          "canAppeal": true,
+          "appealBy": "2026-11-06T15:35:48+00:00",
+          "needsNewEvidence": false,
+          "appeals": []
+        }
+      },
+      "profileStatus": "BASIC_COMPLETE",
+      "capabilities": [
+        "DRIVER",
+        "PASSENGER"
+      ],
+      "initialRoleSelected": true,
+      "registeredRole": "driver",
+      "orgType": "work",
+      "organizationId": "01m6hf9f31te7x9wamvjqpjvyw",
+      "preferredLanguage": "ar",
+      "trustLevel": 3,
+      "gender": "woman",
+      "canChooseWomenOnly": true,
+      "outstandingConsents": [
+        "terms",
+        "privacy"
+      ]
+    },
+    "device": {
+      "id": "01m6jgmm0epeq06da3s6hpjsfk",
+      "platform": "android",
+      "model": null,
+      "osVersion": null,
+      "appVersion": "1.0.0",
+      "isTrusted": false,
+      "biometricEnabled": false,
+      "lastSeenAt": "2026-11-04T15:35:49+00:00",
+      "revokedAt": null
+    },
+    "nextStep": "HOME"
+  }
+}
+```
+
 ## Errors
 
 ### Start refused, too early
 
 - **State:** `F3D-01`
 - **Phone:** `+201055557001`
-- **Captured:** 2026-11-04 05:32:37 UTC
+- **Captured:** 2026-11-04 15:35:50 UTC
 
 **POST /trips/01m6jbcgmnprbdmxbtvarc2xsh/start** → `422`
 
@@ -6603,7 +7013,7 @@ Full, unedited JSON from a running server. Nothing is masked or shortened.
     "message": "It is too early to start this run. Start it closer to the departure time.",
     "fields": {
       "departureAt": [
-        "2026-11-04T07:42:00+00:00"
+        "2026-11-04T17:45:00+00:00"
       ],
       "windowMinutes": [
         "90"
@@ -6617,7 +7027,7 @@ Full, unedited JSON from a running server. Nothing is masked or shortened.
 
 - **State:** `IN-PROGRESS`
 - **Phone:** `+201055557202`
-- **Captured:** 2026-11-04 05:32:38 UTC
+- **Captured:** 2026-11-04 15:35:51 UTC
 
 **POST /driver/application/submit** → `422`
 
