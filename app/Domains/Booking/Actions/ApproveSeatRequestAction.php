@@ -255,6 +255,21 @@ final readonly class ApproveSeatRequestAction
      *
      * @param  array<int, string>  $tripIds
      */
+    public function breaksFrozenPromise(SeatRequest $request): bool
+    {
+        try {
+            $this->assertKeepsFrozenPromises($request, $this->candidateTripIds($request));
+        } catch (DomainException $refused) {
+            if ($refused->errorCode === ErrorCode::BookingBreaksFrozenPromise) {
+                return true;
+            }
+
+            throw $refused;
+        }
+
+        return false;
+    }
+
     private function assertKeepsFrozenPromises(SeatRequest $request, array $tripIds): void
     {
         $locked = ScheduledTrip::query()

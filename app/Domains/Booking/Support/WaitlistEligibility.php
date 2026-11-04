@@ -83,16 +83,7 @@ final class WaitlistEligibility
 
     public static function isWaitingFor(SeatRequest $request, ScheduledTrip $trip): bool
     {
-        if ($request->commute_offer_id !== $trip->commute_offer_id) {
-            return false;
-        }
-
-        if ($request->scheduled_trip_id !== null) {
-            if ($request->scheduled_trip_id !== $trip->getKey()) {
-                return false;
-            }
-        } elseif ($request->requested_days_mask !== null
-            && ! DaysMask::fromBits($request->requested_days_mask)->includesDate($trip->trip_date)) {
+        if (! self::isForDay($request, $trip)) {
             return false;
         }
 
@@ -108,6 +99,24 @@ final class WaitlistEligibility
         }
 
         return $request->expires_at === null || $request->expires_at->isFuture();
+    }
+
+    public static function isForDay(SeatRequest $request, ScheduledTrip $trip): bool
+    {
+        if ($request->commute_offer_id !== $trip->commute_offer_id) {
+            return false;
+        }
+
+        if ($request->scheduled_trip_id !== null) {
+            if ($request->scheduled_trip_id !== $trip->getKey()) {
+                return false;
+            }
+        } elseif ($request->requested_days_mask !== null
+            && ! DaysMask::fromBits($request->requested_days_mask)->includesDate($trip->trip_date)) {
+            return false;
+        }
+
+        return true;
     }
 
     /**

@@ -7,6 +7,7 @@ use App\Domains\Commute\Models\ScheduledTrip;
 use App\Domains\Identity\Models\User;
 use Database\Seeders\DemoDataSeeder;
 use Database\Seeders\DriverHomeStatesSeeder;
+use Database\Seeders\DriverRequestsStatesSeeder;
 
 /**
  * `demo:refresh` — a long-lived demo environment where the calendar has moved on.
@@ -129,4 +130,38 @@ it('seeds every Driver Home state through the real flows, and resets them when r
     $this->artisan('demo:driver-home-states', ['--state' => 'F3D-05', '--phone' => '+201055557005'])->assertSuccessful();
     $this->artisan('demo:driver-home-states', ['--state' => 'F3D-05', '--phone' => '+201055557001'])->assertFailed();
     $this->artisan('demo:driver-home-states', ['--state' => 'NOPE'])->assertFailed();
+});
+
+it('seeds every Driver Requests state and resets them when run again', function () {
+    $this->artisan('demo:driver-requests-states')->assertSuccessful();
+    $this->artisan('demo:driver-requests-states')->assertSuccessful();
+
+    $as = fn (string $state) => $this->actingAs(
+        User::query()->where('phone_e164', DriverRequestsStatesSeeder::REQUEST_STATES[$state])->sole(),
+        'sanctum',
+    );
+
+    $inbox = fn (string $state) => $as($state)->getJson('/api/v1/driver/seat-requests')->assertOk()->json('data');
+    $waiting = fn (string $state) => $as($state)->getJson('/api/v1/driver/waitlist')->assertOk()->json();
+    $offers = fn (string $state) => $as($state)->getJson('/api/v1/driver/seat-offers')->assertOk()->json('data');
+
+    $rows = collect($inbox('REQ-INBOX'));
+
+    expect($inbox('REQ-EMPTY'))->toBe([])
+        ->and($rows->pluck('kind')->unique()->sort()->values()->all())->toBe(['seat_request', 'waitlist_application'])
+        ->and($rows->pluck('hasOtherConfirmedCommute')->unique()->count())->toBe(2)
+        ->and($rows->pluck('impact.canAccept')->unique()->all())->toBe([true])
+        ->and(collect($inbox('REQ-DECIDED'))->pluck('status')->unique()->count())->toBe(11)
+        ->and($inbox('REQ-BREAKS-PROMISE')[0]['impact']['canAccept'])->toBeFalse()
+        ->and($inbox('REQ-OVER-LIMIT')[0]['impact']['withinLimit'])->toBeFalse()
+        ->and($waiting('WL-DAYS')['meta']['total'])->toBe(3)
+        ->and(collect($waiting('WL-DAYS')['meta']['days'])->pluck('isFull')->contains(true))->toBeTrue()
+        ->and($offers('WL-OFFER-OPEN')[0]['status'])->toBe('OPEN')
+        ->and($offers('WL-OFFER-ACCEPTED')[0]['acceptedBy']['publicFirstName'])->toBe('Laila');
+});
+
+it('refuses to add Driver Requests states in production', function () {
+    app()->detectEnvironment(fn () => 'production');
+
+    $this->artisan('demo:driver-requests-states')->assertFailed();
 });

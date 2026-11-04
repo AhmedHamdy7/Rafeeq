@@ -668,6 +668,7 @@ Route::prefix('v1')->group(function (): void {
          * system would know: the itinerary would still send her to the original point and a dispute
          * would be settled against a record that disagreed with both of them.
          */
+        Route::get('driver/seat-requests/{seatRequest}/counteroffer-options', [SeatRequestController::class, 'counterofferOptions']);
         Route::post('driver/seat-requests/{seatRequest}/counteroffer', [SeatRequestController::class, 'counteroffer']);
         Route::post('seat-requests/{seatRequest}/counteroffer/accept', [SeatRequestController::class, 'acceptCounteroffer']);
         Route::post('seat-requests/{seatRequest}/counteroffer/decline', [SeatRequestController::class, 'declineCounteroffer']);
@@ -684,6 +685,8 @@ Route::prefix('v1')->group(function (): void {
          * commute means refilling a whole car for weeks of mornings, and v5 lets her choose — and
          * favour the passengers she had before. She still only decides WHO may race.
          */
+        Route::get('driver/waitlist', [WaitlistController::class, 'all']);
+        Route::get('driver/seat-offers', [WaitlistController::class, 'offers']);
         Route::get('driver/commutes/{commute}/waitlist', [WaitlistController::class, 'index']);
         Route::post('driver/commutes/{commute}/waitlist/offers', [WaitlistController::class, 'offer']);
         Route::delete('driver/seat-offers/{offer}', [WaitlistController::class, 'withdrawOffer']);
