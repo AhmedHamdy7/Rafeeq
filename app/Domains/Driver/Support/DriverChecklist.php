@@ -5,11 +5,13 @@ namespace App\Domains\Driver\Support;
 use App\Domains\Driver\Enums\DriverProfileStatus;
 use App\Domains\Driver\Enums\VehicleDocumentType;
 use App\Domains\Driver\Enums\VehicleVerificationStatus;
+use App\Domains\Driver\Models\DriverProfile;
 use App\Domains\Driver\Models\Vehicle;
 use App\Domains\Identity\Models\User;
 use App\Domains\Verification\Enums\VerificationStatus;
 use App\Domains\Verification\Enums\VerificationType;
 use App\Domains\Verification\Models\UserVerification;
+use Carbon\CarbonInterface;
 use Illuminate\Support\Collection;
 
 /**
@@ -43,6 +45,8 @@ final class DriverChecklist
      *     of: int,
      *     items: array<int, array<string, mixed>>,
      *     licenceExpiresAt: string|null,
+     *     actionItem: array{key: string, status: string, rejectionReason: string|null}|null,
+     *     suspensionReason: string|null,
      * }
      */
     public static function for(User $user): array
@@ -59,20 +63,78 @@ final class DriverChecklist
         $items = [
             self::fromVerification('government_id', $verifications->get(VerificationType::GovernmentId->value)),
             self::fromVerification('selfie', $verifications->get(VerificationType::Selfie->value)),
-            self::fromVerification('driving_licence', $verifications->get(VerificationType::DrivingLicence->value)),
-            self::vehicleRegistration($vehicle),
-            self::vehicleDetails($vehicle),
+            self::fromVerification('driving_licence', $verifications->get(VerificationType::DrivingLicence->value), self::licenceExpiry($verifications, $profile)),
+            self::vehicleRegistration($vehicle, $profile),
+            self::vehicleDetails($vehicle, $profile),
         ];
 
         $completed = count(array_filter($items, fn (array $item): bool => $item['status'] === 'approved'));
 
         return [
-            'overall' => self::overall($profile?->status, $items, $verifications),
+            'overall' => self::overall($profile, $items, $verifications),
             'completed' => $completed,
             'of' => count($items),
             'items' => $items,
-            'licenceExpiresAt' => self::licenceExpiry($verifications),
+            'licenceExpiresAt' => self::licenceExpiry($verifications, $profile)?->toIso8601String(),
+            'actionItem' => self::actionItem($items, $profile),
+            'suspensionReason' => $profile?->status === DriverProfileStatus::Suspended ? $profile->rejection_reason : null,
         ];
+    }
+
+    /**
+     * @return array{
+     *     overall: string,
+     *     completed: int,
+     *     of: int,
+     *     licenceExpiresAt: string|null,
+     *     actionItem: array{key: string, status: string, rejectionReason: string|null}|null,
+     *     suspensionReason: string|null,
+     * }
+     */
+    public static function summary(User $user): array
+    {
+        $checklist = self::for($user);
+
+        return [
+            'overall' => $checklist['overall'],
+            'completed' => $checklist['completed'],
+            'of' => $checklist['of'],
+            'licenceExpiresAt' => $checklist['licenceExpiresAt'],
+            'actionItem' => $checklist['actionItem'],
+            'suspensionReason' => $checklist['suspensionReason'],
+        ];
+    }
+
+    /**
+     * @param  array<int, array<string, mixed>>  $items
+     * @return array{key: string, status: string, rejectionReason: string|null}|null
+     */
+    private static function actionItem(array $items, ?DriverProfile $profile): ?array
+    {
+        if ($profile?->status === DriverProfileStatus::Suspended) {
+            return null;
+        }
+
+        $item = collect($items)->firstWhere('status', 'action_needed')
+            ?? collect($items)->firstWhere('status', 'expired');
+
+        if ($item !== null) {
+            return [
+                'key' => (string) $item['key'],
+                'status' => (string) $item['status'],
+                'rejectionReason' => $item['rejectionReason'],
+            ];
+        }
+
+        if ($profile?->status === DriverProfileStatus::Rejected) {
+            return [
+                'key' => 'application',
+                'status' => 'action_needed',
+                'rejectionReason' => $profile->rejection_reason,
+            ];
+        }
+
+        return null;
     }
 
     /**
@@ -85,9 +147,10 @@ final class DriverChecklist
      *
      * @return array<string, mixed>
      */
-    private static function fromVerification(string $key, ?UserVerification $verification): array
+    private static function fromVerification(string $key, ?UserVerification $verification, ?CarbonInterface $expiry = null): array
     {
-        $expired = $verification?->expires_at !== null && $verification->expires_at->isPast();
+        $expiry ??= $verification?->expires_at;
+        $expired = $expiry !== null && $expiry->isPast();
 
         $status = match (true) {
             $verification === null => 'not_started',
@@ -104,14 +167,14 @@ final class DriverChecklist
             'key' => $key,
             'status' => $status,
             'rejectionReason' => $verification?->rejection_reason,
-            'expiresAt' => $verification?->expires_at?->toIso8601String(),
+            'expiresAt' => $expiry?->toIso8601String(),
         ];
     }
 
     /**
      * @return array<string, mixed>
      */
-    private static function vehicleRegistration(?Vehicle $vehicle): array
+    private static function vehicleRegistration(?Vehicle $vehicle, ?DriverProfile $profile): array
     {
         // F2-4: the single legacy image, or the two sides. One side alone is a start, not a finish.
         $papers = $vehicle?->documents->filter(fn ($doc) => $doc->type->isRegistration()) ?? collect();
@@ -131,10 +194,9 @@ final class DriverChecklist
                 $expired => 'expired',
                 // A vehicle document is approved with the vehicle it belongs to: the reviewer
                 // decides on the car, not on each page of its paperwork separately.
-                $vehicle->verification_status === VehicleVerificationStatus::Approved => 'approved',
-                default => 'under_review',
+                default => self::carStatus($vehicle, $profile),
             },
-            'rejectionReason' => null,
+            'rejectionReason' => self::carRejection($vehicle, $profile),
             'expiresAt' => $document?->expires_at?->toIso8601String(),
         ];
     }
@@ -145,24 +207,35 @@ final class DriverChecklist
      *
      * @return array<string, mixed>
      */
-    private static function vehicleDetails(?Vehicle $vehicle): array
+    private static function vehicleDetails(?Vehicle $vehicle, ?DriverProfile $profile): array
     {
         return [
             'key' => 'vehicle_details',
             'status' => match (true) {
                 $vehicle === null => 'not_started',
-                $vehicle->verification_status === VehicleVerificationStatus::Approved => 'approved',
-                $vehicle->verification_status === VehicleVerificationStatus::Suspended => 'action_needed',
-                default => 'under_review',
+                default => self::carStatus($vehicle, $profile),
             },
-            /*
-             * No per-vehicle reason column exists, and inventing one here would publish an
-             * always-null field. A suspension reason lives on the driver profile, because
-             * suspending a car is a decision about the driver who drives it.
-             */
-            'rejectionReason' => null,
+            'rejectionReason' => self::carRejection($vehicle, $profile),
             'expiresAt' => null,
         ];
+    }
+
+    private static function carStatus(Vehicle $vehicle, ?DriverProfile $profile): string
+    {
+        return match (true) {
+            $vehicle->verification_status === VehicleVerificationStatus::Approved => 'approved',
+            $vehicle->verification_status === VehicleVerificationStatus::Rejected,
+            $vehicle->verification_status === VehicleVerificationStatus::Suspended => 'action_needed',
+            in_array($profile?->status, [DriverProfileStatus::PendingReview, DriverProfileStatus::Approved], true) => 'under_review',
+            default => 'in_progress',
+        };
+    }
+
+    private static function carRejection(?Vehicle $vehicle, ?DriverProfile $profile): ?string
+    {
+        return $vehicle?->verification_status === VehicleVerificationStatus::Rejected
+            ? $profile?->rejection_reason
+            : null;
     }
 
     /**
@@ -176,35 +249,33 @@ final class DriverChecklist
      * @param  array<int, array<string, mixed>>  $items
      * @param  Collection<string, UserVerification>  $verifications
      */
-    private static function overall(?DriverProfileStatus $status, array $items, $verifications): string
+    private static function overall(?DriverProfile $profile, array $items, $verifications): string
     {
+        $status = $profile?->status;
+
         if ($status === DriverProfileStatus::Suspended) {
             return 'suspended';
         }
 
         $statuses = array_column($items, 'status');
 
-        if (in_array('expired', $statuses, true)) {
-            // The design calls this `renewal`: "publishing and driving are paused until your
-            // renewed licence is approved".
+        if (in_array('expired', $statuses, true) || $status === DriverProfileStatus::ExpiredDocuments) {
             return 'renewal_required';
         }
 
-        if (in_array('action_needed', $statuses, true)) {
+        if (in_array('action_needed', $statuses, true) || $status === DriverProfileStatus::Rejected) {
             return 'action_required';
         }
 
         if ($status === DriverProfileStatus::Approved) {
-            // `expiring` is a sub-state of verified in the design — the chip still reads
-            // "Verified" while the headline warns about the date.
-            return self::licenceExpiringSoon($verifications) ? 'expiring' : 'verified';
+            return self::licenceExpiringSoon($verifications, $profile) ? 'expiring' : 'verified';
         }
 
-        if ($status === DriverProfileStatus::PendingReview || in_array('under_review', $statuses, true)) {
+        if ($status === DriverProfileStatus::PendingReview) {
             return 'under_review';
         }
 
-        return in_array('approved', $statuses, true) || in_array('in_progress', $statuses, true)
+        return array_intersect(['approved', 'in_progress', 'under_review'], $statuses) !== []
             ? 'in_progress'
             : 'not_started';
     }
@@ -212,27 +283,27 @@ final class DriverChecklist
     /**
      * @param  Collection<string, UserVerification>  $verifications
      */
-    private static function licenceExpiringSoon($verifications): bool
+    private static function licenceExpiringSoon($verifications, ?DriverProfile $profile): bool
     {
-        $licence = $verifications->get(VerificationType::DrivingLicence->value);
+        $expiry = self::licenceExpiry($verifications, $profile);
 
-        if ($licence?->expires_at === null) {
+        if ($expiry === null) {
             return false;
         }
 
-        // The window is a platform setting rather than a literal: v3 says renewal deadlines are
-        // configurable and "don't assume 30 days".
         $days = (int) config('rafeeq.verification.licence_expiry_warning_days', 30);
 
-        return $licence->expires_at->isBetween(now(), now()->addDays($days));
+        return $expiry->isBetween(now(), now()->addDays($days));
     }
 
     /**
      * @param  Collection<string, UserVerification>  $verifications
      */
-    private static function licenceExpiry($verifications): ?string
+    private static function licenceExpiry($verifications, ?DriverProfile $profile): ?CarbonInterface
     {
-        return $verifications->get(VerificationType::DrivingLicence->value)
-            ?->expires_at?->toIso8601String();
+        $licence = $verifications->get(VerificationType::DrivingLicence->value);
+
+        return $licence?->expires_at
+            ?? ($licence?->status === VerificationStatus::Approved ? $profile?->licence_expiry : null);
     }
 }

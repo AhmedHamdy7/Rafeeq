@@ -40,7 +40,7 @@ use Illuminate\Support\Facades\DB;
  */
 final readonly class StartTripAction
 {
-    public function execute(ScheduledTrip $trip): TripSession
+    public function assertMayStart(ScheduledTrip $trip): void
     {
         $offer = $trip->commuteOffer;
 
@@ -54,6 +54,11 @@ final readonly class StartTripAction
 
         $this->assertTripIsStartable($trip);
         $this->assertWithinStartWindow($trip);
+    }
+
+    public function execute(ScheduledTrip $trip): TripSession
+    {
+        $this->assertMayStart($trip);
 
         return DB::transaction(function () use ($trip): TripSession {
             /*

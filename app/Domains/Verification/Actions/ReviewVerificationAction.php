@@ -40,6 +40,10 @@ final readonly class ReviewVerificationAction
     {
         $this->assertUnderReview($verification);
 
+        if ($expiresAt === null && $verification->type === VerificationType::DrivingLicence) {
+            $expiresAt = DriverProfile::query()->whereKey($verification->user_id)->first()?->licence_expiry;
+        }
+
         return DB::transaction(function () use ($verification, $reviewer, $expiresAt): UserVerification {
             $verification->status = VerificationStatus::Approved->value;
             $verification->reviewed_by = $reviewer->id;

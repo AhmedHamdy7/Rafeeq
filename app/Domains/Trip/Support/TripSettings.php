@@ -24,6 +24,11 @@ final class TripSettings
         return max(1, (int) self::get('trip.start_window_minutes'));
     }
 
+    public static function startingSoonMinutes(): int
+    {
+        return max(1, (int) self::get('trip.driver_starting_soon_minutes'));
+    }
+
     /** The wait timer's grace period, before a passenger counts as not there. */
     public static function waitGraceSeconds(): int
     {

@@ -186,6 +186,7 @@ final readonly class SweepDelayedTripsAction
 
             $locked->forceFill([
                 'status' => ScheduledTripStatus::Expired->value,
+                'expired_at' => now(),
                 // Stamped even if the ladder skipped it, so a day that expired without ever being
                 // swept still records that it was in violation.
                 'delay_violation_at' => $locked->delay_violation_at ?? now(),

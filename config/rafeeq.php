@@ -553,6 +553,8 @@ return [
          */
         'start_window_minutes' => 90,
 
+        'driver_starting_soon_minutes' => 30,
+
         /*
          * How long past the promised arrival a driver is left alone before the run is offered up
          * for closing, and how much longer "Still driving" buys her (Feature 03 v5: "+15m past

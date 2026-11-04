@@ -6,7 +6,11 @@ use App\Domains\Admin\Models\AdminUser;
 use App\Domains\Booking\Enums\BookingStatus;
 use App\Domains\Booking\Enums\PaymentStatus;
 use App\Domains\Booking\Enums\PaymentType;
+use App\Domains\Booking\Enums\SeatRequestCommitment;
+use App\Domains\Booking\Enums\SeatRequestStatus;
+use App\Domains\Booking\Enums\SwitchReason;
 use App\Domains\Booking\Models\Booking;
+use App\Domains\Booking\Models\SeatRequest;
 use App\Domains\Commute\Enums\CommuteAudience;
 use App\Domains\Commute\Enums\CommuteDirection;
 use App\Domains\Commute\Enums\CommuteLocationType;
@@ -21,6 +25,7 @@ use App\Domains\Commute\Models\CommuteSchedule;
 use App\Domains\Commute\Models\ScheduledTrip;
 use App\Domains\Commute\Support\DepartureTimeCalculator;
 use App\Domains\Commute\Support\SeatPricing;
+use App\Domains\Driver\Enums\DriverProfileStatus;
 use App\Domains\Driver\Enums\VehicleTier;
 use App\Domains\Driver\Enums\VehicleVerificationStatus;
 use App\Domains\Driver\Models\DriverProfile;
@@ -30,7 +35,9 @@ use App\Domains\Geo\Models\Corridor;
 use App\Domains\Geo\Models\Place;
 use App\Domains\Geo\Support\StraightLineGeoEngine;
 use App\Domains\Geo\ValueObjects\BoundingBox;
+use App\Domains\Identity\Actions\EnrollInitialRoleAction;
 use App\Domains\Identity\Enums\AccountStatus;
+use App\Domains\Identity\Enums\Capability;
 use App\Domains\Identity\Enums\OrgType;
 use App\Domains\Identity\Enums\ProfileStatus;
 use App\Domains\Identity\Enums\RegisteredRole;
@@ -48,11 +55,15 @@ use App\Domains\Shared\ValueObjects\Distance;
 use App\Domains\Trip\Enums\TripSessionStatus;
 use App\Domains\Trip\Models\TripSession;
 use App\Domains\Verification\Enums\PublicTrustTier;
+use App\Domains\Verification\Enums\VerificationStatus;
 use App\Domains\Verification\Enums\VerificationType;
 use App\Domains\Verification\Models\TrustScore;
 use App\Domains\Verification\Models\UserVerification;
+use DateTimeInterface;
 use Illuminate\Database\Console\Seeds\WithoutModelEvents;
+use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Seeder;
+use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\DB;
 use RuntimeException;
 
@@ -126,6 +137,35 @@ class DemoDataSeeder extends Seeder
      *
      * @var list<array<string, string>>
      */
+    private const DRIVER_HOME_STATES = [
+        ['+201055557001', 'Scheduled', 'scheduled'],
+        ['+201055557002', 'Soon', 'starting_soon'],
+        ['+201055557003', 'Active', 'in_progress'],
+        ['+201055557004', 'NotStarted', 'not_started'],
+        ['+201055557005', 'Late', 'late'],
+        ['+201055557006', 'Expired', 'expired_today'],
+        ['+201055557007', 'SeatOpened', 'seat_opened'],
+        ['+201055557008', 'Rejoined', 'switched_rejoined'],
+        ['+201055557009', 'Left', 'switched_left'],
+        ['+201055557011', 'Review', 'under_review'],
+        ['+201055557012', 'Action', 'action_required'],
+        ['+201055557013', 'Expiring', 'expiring'],
+        ['+201055557014', 'Renewal', 'renewal_required'],
+        ['+201055557015', 'Suspended', 'suspended'],
+    ];
+
+    private const DRIVER_HOME_RUN_STATES = [
+        'scheduled' => true,
+        'starting_soon' => true,
+        'in_progress' => true,
+        'not_started' => true,
+        'late' => true,
+        'expired_today' => true,
+        'seat_opened' => true,
+        'switched_rejoined' => true,
+        'switched_left' => true,
+    ];
+
     private const TESTERS = [
         ['name' => 'أحمد إبراهيم', 'first' => 'أحمد', 'phone' => '+201125847213'],
         ['name' => 'عمر علي', 'first' => 'عمر', 'phone' => '+201014531739'],
@@ -213,6 +253,8 @@ class DemoDataSeeder extends Seeder
             'profile_status' => ProfileStatus::BasicComplete,
             'trust_level' => 3,
         ]);
+
+        EnrollInitialRoleAction::grant($driver, [Capability::Driver]);
 
         // Three approved levels: enough to clear a `min_trust_level` of 3, which is what the
         // reference commute asks for, without pretending everybody is fully verified.
@@ -587,6 +629,249 @@ class DemoDataSeeder extends Seeder
     }
 
     /**
+     * @return list<string>
+     */
+    public function addDriverHomeStates(): array
+    {
+        $admin = AdminUser::query()->firstOrFail();
+        $organization = Organization::query()->first();
+        $corridor = Corridor::query()->firstOrFail();
+        $origin = Place::query()->where('name', 'like', '%الرحاب%')->first() ?? Place::query()->firstOrFail();
+        $destination = Place::query()->where('id', '!=', $origin->id)->firstOrFail();
+
+        $drivers = [];
+
+        foreach (self::DRIVER_HOME_STATES as $index => [$phone, $first, $state]) {
+            $drivers[$state] = User::query()->where('phone_e164', $phone)->first()
+                ?? Model::unguarded(fn (): User => $this->seedDriverWithCommute([
+                    'name' => "{$first} Demo",
+                    'first' => $first,
+                    'phone' => $phone,
+                    'time' => '07:00:00',
+                    'tier' => VehicleTier::Standard,
+                    'seats' => 3,
+                    'plate' => 'د ه '.(700 + $index),
+                    'make' => 'Toyota',
+                    'model' => 'Corolla',
+                    'colour' => 'أبيض',
+                    'trips' => 40,
+                    'onTime' => 95.0,
+                    'audience' => CommuteAudience::AnyVerified,
+                ], $organization, $admin, $corridor, $origin, $destination));
+
+            $drivers[$state]->forceFill(['initial_role_selected_at' => $drivers[$state]->initial_role_selected_at ?? now()])->save();
+        }
+
+        Artisan::call('commutes:generate-trips');
+
+        $riders = [];
+
+        foreach (['+201055557101' => 'ليلى', '+201055557102' => 'سلمى', '+201055557103' => 'نور'] as $phone => $first) {
+            $riders[] = User::query()->where('phone_e164', $phone)->first() ?? tap(User::factory()->woman()->create([
+                'phone_e164' => $phone,
+                'full_name' => "{$first} Demo",
+                'public_first_name' => $first,
+                'registered_role' => RegisteredRole::Passenger,
+                'account_status' => AccountStatus::Active,
+                'profile_status' => ProfileStatus::BasicComplete,
+                'initial_role_selected_at' => now(),
+            ]), fn (User $rider) => EnrollInitialRoleAction::grant($rider, [Capability::Passenger]));
+        }
+
+        $report = [];
+
+        foreach (self::DRIVER_HOME_STATES as [$phone, $first, $state]) {
+            $this->applyDriverHomeState($state, $drivers[$state], $riders);
+            $report[] = "{$phone}  {$first}  {$state}";
+        }
+
+        return $report;
+    }
+
+    /**
+     * @param  list<User>  $riders
+     */
+    private function applyDriverHomeState(string $state, User $driver, array $riders): void
+    {
+        $profile = DriverProfile::query()->whereKey($driver->id)->firstOrFail();
+        $offer = CommuteOffer::query()->where('driver_profile_id', $driver->id)->with('schedule')->firstOrFail();
+
+        match ($state) {
+            'under_review' => $this->setDriverVerification($profile, DriverProfileStatus::PendingReview, VehicleVerificationStatus::Pending),
+            'action_required' => $this->setDemoLicence($driver, VerificationStatus::ActionNeeded, 'The licence photo is too blurry to read. Please upload it again.', null),
+            'expiring' => $this->setDemoLicence($driver, VerificationStatus::Approved, null, now()->addDays(10)),
+            'renewal_required' => $this->setDemoLicence($driver, VerificationStatus::Approved, null, now()->subDay()),
+            'suspended' => $this->setDriverVerification($profile, DriverProfileStatus::Suspended, VehicleVerificationStatus::Suspended, 'Repeated no-show reports.'),
+            default => null,
+        };
+
+        $minutes = match ($state) {
+            'starting_soon' => 25,
+            'in_progress' => -8,
+            'not_started' => -1,
+            'late' => -10,
+            'expired_today' => -30,
+            default => 130,
+        };
+
+        $trip = $this->moveFirstDay($offer, $minutes);
+
+        if (isset(self::DRIVER_HOME_RUN_STATES[$state])) {
+            $this->seatOnce($riders[0], $trip);
+            $this->waitOnce($riders[1], $offer, null);
+            $this->waitOnce($riders[2], $offer, $trip);
+        }
+
+        match ($state) {
+            'in_progress' => $this->startDemoRun($trip),
+            'expired_today' => $trip->forceFill(['status' => ScheduledTripStatus::Expired->value, 'expired_at' => now()->subMinutes(10)])->save(),
+            'seat_opened' => $this->endDemoSeat($riders[0], $trip, BookingStatus::CancelledByPassenger, null),
+            'switched_rejoined' => $this->switchDemoSeat($riders[0], $trip, $offer, true),
+            'switched_left' => $this->switchDemoSeat($riders[0], $trip, $offer, false),
+            default => null,
+        };
+    }
+
+    private function moveFirstDay(CommuteOffer $offer, int $minutesFromNow): ScheduledTrip
+    {
+        $timezone = $offer->schedule->timezone;
+        $today = now($timezone)->toDateString();
+
+        $trip = ScheduledTrip::query()
+            ->where('commute_offer_id', $offer->id)
+            ->where('trip_date', '>=', $today)
+            ->orderBy('trip_date')
+            ->firstOrFail();
+
+        TripSession::query()->where('scheduled_trip_id', $trip->id)->delete();
+
+        $departure = now()->addMinutes($minutesFromNow)->startOfMinute();
+
+        $trip->forceFill([
+            'status' => ScheduledTripStatus::Scheduled->value,
+            'trip_date' => $today,
+            'departure_at' => $departure,
+            'departure_local' => $departure->copy()->setTimezone($timezone)->format('Y-m-d H:i:s'),
+            'promised_arrival_at' => $departure->copy()->addMinutes(70),
+            'delay_driver_reminded_at' => null,
+            'delay_passengers_warned_at' => null,
+            'delay_violation_at' => null,
+            'expired_at' => null,
+        ])->save();
+
+        return $trip->refresh();
+    }
+
+    private function seatOnce(User $rider, ScheduledTrip $trip): void
+    {
+        $booking = Booking::query()
+            ->where('scheduled_trip_id', $trip->id)
+            ->where('passenger_user_id', $rider->id)
+            ->first();
+
+        if ($booking === null) {
+            $this->seatOn($rider, $trip->load('commuteOffer'));
+
+            return;
+        }
+
+        if ($booking->status !== BookingStatus::Confirmed) {
+            $booking->forceFill(['status' => BookingStatus::Confirmed->value, 'cancelled_at' => null, 'cancelled_reason' => null])->save();
+            $trip->increment('seats_taken');
+        }
+    }
+
+    private function waitOnce(User $rider, CommuteOffer $offer, ?ScheduledTrip $trip): void
+    {
+        $request = SeatRequest::query()
+            ->where('passenger_user_id', $rider->id)
+            ->where('commute_offer_id', $offer->id)
+            ->where('status', SeatRequestStatus::Waitlisted->value)
+            ->first();
+
+        if ($request !== null) {
+            $request->forceFill(['scheduled_trip_id' => $trip?->id])->save();
+
+            return;
+        }
+
+        SeatRequest::factory()->waitlisted()->create([
+            'passenger_user_id' => $rider->id,
+            'commute_offer_id' => $offer->id,
+            'scheduled_trip_id' => $trip?->id,
+            'commitment' => $trip === null ? SeatRequestCommitment::Recurring : SeatRequestCommitment::Trial,
+            'requested_days_mask' => $trip === null ? DaysMask::weekdaysSunToThu()->value : null,
+        ]);
+    }
+
+    private function startDemoRun(ScheduledTrip $trip): void
+    {
+        $session = new TripSession;
+        $session->fill(['scheduled_trip_id' => $trip->id, 'started_at' => now()->subMinutes(10)]);
+        $session->current_status = TripSessionStatus::Preparing->value;
+        $session->save();
+
+        $trip->forceFill(['status' => ScheduledTripStatus::Preparing->value])->save();
+    }
+
+    private function endDemoSeat(User $rider, ScheduledTrip $trip, BookingStatus $status, ?string $reason): void
+    {
+        $this->seatOnce($rider, $trip);
+
+        Booking::query()
+            ->where('scheduled_trip_id', $trip->id)
+            ->where('passenger_user_id', $rider->id)
+            ->firstOrFail()
+            ->forceFill(['status' => $status->value, 'cancelled_at' => now(), 'cancelled_reason' => $reason])
+            ->save();
+
+        $trip->decrement('seats_taken');
+    }
+
+    private function switchDemoSeat(User $rider, ScheduledTrip $trip, CommuteOffer $offer, bool $rejoined): void
+    {
+        $this->endDemoSeat($rider, $trip, BookingStatus::CancelledByPassenger, SwitchReason::Voluntary->value);
+
+        if ($rejoined) {
+            $this->waitOnce($rider, $offer, $trip);
+        }
+    }
+
+    private function setDriverVerification(
+        DriverProfile $profile,
+        DriverProfileStatus $status,
+        VehicleVerificationStatus $vehicle,
+        ?string $reason = null,
+    ): void {
+        $profile->forceFill(['status' => $status->value, 'rejection_reason' => $reason])->save();
+
+        Vehicle::query()
+            ->where('driver_profile_id', $profile->user_id)
+            ->update(['verification_status' => $vehicle->value]);
+    }
+
+    private function setDemoLicence(User $driver, VerificationStatus $status, ?string $reason, ?DateTimeInterface $expiresAt): void
+    {
+        $licence = UserVerification::query()
+            ->where('user_id', $driver->id)
+            ->where('type', VerificationType::DrivingLicence->value)
+            ->first() ?? UserVerification::factory()->create([
+                'user_id' => $driver->id,
+                'type' => VerificationType::DrivingLicence,
+            ]);
+
+        $licence->forceFill([
+            'status' => $status->value,
+            'rejection_reason' => $reason,
+            'expires_at' => $expiresAt,
+        ])->save();
+
+        if ($expiresAt !== null) {
+            DriverProfile::query()->whereKey($driver->id)->update(['licence_expiry' => $expiresAt]);
+        }
+    }
+
+    /**
      * @param  array<string, mixed>  $spec
      * @return array{points: int, rules: int}
      */
@@ -747,6 +1032,8 @@ class DemoDataSeeder extends Seeder
             'profile_status' => ProfileStatus::BasicComplete,
             'trust_level' => 3,
         ]);
+
+        EnrollInitialRoleAction::grant($tester, [Capability::Passenger]);
 
         foreach ([VerificationType::Phone, VerificationType::GovernmentId, VerificationType::Selfie] as $type) {
             UserVerification::factory()->approved()->create([

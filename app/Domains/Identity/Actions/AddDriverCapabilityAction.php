@@ -36,7 +36,10 @@ final readonly class AddDriverCapabilityAction
         }
 
         DB::transaction(function () use ($user): void {
-            EnrollInitialRoleAction::grant($user, [Capability::Driver]);
+            EnrollInitialRoleAction::grant($user, [
+                ...($user->registered_role === null ? [] : Capability::forRegisteredRole($user->registered_role)),
+                Capability::Driver,
+            ]);
 
             // Only a person with no mode at all gets one; anybody else stays where she is.
             $preference = UserPreference::forUser($user);
