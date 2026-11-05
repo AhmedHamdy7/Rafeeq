@@ -186,6 +186,9 @@ class DemoDataSeeder extends Seeder
         $matcher = app(MatchDemandToExistingCommutesAction::class);
         CommuteDemand::query()->with('passenger')->get()->each(fn (CommuteDemand $demand) => $matcher->execute($demand));
 
+        // Omar and Ahmed: a full account on both sides, with trips on the days ahead.
+        app(TesterAccountsSeeder::class)->applyTesterAccounts();
+
         $this->announce();
     }
 
@@ -259,13 +262,35 @@ class DemoDataSeeder extends Seeder
             'verification_status' => VehicleVerificationStatus::Approved,
         ]);
 
+        $this->publishCommute($profile, $vehicle, $spec, $corridor, $origin, $destination);
+
+        return $driver;
+    }
+
+    /**
+     * One published recurring commute for a driver who already has a profile and a car.
+     *
+     * Protected so `TesterAccountsSeeder` can give an EXISTING account commutes of its own. Beyond
+     * the driver spec it reads `direction`, `daysMask`, `originAddress` and `destinationAddress`; a
+     * return commute swaps the two places and says so.
+     *
+     * @param  array<string, mixed>  $spec
+     */
+    protected function publishCommute(
+        DriverProfile $profile,
+        Vehicle $vehicle,
+        array $spec,
+        Corridor $corridor,
+        Place $origin,
+        Place $destination,
+    ): CommuteOffer {
         $offer = CommuteOffer::create([
             'driver_profile_id' => $profile->user_id,
             'vehicle_id' => $vehicle->id,
             'corridor_id' => $corridor->id,
             'commute_type' => CommuteType::Recurring,
             'status' => CommuteOfferStatus::Published,
-            'direction' => CommuteDirection::ToWork,
+            'direction' => $spec['direction'] ?? CommuteDirection::ToWork,
             'seats_total' => $spec['seats'],
             'max_detour_minutes' => 12,
             'max_walk_minutes' => 12,
@@ -304,8 +329,8 @@ class DemoDataSeeder extends Seeder
         $this->addSuggestions($offer, $spec);
 
         foreach ([
-            [$origin, CommuteLocationType::Origin, 'الرحاب، بوابة ٢', 0],
-            [$destination, CommuteLocationType::Destination, 'القرية الذكية، مبنى B6', 999],
+            [$origin, CommuteLocationType::Origin, $spec['originAddress'] ?? 'الرحاب، بوابة ٢', 0],
+            [$destination, CommuteLocationType::Destination, $spec['destinationAddress'] ?? 'القرية الذكية، مبنى B6', 999],
         ] as [$place, $type, $address, $sequence]) {
             CommuteLocation::create([
                 'commute_offer_id' => $offer->id,
@@ -321,14 +346,14 @@ class DemoDataSeeder extends Seeder
 
         CommuteWeekdaySchedule::fillFromSchedule(CommuteSchedule::create([
             'commute_offer_id' => $offer->id,
-            'days_mask' => DaysMask::weekdaysSunToThu()->value,
+            'days_mask' => $spec['daysMask'] ?? DaysMask::weekdaysSunToThu()->value,
             'departure_time' => $spec['time'],
             'timezone' => 'Africa/Cairo',
             'start_date' => now()->toDateString(),
             'end_date' => now()->addMonths(4)->toDateString(),
         ]));
 
-        return $driver;
+        return $offer;
     }
 
     /**
@@ -851,8 +876,8 @@ class DemoDataSeeder extends Seeder
         $command->line('   then request a code for any of the phones below and enter 123456.');
         $command->line('   It is refused outright on APP_ENV=production, so it cannot ship by accident.');
         $command->newLine();
-        $command->line('   +201125847213  Ahmed Ibrahim  — passenger: confirmed seat, saved search, a request');
-        $command->line('   +201014531739  Omar Aly       — passenger: confirmed seat, saved search, a request');
+        $command->line('   +201125847213  Ahmed Ibrahim  — driver AND passenger: commutes, riders, requests, seats ahead, history');
+        $command->line('   +201014531739  Omar Aly       — driver AND passenger: commutes, riders, requests, seats ahead, history');
         $command->line('   +201033334444  Mariam         — passenger: bookings, a RATED trip, a saved search');
         $command->line('   +201011112222  Nour           — driver: published commute, group, pending requests');
         $command->line('   +201055559901  Karim          — passenger, a MAN: women-only commutes answer canRequest false');

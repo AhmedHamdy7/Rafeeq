@@ -557,13 +557,14 @@ from it.
 
 | Phone | Who | What they already have |
 |---|---|---|
-| `01125847213` | Ahmed Ibrahim | Verified passenger · confirmed seat · saved search · standing request |
+| `01125847213` | Ahmed Ibrahim | **Both sides.** Driver: verified 5/5, a reviewed car, a weekday and a weekend commute, riders on the days ahead, requests in every state, past runs with ratings. Passenger: about 10 seats ahead, requests in every state, an open seat offer, every status in History, demands, recent searches, notifications |
 | `01014531739` | Omar Aly | The same |
 | `01033334444` | Mariam | Verified passenger · bookings · **a completed, rated trip** |
 | `01011112222` | Nour | Approved **driver** · published commute · group · pending seat requests |
 
-Six published commutes, ~130 bookable days, one revealed rating pair. Start at step 7 with Mariam or
-one of the testers; start at step 11 with Nour. Every OTP is the fixed development code.
+Ten published commutes, with days generated about a month ahead. Start at step 7 with Mariam or one of
+the testers; start at step 11 with Nour or the testers. Every OTP is the fixed development code. As the
+days pass, `php artisan demo:refresh` puts the testers' seats back onto the days ahead.
 
 ---
 
@@ -4843,6 +4844,7 @@ exist, and every live endpoint must be named here.
 
 | Date | Change |
 |---|---|
+| 2026-11-05 | 🧪 **Omar's and Ahmed's staging accounts are now full on both sides** (driver and passenger, with trips on the days ahead): see "Accounts seeded on staging" in 2.1. No API change. |
 | 2026-11-05 | 🛣️ **Create Commute gaps.** **2 new endpoints:** `GET /commutes/options` and `GET /commutes/{commute}/route-preview`. 🔴 **Behaviour changes:** the form and its drafts no longer need a verified identity, and only publishing and running a commute do (PROF-19), so `GET /commutes` and `POST /commutes` no longer answer `VERIFICATION_REQUIRED`. Every field on `POST /commutes` is optional, `vehicleId` and `seatsTotal` can be `null` on a draft, and `vehicle` is a new `missing[]` value. `allowsCustomPickup` defaults to `true`. `startDate` and `endDate` are optional. New `weekdays[]` on a commute, `?status=` on `GET /commutes`, and `DELETE` works on a draft. New error `COMMUTE_ROUTE_UNAVAILABLE`. `GET /driver/vehicles` answers an empty list, not `404`, before the driver has a profile. Publish refusals corrected. |
 | 2026-11-05 | 📝 **Create Commute round 2.** New `createdAt`, `updatedAt` and `formStep` on a commute. New `weekStart[]` on `DRIVER_COMMISSION_OVERDUE`. `PUT /commutes/{commute}/route` recalculates the estimated departure. Drop-offs too far from the road are now refused, and every far stop is listed. 🔴 A suspended driver can no longer edit a draft. New demo states `CC-WINDOW-PASSED`, `CC-PENDING-REVIEW` and `CC-DRIVER-REJECTED`. |
 | 2026-11-05 | 🗓️ **Weekday rows.** Every commute with a schedule now has `weekdays[]`, filled by a migration where it was empty. `DRIVER_NOT_ELIGIBLE` has its own message for a suspended driver. |
