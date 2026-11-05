@@ -3,7 +3,9 @@
 namespace App\Console\Commands;
 
 use Database\Seeders\DemoDataSeeder;
+use Database\Seeders\TesterAccountsSeeder;
 use Illuminate\Console\Command;
+use Illuminate\Database\Eloquent\Model;
 
 /**
  * Keeps a demo/staging environment usable as the days pass: every demo passenger back on an
@@ -27,6 +29,11 @@ final class RefreshDemoData extends Command
 
         foreach (app(DemoDataSeeder::class)->refreshTesters() as $row) {
             $this->line(sprintf('  %s  %s  %d new matches', $row['phone'], $row['booked'] ? 'seated on an upcoming trip' : 'already has an upcoming trip', $row['matches']));
+        }
+
+        // Omar and Ahmed: everything on both sides, topped up onto the days ahead.
+        foreach (Model::unguarded(fn () => app(TesterAccountsSeeder::class)->applyTesterAccounts()) as $line) {
+            $this->line("  {$line}");
         }
 
         $this->info('Demo data refreshed.');

@@ -1,7 +1,9 @@
 <?php
 
 use App\Domains\Booking\Models\Booking;
+use App\Domains\Booking\Models\SeatRequest;
 use App\Domains\Commute\Models\CommuteLocation;
+use App\Domains\Commute\Models\CommuteOffer;
 use App\Domains\Commute\Models\CommuteRule;
 use App\Domains\Commute\Models\ScheduledTrip;
 use App\Domains\Driver\Models\Vehicle;
@@ -38,13 +40,16 @@ it('puts a tester whose trips are all in the past back on an upcoming one', func
         ->whereIn('id', Booking::query()->where('passenger_user_id', $this->omar->id)->select('scheduled_trip_id'))
         ->update(['departure_at' => now()->subDays(2)]);
 
-    $this->actingAs($this->omar, 'sanctum')->getJson('/api/v1/home')->assertJsonPath('data.nextJourney', null);
+    // Nothing ahead: at most the last ride still waiting for his stars, never a journey to come.
+    $before = $this->actingAs($this->omar, 'sanctum')->getJson('/api/v1/home')->assertOk()->json('data.nextJourney');
+    expect($before['phase'] ?? 'completed')->toBe('completed');
 
     $this->artisan('demo:refresh')->expectsOutputToContain('seated on an upcoming trip')->assertSuccessful();
 
     $this->actingAs($this->omar, 'sanctum')->getJson('/api/v1/home')
         ->assertOk()
-        ->assertJsonPath('data.nextJourney.driver.publicFirstName', fn (?string $name) => $name !== null);
+        ->assertJsonPath('data.nextJourney.driver.publicFirstName', fn (?string $name) => $name !== null)
+        ->assertJsonPath('data.nextJourney.phase', fn (?string $phase) => $phase !== 'completed');
 });
 
 it('is refused in production', function () {
@@ -201,4 +206,63 @@ it('refuses to add Create Commute states in production', function () {
     app()->detectEnvironment(fn () => 'production');
 
     $this->artisan('demo:create-commute-states')->assertFailed();
+});
+
+/**
+ * Omar and Ahmed carry a full account on both sides, with trips on the days ahead, and a second run
+ * adds nothing that is already there.
+ */
+it('gives Omar and Ahmed a full driver and passenger account with trips ahead', function () {
+    $this->assertSame(2, collect(['+201014531739', '+201125847213'])->filter(function (string $phone) {
+        $tester = User::query()->where('phone_e164', $phone)->sole();
+
+        $this->actingAs($tester, 'sanctum');
+
+        // Driver: verified 5 of 5 items, two commutes, days ahead with riders, an inbox.
+        $checklist = $this->getJson('/api/v1/driver/verification')->assertOk()->json('data');
+        expect($checklist['overall'])->toBe('verified')->and($checklist['completed'])->toBe(5);
+
+        $this->getJson('/api/v1/commutes')->assertOk()->assertJsonPath('data', fn (array $commutes) => count($commutes) >= 2);
+
+        $statuses = collect($this->getJson('/api/v1/driver/seat-requests?perPage=50')->assertOk()->json('data'))->pluck('status')->unique();
+        expect($statuses)->toContain('PENDING', 'COUNTEROFFERED', 'WAITLISTED', 'REJECTED');
+
+        // Passenger: seats on several days ahead, and every status in History.
+        $upcoming = $this->getJson('/api/v1/my-bookings?scope=upcoming&perPage=50')->assertOk()->json('data');
+        $recurring = collect($upcoming)->filter(fn (array $b) => ($b['membership']['commitment'] ?? null) === 'recurring');
+
+        expect(count($upcoming))->toBeGreaterThanOrEqual(5)
+            ->and($recurring->count())->toBeGreaterThanOrEqual(5);
+
+        // Home leads with the next journey, not an old trip waiting to be seen.
+        $next = $this->getJson('/api/v1/home')->assertOk()->json('data.nextJourney');
+        expect($next)->not->toBeNull()->and($next['phase'] ?? null)->not->toBe('completed');
+
+        $past = collect($this->getJson('/api/v1/my-bookings?scope=past&perPage=50')->assertOk()->json('data'))->pluck('status')->unique();
+        expect($past)->toContain('COMPLETED', 'CANCELLED_BY_DRIVER', 'CANCELLED_BY_PASSENGER', 'NO_SHOW', 'ENDED_EARLY');
+
+        $requests = collect($this->getJson('/api/v1/seat-requests?perPage=50')->assertOk()->json('data'))->pluck('status');
+        expect($requests)->toContain('PENDING', 'COUNTEROFFERED', 'WAITLISTED', 'APPROVED');
+
+        $this->getJson('/api/v1/seat-offers?status=OPEN')->assertOk()->assertJsonCount(1, 'data');
+        $this->getJson('/api/v1/commute-demands')->assertOk()->assertJsonPath('data', fn (array $demands) => count($demands) >= 2);
+        $this->getJson('/api/v1/me/recent-searches')->assertOk()->assertJsonPath('data', fn (array $searches) => count($searches) >= 3);
+        $this->getJson('/api/v1/notifications')->assertOk()->assertJsonPath('data', fn (array $rows) => count($rows) >= 3);
+
+        return true;
+    })->count());
+});
+
+it('adds nothing twice when demo:refresh runs again', function () {
+    $count = fn () => [Booking::query()->count(), SeatRequest::query()->count(), CommuteOffer::query()->count()];
+    $before = $count();
+
+    $this->artisan('demo:refresh')->assertSuccessful();
+    $after = $count();
+
+    $this->artisan('demo:refresh')->assertSuccessful();
+
+    expect($count())->toBe($after)
+        ->and($after[1])->toBe($before[1])
+        ->and($after[2])->toBe($before[2]);
 });
