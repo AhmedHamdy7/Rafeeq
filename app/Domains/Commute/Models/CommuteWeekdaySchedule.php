@@ -2,6 +2,7 @@
 
 namespace App\Domains\Commute\Models;
 
+use App\Domains\Shared\ValueObjects\DaysMask;
 use Database\Factories\CommuteWeekdayScheduleFactory;
 use Illuminate\Database\Eloquent\Concerns\HasUlids;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
@@ -33,6 +34,17 @@ class CommuteWeekdaySchedule extends Model
             'seats_total' => 'integer',
             'departure_is_computed' => 'boolean',
         ];
+    }
+
+    public static function fillFromSchedule(CommuteSchedule $schedule): void
+    {
+        foreach (DaysMask::fromBits((int) $schedule->days_mask)->bits() as $bit) {
+            $row = new self;
+            $row->commute_offer_id = $schedule->commute_offer_id;
+            $row->weekday_bit = $bit;
+            $row->departure_time = $schedule->departure_time;
+            $row->save();
+        }
     }
 
     public function commuteOffer(): BelongsTo

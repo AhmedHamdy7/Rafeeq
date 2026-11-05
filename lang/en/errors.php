@@ -48,7 +48,9 @@ return [
     // Driver application. The duplicate message is deliberately vague about
     // WHICH detail matched — see the note on the error code.
     'DRIVER_COMMISSION_OVERDUE' => 'Your commission for a past week is still unpaid, so you cannot publish a commute or accept new riders until it is paid. Your booked rides continue. Pay through InstaPay from the Payments screen.',
-    'DRIVER_NOT_ELIGIBLE' => 'You cannot apply to drive yet.',
+    'DRIVER_NOT_ELIGIBLE' => 'Your driver account can\'t do this right now.',
+    'DRIVER_CANNOT_APPLY' => 'You cannot apply to drive yet.',
+    'DRIVER_SUSPENDED' => 'Your driving is suspended, so you can\'t do this right now.',
     'DRIVER_APPLICATION_LOCKED' => 'Your application is being reviewed and cannot be changed. Withdraw it first if you need to make a correction.',
     'DRIVER_APPLICATION_INCOMPLETE' => 'Some required details or documents are still missing.',
     'DRIVER_LICENCE_EXPIRED' => 'Your licence isn\'t valid. Renew it to continue.',

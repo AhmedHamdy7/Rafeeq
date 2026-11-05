@@ -25,6 +25,7 @@ use App\Domains\Commute\Models\CommuteLocation;
 use App\Domains\Commute\Models\CommuteOffer;
 use App\Domains\Commute\Models\CommuteRule;
 use App\Domains\Commute\Models\CommuteSchedule;
+use App\Domains\Commute\Models\CommuteWeekdaySchedule;
 use App\Domains\Commute\Models\ScheduledTrip;
 use App\Domains\Commute\Support\DepartureTimeCalculator;
 use App\Domains\Commute\Support\SeatPricing;
@@ -461,7 +462,7 @@ class DatabaseSeeder extends Seeder
 
     private function seedSchedule(CommuteOffer $offer): CommuteSchedule
     {
-        return CommuteSchedule::create([
+        $schedule = CommuteSchedule::create([
             'commute_offer_id' => $offer->id,
             'days_mask' => DaysMask::weekdaysSunToThu()->value,
             'departure_time' => '07:05:00',
@@ -469,6 +470,10 @@ class DatabaseSeeder extends Seeder
             'start_date' => now()->toDateString(),
             'end_date' => now()->addMonths(4)->toDateString(),
         ]);
+
+        CommuteWeekdaySchedule::fillFromSchedule($schedule);
+
+        return $schedule;
     }
 
     private function seedRules(CommuteOffer $offer): void

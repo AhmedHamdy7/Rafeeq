@@ -73,10 +73,17 @@ final readonly class CreateCommuteOfferAction
     public static function assertDriverMayDraft(DriverProfile $profile): void
     {
         if ($profile->status === DriverProfileStatus::Suspended) {
-            throw DomainException::of(ErrorCode::DriverNotEligible, fields: [
-                'driver' => [strtoupper($profile->status->value)],
-            ]);
+            throw self::notEligible($profile);
         }
+    }
+
+    private static function notEligible(DriverProfile $profile): DomainException
+    {
+        return DomainException::of(
+            ErrorCode::DriverNotEligible,
+            message: $profile->status === DriverProfileStatus::Suspended ? __('errors.DRIVER_SUSPENDED') : null,
+            fields: ['driver' => [strtoupper($profile->status->value)]],
+        );
     }
 
     public static function draftVehicle(DriverProfile $profile, ?string $vehicleId): ?Vehicle
@@ -112,9 +119,7 @@ final readonly class CreateCommuteOfferAction
         }
 
         if ($profile->status !== DriverProfileStatus::Approved) {
-            throw DomainException::of(ErrorCode::DriverNotEligible, fields: [
-                'driver' => [strtoupper($profile->status->value)],
-            ]);
+            throw self::notEligible($profile);
         }
 
         if (! $profile->hasValidLicence()) {

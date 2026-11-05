@@ -1,6 +1,6 @@
 # Create Commute: real responses
 
-Captured from the running API on the `fix/create-commute-open-items` branch. Reset any state with `php artisan demo:create-commute-states --state=CC-READY`. The sign-in code is the server's `RAFEEQ_DEV_OTP_CODE`.
+Captured from the running API on the `fix/commute-weekdays-backfill` branch. Reset any state with `php artisan demo:create-commute-states --state=CC-READY`. The sign-in code is the server's `RAFEEQ_DEV_OTP_CODE`.
 
 The local server uses the straight-line route engine, so `polyline`, distances and minutes are estimates here. The shapes are the same on the live server.
 
@@ -52,7 +52,7 @@ The local server uses the straight-line route engine, so `polyline`, distances a
 
 - **State:** `CC-READY`
 - **Phone:** `+201055557401`
-- **Captured:** 2026-11-05 02:55:46 UTC
+- **Captured:** 2026-11-05 03:32:10 UTC
 
 **GET /commutes/options** → `200`
 
@@ -138,7 +138,7 @@ The local server uses the straight-line route engine, so `polyline`, distances a
 
 - **State:** `CC-CAR-NOT-REVIEWED`
 - **Phone:** `+201055557402`
-- **Captured:** 2026-11-05 02:55:47 UTC
+- **Captured:** 2026-11-05 03:32:11 UTC
 
 **GET /driver/vehicles** → `200`
 
@@ -179,7 +179,7 @@ The local server uses the straight-line route engine, so `polyline`, distances a
 
 - **State:** `CC-CAR-PENDING`
 - **Phone:** `+201055557404`
-- **Captured:** 2026-11-05 02:55:48 UTC
+- **Captured:** 2026-11-05 03:32:12 UTC
 
 **GET /driver/vehicles** → `200`
 
@@ -220,7 +220,7 @@ The local server uses the straight-line route engine, so `polyline`, distances a
 
 - **State:** `CC-CAR-REJECTED`
 - **Phone:** `+201055557403`
-- **Captured:** 2026-11-05 02:55:49 UTC
+- **Captured:** 2026-11-05 03:32:14 UTC
 
 **GET /driver/vehicles** → `200`
 
@@ -261,7 +261,7 @@ The local server uses the straight-line route engine, so `polyline`, distances a
 
 - **State:** `CC-NO-CAR`
 - **Phone:** `+201055557405`
-- **Captured:** 2026-11-05 02:55:51 UTC
+- **Captured:** 2026-11-05 03:32:15 UTC
 
 **GET /driver/vehicles** → `200`
 
@@ -278,7 +278,7 @@ The local server uses the straight-line route engine, so `polyline`, distances a
 
 - **State:** `CC-READY`
 - **Phone:** `+201055557401`
-- **Captured:** 2026-11-05 02:55:52 UTC
+- **Captured:** 2026-11-05 03:32:16 UTC
 
 **GET /places?q=Rehab** → `200`
 
@@ -336,7 +336,7 @@ The local server uses the straight-line route engine, so `polyline`, distances a
 
 - **State:** `CC-READY`
 - **Phone:** `+201055557401`
-- **Captured:** 2026-11-05 02:55:52 UTC
+- **Captured:** 2026-11-05 03:32:16 UTC
 
 **POST /commutes** with `{}` → `201`
 
@@ -344,7 +344,7 @@ The local server uses the straight-line route engine, so `polyline`, distances a
 {
   "success": true,
   "data": {
-    "id": "01m6mt4q2szkmfjc0kaz6njd3c",
+    "id": "01m6mw7c7x7fbkmn1hfxj3ptyx",
     "status": "DRAFT",
     "commuteType": "recurring",
     "direction": "to_work",
@@ -386,7 +386,7 @@ The local server uses the straight-line route engine, so `polyline`, distances a
 {
   "success": true,
   "data": {
-    "id": "01m6mt4q2szkmfjc0kaz6njd3c",
+    "id": "01m6mw7c7x7fbkmn1hfxj3ptyx",
     "status": "DRAFT",
     "commuteType": "recurring",
     "direction": "to_work",
@@ -427,7 +427,7 @@ The local server uses the straight-line route engine, so `polyline`, distances a
 
 - **State:** `CC-READY`
 - **Phone:** `+201055557401`
-- **Captured:** 2026-11-05 02:55:52 UTC
+- **Captured:** 2026-11-05 03:32:16 UTC
 
 **POST /commutes** with `{"seatsTotal": 6}` → `422`
 
@@ -453,7 +453,7 @@ The local server uses the straight-line route engine, so `polyline`, distances a
 
 - **State:** `CC-READY`
 - **Phone:** `+201055557401`
-- **Captured:** 2026-11-05 02:55:52 UTC
+- **Captured:** 2026-11-05 03:32:16 UTC
 
 **POST /commutes** with `{"vehicleId": "01JABCDEFGHJKMNPQRSTVWXYZ0"}` → `404`
 
@@ -474,7 +474,7 @@ The local server uses the straight-line route engine, so `polyline`, distances a
 
 - **State:** `CC-READY`
 - **Phone:** `+201055557401`
-- **Captured:** 2026-11-05 02:55:52 UTC
+- **Captured:** 2026-11-05 03:32:16 UTC
 
 **PUT /commutes/{commute}/route** with `{"origin": {"lat": 30.0594, "lng": 31.4913, "address": "Rehab Gate 2"}, "destination": {"lat": 30.0714, "lng": 30.9716, "address": "Smart Village B6"}}` → `200`
 
@@ -482,7 +482,7 @@ The local server uses the straight-line route engine, so `polyline`, distances a
 {
   "success": true,
   "data": {
-    "id": "01m6mt4q2szkmfjc0kaz6njd3c",
+    "id": "01m6mw7c7x7fbkmn1hfxj3ptyx",
     "status": "DRAFT",
     "commuteType": "recurring",
     "direction": "to_work",
@@ -510,7 +510,7 @@ The local server uses the straight-line route engine, so `polyline`, distances a
     ],
     "locations": [
       {
-        "id": "01m6mt4qabzd3vn8y1504beehb",
+        "id": "01m6mw7cbgyqr9w7qa0k2her73",
         "type": "origin",
         "lat": 30.0594,
         "lng": 31.4913,
@@ -519,7 +519,7 @@ The local server uses the straight-line route engine, so `polyline`, distances a
         "sequence": 0
       },
       {
-        "id": "01m6mt4qacas0ns09r137a9srw",
+        "id": "01m6mw7cbhksf012sxen4sqyrd",
         "type": "destination",
         "lat": 30.0714,
         "lng": 30.9716,
@@ -554,7 +554,7 @@ The local server uses the straight-line route engine, so `polyline`, distances a
 {
   "success": true,
   "data": {
-    "id": "01m6mt4q2szkmfjc0kaz6njd3c",
+    "id": "01m6mw7c7x7fbkmn1hfxj3ptyx",
     "status": "DRAFT",
     "commuteType": "recurring",
     "direction": "to_work",
@@ -582,7 +582,7 @@ The local server uses the straight-line route engine, so `polyline`, distances a
     ],
     "locations": [
       {
-        "id": "01m6mt4qabzd3vn8y1504beehb",
+        "id": "01m6mw7cbgyqr9w7qa0k2her73",
         "type": "origin",
         "lat": 30.0594,
         "lng": 31.4913,
@@ -591,7 +591,7 @@ The local server uses the straight-line route engine, so `polyline`, distances a
         "sequence": 0
       },
       {
-        "id": "01m6mt4qacas0ns09r137a9srw",
+        "id": "01m6mw7cbhksf012sxen4sqyrd",
         "type": "destination",
         "lat": 30.0714,
         "lng": 30.9716,
@@ -612,7 +612,7 @@ The local server uses the straight-line route engine, so `polyline`, distances a
 
 - **State:** `CC-READY`
 - **Phone:** `+201055557401`
-- **Captured:** 2026-11-05 02:55:52 UTC
+- **Captured:** 2026-11-05 03:32:16 UTC
 
 **PUT /commutes/{commute}/route** with `{"origin": {"lat": 30.0594, "lng": 31.4913, "address": "Rehab Gate 2"}, "destination": {"lat": 30.0714, "lng": 30.9716, "address": "Smart Village B6"}, "pickups": [{"lat": 30.065, "lng": 31.25, "address": "Ring Road service stop"}], "dropoffs": [{"lat": 30.065, "lng": 31.25, "address": "Ring Road service stop"}]}` → `200`
 
@@ -620,7 +620,7 @@ The local server uses the straight-line route engine, so `polyline`, distances a
 {
   "success": true,
   "data": {
-    "id": "01m6mt4q2szkmfjc0kaz6njd3c",
+    "id": "01m6mw7c7x7fbkmn1hfxj3ptyx",
     "status": "DRAFT",
     "commuteType": "recurring",
     "direction": "to_work",
@@ -648,7 +648,7 @@ The local server uses the straight-line route engine, so `polyline`, distances a
     ],
     "locations": [
       {
-        "id": "01m6mt4qeqppbz533myxv59575",
+        "id": "01m6mw7ceckwrj0m63v19hk2jv",
         "type": "origin",
         "lat": 30.0594,
         "lng": 31.4913,
@@ -657,7 +657,7 @@ The local server uses the straight-line route engine, so `polyline`, distances a
         "sequence": 0
       },
       {
-        "id": "01m6mt4qeqppbz533myxv59576",
+        "id": "01m6mw7ceckwrj0m63v19hk2jw",
         "type": "pickup",
         "lat": 30.065,
         "lng": 31.25,
@@ -666,7 +666,7 @@ The local server uses the straight-line route engine, so `polyline`, distances a
         "sequence": 1
       },
       {
-        "id": "01m6mt4qern9ka532xf7vwhxqz",
+        "id": "01m6mw7ced2prms6mg4azt98y4",
         "type": "dropoff",
         "lat": 30.065,
         "lng": 31.25,
@@ -675,7 +675,7 @@ The local server uses the straight-line route engine, so `polyline`, distances a
         "sequence": 2
       },
       {
-        "id": "01m6mt4qest644nsnw1b4bmzs7",
+        "id": "01m6mw7ceee60rfcb4zexpjrtf",
         "type": "destination",
         "lat": 30.0714,
         "lng": 30.9716,
@@ -695,7 +695,7 @@ The local server uses the straight-line route engine, so `polyline`, distances a
 
 - **State:** `CC-READY`
 - **Phone:** `+201055557401`
-- **Captured:** 2026-11-05 02:55:52 UTC
+- **Captured:** 2026-11-05 03:32:16 UTC
 
 **PUT /commutes/{commute}/route** with `{"origin": {"lat": 30.0594, "lng": 31.4913, "address": "Rehab Gate 2"}, "destination": {"lat": 30.0594, "lng": 31.4913, "address": "Rehab Gate 2"}}` → `422`
 
@@ -718,7 +718,7 @@ The local server uses the straight-line route engine, so `polyline`, distances a
 
 - **State:** `CC-READY`
 - **Phone:** `+201055557401`
-- **Captured:** 2026-11-05 02:55:52 UTC
+- **Captured:** 2026-11-05 03:32:17 UTC
 
 **PUT /commutes/{commute}/route** with `{"origin": {"lat": 30.0594, "lng": 31.4913, "address": "Rehab Gate 2"}, "destination": {"lat": 30.0714, "lng": 30.9716, "address": "Smart Village B6"}, "pickups": [{"lat": 31.2, "lng": 29.9, "address": "Alexandria"}]}` → `422`
 
@@ -741,7 +741,7 @@ The local server uses the straight-line route engine, so `polyline`, distances a
 
 - **State:** `CC-READY`
 - **Phone:** `+201055557401`
-- **Captured:** 2026-11-05 02:55:52 UTC
+- **Captured:** 2026-11-05 03:32:17 UTC
 
 **PUT /commutes/{commute}/route** with `{"origin": {"lat": 30.0594, "lng": 31.4913, "address": "Rehab Gate 2"}, "destination": {"lat": 30.0714, "lng": 30.9716, "address": "Smart Village B6"}, "pickups": [{"lat": 30.065, "lng": 31.25, "address": "Ring Road service stop"}, {"lat": 30.065, "lng": 31.25, "address": "Ring Road service stop"}, {"lat": 30.065, "lng": 31.25, "address": "Ring Road service stop"}, {"lat": 30.065, "lng": 31.25, "address": "Ring Road service stop"}]}` → `422`
 
@@ -766,7 +766,7 @@ The local server uses the straight-line route engine, so `polyline`, distances a
 {
   "success": true,
   "data": {
-    "id": "01m6mt4q2szkmfjc0kaz6njd3c",
+    "id": "01m6mw7c7x7fbkmn1hfxj3ptyx",
     "status": "DRAFT",
     "commuteType": "recurring",
     "direction": "to_work",
@@ -794,7 +794,7 @@ The local server uses the straight-line route engine, so `polyline`, distances a
     ],
     "locations": [
       {
-        "id": "01m6mt4qjwpkakbep5fpswnn83",
+        "id": "01m6mw7chxnjw6wzd0yph2acj8",
         "type": "origin",
         "lat": 30.0594,
         "lng": 31.4913,
@@ -803,7 +803,7 @@ The local server uses the straight-line route engine, so `polyline`, distances a
         "sequence": 0
       },
       {
-        "id": "01m6mt4qjxw1rwtchdj5m9n0xw",
+        "id": "01m6mw7chyhc7v9b55w7kq8xhh",
         "type": "destination",
         "lat": 30.0714,
         "lng": 30.9716,
@@ -825,7 +825,7 @@ The local server uses the straight-line route engine, so `polyline`, distances a
 
 - **State:** `CC-READY`
 - **Phone:** `+201055557401`
-- **Captured:** 2026-11-05 02:55:52 UTC
+- **Captured:** 2026-11-05 03:32:17 UTC
 
 **GET /commutes/{commute}/price** → `200`
 
@@ -846,7 +846,7 @@ The local server uses the straight-line route engine, so `polyline`, distances a
 
 - **State:** `CC-READY`
 - **Phone:** `+201055557401`
-- **Captured:** 2026-11-05 02:55:52 UTC
+- **Captured:** 2026-11-05 03:32:17 UTC
 
 **GET /commutes/{other}/route-preview** → `422`
 
@@ -886,7 +886,7 @@ The local server uses the straight-line route engine, so `polyline`, distances a
 
 - **State:** `CC-CAR-NOT-REVIEWED`
 - **Phone:** `+201055557402`
-- **Captured:** 2026-11-05 02:55:54 UTC
+- **Captured:** 2026-11-05 03:32:18 UTC
 
 **GET /commutes/{commute}/price** → `409`
 
@@ -911,7 +911,7 @@ The local server uses the straight-line route engine, so `polyline`, distances a
 
 - **State:** `CC-READY`
 - **Phone:** `+201055557401`
-- **Captured:** 2026-11-05 02:55:54 UTC
+- **Captured:** 2026-11-05 03:32:18 UTC
 
 **PUT /commutes/{commute}/schedule** with `{"daysMask": 62, "promisedArrivalTime": "09:00:00"}` → `200`
 
@@ -919,7 +919,7 @@ The local server uses the straight-line route engine, so `polyline`, distances a
 {
   "success": true,
   "data": {
-    "id": "01m6mt4q2szkmfjc0kaz6njd3c",
+    "id": "01m6mw7c7x7fbkmn1hfxj3ptyx",
     "status": "DRAFT",
     "commuteType": "recurring",
     "direction": "to_work",
@@ -945,7 +945,7 @@ The local server uses the straight-line route engine, so `polyline`, distances a
     "missing": [],
     "locations": [
       {
-        "id": "01m6mt4qjwpkakbep5fpswnn83",
+        "id": "01m6mw7chxnjw6wzd0yph2acj8",
         "type": "origin",
         "lat": 30.0594,
         "lng": 31.4913,
@@ -954,7 +954,7 @@ The local server uses the straight-line route engine, so `polyline`, distances a
         "sequence": 0
       },
       {
-        "id": "01m6mt4qjxw1rwtchdj5m9n0xw",
+        "id": "01m6mw7chyhc7v9b55w7kq8xhh",
         "type": "destination",
         "lat": 30.0714,
         "lng": 30.9716,
@@ -1017,7 +1017,7 @@ The local server uses the straight-line route engine, so `polyline`, distances a
 
 - **State:** `CC-READY`
 - **Phone:** `+201055557401`
-- **Captured:** 2026-11-05 02:55:54 UTC
+- **Captured:** 2026-11-05 03:32:18 UTC
 
 **PUT /commutes/{commute}/schedule** with `{"daysMask": 10, "perDay": {"2": {"promisedArrivalTime": "09:00:00", "seatsTotal": 2}, "8": {"promisedArrivalTime": "09:30:00"}}}` → `200`
 
@@ -1025,7 +1025,7 @@ The local server uses the straight-line route engine, so `polyline`, distances a
 {
   "success": true,
   "data": {
-    "id": "01m6mt4q2szkmfjc0kaz6njd3c",
+    "id": "01m6mw7c7x7fbkmn1hfxj3ptyx",
     "status": "DRAFT",
     "commuteType": "recurring",
     "direction": "to_work",
@@ -1051,7 +1051,7 @@ The local server uses the straight-line route engine, so `polyline`, distances a
     "missing": [],
     "locations": [
       {
-        "id": "01m6mt4qjwpkakbep5fpswnn83",
+        "id": "01m6mw7chxnjw6wzd0yph2acj8",
         "type": "origin",
         "lat": 30.0594,
         "lng": 31.4913,
@@ -1060,7 +1060,7 @@ The local server uses the straight-line route engine, so `polyline`, distances a
         "sequence": 0
       },
       {
-        "id": "01m6mt4qjxw1rwtchdj5m9n0xw",
+        "id": "01m6mw7chyhc7v9b55w7kq8xhh",
         "type": "destination",
         "lat": 30.0714,
         "lng": 30.9716,
@@ -1102,7 +1102,7 @@ The local server uses the straight-line route engine, so `polyline`, distances a
 
 - **State:** `CC-READY`
 - **Phone:** `+201055557401`
-- **Captured:** 2026-11-05 02:55:54 UTC
+- **Captured:** 2026-11-05 03:32:18 UTC
 
 **PUT /commutes/{commute}/schedule** with `{"daysMask": 2, "perDay": {"2": {"promisedArrivalTime": "09:00:00", "seatsTotal": 6}}}` → `422`
 
@@ -1128,7 +1128,7 @@ The local server uses the straight-line route engine, so `polyline`, distances a
 
 - **State:** `CC-READY`
 - **Phone:** `+201055557401`
-- **Captured:** 2026-11-05 02:55:54 UTC
+- **Captured:** 2026-11-05 03:32:18 UTC
 
 **PUT /commutes/{commute}/schedule** with `{"promisedArrivalTime": "09:00:00"}` → `422`
 
@@ -1153,7 +1153,7 @@ The local server uses the straight-line route engine, so `polyline`, distances a
 {
   "success": true,
   "data": {
-    "id": "01m6mt4q2szkmfjc0kaz6njd3c",
+    "id": "01m6mw7c7x7fbkmn1hfxj3ptyx",
     "status": "DRAFT",
     "commuteType": "recurring",
     "direction": "to_work",
@@ -1179,7 +1179,7 @@ The local server uses the straight-line route engine, so `polyline`, distances a
     "missing": [],
     "locations": [
       {
-        "id": "01m6mt4qjwpkakbep5fpswnn83",
+        "id": "01m6mw7chxnjw6wzd0yph2acj8",
         "type": "origin",
         "lat": 30.0594,
         "lng": 31.4913,
@@ -1188,7 +1188,7 @@ The local server uses the straight-line route engine, so `polyline`, distances a
         "sequence": 0
       },
       {
-        "id": "01m6mt4qjxw1rwtchdj5m9n0xw",
+        "id": "01m6mw7chyhc7v9b55w7kq8xhh",
         "type": "destination",
         "lat": 30.0714,
         "lng": 30.9716,
@@ -1253,7 +1253,7 @@ The local server uses the straight-line route engine, so `polyline`, distances a
 
 - **State:** `CC-READY`
 - **Phone:** `+201055557401`
-- **Captured:** 2026-11-05 02:55:54 UTC
+- **Captured:** 2026-11-05 03:32:18 UTC
 
 **PATCH /commutes/{commute}** with `{"rules": {"nonsmoking": true, "music": true, "ac": true}, "audience": "women_only"}` → `200`
 
@@ -1261,7 +1261,7 @@ The local server uses the straight-line route engine, so `polyline`, distances a
 {
   "success": true,
   "data": {
-    "id": "01m6mt4q2szkmfjc0kaz6njd3c",
+    "id": "01m6mw7c7x7fbkmn1hfxj3ptyx",
     "status": "DRAFT",
     "commuteType": "recurring",
     "direction": "to_work",
@@ -1287,7 +1287,7 @@ The local server uses the straight-line route engine, so `polyline`, distances a
     "missing": [],
     "locations": [
       {
-        "id": "01m6mt4qjwpkakbep5fpswnn83",
+        "id": "01m6mw7chxnjw6wzd0yph2acj8",
         "type": "origin",
         "lat": 30.0594,
         "lng": 31.4913,
@@ -1296,7 +1296,7 @@ The local server uses the straight-line route engine, so `polyline`, distances a
         "sequence": 0
       },
       {
-        "id": "01m6mt4qjxw1rwtchdj5m9n0xw",
+        "id": "01m6mw7chyhc7v9b55w7kq8xhh",
         "type": "destination",
         "lat": 30.0714,
         "lng": 30.9716,
@@ -1363,7 +1363,7 @@ The local server uses the straight-line route engine, so `polyline`, distances a
 
 - **State:** `CC-READY`
 - **Phone:** `+201055557401`
-- **Captured:** 2026-11-05 02:55:54 UTC
+- **Captured:** 2026-11-05 03:32:18 UTC
 
 **PATCH /commutes/{commute}** with `{"rules": {"smoking_room": true}}` → `422`
 
@@ -1388,7 +1388,7 @@ The local server uses the straight-line route engine, so `polyline`, distances a
 
 - **State:** `CC-READY`
 - **Phone:** `+201055557401`
-- **Captured:** 2026-11-05 02:55:54 UTC
+- **Captured:** 2026-11-05 03:32:18 UTC
 
 **POST /commutes/{other}/publish** → `422`
 
@@ -1413,7 +1413,7 @@ The local server uses the straight-line route engine, so `polyline`, distances a
 
 - **State:** `CC-READY`
 - **Phone:** `+201055557401`
-- **Captured:** 2026-11-05 02:55:54 UTC
+- **Captured:** 2026-11-05 03:32:18 UTC
 
 **POST /commutes/{commute}/publish** → `200`
 
@@ -1421,7 +1421,7 @@ The local server uses the straight-line route engine, so `polyline`, distances a
 {
   "success": true,
   "data": {
-    "id": "01m6mt4q2szkmfjc0kaz6njd3c",
+    "id": "01m6mw7c7x7fbkmn1hfxj3ptyx",
     "status": "PUBLISHED",
     "commuteType": "recurring",
     "direction": "to_work",
@@ -1440,14 +1440,14 @@ The local server uses the straight-line route engine, so `polyline`, distances a
     "routeDistanceMeters": 50031,
     "routeDurationSeconds": 6433,
     "corridorId": null,
-    "publishedAt": "2026-11-05T02:55:54+00:00",
+    "publishedAt": "2026-11-05T03:32:18+00:00",
     "pausedAt": null,
     "pausedReason": null,
     "archivedAt": null,
     "missing": [],
     "locations": [
       {
-        "id": "01m6mt4qjwpkakbep5fpswnn83",
+        "id": "01m6mw7chxnjw6wzd0yph2acj8",
         "type": "origin",
         "lat": 30.0594,
         "lng": 31.4913,
@@ -1456,7 +1456,7 @@ The local server uses the straight-line route engine, so `polyline`, distances a
         "sequence": 0
       },
       {
-        "id": "01m6mt4qjxw1rwtchdj5m9n0xw",
+        "id": "01m6mw7chyhc7v9b55w7kq8xhh",
         "type": "destination",
         "lat": 30.0714,
         "lng": 30.9716,
@@ -1517,7 +1517,7 @@ The local server uses the straight-line route engine, so `polyline`, distances a
     },
     "upcomingTrips": [
       {
-        "id": "01m6mt4s7ghcakcr4eng5ptqh4",
+        "id": "01m6mw7e6bntd40mjcrtqzm9pk",
         "tripDate": "2026-11-08",
         "departureAt": "2026-11-08T05:12:00+00:00",
         "departureLocal": "2026-11-08 07:12:00",
@@ -1532,7 +1532,7 @@ The local server uses the straight-line route engine, so `polyline`, distances a
         "driverSharePiastres": 12508
       },
       {
-        "id": "01m6mt4s7k0ma67cmnw336g4xn",
+        "id": "01m6mw7e6e33kvsrx01xanh1q0",
         "tripDate": "2026-11-09",
         "departureAt": "2026-11-09T05:12:00+00:00",
         "departureLocal": "2026-11-09 07:12:00",
@@ -1547,7 +1547,7 @@ The local server uses the straight-line route engine, so `polyline`, distances a
         "driverSharePiastres": 12508
       },
       {
-        "id": "01m6mt4s7nfcnrm11dvnhgh1bz",
+        "id": "01m6mw7e6ghez16hpamck1hcfh",
         "tripDate": "2026-11-10",
         "departureAt": "2026-11-10T05:12:00+00:00",
         "departureLocal": "2026-11-10 07:12:00",
@@ -1562,7 +1562,7 @@ The local server uses the straight-line route engine, so `polyline`, distances a
         "driverSharePiastres": 12508
       },
       {
-        "id": "01m6mt4s7qs61yb1w9c3x891ez",
+        "id": "01m6mw7e6k4b50g2ftm32mds93",
         "tripDate": "2026-11-11",
         "departureAt": "2026-11-11T05:12:00+00:00",
         "departureLocal": "2026-11-11 07:12:00",
@@ -1577,7 +1577,7 @@ The local server uses the straight-line route engine, so `polyline`, distances a
         "driverSharePiastres": 12508
       },
       {
-        "id": "01m6mt4s7sztfa3eqsar550raf",
+        "id": "01m6mw7e6pc49yt85efew9fvsw",
         "tripDate": "2026-11-12",
         "departureAt": "2026-11-12T05:12:00+00:00",
         "departureLocal": "2026-11-12 07:12:00",
@@ -1592,7 +1592,7 @@ The local server uses the straight-line route engine, so `polyline`, distances a
         "driverSharePiastres": 12508
       },
       {
-        "id": "01m6mt4s7vx4qw6dg233n8vatc",
+        "id": "01m6mw7e6rge0je4rvket1tghh",
         "tripDate": "2026-11-15",
         "departureAt": "2026-11-15T05:12:00+00:00",
         "departureLocal": "2026-11-15 07:12:00",
@@ -1607,7 +1607,7 @@ The local server uses the straight-line route engine, so `polyline`, distances a
         "driverSharePiastres": 12508
       },
       {
-        "id": "01m6mt4s7xg97z442n319b3tmj",
+        "id": "01m6mw7e6vrpsfncgw12jjq0z0",
         "tripDate": "2026-11-16",
         "departureAt": "2026-11-16T05:12:00+00:00",
         "departureLocal": "2026-11-16 07:12:00",
@@ -1622,7 +1622,7 @@ The local server uses the straight-line route engine, so `polyline`, distances a
         "driverSharePiastres": 12508
       },
       {
-        "id": "01m6mt4s7z87n9cgdexwzhpq5b",
+        "id": "01m6mw7e6y4647mj8tt0jc93p5",
         "tripDate": "2026-11-17",
         "departureAt": "2026-11-17T05:12:00+00:00",
         "departureLocal": "2026-11-17 07:12:00",
@@ -1637,7 +1637,7 @@ The local server uses the straight-line route engine, so `polyline`, distances a
         "driverSharePiastres": 12508
       },
       {
-        "id": "01m6mt4s81tqzb83q0wvx8bp3w",
+        "id": "01m6mw7e70bdw00ksevkn3t2gm",
         "tripDate": "2026-11-18",
         "departureAt": "2026-11-18T05:12:00+00:00",
         "departureLocal": "2026-11-18 07:12:00",
@@ -1652,7 +1652,7 @@ The local server uses the straight-line route engine, so `polyline`, distances a
         "driverSharePiastres": 12508
       },
       {
-        "id": "01m6mt4s83qeez9r8k3b4z8ts9",
+        "id": "01m6mw7e73dxd6jtne8q09d0dm",
         "tripDate": "2026-11-19",
         "departureAt": "2026-11-19T05:12:00+00:00",
         "departureLocal": "2026-11-19 07:12:00",
@@ -1667,7 +1667,7 @@ The local server uses the straight-line route engine, so `polyline`, distances a
         "driverSharePiastres": 12508
       },
       {
-        "id": "01m6mt4s861ej74m1730w8eyg4",
+        "id": "01m6mw7e75ndcn3svyeh0ayx27",
         "tripDate": "2026-11-22",
         "departureAt": "2026-11-22T05:12:00+00:00",
         "departureLocal": "2026-11-22 07:12:00",
@@ -1682,7 +1682,7 @@ The local server uses the straight-line route engine, so `polyline`, distances a
         "driverSharePiastres": 12508
       },
       {
-        "id": "01m6mt4s889m01ma1k9kbbm77e",
+        "id": "01m6mw7e78zr0sn4abfwjraj46",
         "tripDate": "2026-11-23",
         "departureAt": "2026-11-23T05:12:00+00:00",
         "departureLocal": "2026-11-23 07:12:00",
@@ -1697,7 +1697,7 @@ The local server uses the straight-line route engine, so `polyline`, distances a
         "driverSharePiastres": 12508
       },
       {
-        "id": "01m6mt4s8ak67xfqng6r8j0j9c",
+        "id": "01m6mw7e7a1gj6hz2pkcdxrs5k",
         "tripDate": "2026-11-24",
         "departureAt": "2026-11-24T05:12:00+00:00",
         "departureLocal": "2026-11-24 07:12:00",
@@ -1712,7 +1712,7 @@ The local server uses the straight-line route engine, so `polyline`, distances a
         "driverSharePiastres": 12508
       },
       {
-        "id": "01m6mt4s8cdk4et4pvcf45brvn",
+        "id": "01m6mw7e7dz7tf01csjv8x7yfk",
         "tripDate": "2026-11-25",
         "departureAt": "2026-11-25T05:12:00+00:00",
         "departureLocal": "2026-11-25 07:12:00",
@@ -1727,7 +1727,7 @@ The local server uses the straight-line route engine, so `polyline`, distances a
         "driverSharePiastres": 12508
       },
       {
-        "id": "01m6mt4s8ec5thxk5c7epdpwsa",
+        "id": "01m6mw7e7g9pg4abep21mf1dqj",
         "tripDate": "2026-11-26",
         "departureAt": "2026-11-26T05:12:00+00:00",
         "departureLocal": "2026-11-26 07:12:00",
@@ -1742,7 +1742,7 @@ The local server uses the straight-line route engine, so `polyline`, distances a
         "driverSharePiastres": 12508
       },
       {
-        "id": "01m6mt4s8g07f3j7sjyg319wnh",
+        "id": "01m6mw7e7kqhwd3hbe2h1n3cx6",
         "tripDate": "2026-11-29",
         "departureAt": "2026-11-29T05:12:00+00:00",
         "departureLocal": "2026-11-29 07:12:00",
@@ -1757,7 +1757,7 @@ The local server uses the straight-line route engine, so `polyline`, distances a
         "driverSharePiastres": 12508
       },
       {
-        "id": "01m6mt4s8j9qm2qep4ypz5myy5",
+        "id": "01m6mw7e7pzfdv4sbdc2pkh3zk",
         "tripDate": "2026-11-30",
         "departureAt": "2026-11-30T05:12:00+00:00",
         "departureLocal": "2026-11-30 07:12:00",
@@ -1772,7 +1772,7 @@ The local server uses the straight-line route engine, so `polyline`, distances a
         "driverSharePiastres": 12508
       },
       {
-        "id": "01m6mt4s8m66fnf8mx78y0y7e8",
+        "id": "01m6mw7e7rj31h7j86p7ss3kq1",
         "tripDate": "2026-12-01",
         "departureAt": "2026-12-01T05:12:00+00:00",
         "departureLocal": "2026-12-01 07:12:00",
@@ -1787,7 +1787,7 @@ The local server uses the straight-line route engine, so `polyline`, distances a
         "driverSharePiastres": 12508
       },
       {
-        "id": "01m6mt4s8p4exm1k88zc5j2nq0",
+        "id": "01m6mw7e7tq8ww18q728rn3dvq",
         "tripDate": "2026-12-02",
         "departureAt": "2026-12-02T05:12:00+00:00",
         "departureLocal": "2026-12-02 07:12:00",
@@ -1802,7 +1802,7 @@ The local server uses the straight-line route engine, so `polyline`, distances a
         "driverSharePiastres": 12508
       },
       {
-        "id": "01m6mt4s8rntjqbcem9g40709g",
+        "id": "01m6mw7e7y5gm7amx6da3dshfc",
         "tripDate": "2026-12-03",
         "departureAt": "2026-12-03T05:12:00+00:00",
         "departureLocal": "2026-12-03 07:12:00",
@@ -1825,7 +1825,7 @@ The local server uses the straight-line route engine, so `polyline`, distances a
 
 - **State:** `CC-READY`
 - **Phone:** `+201055557401`
-- **Captured:** 2026-11-05 02:55:54 UTC
+- **Captured:** 2026-11-05 03:32:18 UTC
 
 **POST /commutes/{commute}/publish** → `409`
 
@@ -1848,7 +1848,7 @@ The local server uses the straight-line route engine, so `polyline`, distances a
 
 - **State:** `CC-CAR-NOT-REVIEWED`
 - **Phone:** `+201055557402`
-- **Captured:** 2026-11-05 02:55:55 UTC
+- **Captured:** 2026-11-05 03:32:20 UTC
 
 **POST /commutes/{commute}/publish** → `409`
 
@@ -1871,7 +1871,7 @@ The local server uses the straight-line route engine, so `polyline`, distances a
 
 - **State:** `CC-CAR-PENDING`
 - **Phone:** `+201055557404`
-- **Captured:** 2026-11-05 02:55:57 UTC
+- **Captured:** 2026-11-05 03:32:21 UTC
 
 **POST /commutes/{commute}/publish** → `422`
 
@@ -1890,7 +1890,7 @@ The local server uses the straight-line route engine, so `polyline`, distances a
 
 - **State:** `CC-CAR-REJECTED`
 - **Phone:** `+201055557403`
-- **Captured:** 2026-11-05 02:55:58 UTC
+- **Captured:** 2026-11-05 03:32:22 UTC
 
 **POST /commutes/{commute}/publish** → `422`
 
@@ -1909,7 +1909,7 @@ The local server uses the straight-line route engine, so `polyline`, distances a
 
 - **State:** `CC-OVERDUE`
 - **Phone:** `+201055557407`
-- **Captured:** 2026-11-05 02:55:59 UTC
+- **Captured:** 2026-11-05 03:32:24 UTC
 
 **POST /commutes/{commute}/publish** → `403`
 
@@ -1935,7 +1935,7 @@ The local server uses the straight-line route engine, so `polyline`, distances a
 
 - **State:** `CC-SUSPENDED`
 - **Phone:** `+201055557408`
-- **Captured:** 2026-11-05 02:56:00 UTC
+- **Captured:** 2026-11-05 03:32:25 UTC
 
 **POST /commutes/{commute}/publish** → `403`
 
@@ -1944,7 +1944,7 @@ The local server uses the straight-line route engine, so `polyline`, distances a
   "success": false,
   "error": {
     "code": "DRIVER_NOT_ELIGIBLE",
-    "message": "You cannot apply to drive yet.",
+    "message": "Your driving is suspended, so you can't do this right now.",
     "fields": {
       "driver": [
         "SUSPENDED"
@@ -1958,7 +1958,7 @@ The local server uses the straight-line route engine, so `polyline`, distances a
 
 - **State:** `CC-LICENCE-EXPIRED`
 - **Phone:** `+201055557409`
-- **Captured:** 2026-11-05 02:56:02 UTC
+- **Captured:** 2026-11-05 03:32:26 UTC
 
 **POST /commutes/{commute}/publish** → `422`
 
@@ -1979,7 +1979,7 @@ The local server uses the straight-line route engine, so `polyline`, distances a
 
 - **State:** `CC-SUSPENDED`
 - **Phone:** `+201055557408`
-- **Captured:** 2026-11-05 02:56:03 UTC
+- **Captured:** 2026-11-05 03:32:28 UTC
 
 **POST /commutes** with `{}` → `403`
 
@@ -1988,7 +1988,7 @@ The local server uses the straight-line route engine, so `polyline`, distances a
   "success": false,
   "error": {
     "code": "DRIVER_NOT_ELIGIBLE",
-    "message": "You cannot apply to drive yet.",
+    "message": "Your driving is suspended, so you can't do this right now.",
     "fields": {
       "driver": [
         "SUSPENDED"
@@ -2004,7 +2004,7 @@ The local server uses the straight-line route engine, so `polyline`, distances a
 
 - **State:** `CC-READY`
 - **Phone:** `+201055557401`
-- **Captured:** 2026-11-05 02:56:04 UTC
+- **Captured:** 2026-11-05 03:32:29 UTC
 
 **POST /commutes/{commute}/duplicate** → `201`
 
@@ -2012,7 +2012,7 @@ The local server uses the straight-line route engine, so `polyline`, distances a
 {
   "success": true,
   "data": {
-    "id": "01m6mt538g5k513fbf77tfjyvh",
+    "id": "01m6mw7rk9qafz0zx411a4sw1m",
     "status": "DRAFT",
     "commuteType": "recurring",
     "direction": "to_work",
@@ -2038,7 +2038,7 @@ The local server uses the straight-line route engine, so `polyline`, distances a
     "missing": [],
     "locations": [
       {
-        "id": "01m6mt538j0fdmbfrarht1h2w0",
+        "id": "01m6mw7rkbndbh6enq71qn5mt9",
         "type": "origin",
         "lat": 30.0594,
         "lng": 31.4913,
@@ -2047,7 +2047,7 @@ The local server uses the straight-line route engine, so `polyline`, distances a
         "sequence": 0
       },
       {
-        "id": "01m6mt538k0rw5th4zh0jx5hyh",
+        "id": "01m6mw7rkc4x6hjrfm8zmvb2w2",
         "type": "destination",
         "lat": 30.0714,
         "lng": 30.9716,
@@ -2116,7 +2116,7 @@ The local server uses the straight-line route engine, so `polyline`, distances a
 {
   "success": true,
   "data": {
-    "id": "01m6mt539v24c60fjn8py32frx",
+    "id": "01m6mw7rmvjnz7nrw7zgtr2bke",
     "status": "DRAFT",
     "commuteType": "recurring",
     "direction": "to_home",
@@ -2144,7 +2144,7 @@ The local server uses the straight-line route engine, so `polyline`, distances a
     ],
     "locations": [
       {
-        "id": "01m6mt539x153xvsb60kn4whgv",
+        "id": "01m6mw7rmxys0aqhg5ksx88jq3",
         "type": "origin",
         "lat": 30.0714,
         "lng": 30.9716,
@@ -2153,7 +2153,7 @@ The local server uses the straight-line route engine, so `polyline`, distances a
         "sequence": 0
       },
       {
-        "id": "01m6mt539yxtjqvcm5gv3zmeft",
+        "id": "01m6mw7rmyj5eqp774scxa2tnd",
         "type": "destination",
         "lat": 30.0594,
         "lng": 31.4913,
@@ -2177,7 +2177,7 @@ The local server uses the straight-line route engine, so `polyline`, distances a
 
 - **State:** `CC-READY`
 - **Phone:** `+201055557401`
-- **Captured:** 2026-11-05 02:56:04 UTC
+- **Captured:** 2026-11-05 03:32:29 UTC
 
 **POST /commutes/{commute}/duplicate** → `201`
 
@@ -2185,7 +2185,7 @@ The local server uses the straight-line route engine, so `polyline`, distances a
 {
   "success": true,
   "data": {
-    "id": "01m6mt53nsgh2ferbhy4e41twc",
+    "id": "01m6mw7s0w7284vydfxk03k8by",
     "status": "DRAFT",
     "commuteType": "recurring",
     "direction": "to_work",
@@ -2213,7 +2213,7 @@ The local server uses the straight-line route engine, so `polyline`, distances a
     ],
     "locations": [
       {
-        "id": "01m6mt53nxp3en0p3asb9j8a5d",
+        "id": "01m6mw7s0zpvdevyd0j1m0mwkw",
         "type": "origin",
         "lat": 30.0594,
         "lng": 31.4913,
@@ -2222,7 +2222,7 @@ The local server uses the straight-line route engine, so `polyline`, distances a
         "sequence": 0
       },
       {
-        "id": "01m6mt53nyyxtn9fh6xa06pp5j",
+        "id": "01m6mw7s1246kk5grcnkvv2bn3",
         "type": "destination",
         "lat": 30.0714,
         "lng": 30.9716,
@@ -2248,7 +2248,7 @@ The local server uses the straight-line route engine, so `polyline`, distances a
 
 - **State:** `CC-READY`
 - **Phone:** `+201055557401`
-- **Captured:** 2026-11-05 02:56:06 UTC
+- **Captured:** 2026-11-05 03:32:31 UTC
 
 **GET /commutes?status=draft** → `200`
 
@@ -2257,7 +2257,7 @@ The local server uses the straight-line route engine, so `polyline`, distances a
   "success": true,
   "data": [
     {
-      "id": "01m6mt54x8h6gmqafns6bpa5xk",
+      "id": "01m6mw7tdsva2khaq2cejx43c6",
       "status": "DRAFT",
       "commuteType": "recurring",
       "direction": "to_work",
@@ -2291,7 +2291,7 @@ The local server uses the straight-line route engine, so `polyline`, distances a
       "rules": {}
     },
     {
-      "id": "01m6mt53yxmk75676xse9vy6hf",
+      "id": "01m6mw7se4j2196rspab7y7p0j",
       "status": "DRAFT",
       "commuteType": "recurring",
       "direction": "to_work",
@@ -2317,7 +2317,7 @@ The local server uses the straight-line route engine, so `polyline`, distances a
       "missing": [],
       "locations": [
         {
-          "id": "01m6mt53z977qa4eyv5mqd7t1g",
+          "id": "01m6mw7sev6d1j29cct06rft7p",
           "type": "origin",
           "lat": 30.0594,
           "lng": 31.4913,
@@ -2326,7 +2326,7 @@ The local server uses the straight-line route engine, so `polyline`, distances a
           "sequence": 0
         },
         {
-          "id": "01m6mt53za8vwmrw7c8gsa03f2",
+          "id": "01m6mw7sexxpm86gecdr8tv2dx",
           "type": "destination",
           "lat": 30.0714,
           "lng": 30.9716,
@@ -2392,7 +2392,7 @@ The local server uses the straight-line route engine, so `polyline`, distances a
 {
   "success": true,
   "data": {
-    "id": "01m6mt53yxmk75676xse9vy6hf",
+    "id": "01m6mw7se4j2196rspab7y7p0j",
     "status": "DRAFT",
     "commuteType": "recurring",
     "direction": "to_work",
@@ -2418,7 +2418,7 @@ The local server uses the straight-line route engine, so `polyline`, distances a
     "missing": [],
     "locations": [
       {
-        "id": "01m6mt53z977qa4eyv5mqd7t1g",
+        "id": "01m6mw7sev6d1j29cct06rft7p",
         "type": "origin",
         "lat": 30.0594,
         "lng": 31.4913,
@@ -2427,7 +2427,7 @@ The local server uses the straight-line route engine, so `polyline`, distances a
         "sequence": 0
       },
       {
-        "id": "01m6mt53za8vwmrw7c8gsa03f2",
+        "id": "01m6mw7sexxpm86gecdr8tv2dx",
         "type": "destination",
         "lat": 30.0714,
         "lng": 30.9716,
@@ -2493,7 +2493,7 @@ The local server uses the straight-line route engine, so `polyline`, distances a
 {
   "success": true,
   "data": {
-    "id": "01m6mt53yxmk75676xse9vy6hf",
+    "id": "01m6mw7se4j2196rspab7y7p0j",
     "status": "ARCHIVED",
     "commuteType": "recurring",
     "direction": "to_work",
@@ -2515,11 +2515,11 @@ The local server uses the straight-line route engine, so `polyline`, distances a
     "publishedAt": null,
     "pausedAt": null,
     "pausedReason": null,
-    "archivedAt": "2026-11-05T02:56:06+00:00",
+    "archivedAt": "2026-11-05T03:32:31+00:00",
     "missing": [],
     "locations": [
       {
-        "id": "01m6mt53z977qa4eyv5mqd7t1g",
+        "id": "01m6mw7sev6d1j29cct06rft7p",
         "type": "origin",
         "lat": 30.0594,
         "lng": 31.4913,
@@ -2528,7 +2528,7 @@ The local server uses the straight-line route engine, so `polyline`, distances a
         "sequence": 0
       },
       {
-        "id": "01m6mt53za8vwmrw7c8gsa03f2",
+        "id": "01m6mw7sexxpm86gecdr8tv2dx",
         "type": "destination",
         "lat": 30.0714,
         "lng": 30.9716,
@@ -2594,7 +2594,7 @@ The local server uses the straight-line route engine, so `polyline`, distances a
   "success": true,
   "data": [
     {
-      "id": "01m6mt54x8h6gmqafns6bpa5xk",
+      "id": "01m6mw7tdsva2khaq2cejx43c6",
       "status": "DRAFT",
       "commuteType": "recurring",
       "direction": "to_work",
@@ -2637,7 +2637,7 @@ The local server uses the straight-line route engine, so `polyline`, distances a
 
 - **State:** `CC-UNVERIFIED`
 - **Phone:** `+201055557406`
-- **Captured:** 2026-11-05 02:56:07 UTC
+- **Captured:** 2026-11-05 03:32:32 UTC
 
 **GET /commutes/options** → `200`
 
@@ -2706,7 +2706,7 @@ The local server uses the straight-line route engine, so `polyline`, distances a
 {
   "success": true,
   "data": {
-    "id": "01m6mt5687kvejm54xqkvs9wp2",
+    "id": "01m6mw7vw7eswes5yegn0tttdh",
     "status": "DRAFT",
     "commuteType": "recurring",
     "direction": "to_work",
@@ -2749,7 +2749,7 @@ The local server uses the straight-line route engine, so `polyline`, distances a
 {
   "success": true,
   "data": {
-    "id": "01m6mt5687kvejm54xqkvs9wp2",
+    "id": "01m6mw7vw7eswes5yegn0tttdh",
     "status": "DRAFT",
     "commuteType": "recurring",
     "direction": "to_work",
@@ -2778,7 +2778,7 @@ The local server uses the straight-line route engine, so `polyline`, distances a
     ],
     "locations": [
       {
-        "id": "01m6mt569676hk5w1av4psdr84",
+        "id": "01m6mw7vxag27smxehh87hrqf6",
         "type": "origin",
         "lat": 30.0594,
         "lng": 31.4913,
@@ -2787,7 +2787,7 @@ The local server uses the straight-line route engine, so `polyline`, distances a
         "sequence": 0
       },
       {
-        "id": "01m6mt5697e73bh1a6cavhsa63",
+        "id": "01m6mw7vxbs8tgrn69vkvdg3tw",
         "type": "destination",
         "lat": 30.0714,
         "lng": 30.9716,
@@ -2839,7 +2839,7 @@ The local server uses the straight-line route engine, so `polyline`, distances a
 {
   "success": true,
   "data": {
-    "id": "01m6mt5687kvejm54xqkvs9wp2",
+    "id": "01m6mw7vw7eswes5yegn0tttdh",
     "status": "DRAFT",
     "commuteType": "recurring",
     "direction": "to_work",
@@ -2867,7 +2867,7 @@ The local server uses the straight-line route engine, so `polyline`, distances a
     ],
     "locations": [
       {
-        "id": "01m6mt569676hk5w1av4psdr84",
+        "id": "01m6mw7vxag27smxehh87hrqf6",
         "type": "origin",
         "lat": 30.0594,
         "lng": 31.4913,
@@ -2876,7 +2876,7 @@ The local server uses the straight-line route engine, so `polyline`, distances a
         "sequence": 0
       },
       {
-        "id": "01m6mt5697e73bh1a6cavhsa63",
+        "id": "01m6mw7vxbs8tgrn69vkvdg3tw",
         "type": "destination",
         "lat": 30.0714,
         "lng": 30.9716,
@@ -2941,7 +2941,7 @@ The local server uses the straight-line route engine, so `polyline`, distances a
 {
   "success": true,
   "data": {
-    "id": "01m6mt5687kvejm54xqkvs9wp2",
+    "id": "01m6mw7vw7eswes5yegn0tttdh",
     "status": "DRAFT",
     "commuteType": "recurring",
     "direction": "to_work",
@@ -2969,7 +2969,7 @@ The local server uses the straight-line route engine, so `polyline`, distances a
     ],
     "locations": [
       {
-        "id": "01m6mt569676hk5w1av4psdr84",
+        "id": "01m6mw7vxag27smxehh87hrqf6",
         "type": "origin",
         "lat": 30.0594,
         "lng": 31.4913,
@@ -2978,7 +2978,7 @@ The local server uses the straight-line route engine, so `polyline`, distances a
         "sequence": 0
       },
       {
-        "id": "01m6mt5697e73bh1a6cavhsa63",
+        "id": "01m6mw7vxbs8tgrn69vkvdg3tw",
         "type": "destination",
         "lat": 30.0714,
         "lng": 30.9716,
@@ -3045,7 +3045,7 @@ The local server uses the straight-line route engine, so `polyline`, distances a
 {
   "success": true,
   "data": {
-    "id": "01m6mt5687kvejm54xqkvs9wp2",
+    "id": "01m6mw7vw7eswes5yegn0tttdh",
     "status": "DRAFT",
     "commuteType": "recurring",
     "direction": "to_work",
@@ -3073,7 +3073,7 @@ The local server uses the straight-line route engine, so `polyline`, distances a
     ],
     "locations": [
       {
-        "id": "01m6mt569676hk5w1av4psdr84",
+        "id": "01m6mw7vxag27smxehh87hrqf6",
         "type": "origin",
         "lat": 30.0594,
         "lng": 31.4913,
@@ -3082,7 +3082,7 @@ The local server uses the straight-line route engine, so `polyline`, distances a
         "sequence": 0
       },
       {
-        "id": "01m6mt5697e73bh1a6cavhsa63",
+        "id": "01m6mw7vxbs8tgrn69vkvdg3tw",
         "type": "destination",
         "lat": 30.0714,
         "lng": 30.9716,
@@ -3167,7 +3167,7 @@ The local server uses the straight-line route engine, so `polyline`, distances a
 {
   "success": true,
   "data": {
-    "id": "01m6mt5687kvejm54xqkvs9wp2",
+    "id": "01m6mw7vw7eswes5yegn0tttdh",
     "status": "ARCHIVED",
     "commuteType": "recurring",
     "direction": "to_work",
@@ -3189,13 +3189,13 @@ The local server uses the straight-line route engine, so `polyline`, distances a
     "publishedAt": null,
     "pausedAt": null,
     "pausedReason": null,
-    "archivedAt": "2026-11-05T02:56:08+00:00",
+    "archivedAt": "2026-11-05T03:32:32+00:00",
     "missing": [
       "vehicle"
     ],
     "locations": [
       {
-        "id": "01m6mt569676hk5w1av4psdr84",
+        "id": "01m6mw7vxag27smxehh87hrqf6",
         "type": "origin",
         "lat": 30.0594,
         "lng": 31.4913,
@@ -3204,7 +3204,7 @@ The local server uses the straight-line route engine, so `polyline`, distances a
         "sequence": 0
       },
       {
-        "id": "01m6mt5697e73bh1a6cavhsa63",
+        "id": "01m6mw7vxbs8tgrn69vkvdg3tw",
         "type": "destination",
         "lat": 30.0714,
         "lng": 30.9716,
@@ -3269,7 +3269,7 @@ The local server uses the straight-line route engine, so `polyline`, distances a
 
 - **State:** `CC-NO-CAR`
 - **Phone:** `+201055557405`
-- **Captured:** 2026-11-05 02:56:09 UTC
+- **Captured:** 2026-11-05 03:32:34 UTC
 
 **POST /commutes** with `{}` → `201`
 
@@ -3277,7 +3277,7 @@ The local server uses the straight-line route engine, so `polyline`, distances a
 {
   "success": true,
   "data": {
-    "id": "01m6mt57kqy751vy34t1ktb6p5",
+    "id": "01m6mw7xkt9vs2z0gaw65fzvqr",
     "status": "DRAFT",
     "commuteType": "recurring",
     "direction": "to_work",
@@ -3337,7 +3337,7 @@ The local server uses the straight-line route engine, so `polyline`, distances a
 
 - **State:** `CC-READY`
 - **Phone:** `+201055557401`
-- **Captured:** 2026-11-05 02:56:10 UTC
+- **Captured:** 2026-11-05 03:32:35 UTC
 
 **GET /commutes/options** → `200`
 
@@ -3386,15 +3386,15 @@ The local server uses the straight-line route engine, so `polyline`, distances a
 
 - **State:** `CC-CAR-NOT-REVIEWED`
 - **Phone:** `+201055557402`
-- **Captured:** 2026-11-05 02:56:11 UTC
+- **Captured:** 2026-11-05 03:32:36 UTC
 
-**GET /commutes/01m6mt59wdtmsxh0wxf86v72n8** → `200`
+**GET /commutes/01m6mw7zzyck3d0ks3qt6jntk3** → `200`
 
 ```json
 {
   "success": true,
   "data": {
-    "id": "01m6mt59wdtmsxh0wxf86v72n8",
+    "id": "01m6mw7zzyck3d0ks3qt6jntk3",
     "status": "DRAFT",
     "commuteType": "recurring",
     "direction": "to_work",
@@ -3436,15 +3436,15 @@ The local server uses the straight-line route engine, so `polyline`, distances a
 
 - **State:** `CC-CAR-REJECTED`
 - **Phone:** `+201055557403`
-- **Captured:** 2026-11-05 02:56:12 UTC
+- **Captured:** 2026-11-05 03:32:38 UTC
 
-**GET /commutes/01m6mt5b6bh2haz5dz1ka9rbh9** → `200`
+**GET /commutes/01m6mw818zp0xf3jwkp2qq5cr5** → `200`
 
 ```json
 {
   "success": true,
   "data": {
-    "id": "01m6mt5b6bh2haz5dz1ka9rbh9",
+    "id": "01m6mw818zp0xf3jwkp2qq5cr5",
     "status": "DRAFT",
     "commuteType": "recurring",
     "direction": "to_work",
@@ -3488,9 +3488,9 @@ The local server uses the straight-line route engine, so `polyline`, distances a
 
 - **State:** `CC-CAR-NO-AC`
 - **Phone:** `+201055557410`
-- **Captured:** 2026-11-05 02:56:14 UTC
+- **Captured:** 2026-11-05 03:32:39 UTC
 
-**PATCH /commutes/01m6mt5bx4jwh7h0p0e1qagksa** with `{"rules": {"ac": true}}` → `422`
+**PATCH /commutes/01m6mw81jk9q7cgvejs0yfr8cb** with `{"rules": {"ac": true}}` → `422`
 
 ```json
 {
@@ -3511,7 +3511,7 @@ The local server uses the straight-line route engine, so `polyline`, distances a
 
 - **State:** `CC-MAN-DRIVER`
 - **Phone:** `+201055557411`
-- **Captured:** 2026-11-05 02:56:16 UTC
+- **Captured:** 2026-11-05 03:32:40 UTC
 
 **POST /commutes** with `{"audience": "women_only"}` → `422`
 
@@ -3534,9 +3534,9 @@ The local server uses the straight-line route engine, so `polyline`, distances a
 
 - **State:** `CC-READY`
 - **Phone:** `+201055557401`
-- **Captured:** 2026-11-05 02:56:17 UTC
+- **Captured:** 2026-11-05 03:32:42 UTC
 
-**PUT /commutes/01m6mga8jeybrb8jxacb2nbvaw/route** with `{"origin": {"lat": 30.0594, "lng": 31.4913, "address": "Rehab Gate 2"}, "destination": {"lat": 30.0714, "lng": 30.9716, "address": "Smart Village B6"}}` → `409`
+**PUT /commutes/01m6mw7c7x7fbkmn1hfxj3ptyx/route** with `{"origin": {"lat": 30.0594, "lng": 31.4913, "address": "Rehab Gate 2"}, "destination": {"lat": 30.0714, "lng": 30.9716, "address": "Smart Village B6"}}` → `409`
 
 ```json
 {
@@ -3553,7 +3553,7 @@ The local server uses the straight-line route engine, so `polyline`, distances a
 
 - **State:** `CC-READY`
 - **Phone:** `+201055557401`
-- **Captured:** 2026-11-05 02:56:18 UTC
+- **Captured:** 2026-11-05 03:32:44 UTC
 
 **GET /commutes/{commute}/route-preview** → `503`
 

@@ -24,7 +24,7 @@ final readonly class StartDriverApplicationAction
         $eligibility = DriverEligibility::for($user);
 
         if (! $eligibility['eligible']) {
-            throw DomainException::of(ErrorCode::DriverNotEligible, fields: [
+            throw DomainException::of(ErrorCode::DriverNotEligible, message: __('errors.DRIVER_CANNOT_APPLY'), fields: [
                 'eligibility' => array_column($eligibility['blockers'], 'reason'),
             ]);
         }

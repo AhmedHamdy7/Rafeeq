@@ -7,6 +7,7 @@ use App\Domains\Commute\Actions\SaveCommuteRouteAction;
 use App\Domains\Commute\Actions\SaveCommuteScheduleAction;
 use App\Domains\Commute\Enums\CommuteOfferStatus;
 use App\Domains\Commute\Models\CommuteOffer;
+use App\Domains\Commute\Models\CommuteWeekdaySchedule;
 use App\Domains\Driver\Enums\DriverProfileStatus;
 use App\Domains\Driver\Enums\VehicleVerificationStatus;
 use App\Domains\Driver\Models\DriverProfile;
@@ -81,6 +82,12 @@ final class CreateCommuteStatesSeeder extends DriverHomeStatesSeeder
 
         $this->resetDriver($driver, $published);
         $this->clearDrafts($driver->id);
+
+        if (! $published->weekdaySchedules()->exists()) {
+            CommuteWeekdaySchedule::fillFromSchedule($published->schedule);
+        }
+
+        $published->weekdaySchedules()->update(['promised_arrival_time' => self::SCHEDULE['promisedArrivalTime'], 'departure_is_computed' => true]);
         $this->clearDebt($driver->id);
 
         $profile = DriverProfile::query()->whereKey($driver->id)->firstOrFail();

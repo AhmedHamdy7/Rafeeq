@@ -18,6 +18,7 @@ use App\Domains\Commute\Models\CommuteLocation;
 use App\Domains\Commute\Models\CommuteOffer;
 use App\Domains\Commute\Models\CommuteRule;
 use App\Domains\Commute\Models\CommuteSchedule;
+use App\Domains\Commute\Models\CommuteWeekdaySchedule;
 use App\Domains\Commute\Models\ScheduledTrip;
 use App\Domains\Commute\Support\DepartureTimeCalculator;
 use App\Domains\Commute\Support\SeatPricing;
@@ -318,14 +319,14 @@ class DemoDataSeeder extends Seeder
             ]);
         }
 
-        CommuteSchedule::create([
+        CommuteWeekdaySchedule::fillFromSchedule(CommuteSchedule::create([
             'commute_offer_id' => $offer->id,
             'days_mask' => DaysMask::weekdaysSunToThu()->value,
             'departure_time' => $spec['time'],
             'timezone' => 'Africa/Cairo',
             'start_date' => now()->toDateString(),
             'end_date' => now()->addMonths(4)->toDateString(),
-        ]);
+        ]));
 
         return $driver;
     }
