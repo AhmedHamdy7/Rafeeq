@@ -77,7 +77,7 @@ final readonly class RecordLicenceDetailsAction
         if ($expiry->lessThan(now()->addDays($minimumDays))) {
             throw DomainException::of(
                 ErrorCode::LicenceExpired,
-                message: __('errors.DRIVER_LICENCE_EXPIRED', ['days' => $minimumDays]),
+                message: __('errors.DRIVER_LICENCE_MINIMUM_VALIDITY', ['days' => $minimumDays]),
             );
         }
     }

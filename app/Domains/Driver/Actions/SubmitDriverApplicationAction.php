@@ -53,7 +53,7 @@ final readonly class SubmitDriverApplicationAction
         if (! $profile->hasValidLicence()) {
             throw DomainException::of(
                 ErrorCode::LicenceExpired,
-                message: __('errors.DRIVER_LICENCE_EXPIRED', [
+                message: __('errors.DRIVER_LICENCE_MINIMUM_VALIDITY', [
                     'days' => config('rafeeq.driver.licence_minimum_validity_days'),
                 ]),
             );
