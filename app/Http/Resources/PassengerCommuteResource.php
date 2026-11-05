@@ -102,9 +102,8 @@ final class PassengerCommuteResource extends JsonResource
              * pin with `POST /commutes/{commute}/pickup-preview`.
              */
             'allowsCustomPickup' => (bool) $offer->allows_custom_pickup,
-            'maxPointDistanceMetres' => RouteSettings::matchRadiusMeters(),
+            'maxPointDistanceMetres' => RouteSettings::farRadiusMeters(),
             'maxDetourMinutes' => RouteSettings::maxTripDetourMinutes(),
-            'maxDetourKm' => round(RouteSettings::maxTripDetourMeters() / 1000, 1),
 
             'schedule' => [
                 // The days it RUNS: "Every Sun · Tue · Thu", "Nour drives Sun · Tue · Thu only".
@@ -251,6 +250,12 @@ final class PassengerCommuteResource extends JsonResource
 
         foreach ($offer->rules as $rule) {
             $map[$rule->rule_key->value] = (bool) $rule->rule_value;
+        }
+
+        if ($offer->vehicle?->has_ac) {
+            $map['ac'] = true;
+        } else {
+            unset($map['ac']);
         }
 
         return $map;

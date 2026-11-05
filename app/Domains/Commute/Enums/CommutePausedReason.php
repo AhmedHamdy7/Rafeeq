@@ -21,4 +21,6 @@ enum CommutePausedReason: string
      */
     case AccountSuspended = 'account_suspended';
     case DriverSuspended = 'driver_suspended';
+
+    case GenderReview = 'gender_review';
 }

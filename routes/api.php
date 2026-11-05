@@ -282,19 +282,12 @@ Route::prefix('v1')->group(function (): void {
             Route::post('vehicles/{vehicle}/documents', [VehicleController::class, 'storeDocument']);
         });
 
-    /*
-     * Publishing and managing commutes (Chapter 4).
-     *
-     * Same gate as the rest of the driver surface, and for the same reason: an
-     * unverified identity does not carry passengers. Eligibility to publish is
-     * re-checked inside the Actions too, because a draft can sit for weeks while
-     * a licence lapses or a vehicle is suspended.
-     */
     Route::prefix('commutes')
-        ->middleware(['auth:sanctum', 'account.active', 'profile.complete', 'verified:government_id'])
+        ->middleware(['auth:sanctum', 'account.active', 'profile.complete'])
         ->group(function (): void {
             Route::get('/', [CommuteController::class, 'index']);
             Route::post('/', [CommuteController::class, 'store']);
+            Route::get('options', [CommuteController::class, 'options']);
             Route::get('{commute}', [CommuteController::class, 'show']);
             Route::patch('{commute}', [CommuteController::class, 'update']);
             Route::delete('{commute}', [CommuteController::class, 'destroy']);
@@ -304,11 +297,25 @@ Route::prefix('v1')->group(function (): void {
             Route::put('{commute}/route', [CommuteController::class, 'saveRoute']);
             Route::put('{commute}/schedule', [CommuteController::class, 'saveSchedule']);
 
+            Route::get('{commute}/route-preview', [CommuteController::class, 'routePreview']);
+
             /*
              * The seat price RAFEEQ computes (P-1, PAY-42), read-only. It replaced the old
              * `price-suggestion` slider when the driver stopped choosing the price (D-0016).
              */
             Route::get('{commute}/price', [CommuteController::class, 'price']);
+        });
+
+    /*
+     * Publishing and running commutes (Chapter 4).
+     *
+     * An unverified identity does not carry passengers. Eligibility to publish is re-checked inside
+     * the Actions too, because a draft can sit for weeks while a licence lapses or a vehicle is
+     * suspended.
+     */
+    Route::prefix('commutes')
+        ->middleware(['auth:sanctum', 'account.active', 'profile.complete', 'verified:government_id'])
+        ->group(function (): void {
             // C-9: the fee pausing, deleting or replacing the car would cost, before she confirms.
             Route::get('{commute}/cancel-preview', [CommuteController::class, 'cancelPreview']);
 

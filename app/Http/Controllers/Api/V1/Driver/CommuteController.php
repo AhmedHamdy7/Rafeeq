@@ -4,32 +4,47 @@ namespace App\Http\Controllers\Api\V1\Driver;
 
 use App\Domains\Booking\Actions\DisplaceConfirmedBookingsAction;
 use App\Domains\Commute\Actions\ChangeCommuteStatusAction;
+use App\Domains\Commute\Actions\CommuteState;
 use App\Domains\Commute\Actions\CreateCommuteOfferAction;
 use App\Domains\Commute\Actions\DuplicateCommuteOfferAction;
 use App\Domains\Commute\Actions\PublishCommuteOfferAction;
 use App\Domains\Commute\Actions\ReviseCommuteOfferAction;
 use App\Domains\Commute\Actions\SaveCommuteRouteAction;
 use App\Domains\Commute\Actions\SaveCommuteScheduleAction;
+use App\Domains\Commute\Enums\CommuteAudience;
+use App\Domains\Commute\Enums\CommuteDirection;
 use App\Domains\Commute\Enums\CommuteLocationType;
 use App\Domains\Commute\Enums\CommuteOfferStatus;
 use App\Domains\Commute\Enums\CommutePausedReason;
+use App\Domains\Commute\Enums\CommuteRuleKey;
+use App\Domains\Commute\Enums\CommuteType;
 use App\Domains\Commute\Models\CommuteOffer;
+use App\Domains\Commute\Support\CommuteDefaults;
+use App\Domains\Commute\Support\RouteSettings;
 use App\Domains\Commute\Support\SeatPricing;
+use App\Domains\Driver\Enums\DriverProfileStatus;
 use App\Domains\Driver\Models\DriverProfile;
 use App\Domains\Geo\Contracts\GeoQueryEngine;
+use App\Domains\Geo\ValueObjects\Route;
+use App\Domains\Identity\Enums\Capability;
+use App\Domains\Identity\Enums\Gender;
 use App\Domains\Payment\Support\DriverFees;
 use App\Domains\Shared\Exceptions\DomainException;
 use App\Domains\Shared\Support\ErrorCode;
 use App\Domains\Shared\ValueObjects\Coordinate;
+use App\Domains\Verification\Enums\VerificationType;
+use App\Domains\Verification\Support\VerificationCentre;
 use App\Http\Controllers\Controller;
 use App\Http\OpenApi\ApiErrors;
 use App\Http\Requests\Commute\CancelPreviewRequest;
+use App\Http\Requests\Commute\ListCommutesRequest;
 use App\Http\Requests\Commute\ReviseCommuteRequest;
 use App\Http\Requests\Commute\SaveCommuteRouteRequest;
 use App\Http\Requests\Commute\SaveCommuteScheduleRequest;
 use App\Http\Requests\Commute\StoreCommuteRequest;
 use App\Http\Resources\CommuteOfferResource;
 use App\Http\Responses\ApiResponse;
+use Carbon\CarbonImmutable;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
@@ -38,11 +53,21 @@ final class CommuteController extends Controller
     /**
      * GET /v1/commutes — the driver's own commutes.
      */
-    public function index(Request $request): JsonResponse
+    public function index(ListCommutesRequest $request): JsonResponse
     {
-        $offers = $this->profile($request)
+        $profile = DriverProfile::query()->whereKey($request->user()->id)->first();
+
+        if ($profile === null) {
+            return ApiResponse::success(CommuteOfferResource::collection(collect()));
+        }
+
+        $offers = $profile
             ->commuteOffers()
-            ->with(['locations', 'schedule', 'rules'])
+            ->when($request->statuses() !== [], fn ($query) => $query->whereIn('status', $request->statuses()))
+            ->where(fn ($query) => $query
+                ->whereNot('status', CommuteOfferStatus::Archived->value)
+                ->orWhereNotNull('published_at'))
+            ->with(['locations', 'schedule', 'weekdaySchedules', 'rules'])
             // The id is a tiebreak, not decoration: `created_at` has
             // second precision, so two commutes made in the same second have no
             // defined order without it — and an unstable sort is what makes a
@@ -61,8 +86,49 @@ final class CommuteController extends Controller
     public function show(Request $request, string $commute): JsonResponse
     {
         return ApiResponse::success(new CommuteOfferResource(
-            $this->owned($request, $commute)->load(['locations', 'schedule', 'rules', 'scheduledTrips'])
+            $this->owned($request, $commute)->load(['locations', 'schedule', 'weekdaySchedules', 'rules', 'scheduledTrips'])
         ));
+    }
+
+    public function options(Request $request): JsonResponse
+    {
+        $startDate = CommuteDefaults::startDate();
+
+        return ApiResponse::success([
+            'maxPickupStops' => RouteSettings::maxPickupStops(),
+            'maxDropoffStops' => RouteSettings::maxDropoffStops(),
+            'maxDetourMinutes' => RouteSettings::maxTripDetourMinutes(),
+            'matchRadiusMeters' => RouteSettings::matchRadiusMeters(),
+            'detourTiers' => [
+                'onWay' => [
+                    'pointMeters' => RouteSettings::matchRadiusMeters(),
+                    'requestMinutes' => RouteSettings::onWayRequestMinutes(),
+                    'tripMinutes' => RouteSettings::onWayTripMinutes(),
+                ],
+                'far' => [
+                    'pointMeters' => RouteSettings::farRadiusMeters(),
+                    'requestMinutes' => RouteSettings::farRequestMinutes(),
+                    'tripMinutes' => RouteSettings::farTripMinutes(),
+                ],
+            ],
+            'maxScheduleMonths' => CommuteDefaults::maxScheduleMonths(),
+            'preferences' => [
+                CommuteRuleKey::NonSmoking->value,
+                CommuteRuleKey::Quiet->value,
+                CommuteRuleKey::Ac->value,
+                CommuteRuleKey::NoFood->value,
+                CommuteRuleKey::Music->value,
+            ],
+            'canMarkWomenOnly' => $request->user()->gender === Gender::Woman,
+            'defaults' => [
+                'commuteType' => CommuteType::Recurring->value,
+                'direction' => CommuteDirection::ToWork->value,
+                'audience' => CommuteAudience::AnyVerified->value,
+                'allowsCustomPickup' => true,
+                'startDate' => $startDate,
+                'endDate' => CommuteDefaults::endDate(CarbonImmutable::parse($startDate)),
+            ],
+        ]);
     }
 
     /**
@@ -72,19 +138,17 @@ final class CommuteController extends Controller
      * a whole thing that has to be validated together.
      */
     #[ApiErrors(
+        ErrorCode::CommuteWomenOnlyNotAllowed,
         ErrorCode::DriverNotEligible,
-        ErrorCode::LicenceExpired,
-        ErrorCode::CommuteVehicleUnavailable,
         ErrorCode::CommuteSeatsExceedApproved,
-        ErrorCode::VehicleSeatsNotApproved,
         ErrorCode::NotFound,
     )]
     public function store(StoreCommuteRequest $request, CreateCommuteOfferAction $action): JsonResponse
     {
-        $offer = $action->execute($this->profile($request), $request->validated());
+        $offer = $action->execute($this->draftingProfile($request), $request->validated());
 
         return ApiResponse::success(
-            new CommuteOfferResource($offer->load(['locations', 'schedule', 'rules'])),
+            new CommuteOfferResource($offer->load(['locations', 'schedule', 'weekdaySchedules', 'rules'])),
             status: 201,
         );
     }
@@ -94,6 +158,7 @@ final class CommuteController extends Controller
      */
     #[ApiErrors(
         ErrorCode::CommuteNotEditable,
+        ErrorCode::VerificationRequired,
         ErrorCode::CommuteSeatsConflict,
         ErrorCode::CommuteVehicleUnavailable,
         ErrorCode::CommuteSeatsExceedApproved,
@@ -102,10 +167,14 @@ final class CommuteController extends Controller
     )]
     public function update(ReviseCommuteRequest $request, string $commute, ReviseCommuteOfferAction $action): JsonResponse
     {
-        $offer = $action->execute($this->owned($request, $commute), $request->validated());
+        $offer = $this->owned($request, $commute);
+
+        $this->assertVerifiedUnlessDraft($request, $offer);
+
+        $offer = $action->execute($offer, $request->validated());
 
         return ApiResponse::success(new CommuteOfferResource(
-            $offer->load(['locations', 'schedule', 'rules'])
+            $offer->load(['locations', 'schedule', 'weekdaySchedules', 'rules'])
         ));
     }
 
@@ -124,7 +193,7 @@ final class CommuteController extends Controller
         $offer = $action->execute($this->owned($request, $commute), $request->validated());
 
         return ApiResponse::success(new CommuteOfferResource(
-            $offer->load(['locations', 'schedule', 'rules'])
+            $offer->load(['locations', 'schedule', 'weekdaySchedules', 'rules'])
         ));
     }
 
@@ -135,7 +204,7 @@ final class CommuteController extends Controller
         ErrorCode::CommuteNotEditable,
         ErrorCode::CommuteIncomplete,
         ErrorCode::CommuteSeatsExceedApproved,
-        ErrorCode::VehicleSeatsNotApproved,
+        ErrorCode::ValidationFailed,
         ErrorCode::NotFound,
     )]
     public function saveSchedule(SaveCommuteScheduleRequest $request, string $commute, SaveCommuteScheduleAction $action): JsonResponse
@@ -143,8 +212,34 @@ final class CommuteController extends Controller
         $offer = $action->execute($this->owned($request, $commute), $request->validated());
 
         return ApiResponse::success(new CommuteOfferResource(
-            $offer->load(['locations', 'schedule', 'rules'])
+            $offer->load(['locations', 'schedule', 'weekdaySchedules', 'rules'])
         ));
+    }
+
+    #[ApiErrors(ErrorCode::CommuteIncomplete, ErrorCode::CommuteRouteUnavailable, ErrorCode::NotFound)]
+    public function routePreview(Request $request, string $commute, GeoQueryEngine $geo): JsonResponse
+    {
+        $offer = $this->owned($request, $commute)->load('locations');
+
+        if ($offer->route_polyline !== null) {
+            return ApiResponse::success([
+                'polyline' => (string) $offer->route_polyline,
+                'distanceMeters' => (int) $offer->route_distance_meters,
+                'durationSeconds' => (int) $offer->route_duration_seconds,
+            ]);
+        }
+
+        $route = $this->measureRoute($offer, $geo);
+
+        if ($route->isFallback) {
+            throw DomainException::of(ErrorCode::CommuteRouteUnavailable);
+        }
+
+        return ApiResponse::success([
+            'polyline' => (string) $route->polyline,
+            'distanceMeters' => (int) $route->distance->metres,
+            'durationSeconds' => (int) $route->durationSeconds,
+        ]);
     }
 
     /**
@@ -153,6 +248,8 @@ final class CommuteController extends Controller
      */
     #[ApiErrors(
         ErrorCode::CommuteIncomplete,
+        ErrorCode::CommuteAcNotAvailable,
+        ErrorCode::CommuteWomenOnlyNotAllowed,
         ErrorCode::CommuteInvalidTransition,
         ErrorCode::CommuteVehicleUnavailable,
         ErrorCode::CommuteSeatsExceedApproved,
@@ -167,7 +264,7 @@ final class CommuteController extends Controller
         $offer = $action->execute($this->owned($request, $commute));
 
         return ApiResponse::success(new CommuteOfferResource(
-            $offer->load(['locations', 'schedule', 'rules', 'scheduledTrips'])
+            $offer->load(['locations', 'schedule', 'weekdaySchedules', 'rules', 'scheduledTrips'])
         ));
     }
 
@@ -189,7 +286,7 @@ final class CommuteController extends Controller
         $offer = $action->pause($this->owned($request, $commute), CommutePausedReason::ByDriver);
 
         return ApiResponse::success(new CommuteOfferResource(
-            $offer->load(['locations', 'schedule', 'rules'])
+            $offer->load(['locations', 'schedule', 'weekdaySchedules', 'rules'])
         ));
     }
 
@@ -198,6 +295,7 @@ final class CommuteController extends Controller
      * paused. Refused if the vehicle or licence is no longer usable.
      */
     #[ApiErrors(
+        ErrorCode::CommuteWomenOnlyNotAllowed,
         ErrorCode::CommuteInvalidTransition,
         ErrorCode::CommuteVehicleUnavailable,
         ErrorCode::CommuteSeatsExceedApproved,
@@ -212,7 +310,7 @@ final class CommuteController extends Controller
         $offer = $action->resume($this->owned($request, $commute));
 
         return ApiResponse::success(new CommuteOfferResource(
-            $offer->load(['locations', 'schedule', 'rules'])
+            $offer->load(['locations', 'schedule', 'weekdaySchedules', 'rules'])
         ));
     }
 
@@ -294,13 +392,17 @@ final class CommuteController extends Controller
      * every open request or waiting-list place on it closes as `COMMUTE_ARCHIVED`.
      * A run already under way is not touched. No fee is charged yet.
      */
-    #[ApiErrors(ErrorCode::CommuteInvalidTransition, ErrorCode::NotFound)]
+    #[ApiErrors(ErrorCode::CommuteInvalidTransition, ErrorCode::VerificationRequired, ErrorCode::NotFound)]
     public function destroy(Request $request, string $commute, ChangeCommuteStatusAction $action): JsonResponse
     {
-        $offer = $action->archive($this->owned($request, $commute));
+        $offer = $this->owned($request, $commute);
+
+        $this->assertVerifiedUnlessDraft($request, $offer);
+
+        $offer = $action->archive($offer);
 
         return ApiResponse::success(new CommuteOfferResource(
-            $offer->load(['locations', 'schedule', 'rules'])
+            $offer->load(['locations', 'schedule', 'weekdaySchedules', 'rules'])
         ));
     }
 
@@ -325,7 +427,13 @@ final class CommuteController extends Controller
     {
         $offer = $this->owned($request, $commute)->load(['locations', 'vehicle']);
 
-        $metres = $offer->route_distance_meters ?? $this->measureRoute($offer, $geo);
+        $metres = $offer->route_distance_meters ?? $this->measureRoute($offer, $geo)->distance->metres;
+
+        if ($offer->vehicle === null) {
+            throw DomainException::of(ErrorCode::CommuteIncomplete, fields: [
+                'missing' => ['vehicle'],
+            ]);
+        }
 
         if ($offer->vehicle->approved_seats === null) {
             // The price is divided by the approved seats; a car nobody has reviewed has none.
@@ -356,7 +464,7 @@ final class CommuteController extends Controller
      * provider call per keystroke; one call when the driver asks what a seat costs is the right
      * place to pay for it.
      */
-    private function measureRoute(CommuteOffer $offer, GeoQueryEngine $geo): int
+    private function measureRoute(CommuteOffer $offer, GeoQueryEngine $geo): Route
     {
         $origin = $offer->locations->firstWhere('type', CommuteLocationType::Origin);
         $destination = $offer->locations->firstWhere('type', CommuteLocationType::Destination);
@@ -378,7 +486,45 @@ final class CommuteController extends Controller
             new Coordinate((float) $origin->lat, (float) $origin->lng),
             new Coordinate((float) $destination->lat, (float) $destination->lng),
             $via,
-        )->distance->metres;
+        );
+    }
+
+    private function draftingProfile(Request $request): DriverProfile
+    {
+        $user = $request->user();
+        $profile = DriverProfile::query()->whereKey($user->id)->first();
+
+        if ($profile !== null) {
+            return $profile;
+        }
+
+        if (! $user->capabilities()->where('capability', Capability::Driver->value)->exists()) {
+            throw DomainException::of(ErrorCode::DriverNotEligible, fields: [
+                'driver' => ['NO_DRIVER_CAPABILITY'],
+            ]);
+        }
+
+        $profile = new DriverProfile;
+        $profile->user_id = $user->id;
+        $profile->status = DriverProfileStatus::Draft->value;
+        $profile->save();
+
+        return $profile;
+    }
+
+    private function assertVerifiedUnlessDraft(Request $request, CommuteOffer $offer): void
+    {
+        if (CommuteState::isEditable($offer)) {
+            return;
+        }
+
+        $missing = VerificationCentre::missingFrom($request->user(), [VerificationType::GovernmentId]);
+
+        if ($missing !== []) {
+            throw DomainException::of(ErrorCode::VerificationRequired, fields: [
+                'verification' => $missing,
+            ]);
+        }
     }
 
     private function profile(Request $request): DriverProfile

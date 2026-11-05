@@ -420,6 +420,12 @@ enum NotificationType: string
      */
     case DepartureTimeChanged = 'departure_time_changed';
 
+    case PickupMovedEarlier = 'pickup_moved_earlier';
+
+    case CommuteArchived = 'commute_archived';
+
+    case WaitlistedCommuteEnded = 'waitlisted_commute_ended';
+
     public function category(): NotificationCategory
     {
         return match ($this) {
@@ -465,6 +471,9 @@ enum NotificationType: string
             self::WaitlistClearedByChange,
             self::TripDayCancelled,
             self::DepartureTimeChanged,
+            self::PickupMovedEarlier,
+            self::CommuteArchived,
+            self::WaitlistedCommuteEnded,
             self::MatchFound => NotificationCategory::Booking,
 
             self::TripStarted,

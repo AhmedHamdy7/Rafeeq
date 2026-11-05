@@ -14,7 +14,7 @@
 >
 > **Base URL:** `{host}/api/v1` · **Auth:** bearer token · **Format:** JSON only.
 
-**Last updated:** 2026-11-04 · **193 endpoints live** · Phases 0–7, 9 and 11 complete · 10, 12 and 13 all but a decision each
+**Last updated:** 2026-11-05 · **195 endpoints live** · Phases 0–7, 9 and 11 complete · 10, 12 and 13 all but a decision each
 
 ---
 
@@ -22,7 +22,7 @@
 
 ### What is ready
 
-**193 endpoints live** and tested, across the 47 designed screens:
+**195 endpoints live** and tested, across the 47 designed screens:
 
 | | Count | Covers |
 |---|---|---|
@@ -147,7 +147,7 @@ go to the phone screen. On plain `UNAUTHENTICATED`, refresh once and retry.
 | public | no credential | OTP + refresh only |
 | signed-in | valid token, account may be suspended or profile half-finished | `auth/me`, logout, devices, consents, preferences, onboarding state, verification centre |
 | active, profile complete | not suspended, profile complete | **everything a passenger does** — search, seat requests, bookings, groups, the live trip, ratings, safety |
-| verified | the above **plus** an approved `government_id` | **the driver surface only** — the application, vehicles, and publishing or managing a commute |
+| verified | the above **plus** an approved `government_id` | **publishing and running a commute only** — the application, vehicles, and the Create Commute form and its drafts need none of it |
 
 🔴 **A passenger needs no identity verification.** She books with a verified phone number and
 nothing more. The driver approves each seat request by hand and sees the passenger's trust level
@@ -391,7 +391,7 @@ quarter of an hour.
    → 200  a ranked list; each row has commuteId, score + its breakdown, driver summary, vehicle
 
 8  POST /commutes/{commute}/pickup-preview   { lat, lng }
-   → 200  { addedMinutes, runTotalMinutes, maxDetourMinutes, runTotalKm, maxDetourKm, withinLimit }
+   → 200  { addedMinutes, runTotalMinutes, maxDetourMinutes, pointMeters, tier, extraMinutes, withinLimit }
 ```
 
 Step 8 creates nothing. It exists so the passenger can see the detour **before** committing to a
@@ -731,6 +731,8 @@ fails if this list and the running routes ever disagree in either direction.
 | `POST /commutes/{commute}/duplicate` | 4.5 Commutes (driver) |
 | `POST /commutes/{commute}/pause` | 4.5 Commutes (driver) |
 | `POST /commutes/{commute}/pickup-preview` | 4.5 Commutes (driver) |
+| `GET /commutes/options` | 4.5 Commutes (driver) |
+| `GET /commutes/{commute}/route-preview` | 4.5 Commutes (driver) |
 | `GET /commutes/{commute}/price` | 4.5 Commutes (driver) |
 | `GET /commutes/{commute}/cancel-preview` | 4.5 Commutes (driver) |
 | `POST /commutes/{commute}/publish` | 4.5 Commutes (driver) |
@@ -1665,17 +1667,42 @@ No car photos (dropped 2026-10-31).
 >
 > **Screens** 24 · 25 · **Shapes** the commute offer, at the end of this chapter
 
-#### `GET /commutes` · `GET /commutes/{commute}` — verified
+#### `GET /commutes/options` — active, profile complete
 
-The caller's own commutes. Full shape in 4.5. 🔴 **Not the passenger's detail call** — a passenger
-reads a commute with `GET /commutes/{commute}/public` (4.6), which needs no verification.
+What the Create Commute form needs before its first call. An unverified driver can read it.
 
-#### `POST /commutes` — verified
+| Field | Means |
+|---|---|
+| `maxPickupStops` · `maxDropoffStops` | The most suggested points of each kind (COM-31: 3 and 3). The admin can move them, so stop the Add button at these numbers. |
+| `maxDetourMinutes` · `matchRadiusMeters` | RAFEEQ's limits for every commute. |
+| `maxScheduleMonths` | The longest window the schedule accepts. |
+| `preferences[]` | The keys to offer on the Preferences step (COM-39). |
+| `canMarkWomenOnly` | Whether to show the Women-only switch (COM-39). |
+| `defaults` | What the server uses for a value you leave out: `commuteType`, `direction`, `audience`, `allowsCustomPickup`, `startDate`, `endDate`. |
 
-**Request:** `commuteType` (`recurring`/`one_time`), `vehicleId`, `direction`
-(`to_work`/`to_home`), `seatsTotal` (1–7, and **never more than the car's `approvedSeats`** —
-`422 COMMUTE_SEATS_EXCEED_APPROVED` with `error.fields.approvedSeats`),
-`audience` (`women_only`/`any_verified`), `minTrustLevel` (0–4), `allowsCustomPickup`.
+#### `GET /commutes` · `GET /commutes/{commute}` — active, profile complete
+
+The caller's own commutes, drafts included. Full shape in 4.5. `?status=` filters, comma-separated in
+any case: `?status=draft` is how a saved draft comes back. A driver can hold several drafts. A
+discarded draft is not listed. A driver with no commutes gets an empty list. 🔴 **Not the passenger's
+detail call** — a passenger reads a commute with `GET /commutes/{commute}/public` (4.6).
+
+#### `POST /commutes` — active, profile complete
+
+Creates a **draft**, and every field is optional. An unverified driver can create one (PROF-19): the
+gate is at publish.
+
+| Field | Left out |
+|---|---|
+| `commuteType` (`recurring`/`one_time`) | `recurring`. The beta form sends nothing. |
+| `vehicleId` | The active car, or none. With no car the draft has `vehicleId: null` and `vehicle` in `missing[]`. A draft can hold any of the driver's cars; publishing needs it approved and active. Someone else's car answers `404`. |
+| `direction` (`to_work`/`to_home`) | `to_work`. `return` flips it. Nothing is matched or searched on it. |
+| `seatsTotal` (1–7) | The car's `approvedSeats`, or `null` until the car has them. Never more than `approvedSeats` (`422 COMMUTE_SEATS_EXCEED_APPROVED` with `error.fields.approvedSeats`). |
+| `audience` (`women_only`/`any_verified`) | `any_verified`. |
+| `minTrustLevel` (0–4) | `0`. |
+| `allowsCustomPickup` | `true`. It only decides whether a passenger may ask to move a **confirmed** pickup (`POST .../pickup-request`, `pickup-preview`). A seat request's own points never depend on it (BOOK-08). |
+
+An account without the `DRIVER` capability, or a suspended driver, gets `403 DRIVER_NOT_ELIGIBLE`.
 
 🔴 **No price field any more** (P-1, D-0016). RAFEEQ computes the seat price from the route length,
 the car's tier and its approved seats — see `GET /commutes/{commute}/price`. A
@@ -1686,25 +1713,67 @@ the car's tier and its approved seats — see `GET /commutes/{commute}/price`. A
 `maxWalkMinutes` are RAFEEQ's admin settings for every commute; sending either is refused with
 `422 VALIDATION_FAILED`. Remove both controls from the form.
 
-Creates a **draft**. Route and schedule arrive through their own endpoints because each is a whole
-thing that has to be validated together. `allowsCustomPickup` defaults to **false** — a commute
-that accepts pickup proposals has to say so.
+#### `PATCH /commutes/{commute}` — active, profile complete
 
-#### `PATCH /commutes/{commute}` — verified
-
-Revises terms after publishing: price, seats, rules, audience. **Applies to days generated from
-now on, never to a day somebody already booked.** Route and schedule lock once published
+Works on a draft, which is how the Preferences step saves, and after publishing. Takes `vehicleId`,
+`seatsTotal`, `audience`, `minTrustLevel`, `allowsCustomPickup` and `rules`. On a published or paused
+commute it needs a verified identity (`403 VERIFICATION_REQUIRED`) and **applies to days generated
+from now on, never to a day somebody already booked.** Route and schedule lock once published
 (`COMMUTE_NOT_EDITABLE`, 409).
 
-#### `PUT /commutes/{commute}/route` — verified
+`rules` is a map of key to boolean, and sending it replaces the whole set. Offer the five keys in
+`preferences[]` of `GET /commutes/options`:
 
-**Request:** `origin{lat,lng,address,placeId}`, `destination{...}`, `pickups[]` (max 4),
-`dropoffs[]` (max 2). A PUT because the route is replaced whole.
+| Key | Chip |
+|---|---|
+| `nonsmoking` | No smoking |
+| `quiet` | Quiet ride |
+| `ac` | AC |
+| `nofood` | No food |
+| `music` | Music on |
 
-#### `PUT /commutes/{commute}/schedule` — verified
+`luggage` and `front` are accepted and hidden in the beta (PROF-32). Any other key answers
+`422 VALIDATION_FAILED`.
+
+#### `PUT /commutes/{commute}/route` — active, profile complete
+
+**Request:** `origin{lat,lng,address,placeId}`, `destination{...}`, `pickups[]`, `dropoffs[]`. A PUT
+because the route is replaced whole. The limits are `maxPickupStops` and `maxDropoffStops` on
+`GET /commutes/options` (3 and 3 today). A point used for both goes in both lists, and counts once
+towards each limit.
+
+`422 COMMUTE_ROUTE_INVALID`: `error.fields.route` when the ends are the same place or there are too
+many stops, `error.fields["pickups.0"]` when that stop is too far off the road.
+
+#### `GET /commutes/{commute}/route-preview` — active, profile complete
+
+The road for the Route step (COM-02). Call it after saving the route.
+
+```json
+{ "polyline": "...", "distanceMeters": 46206, "durationSeconds": 5940 }
+```
+
+`503 COMMUTE_ROUTE_UNAVAILABLE` means the road can't be calculated right now: show "Route not
+available" with Retry and keep Next disabled. A failed answer isn't cached, so Retry asks again.
+`COMMUTE_ROUTE_INVALID` is different: the driver has to change a point. `422 COMMUTE_INCOMPLETE` with
+`error.fields.missing: ["route"]` means no route is saved yet.
+
+#### `PUT /commutes/{commute}/schedule` — active, profile complete
 
 **Request:** `daysMask`, `promisedArrivalTime` **or** `departureTime` (`HH:MM:SS`, **local wall
-clock**), `timezone`, `startDate`, `endDate` (**mandatory** — there are no infinite commutes).
+clock**), `timezone`, `startDate`, `endDate`, `perDay`.
+
+`startDate` defaults to tomorrow and `endDate` to 12 months later (`defaults` on
+`GET /commutes/options`). Saving again without dates keeps the dates already saved. **Never show the
+end date.** Each night, a recurring commute ending within 7 days with a trip in the last 30 days gets
+12 more months, and nobody is told. Otherwise it is archived the night after `endDate`, and the driver
+gets `commute_archived` (button: Duplicate) and its waiting list gets `waitlisted_commute_ended`
+(button: Find another commute).
+
+`daysMask` is required on a recurring commute (`422 COMMUTE_INCOMPLETE` on `daysMask`). A one-time
+commute takes `startDate` alone.
+
+🔴 **No earliest departure (COM-41).** The driver sets the arrival and the seats. The departure is worked out, and moves earlier by at most the whole-trip limit of the tier in use.
 
 🔴 **New (C-2, COM-15): send the arrival, not the departure.** Leave `departureTime` out and send
 `promisedArrivalTime`: RAFEEQ works out when the driver leaves from the route and that morning's
@@ -1721,7 +1790,7 @@ before** — one time, one price, one seat count for the whole week.
 | Field | Means |
 |---|---|
 | `promisedArrivalTime` | `HH:MM:SS` local. When you promise to arrive, applied to every day unless a day overrides it. ⚠️ **Arriving later than this counts against the driver's on-time rate**, outside a five-minute tolerance. Omit it and no promise is recorded — and nothing is scored. |
-| `perDay` | Per-day differences, **keyed by the day's bit**: `{"2": {"departureTime": "06:30:00", "seatsTotal": 2}}` sets Sunday only. Each day accepts `departureTime`, `promisedArrivalTime`, `seatsTotal` (≤ `approvedSeats`). **No per-day price**: the price is RAFEEQ's, the same every day of the commute. |
+| `perDay` | Per-day differences, **keyed by the day's bit**: `{"2": {"departureTime": "06:30:00", "seatsTotal": 2}}` sets Sunday only. It can stand alone when every day has its own time. Each day accepts `departureTime`, `promisedArrivalTime`, `seatsTotal` (≤ `approvedSeats`). **No per-day price**: the price is RAFEEQ's, the same every day of the commute. |
 
 ```
 PUT { daysMask: 62, departureTime: "07:05:00", startDate: "...", endDate: "...",
@@ -1742,7 +1811,7 @@ one fewer seat on the day she takes her own child.
 >
 > Sending the whole thing again **replaces** the week; it never merges. A day you drop disappears.
 
-#### `GET /commutes/{commute}/price` — verified
+#### `GET /commutes/{commute}/price` — active, profile complete
 
 The seat price RAFEEQ computed (P-1 → P-3, PAY-42). **Read-only** — the driver cannot change it.
 Replaces the old `price-suggestion` slider.
@@ -1754,8 +1823,9 @@ Replaces the old `price-suggestion` slider.
 | `distanceKm` | The road length the price was computed from, one decimal. |
 | `tier` · `approvedSeats` | The car review the price depends on. |
 
-`COMMUTE_INCOMPLETE` (422) if the route has not been saved yet. `VEHICLE_SEATS_NOT_APPROVED` (409)
-while the car has not been reviewed — nothing for the driver to fix, he waits for the review.
+`COMMUTE_INCOMPLETE` (422) with `error.fields.missing` (`route` or `vehicle`) when either isn't there
+yet. `VEHICLE_SEATS_NOT_APPROVED` (409) while the car has not been reviewed — nothing for the driver to
+fix, he waits for the review. The form carries on without a price; publishing is what's refused.
 
 #### `GET /commutes/{commute}/cancel-preview?action=pause|delete|replace_vehicle` — verified
 
@@ -1771,13 +1841,23 @@ car, a lapsed licence, unpaid commission) costs nothing.
 #### `POST /commutes/{commute}/publish` — verified
 
 Computes the route, writes the search box, generates the first bookable days. Re-checks driver and
-vehicle: `DRIVER_LICENCE_EXPIRED`, `COMMUTE_VEHICLE_UNAVAILABLE` and `COMMUTE_INCOMPLETE` are all
-expected failures here.
+vehicle. An unverified driver stops here, not earlier (PROF-19).
 
-**`DRIVER_DEBT_LIMIT_REACHED` (403)** — the driver owes more in platform fees from cash trips than the
-limit (200 EGP by default; operations can change it). `error.fields.outstandingPiastres` and
-`error.fields.capPiastres` give both numbers. **Her existing rides continue** — starting a run is never
-refused for this. The same refusal applies to `resume`. Show the amount and how to settle it.
+| Code | Status | `error.fields` | Means |
+|---|---|---|---|
+| `VERIFICATION_REQUIRED` | 403 | `verification[]` | Show "Finish driver verification to publish". |
+| `COMMUTE_INCOMPLETE` | 422 | `missing[]` | Something isn't filled in. |
+| `COMMUTE_AC_NOT_AVAILABLE` | 422 | `rules.ac` | The reviewed car has no AC. Also on `PATCH`. Lock the chip with "Your car is registered without AC". |
+| `COMMUTE_WOMEN_ONLY_NOT_ALLOWED` | 422 | `audience` | The driver's profile gender isn't female. Also on `POST`, `PATCH` and resume. |
+| `COMMUTE_INVALID_TRANSITION` | 409 | `status[]` | It isn't a draft or can't be published from this status. |
+| `COMMUTE_VEHICLE_UNAVAILABLE` | 422 | none | The car isn't approved and active. |
+| `VEHICLE_SEATS_NOT_APPROVED` | 409 | `vehicleId[]` | The car has no approved seats yet. |
+| `COMMUTE_SEATS_EXCEED_APPROVED` | 422 | `seatsTotal[]`, `approvedSeats[]` | A day offers more seats than the car has. |
+| `DRIVER_NOT_ELIGIBLE` | 403 | `driver[]`: the profile status, such as `SUSPENDED` or `PENDING_REVIEW` | The driver isn't approved. |
+| `DRIVER_LICENCE_EXPIRED` | 422 | none | The licence lapsed. |
+| `DRIVER_COMMISSION_OVERDUE` | 403 | `amountOwedPiastres[]`, `dueAt[]` | Commission is unpaid past its Friday (PAY-12). **Existing rides continue.** The same refusal applies to `resume`. Show the amount and how to pay. |
+
+`DRIVER_DEBT_LIMIT_REACHED` is gone (D-0006).
 
 #### `POST /commutes/{commute}/pause` · `/resume` — verified
 
@@ -1839,9 +1919,12 @@ last term's pattern is one of the main reasons to reach for the button.
 ⚠️ v5 proposes these under `/driver/commutes/{id}`; every other commute-management endpoint here
 lives under `/commutes`, so these do too.
 
-#### `DELETE /commutes/{commute}` — verified
+#### `DELETE /commutes/{commute}` — active, profile complete
 
-Archives. Nothing is deleted: history stays. 🔴 **Every upcoming day is cancelled, booked ones
+On a draft this discards it: it leaves `GET /commutes` and nothing else happens. An unverified driver
+can discard a draft; anything else needs a verified identity.
+
+On anything else it archives. Nothing is deleted: history stays. 🔴 **Every upcoming day is cancelled, booked ones
 included** (Feature 03 C-8, COM-35): each confirmed seat becomes `CANCELLED_BY_DRIVER`, each
 passenger gets one `commute_deleted_seat_cancelled` (4.14), and every open request and waiting-list
 place on it closes as `COMMUTE_ARCHIVED` — nobody is put on a waiting list for a commute that no
@@ -1859,16 +1942,17 @@ confirmed seat (16h+: 0 · 10–16h: 10 % · < 10h: 25 %) — **show it first** 
 | `id`, `status` | `DRAFT` · `PUBLISHED` · `PAUSED` · `ARCHIVED`. |
 | `commuteType` | `recurring` · `one_time`. |
 | `direction` | `to_work` · `to_home`. |
-| `vehicleId`, `seatsTotal` | `seatsTotal` is bookable seats, already excluding the driver. |
+| `vehicleId`, `seatsTotal` | `seatsTotal` is bookable seats, already excluding the driver. Both can be `null` on a draft. |
 | `seatPricePiastres`, `currency` | RAFEEQ's seat price; `currency` is always `EGP` today. `pricePerSeatPiastres` is a deprecated alias with the same value (DISCOVER-15). |
-| `maxDetourMinutes` / `maxWalkMinutes` | **RAFEEQ's** limits, the same on every commute (C-1, COM-31): the whole trip may carry at most 10 min **and** at most 5 km of detour, and a passenger's point must be within 1.5 km of the route. Read-only — sending either when creating or revising a commute is refused with `422`. |
+| `maxDetourMinutes` / `maxWalkMinutes` | **RAFEEQ's** limits, the same on every commute (C-1, COM-31): two tiers (COM-40). On your way: point within 1.5 km, up to 10 min for her, up to 20 min for the whole trip. A bit far: within 3 km, 15 min and 30 min. `maxDetourMinutes` is the outer limit, 30. `detourTiers` on `GET /commutes/options` has every number. Read-only — sending either when creating or revising a commute is refused with `422`. |
 | `audience`, `minTrustLevel` | Who may join. |
-| `allowsCustomPickup` | **Defaults to false.** |
-| `routePolyline`, `routeDistanceMeters`, `routeDurationSeconds` | Computed at publish; `null` on a draft. **Only ever returned to the commute's own driver.** |
+| `allowsCustomPickup` | **Defaults to true.** Only decides whether a confirmed passenger may ask to move their pickup. |
+| `routePolyline`, `routeDistanceMeters`, `routeDurationSeconds` | Computed at publish; `null` on a draft (read `GET /commutes/{commute}/route-preview`). **Only ever returned to the commute's own driver.** |
 | `publishedAt`, `pausedAt`, `pausedReason`, `archivedAt` | `pausedReason` is `by_driver` · `vehicle_suspended` · `licence_expired` · `commission_unpaid` · `account_suspended` · `driver_suspended` — all but `by_driver` are automatic, so show the right copy. `licence_expired` means her licence lapsed (COM-26): she can resume after the renewed licence is approved. `driver_suspended` means staff suspended her driving only (PROF-27): Resume answers `403 DRIVER_NOT_ELIGIBLE` and Passenger mode still works. `account_suspended` means staff suspended her account (F1-3); once it is lifted she resumes the commute herself. `commission_unpaid` means a week's commission missed two Fridays (PAY-45): show the debt screen; after paying she resumes the commute herself. |
-| `missing[]` | What still has to be done before it can be published. Drive the wizard from this. |
+| `missing[]` | What still has to be done before it can be published. Drive the wizard from this. The values are `origin`, `destination`, `schedule`, `vehicle` and `one_time_single_date`. |
 | `locations[]` | `{id, type, lat, lng, address, placeId, sequence}`; type is `origin` · `pickup` · `dropoff` · `destination`. |
 | `schedule` | `{daysMask, departureTime, timezone, startDate, endDate, generatedUntil}`. `generatedUntil` is **how far ahead bookable days currently exist**, rolled forward daily — not the end of the commute. |
+| `weekdays[]` | One row per weekday, to refill the form from a draft: `{weekdayBit, promisedArrivalTime, departureTime, departureIsComputed, seatsTotal}`. `seatsTotal` is `null` when the day follows the commute. |
 | `rules` | A map of `{key: bool}`; `{}` when empty. |
 | `upcomingTrips[]` | The next generated days (4.7). |
 
@@ -1904,7 +1988,7 @@ that is not published, answers `404`. A women-only commute is shown to everybody
 |---|---|
 | `commuteId`, `status`, `commuteType`, `direction`, `audience`, `womenOnly`, `seatsTotal` | |
 | `seatPricePiastres` | The current seat price. Each day's own frozen price is on `upcomingTrips[]`. (`pricePerSeatPiastres`: deprecated alias.) |
-| `allowsCustomPickup`, `maxPointDistanceMetres`, `maxDetourMinutes`, `maxDetourKm` | Whether she may drop her own pin, and the limits it is checked against (1.5 km from the route, the whole trip's 10 min / 5 km cap). Preview a pin with `POST /commutes/{commute}/pickup-preview`. |
+| `allowsCustomPickup`, `maxPointDistanceMetres`, `maxDetourMinutes` | Whether she may drop her own pin, and the outer limits it is checked against: 3 km from the route and 30 min for the whole trip (COM-40). Preview a pin with `POST /commutes/{commute}/pickup-preview`. |
 | `schedule` | `{daysMask, departureTime, timezone, startDate, endDate}` — **the days it runs** ("Every Sun · Tue · Thu"). |
 | `route` | `{start, end, distanceKm, durationMinutes, polyline, isTrimmed}`. 🔒 **Before she holds a confirmed seat the line is trimmed ~1 km at each end** and `start` / `end` are `{label, lat, lng}` of the trimmed ends, labelled by **area only** ("Nasr City"); `isTrimmed: true`. Once she has a confirmed booking on it, the whole line (`isTrimmed: false`). `distanceKm` / `durationMinutes` are the whole run's ("27 km · about 52 min"). |
 | `pickups[]` / `dropoffs[]` | The driver's suggested points, in road order: `{id, label, lat, lng, estimatedTime}`. **`id` is the `suggestionId` a seat request takes.** `estimatedTime` is `HH:MM:SS` on the commute's clock from the usual departure. Empty arrays when the driver gave none (B07) — her own pin is always the other way to choose. |
@@ -2149,7 +2233,7 @@ else rather than letting them hit this — and four about the two points:
 | `SEAT_REQUEST_POINTS_SAME` | The two pins are within 200 m of each other. |
 | `SEAT_REQUEST_POINTS_OUT_OF_ORDER` | This commute reaches her drop-off before her pickup — they are the wrong way round. |
 | `SEAT_REQUEST_SUGGESTION_UNKNOWN` | That `suggestionId` is not one this commute advertises. |
-| `PICKUP_DETOUR_TOO_LONG` | The **pair together** takes the driver further out of her way than RAFEEQ's whole-trip cap (10 min **and** 5 km, admin settings). `error.fields` carries `runTotalKm`, `maxDetourMeters`, `addedMinutes`, `runTotalMinutes` and `maxDetourMinutes`. |
+| `PICKUP_DETOUR_TOO_LONG` | The **pair together** takes the driver further than the outer tier allows (COM-40: 3 km, 15 min for her, 30 min for the trip, admin settings). `error.fields` carries `pointMeters`, `maxPointMeters`, `addedMinutes`, `runTotalMinutes` and `maxDetourMinutes`. |
 
 > 🔴 The detour is measured **by us**, for both points at once, against the route as published —
 > never accepted from the request. Use `POST /commutes/{commute}/pickup-preview` to show the cost
@@ -2257,7 +2341,8 @@ list has meaning for:
 |---|---|
 | `tripId` · `tripDate` | The day the numbers are for. |
 | `addedMinutes` | How much longer that day's run gets, measured against the confirmed stops. |
-| `maxDetourMinutes` · `withinLimit` | RAFEEQ's whole-trip cap (COM-31), which is also limited by kilometres. Use `withinLimit`, don't compare the numbers. |
+| `maxDetourMinutes` · `withinLimit` | The outer whole-trip limit (COM-40). Use `withinLimit`, don't compare the numbers. |
+| `tier` · `extraMinutes` | `on_way` shows "On your way". `far` shows "A bit far · you'd leave about {extraMinutes} min earlier". `null` is beyond both. The same two fields are on `counteroffer-options`, `pickup-preview` and search results. |
 | `promisedArrivalLocal` · `projectedArrivalLocal` | The promised arrival, `null` on a day with no promise, and when the run would arrive with her on board. |
 | `canAccept` | `false` when `/approve` would answer `409 BOOKING_BREAKS_FROZEN_PROMISE` today. Disable Accept and offer Counteroffer and Reject (BOOK-15). Always `true` on a `waitlist_application`. |
 | `blockReason` | `promised_arrival` when `canAccept` is `false`, otherwise `null`. |
@@ -2401,9 +2486,9 @@ anybody else's request.
 | `tripDate` · `departureLocal` | The day in view, as on the inbox row. |
 | `maxDetourMinutes` | RAFEEQ's whole-trip cap. |
 | `canDropPin` | `true`: the driver can also place his own pin (C04), and send it as `{lat, lng, label}`. |
-| `requested` | `{pickup, dropoff, addedMinutes, withinLimit}`: what she asked for. |
+| `requested` | `{pickup, dropoff, addedMinutes, withinLimit, tier, extraMinutes}`: what she asked for. |
 | `route` | `{polyline, distanceMeters, durationSeconds}`: the published route, for the map. |
-| `pickups[]` · `dropoffs[]` | The options: `{suggestionId, label, lat, lng, addedMinutes, changeFromRequestedMinutes, walkMeters, withinLimit, refusalCode}`. Her own suggested point is left out. |
+| `pickups[]` · `dropoffs[]` | The options: `{suggestionId, label, lat, lng, addedMinutes, changeFromRequestedMinutes, walkMeters, withinLimit, tier, extraMinutes, refusalCode}`. Her own suggested point is left out. |
 
 `changeFromRequestedMinutes` is negative when the option saves time ("saves 6 min"). `walkMeters` is the
 straight-line distance from the point she asked for, so show it as approximate. `refusalCode` is the code
@@ -2816,6 +2901,8 @@ What cancelling **her own** seat now would cost her (TRIPS-18), from the same ru
 { "feePiastres": 1425, "reason": "late_cancel_fee", "warning": true, "rung": 2, "waivedIfRefilled": true }
 ```
 
+`reason: "pickup_moved_earlier"` with `feePiastres: 0` means her pickup moved more than 10 minutes earlier than she agreed to, so she cancels free (PAY-21). Show **Cancel free**. She is told of the new time by `pickup_moved_earlier`.
+
 | Field | Means |
 |---|---|
 | `feePiastres` | The amount, or `0`. |
@@ -2951,9 +3038,10 @@ the person commits.
 |---|---|
 | `addedMinutes` / `addedKm` | What THIS point adds. Computed by us from the route, never taken from the requester. |
 | `runTotalMinutes` | The detour for the **whole run** including every already-approved pickup. This is the figure the limit is checked against. |
-| `maxDetourMinutes` | RAFEEQ's whole-trip cap in minutes (C-1). |
+| `maxDetourMinutes` | The outer whole-trip limit in minutes (COM-40). |
 | `withinLimit` | Whether a request would be accepted. Show the consequence before they ask. |
-| `runTotalKm` / `maxDetourKm` | The same in kilometres — both caps must hold. |
+| `pointMeters` | How far this point is from the route. |
+| `tier` · `extraMinutes` | `on_way`, `far`, or `null` when a request can't be sent (grey the pin). Discover shows `on_way` under Matching and `far` under Other commutes, labelled "A bit far". |
 | `tripId` · `estimatedPickupAt` · `estimatedPickupLocal` | "Pickup around 7:55" (DISCOVER-14): when the car should reach this point on that day — **an estimate**, the departure plus the point's share of the route's duration. `null` when the commute has no upcoming day. Once she is booked, read `pickupEta` on the booking. |
 
 #### `POST /seat-requests/{seatRequest}/pickup-request` — active, profile complete
@@ -4707,6 +4795,8 @@ exist, and every live endpoint must be named here.
 
 | Date | Change |
 |---|---|
+| 2026-11-05 | 🛣️ **Create Commute gaps.** **2 new endpoints:** `GET /commutes/options` and `GET /commutes/{commute}/route-preview`. 🔴 **Behaviour changes:** the form and its drafts no longer need a verified identity, and only publishing and running a commute do (PROF-19), so `GET /commutes` and `POST /commutes` no longer answer `VERIFICATION_REQUIRED`. Every field on `POST /commutes` is optional, `vehicleId` and `seatsTotal` can be `null` on a draft, and `vehicle` is a new `missing[]` value. `allowsCustomPickup` defaults to `true`. `startDate` and `endDate` are optional. New `weekdays[]` on a commute, `?status=` on `GET /commutes`, and `DELETE` works on a draft. New error `COMMUTE_ROUTE_UNAVAILABLE`. `GET /driver/vehicles` answers an empty list, not `404`, before the driver has a profile. Publish refusals corrected. |
+| 2026-11-05 | 🧭 **Create Commute answers (D-0034).** 🔴 **Behaviour changes:** detours now have two tiers with no km cap, and `tier` and `extraMinutes` are new on the inbox `impact`, `counteroffer-options`, `pickup-preview` and search. A request beyond them answers `PICKUP_DETOUR_TOO_LONG`, whose fields changed; `maxDetourMinutes` is now 30, and `maxDetourKm` and `runTotalKm` are gone. New `detourTiers` on `GET /commutes/options`. New errors `COMMUTE_AC_NOT_AVAILABLE` and `COMMUTE_WOMEN_ONLY_NOT_ALLOWED`. `rules.ac` on results follows the car, and the `ac` search rule filters on the car. New cancel reason `pickup_moved_earlier`. New notifications `pickup_moved_earlier`, `commute_archived` and `waitlisted_commute_ended`. New `missing[]` values `vehicle_under_review` and `vehicle_rejected` on a draft. Commutes renew by themselves. |
 | 2026-11-04 | 📥 **Driver Requests gaps.** **3 new endpoints:** `GET /driver/waitlist`, `GET /driver/seat-offers` and `GET /driver/seat-requests/{seatRequest}/counteroffer-options`. `GET /driver/seat-requests` takes `?status=` and each row gains `tripDate`, `departureLocal`, `originLabel`, `destinationLabel` and `impact`. `route-preview` gains `impact` and now previews the next **requested** weekday. Waiting-list rows gain `tripDate`, `originLabel`, `destinationLabel`, `pickup.label`, `dropoff.label`, `availableToday` and `offer`. 🛑 `joinedWaitlistAt` on a waiting-list row is now when she was added to the list, not when she asked, and matches the seat-request shape. |
 | 2026-11-04 | 🚗 **Driver Home round 2.** New `pausedCommutes` and `pausedCommuteReasons` on `GET /driver/home`. 🛑 Car items of a suspended driver read `suspended`, not `action_needed`. 🛑 A licence waiting on an application that was rejected or withdrawn reads `in_progress`, not `under_review`. |
 | 2026-11-04 | 🪪 **The licence follows the application.** `POST /driver/application/submit` now sends the licence to review, and approving the driver approves it with the typed date, so `licenceExpiresAt`, `expiring` and `renewal_required` work and an approved driver reads 5 of 5. A reviewer's rejected licence blocks approval until replaced. **Days of a paused commute are gone from `nextRun` and `laterThisWeek`**, and the lateness sweep skips them. `demo:driver-home-states` gains `--state` and `--phone`, and covers every state in `FLUTTER_DRIVER_HOME_RESPONSES.md`. |

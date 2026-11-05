@@ -10,6 +10,7 @@ use App\Domains\Booking\Enums\PaymentType;
 use App\Domains\Booking\Models\Booking;
 use App\Domains\Booking\Models\SeatRequest;
 use App\Domains\Booking\Support\BookingEventLog;
+use App\Domains\Booking\Support\FreeCancel;
 use App\Domains\Commute\Models\ScheduledTrip;
 use App\Domains\Group\Models\CommuteGroup;
 
@@ -114,6 +115,8 @@ final readonly class CreateBookingAction
             : PaymentStatus::Pending->value;
 
         $booking->save();
+
+        FreeCancel::rememberAgreedPickup($booking);
 
         BookingEventLog::record(
             $booking,

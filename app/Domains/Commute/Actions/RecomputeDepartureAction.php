@@ -2,6 +2,8 @@
 
 namespace App\Domains\Commute\Actions;
 
+use App\Domains\Booking\Enums\BookingStatus;
+use App\Domains\Booking\Models\Booking;
 use App\Domains\Commute\Enums\ScheduledTripStatus;
 use App\Domains\Commute\Jobs\RecomputeTripDeparture;
 use App\Domains\Commute\Models\ScheduledTrip;
@@ -66,8 +68,9 @@ final readonly class RecomputeDepartureAction
 
         $timezone = $trip->commuteSchedule?->timezone ?? 'Africa/Cairo';
         $local = $computed->setTimezone($timezone);
+        $movedEarlier = $computed->lessThan($trip->departure_at);
 
-        DB::transaction(function () use ($trip, $computed, $local): void {
+        DB::transaction(function () use ($trip, $computed, $local, $movedEarlier): void {
             $trip->forceFill([
                 'departure_at' => $computed,
                 'departure_local' => $local->format('Y-m-d H:i:s'),
@@ -84,8 +87,34 @@ final readonly class RecomputeDepartureAction
                     'commuteId' => (string) $trip->commute_offer_id,
                 ]);
             }
+
+            if ($movedEarlier) {
+                $this->tellPassengers($trip, $local);
+            }
         });
 
         return true;
+    }
+
+    private function tellPassengers(ScheduledTrip $trip, CarbonImmutable $local): void
+    {
+        Booking::query()
+            ->with('passenger')
+            ->where('scheduled_trip_id', $trip->getKey())
+            ->where('status', BookingStatus::Confirmed->value)
+            ->get()
+            ->each(function (Booking $booking) use ($trip, $local): void {
+                if ($booking->passenger === null) {
+                    return;
+                }
+
+                Notifier::send($booking->passenger, NotificationType::PickupMovedEarlier, [
+                    'time' => $local->format('H:i'),
+                    'date' => $local->format('Y-m-d'),
+                ], [
+                    'bookingId' => (string) $booking->getKey(),
+                    'scheduledTripId' => (string) $trip->getKey(),
+                ]);
+            });
     }
 }

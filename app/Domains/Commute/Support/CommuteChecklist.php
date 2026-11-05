@@ -3,8 +3,10 @@
 namespace App\Domains\Commute\Support;
 
 use App\Domains\Commute\Enums\CommuteLocationType;
+use App\Domains\Commute\Enums\CommuteOfferStatus;
 use App\Domains\Commute\Enums\CommuteType;
 use App\Domains\Commute\Models\CommuteOffer;
+use App\Domains\Driver\Enums\VehicleVerificationStatus;
 
 /**
  * What a commute still needs before it can be published — the review screen of
@@ -41,6 +43,10 @@ final class CommuteChecklist
             $missing[] = 'schedule';
         }
 
+        if ($offer->vehicle_id === null) {
+            $missing[] = 'vehicle';
+        }
+
         // A one-time commute still needs a schedule row: it is the same shape
         // with a single day in the mask and start_date == end_date, so nothing
         // downstream has to special-case it.
@@ -48,6 +54,28 @@ final class CommuteChecklist
             && $offer->schedule !== null
             && ! $offer->schedule->start_date->isSameDay($offer->schedule->end_date)) {
             $missing[] = 'one_time_single_date';
+        }
+
+        return $missing;
+    }
+
+    /**
+     * @return array<int, string>
+     */
+    public static function forReview(CommuteOffer $offer): array
+    {
+        $missing = self::missingFor($offer);
+
+        if ($offer->status !== CommuteOfferStatus::Draft || $offer->vehicle_id === null) {
+            return $missing;
+        }
+
+        $vehicle = $offer->vehicle()->first();
+
+        if ($vehicle?->verification_status === VehicleVerificationStatus::Rejected) {
+            $missing[] = 'vehicle_rejected';
+        } elseif ($vehicle !== null && (! $vehicle->isApproved() || $vehicle->approved_seats === null)) {
+            $missing[] = 'vehicle_under_review';
         }
 
         return $missing;

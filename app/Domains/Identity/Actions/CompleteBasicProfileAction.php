@@ -2,6 +2,7 @@
 
 namespace App\Domains\Identity\Actions;
 
+use App\Domains\Commute\Actions\ChangeCommuteStatusAction;
 use App\Domains\Identity\Enums\Gender;
 use App\Domains\Identity\Enums\OrgType;
 use App\Domains\Identity\Enums\ProfileStatus;
@@ -48,6 +49,8 @@ final readonly class CompleteBasicProfileAction
             ? trim($firstName.' '.trim((string) ($attributes['lastName'] ?? '')))
             : trim((string) $attributes['fullName']);
 
+        $wasWoman = $user->gender === Gender::Woman;
+
         $user->fill([
             'full_name' => $fullName,
             // What other members actually see (Bible §15.2 / pitfall #21):
@@ -78,6 +81,10 @@ final readonly class CompleteBasicProfileAction
         $user->profile_status = ProfileStatus::BasicComplete->value;
 
         $user->save();
+
+        if ($wasWoman && $user->gender !== Gender::Woman) {
+            app(ChangeCommuteStatusAction::class)->pauseWomenOnlyForReview((string) $user->id);
+        }
 
         /*
          * 🔴 The role is now OPTIONAL here (Feature 01 v3 makes it its own step), and this branch

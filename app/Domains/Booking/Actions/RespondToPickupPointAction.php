@@ -6,6 +6,7 @@ use App\Domains\Booking\Enums\BookingStatus;
 use App\Domains\Booking\Enums\PickupPointRequestStatus;
 use App\Domains\Booking\Models\Booking;
 use App\Domains\Booking\Models\PickupPointRequest;
+use App\Domains\Booking\Support\FreeCancel;
 use App\Domains\Commute\Models\ScheduledTrip;
 use App\Domains\Commute\Support\ScheduleLock;
 use App\Domains\Geo\Models\Place;
@@ -182,6 +183,8 @@ final readonly class RespondToPickupPointAction
              * itinerary").
              */
             $this->itinerary->bump($booking->scheduled_trip_id);
+
+            FreeCancel::rememberAgreedPickup($booking);
         }
     }
 

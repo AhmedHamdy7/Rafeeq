@@ -6,6 +6,7 @@ use App\Domains\Commute\Enums\CommuteLocationType;
 use App\Domains\Commute\Enums\CommuteOfferStatus;
 use App\Domains\Commute\Models\CommuteOffer;
 use App\Domains\Commute\Support\CommuteChecklist;
+use App\Domains\Commute\Support\CommuteGuards;
 use App\Domains\Geo\Actions\MatchCorridorAction;
 use App\Domains\Geo\Contracts\GeoQueryEngine;
 use App\Domains\Geo\Models\Corridor;
@@ -56,6 +57,9 @@ final readonly class PublishCommuteOfferAction
             throw DomainException::of(ErrorCode::CommuteIncomplete, fields: ['missing' => $missing]);
         }
 
+        CommuteGuards::assertDriverMayUseAudience((string) $offer->driver_profile_id, $offer->audience);
+        CommuteGuards::assertOfferFitsCarAc($offer, $offer->vehicle);
+
         // Re-checked at publish, not only at creation: a draft can sit for weeks,
         // and a licence or a vehicle approval can lapse in between.
         CreateCommuteOfferAction::assertDriverMayPublish($offer->driverProfile);
@@ -72,6 +76,7 @@ final readonly class PublishCommuteOfferAction
             );
 
             $offer->forceFill([
+                'seats_total' => $offer->seats_total ?? $offer->vehicle->approved_seats,
                 'status' => CommuteOfferStatus::Published->value,
                 'published_at' => now(),
                 'paused_at' => null,

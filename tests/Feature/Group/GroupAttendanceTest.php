@@ -168,6 +168,7 @@ it('cancels her seat that day when she says she is away, for free days ahead', f
 
 it('makes "away" within 12 hours a late cancel', function () {
     $this->trip->forceFill(['departure_at' => now()->addHours(5)])->save();
+    Booking::query()->where('scheduled_trip_id', $this->trip->id)->update(['agreed_pickup_at' => null]);
 
     declareAttendance($this->paxToken, $this->groupId, $this->trip->id, 'away')->assertStatus(201);
 

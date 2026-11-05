@@ -13,7 +13,7 @@ enum CommuteOfferStatus: string
     public function canTransitionTo(self $next): bool
     {
         return in_array($next, match ($this) {
-            self::Draft => [self::Published],
+            self::Draft => [self::Published, self::Archived],
             self::Published => [self::Paused, self::Archived],
             self::Paused => [self::Published, self::Archived],
             self::Archived => [],

@@ -2,6 +2,8 @@
 
 namespace App\Domains\Matching\Support;
 
+use App\Domains\Booking\Enums\DetourTier;
+
 /**
  * A match's score, component by component.
  *
@@ -21,6 +23,7 @@ final readonly class ScoreBreakdown
         public int $reliability,
         public float $walkMinutes,
         public float $detourMinutes,
+        public ?DetourTier $tier = null,
     ) {}
 
     public function total(): int
@@ -44,6 +47,7 @@ final readonly class ScoreBreakdown
             'reliability_score' => $this->reliability,
             'walk_minutes' => round($this->walkMinutes, 1),
             'detour_minutes' => round($this->detourMinutes, 1),
+            'detour_tier' => $this->tier?->value,
         ];
     }
 }

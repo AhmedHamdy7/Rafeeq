@@ -5,6 +5,7 @@ use App\Domains\Commute\Models\CommuteLocation;
 use App\Domains\Commute\Models\CommuteRule;
 use App\Domains\Commute\Models\ScheduledTrip;
 use App\Domains\Identity\Models\User;
+use Database\Seeders\CreateCommuteStatesSeeder;
 use Database\Seeders\DemoDataSeeder;
 use Database\Seeders\DriverHomeStatesSeeder;
 use Database\Seeders\DriverRequestsStatesSeeder;
@@ -164,4 +165,33 @@ it('refuses to add Driver Requests states in production', function () {
     app()->detectEnvironment(fn () => 'production');
 
     $this->artisan('demo:driver-requests-states')->assertFailed();
+});
+
+it('seeds every Create Commute state and resets them when run again', function () {
+    $this->artisan('demo:create-commute-states')->assertSuccessful();
+    $this->artisan('demo:create-commute-states')->assertSuccessful();
+
+    $as = fn (string $state) => $this->actingAs(
+        User::query()->where('phone_e164', CreateCommuteStatesSeeder::CREATE_STATES[$state])->sole(),
+        'sanctum',
+    );
+
+    $draft = fn (string $state) => $as($state)->getJson('/api/v1/commutes?status=draft')->assertOk()->json('data.0.id');
+    $publish = fn (string $state) => $as($state)->postJson('/api/v1/commutes/'.$draft($state).'/publish')->json('error.code');
+
+    expect($as('CC-UNVERIFIED')->getJson('/api/v1/commutes')->assertOk()->json('data'))->toBe([])
+        ->and($as('CC-NO-CAR')->getJson('/api/v1/driver/vehicles')->assertOk()->json('data'))->toBe([])
+        ->and($publish('CC-CAR-NOT-REVIEWED'))->toBe('VEHICLE_SEATS_NOT_APPROVED')
+        ->and($publish('CC-CAR-REJECTED'))->toBe('COMMUTE_VEHICLE_UNAVAILABLE')
+        ->and($publish('CC-CAR-PENDING'))->toBe('COMMUTE_VEHICLE_UNAVAILABLE')
+        ->and($publish('CC-OVERDUE'))->toBe('DRIVER_COMMISSION_OVERDUE')
+        ->and($publish('CC-SUSPENDED'))->toBe('DRIVER_NOT_ELIGIBLE')
+        ->and($publish('CC-LICENCE-EXPIRED'))->toBe('DRIVER_LICENCE_EXPIRED')
+        ->and($publish('CC-READY'))->toBeNull();
+});
+
+it('refuses to add Create Commute states in production', function () {
+    app()->detectEnvironment(fn () => 'production');
+
+    $this->artisan('demo:create-commute-states')->assertFailed();
 });

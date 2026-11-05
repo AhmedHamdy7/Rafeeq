@@ -57,6 +57,7 @@ class Booking extends Model
              * client move the place somebody is standing.
              */
             'pickup_point' => SpatialPoint::class,
+            'agreed_pickup_at' => 'datetime',
             'pickup_lat' => 'decimal:7',
             'pickup_lng' => 'decimal:7',
             'dropoff_point' => SpatialPoint::class,

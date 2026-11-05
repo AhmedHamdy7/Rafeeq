@@ -48,6 +48,8 @@ final readonly class RequestRouteImpact
             'addedMinutes' => (int) round(max(0, $preview->durationSeconds - $current) / 60),
             'maxDetourMinutes' => RouteSettings::maxTripDetourMinutes(),
             'withinLimit' => $detour->isWithin(),
+            'tier' => $detour->tier()?->value,
+            'extraMinutes' => $detour->extraMinutes(),
             'promisedArrivalLocal' => PassengerStanding::promisedArrivalLocal($day),
             'projectedArrivalLocal' => PickupEta::local($day, $arrival),
             'canAccept' => ! $blocked,

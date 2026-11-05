@@ -66,8 +66,11 @@ final class SettingsCatalogue
         // ---- Route limits (COM-31, COM-16; decision C8 of 2026-10-31) -----
         // The driver no longer chooses any of these.
         'commute.match_radius_meters' => ['group' => 'commute', 'min' => 200, 'max' => 5_000, 'unit' => 'meters'],
-        'commute.max_trip_detour_minutes' => ['group' => 'commute', 'min' => 0, 'max' => 45, 'unit' => 'minutes'],
-        'commute.max_trip_detour_meters' => ['group' => 'commute', 'min' => 0, 'max' => 20_000, 'unit' => 'meters'],
+        'commute.far_radius_meters' => ['group' => 'commute', 'min' => 200, 'max' => 10_000, 'unit' => 'meters'],
+        'commute.on_way_request_minutes' => ['group' => 'commute', 'min' => 0, 'max' => 60, 'unit' => 'minutes'],
+        'commute.far_request_minutes' => ['group' => 'commute', 'min' => 0, 'max' => 60, 'unit' => 'minutes'],
+        'commute.on_way_trip_minutes' => ['group' => 'commute', 'min' => 0, 'max' => 90, 'unit' => 'minutes'],
+        'commute.far_trip_minutes' => ['group' => 'commute', 'min' => 0, 'max' => 90, 'unit' => 'minutes'],
         'commute.max_pickup_points' => ['group' => 'commute', 'min' => 1, 'max' => 6, 'unit' => 'stops'],
         'commute.max_dropoff_points' => ['group' => 'commute', 'min' => 1, 'max' => 6, 'unit' => 'stops'],
         'commute.schedule_lock_hours' => ['group' => 'commute', 'min' => 1, 'max' => 48, 'unit' => 'hours'],
@@ -148,6 +151,7 @@ final class SettingsCatalogue
         'fees.no_show_step_4_percent' => ['group' => 'fees', 'min' => 0, 'max' => 200, 'unit' => 'percent'],
         'fees.no_show_step_5_percent' => ['group' => 'fees', 'min' => 0, 'max' => 200, 'unit' => 'percent'],
         'fees.late_cancel_hours' => ['group' => 'fees', 'min' => 1, 'max' => 48, 'unit' => 'hours'],
+        'fees.free_cancel_pickup_moved_minutes' => ['group' => 'fees', 'min' => 0, 'max' => 120, 'unit' => 'minutes'],
         'fees.late_cancel_share_percent' => ['group' => 'fees', 'min' => 0, 'max' => 100, 'unit' => 'percent'],
         'fees.lateness_step_3_percent' => ['group' => 'fees', 'min' => 0, 'max' => 200, 'unit' => 'percent'],
         'fees.lateness_step_4_percent' => ['group' => 'fees', 'min' => 0, 'max' => 200, 'unit' => 'percent'],

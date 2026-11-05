@@ -2,8 +2,8 @@
 
 namespace App\Console\Commands;
 
-use App\Domains\Commute\Actions\ChangeCommuteStatusAction;
 use App\Domains\Commute\Actions\GenerateScheduledTripsAction;
+use App\Domains\Commute\Actions\RenewOrEndCommuteAction;
 use App\Domains\Commute\Enums\CommuteOfferStatus;
 use App\Domains\Commute\Models\CommuteOffer;
 use Carbon\CarbonImmutable;
@@ -33,7 +33,7 @@ final class GenerateScheduledTrips extends Command
 
     public function handle(
         GenerateScheduledTripsAction $generate,
-        ChangeCommuteStatusAction $changeStatus,
+        RenewOrEndCommuteAction $renewOrEnd,
     ): int {
         $created = 0;
         $archived = 0;
@@ -45,14 +45,16 @@ final class GenerateScheduledTrips extends Command
             // Chunked rather than loaded: this walks every published commute on
             // the platform, and the whole point of the rolling horizon is not to
             // hold the fleet's worth of data at once.
-            ->chunkById(200, function ($offers) use ($generate, $changeStatus, &$created, &$archived): void {
+            ->chunkById(200, function ($offers) use ($generate, $renewOrEnd, &$created, &$archived): void {
                 foreach ($offers as $offer) {
                     if ($offer->schedule === null) {
                         continue;
                     }
 
+                    $renewOrEnd->renewIfDue($offer);
+
                     if ($offer->schedule->end_date->lessThan(CarbonImmutable::today())) {
-                        $changeStatus->archive($offer, 'schedule_ended');
+                        $renewOrEnd->end($offer);
                         $archived++;
 
                         continue;

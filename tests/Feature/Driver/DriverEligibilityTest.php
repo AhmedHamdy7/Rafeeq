@@ -148,7 +148,7 @@ it('lets an unverified identity reach every application and vehicle route', func
 it('still blocks publishing a commute behind a verified identity', function () {
     completeBasicProfile($this->token);
 
-    $this->withToken($this->token)->postJson('/api/v1/commutes', [])
+    $this->withToken($this->token)->postJson('/api/v1/commutes/01JABCDEFGHJKMNPQRSTVWXYZ0/publish')
         ->assertStatus(403)
         ->assertJsonPath('error.code', 'VERIFICATION_REQUIRED');
 });

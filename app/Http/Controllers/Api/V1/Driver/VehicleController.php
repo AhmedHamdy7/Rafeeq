@@ -27,7 +27,9 @@ final class VehicleController extends Controller
      */
     public function index(Request $request): JsonResponse
     {
-        $vehicles = $this->profile($request)
+        $profile = DriverProfile::query()->whereKey($request->user()->id)->first();
+
+        $vehicles = $profile === null ? collect() : $profile
             ->vehicles()
             ->with('documents')
             ->orderByDesc('is_active')

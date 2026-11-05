@@ -94,10 +94,10 @@ final class PickupPreviewController extends Controller
              * discovering it in a refusal.
              */
             'runTotalMinutes' => $detour->runTotalMinutes,
-            // RAFEEQ's whole-trip cap (C-1, COM-31): minutes AND kilometres, both must hold.
             'maxDetourMinutes' => RouteSettings::maxTripDetourMinutes(),
-            'runTotalKm' => $detour->runTotalKm,
-            'maxDetourKm' => round(RouteSettings::maxTripDetourMeters() / 1000, 1),
+            'pointMeters' => $detour->pointMeters,
+            'tier' => $detour->tier()?->value,
+            'extraMinutes' => $detour->extraMinutes(),
 
             // Stated rather than left for the client to compare two numbers and get the
             // boundary case wrong.

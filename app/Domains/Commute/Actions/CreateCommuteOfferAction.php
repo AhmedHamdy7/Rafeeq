@@ -2,8 +2,12 @@
 
 namespace App\Domains\Commute\Actions;
 
+use App\Domains\Commute\Enums\CommuteAudience;
+use App\Domains\Commute\Enums\CommuteDirection;
 use App\Domains\Commute\Enums\CommuteOfferStatus;
+use App\Domains\Commute\Enums\CommuteType;
 use App\Domains\Commute\Models\CommuteOffer;
+use App\Domains\Commute\Support\CommuteGuards;
 use App\Domains\Commute\Support\RouteSettings;
 use App\Domains\Driver\Enums\DriverProfileStatus;
 use App\Domains\Driver\Enums\VehicleVerificationStatus;
@@ -32,20 +36,19 @@ final readonly class CreateCommuteOfferAction
      */
     public function execute(DriverProfile $profile, array $attributes): CommuteOffer
     {
-        $this->assertDriverMayPublish($profile);
+        self::assertDriverMayDraft($profile);
+        CommuteGuards::assertDriverMayUseAudience($profile->user_id, $attributes['audience'] ?? null);
 
-        $vehicle = $this->usableVehicle($profile, $attributes['vehicleId']);
-
-        $this->assertSeatsFitVehicle($vehicle, (int) $attributes['seatsTotal']);
+        $vehicle = self::draftVehicle($profile, $attributes['vehicleId'] ?? null);
 
         $offer = new CommuteOffer;
 
         $offer->fill([
             'driver_profile_id' => $profile->user_id,
-            'vehicle_id' => $vehicle->id,
-            'commute_type' => $attributes['commuteType'],
-            'direction' => $attributes['direction'],
-            'seats_total' => $attributes['seatsTotal'],
+            'vehicle_id' => $vehicle?->id,
+            'commute_type' => $attributes['commuteType'] ?? CommuteType::Recurring->value,
+            'direction' => $attributes['direction'] ?? CommuteDirection::ToWork->value,
+            'seats_total' => self::draftSeats($vehicle, $attributes['seatsTotal'] ?? null),
             /*
              * The platform's limits at the time, stored for history only (C-1, COM-31). Nothing
              * reads these columns to decide anything: every check asks RouteSettings, so an admin
@@ -53,9 +56,9 @@ final readonly class CreateCommuteOfferAction
              */
             'max_detour_minutes' => RouteSettings::maxTripDetourMinutes(),
             'max_walk_minutes' => Distance::fromMetres(RouteSettings::matchRadiusMeters())->asWalkTime()->minutes,
-            'audience' => $attributes['audience'],
+            'audience' => $attributes['audience'] ?? CommuteAudience::AnyVerified->value,
             'min_trust_level' => $attributes['minTrustLevel'] ?? 0,
-            'allows_custom_pickup' => $attributes['allowsCustomPickup'] ?? false,
+            'allows_custom_pickup' => $attributes['allowsCustomPickup'] ?? true,
         ]);
 
         // Not fillable: a commute must never be able to declare itself published
@@ -65,6 +68,36 @@ final readonly class CreateCommuteOfferAction
         $offer->save();
 
         return $offer;
+    }
+
+    public static function assertDriverMayDraft(DriverProfile $profile): void
+    {
+        if ($profile->status === DriverProfileStatus::Suspended) {
+            throw DomainException::of(ErrorCode::DriverNotEligible, fields: [
+                'driver' => [strtoupper($profile->status->value)],
+            ]);
+        }
+    }
+
+    public static function draftVehicle(DriverProfile $profile, ?string $vehicleId): ?Vehicle
+    {
+        if ($vehicleId === null) {
+            return $profile->activeVehicle()->first();
+        }
+
+        return $profile->vehicles()->whereKey($vehicleId)->first()
+            ?? throw DomainException::of(ErrorCode::NotFound);
+    }
+
+    public static function draftSeats(?Vehicle $vehicle, ?int $requested): ?int
+    {
+        $approved = $vehicle?->approved_seats;
+
+        if ($requested !== null && $approved !== null) {
+            self::assertSeatsFitVehicle($vehicle, $requested);
+        }
+
+        return $requested ?? $approved;
     }
 
     /**
@@ -145,7 +178,7 @@ final readonly class CreateCommuteOfferAction
      */
     public static function assertCommuteFitsVehicle(CommuteOffer $offer, Vehicle $vehicle): void
     {
-        self::assertSeatsFitVehicle($vehicle, (int) $offer->seats_total);
+        self::assertSeatsFitVehicle($vehicle, (int) ($offer->seats_total ?? $vehicle->approved_seats));
 
         foreach ($offer->weekdaySchedules()->whereNotNull('seats_total')->pluck('seats_total') as $seats) {
             self::assertSeatsFitVehicle($vehicle, (int) $seats);

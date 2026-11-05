@@ -171,6 +171,8 @@ it('generates a document describing every /v1 route', function () {
         'DELETE /v1/commutes/{commute}',
         'PUT /v1/commutes/{commute}/route',
         'PUT /v1/commutes/{commute}/schedule',
+        'GET /v1/commutes/options',
+        'GET /v1/commutes/{commute}/route-preview',
         'POST /v1/commutes/{commute}/publish',
         'POST /v1/commutes/{commute}/pause',
         'POST /v1/commutes/{commute}/resume',
