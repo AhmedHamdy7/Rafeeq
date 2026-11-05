@@ -13,6 +13,7 @@ use App\Domains\Commute\Enums\CommuteAudience;
 use App\Domains\Commute\Enums\CommuteOfferStatus;
 use App\Domains\Commute\Enums\CommutePausedReason;
 use App\Domains\Commute\Enums\ScheduledTripStatus;
+use App\Domains\Commute\Enums\TripCancelledBy;
 use App\Domains\Commute\Models\CommuteOffer;
 use App\Domains\Commute\Models\ScheduledTrip;
 use App\Domains\Commute\Support\CommuteGuards;
@@ -202,6 +203,7 @@ final readonly class ChangeCommuteStatusAction
             ScheduledTrip::query()->whereIn('id', $ids)->update([
                 'status' => ScheduledTripStatus::Cancelled->value,
                 'cancelled_reason' => $reason ?? 'commute_archived',
+                'cancelled_by' => $reason === null ? TripCancelledBy::Driver->value : TripCancelledBy::Platform->value,
             ]);
         }
 

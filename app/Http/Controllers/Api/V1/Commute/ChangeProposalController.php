@@ -41,7 +41,7 @@ final class ChangeProposalController extends Controller
      */
     #[ApiErrors(
         ErrorCode::ChangeProposalAlreadyOpen,
-        ErrorCode::ChangeProposalNobodyAffected,
+        ErrorCode::CommuteRouteInvalid,
         ErrorCode::NotFound,
     )]
     public function store(
@@ -51,7 +51,7 @@ final class ChangeProposalController extends Controller
     ): JsonResponse {
         $proposal = $action->propose($this->myCommute($request, $commute), $request->validated());
 
-        return ApiResponse::success(new ChangeProposalResource($proposal), status: 201);
+        return ApiResponse::success(ChangeProposalResource::forDriver([$proposal->load('scheduledTrip')])[0], status: 201);
     }
 
     /**
@@ -67,6 +67,7 @@ final class ChangeProposalController extends Controller
             ->whereIn('commute_offer_id', CommuteOffer::query()
                 ->where('driver_profile_id', $request->user()->id)
                 ->select('id'))
+            ->when($request->filled('commuteId'), fn ($query) => $query->where('commute_offer_id', $request->string('commuteId')->value()))
             ->with('scheduledTrip')
             ->latest('created_at')
             ->orderByDesc('id')
@@ -92,7 +93,7 @@ final class ChangeProposalController extends Controller
     ): JsonResponse {
         $revised = $action->revise($this->myProposal($request, $proposal), $request->validated());
 
-        return ApiResponse::success(new ChangeProposalResource($revised));
+        return ApiResponse::success(ChangeProposalResource::forDriver([$revised])[0]);
     }
 
     /**

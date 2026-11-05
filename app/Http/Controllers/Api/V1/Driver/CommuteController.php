@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Api\V1\Driver;
 
 use App\Domains\Booking\Actions\DisplaceConfirmedBookingsAction;
+use App\Domains\Commute\Actions\ChangeCommuteSeatsAction;
 use App\Domains\Commute\Actions\ChangeCommuteStatusAction;
 use App\Domains\Commute\Actions\CommuteState;
 use App\Domains\Commute\Actions\CreateCommuteOfferAction;
@@ -37,6 +38,7 @@ use App\Domains\Verification\Support\VerificationCentre;
 use App\Http\Controllers\Controller;
 use App\Http\OpenApi\ApiErrors;
 use App\Http\Requests\Commute\CancelPreviewRequest;
+use App\Http\Requests\Commute\ChangeCommuteSeatsRequest;
 use App\Http\Requests\Commute\ListCommutesRequest;
 use App\Http\Requests\Commute\ReviseCommuteRequest;
 use App\Http\Requests\Commute\SaveCommuteRouteRequest;
@@ -226,6 +228,37 @@ final class CommuteController extends Controller
         return ApiResponse::success(new CommuteOfferResource(
             $offer->load(['locations', 'schedule', 'weekdaySchedules', 'rules'])
         ));
+    }
+
+    #[ApiErrors(
+        ErrorCode::CommuteNotEditable,
+        ErrorCode::CommuteSeatsConflict,
+        ErrorCode::CommuteSeatsExceedApproved,
+        ErrorCode::NotFound,
+    )]
+    public function changeSeats(ChangeCommuteSeatsRequest $request, string $commute, ChangeCommuteSeatsAction $action): JsonResponse
+    {
+        $offer = $this->owned($request, $commute);
+
+        $tripIds = $action->execute(
+            $offer,
+            (int) $request->validated('seatsTotal'),
+            (string) $request->validated('scope'),
+            $request->validated('scheduledTripId'),
+        );
+
+        $ids = [];
+
+        foreach ($tripIds as $id) {
+            $ids[] = (string) $id;
+        }
+
+        return ApiResponse::success([
+            'seatsTotal' => (int) $request->validated('seatsTotal'),
+            'scope' => (string) $request->validated('scope'),
+            'updatedDays' => count($ids),
+            'tripIds' => $ids,
+        ]);
     }
 
     #[ApiErrors(ErrorCode::CommuteIncomplete, ErrorCode::CommuteRouteUnavailable, ErrorCode::NotFound)]

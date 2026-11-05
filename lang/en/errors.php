@@ -95,7 +95,9 @@ return [
 
     // Custom pickup points.
     'CHANGE_PROPOSAL_ALREADY_OPEN' => 'You already have a change waiting on your passengers. Edit that one instead of sending another.',
-    'CHANGE_PROPOSAL_NOBODY_AFFECTED' => 'Nobody is confirmed on those days, so there is nobody to ask.',
+    'REPLACEMENT_ALREADY_OPEN' => 'You already offered this seat to someone. Withdraw that offer before sending another.',
+    'REPLACEMENT_NOT_ELIGIBLE' => "This person can't take this seat on this day.",
+    'REPLACEMENT_CHANGES_OTHERS' => 'This day is too close to departure, and this replacement would change the trip for your other passengers.',
     'CHANGE_PROPOSAL_NOT_LIVE' => 'This proposal has already been settled.',
     'COMMUTE_SCHEDULE_LOCKED' => 'This day is too close to departure to change. Your passengers have already planned around it.',
     'BOOKING_BREAKS_FROZEN_PROMISE' => 'Adding this seat would make the commute arrive later than the passengers on board were promised.',

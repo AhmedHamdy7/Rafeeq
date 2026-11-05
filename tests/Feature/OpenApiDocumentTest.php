@@ -287,8 +287,12 @@ it('generates a document describing every /v1 route', function () {
         'POST /v1/driver/seat-requests/{seatRequest}/approve',
         'POST /v1/driver/seat-requests/{seatRequest}/reject',
         'GET /v1/driver/bookings',
+        'GET /v1/driver/bookings/{booking}/cancel-preview',
         // C-5: the driver removing one passenger, with the fee by notice.
         'POST /v1/driver/bookings/{booking}/cancel',
+        'POST /v1/driver/bookings/{booking}/replacement-offer',
+        'GET /v1/driver/trips',
+        'PATCH /v1/driver/commutes/{commute}/seats',
         /*
          * The money. Her debt to RAFEEQ, its weekly statement and "I paid" (PAY-08 → PAY-17), and
          * the group's week. Online capture, payouts and refunds still wait on a provider.

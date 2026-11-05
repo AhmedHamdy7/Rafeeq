@@ -1,7 +1,9 @@
 <?php
 
 use App\Domains\Booking\Models\Booking;
+use App\Domains\Commute\Models\ChangeProposal;
 use App\Domains\Commute\Models\CommuteLocation;
+use App\Domains\Commute\Models\CommuteOffer;
 use App\Domains\Commute\Models\CommuteRule;
 use App\Domains\Commute\Models\ScheduledTrip;
 use App\Domains\Driver\Models\Vehicle;
@@ -9,6 +11,7 @@ use App\Domains\Identity\Enums\Gender;
 use App\Domains\Identity\Models\User;
 use Database\Seeders\CreateCommuteStatesSeeder;
 use Database\Seeders\DemoDataSeeder;
+use Database\Seeders\DriverCommutesStatesSeeder;
 use Database\Seeders\DriverHomeStatesSeeder;
 use Database\Seeders\DriverRequestsStatesSeeder;
 
@@ -201,4 +204,21 @@ it('refuses to add Create Commute states in production', function () {
     app()->detectEnvironment(fn () => 'production');
 
     $this->artisan('demo:create-commute-states')->assertFailed();
+});
+
+it('refuses the driver commutes states in production', function () {
+    app()->detectEnvironment(fn () => 'production');
+
+    $this->artisan('demo:driver-commutes-states')->assertFailed();
+});
+
+it('seats real passengers on the driver commutes state, and can reset it', function () {
+    $this->artisan('demo:driver-commutes-states', ['--state' => 'DC-PROPOSAL-OPEN'])->assertSuccessful();
+    $this->artisan('demo:driver-commutes-states', ['--state' => 'DC-PROPOSAL-OPEN'])->assertSuccessful();
+
+    $driver = User::query()->where('phone_e164', DriverCommutesStatesSeeder::COMMUTE_STATES['DC-PROPOSAL-OPEN'])->firstOrFail();
+    $proposals = ChangeProposal::query()->whereIn('commute_offer_id', CommuteOffer::query()->where('driver_profile_id', $driver->id)->select('id'))->get();
+
+    expect($proposals)->toHaveCount(1)
+        ->and($proposals->first()->affectedBookings()->count())->toBe(3);
 });

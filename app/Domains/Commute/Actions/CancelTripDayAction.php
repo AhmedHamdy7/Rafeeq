@@ -10,6 +10,7 @@ use App\Domains\Booking\Models\Booking;
 use App\Domains\Booking\Models\SeatRequest;
 use App\Domains\Booking\Support\BookingEventLog;
 use App\Domains\Commute\Enums\ScheduledTripStatus;
+use App\Domains\Commute\Enums\TripCancelledBy;
 use App\Domains\Commute\Models\ScheduledTrip;
 use App\Domains\Identity\Models\User;
 use App\Domains\Notification\Enums\NotificationType;
@@ -63,6 +64,7 @@ final readonly class CancelTripDayAction
             $trip->forceFill([
                 'status' => ScheduledTripStatus::Cancelled->value,
                 'cancelled_reason' => $reason ?? 'driver_cancelled_day',
+                'cancelled_by' => TripCancelledBy::Driver->value,
                 'seats_taken' => 0,
             ])->save();
 

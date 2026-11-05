@@ -3,6 +3,7 @@
 namespace App\Domains\Trip\Actions;
 
 use App\Domains\Commute\Enums\ScheduledTripStatus;
+use App\Domains\Commute\Enums\TripCancelledBy;
 use App\Domains\Commute\Models\ScheduledTrip;
 use App\Domains\Shared\Exceptions\DomainException;
 use App\Domains\Shared\Support\ErrorCode;
@@ -120,7 +121,7 @@ final readonly class AdvanceTripAction
         self::assertCanTransitionTo($session, TripSessionStatus::Cancelled);
 
         $session->forceFill(['current_status' => TripSessionStatus::Cancelled->value])->save();
-        $session->scheduledTrip->forceFill(['status' => ScheduledTripStatus::Cancelled->value])->save();
+        $session->scheduledTrip->forceFill(['status' => ScheduledTripStatus::Cancelled->value, 'cancelled_by' => TripCancelledBy::Driver->value])->save();
 
         return $session;
     }

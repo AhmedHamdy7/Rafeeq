@@ -87,11 +87,14 @@ final class DriverSeatOffers
             'offerId' => (string) $offer->getKey(),
             'seatRequestId' => $offer->seat_request_id,
             'publicFirstName' => $offer->seatRequest?->passenger?->public_first_name,
-            'status' => self::visibleStatus($offer->status, $someoneAccepted),
+            'status' => $offer->replaces_booking_id !== null && $offer->status === SeatOfferStatus::Declined
+                ? 'DECLINED'
+                : self::visibleStatus($offer->status, $someoneAccepted),
         ])->values();
 
         return [
             'releaseEventId' => $offers->first()->release_event_id,
+            'replacesBookingId' => $offers->first()->replaces_booking_id,
             'tripId' => $trip->id,
             'commuteId' => $trip->commute_offer_id,
             'date' => $trip->trip_date->toDateString(),

@@ -336,18 +336,16 @@ it('refuses an answer from somebody with no seat on the day', function () {
     expect(ScheduledTrip::findOrFail($this->tripId)->departure_local->format('H:i:s'))->toBe('07:05:00');
 });
 
-/**
- * 🔴 Nobody to ask means refused, not applied. A change through this path with no approvals would
- * be a route around the whole mechanism the moment the last passenger cancelled.
- */
-it('refuses a proposal that affects nobody', function () {
+it('applies at once when it affects nobody', function () {
     proposeChange($this->driverToken, $this->commuteId, [
         'scheduledTripId' => $this->tripId,
         'scope' => 'only_this_occurrence',
         'departureTime' => '07:30:00',
     ])
-        ->assertStatus(409)
-        ->assertJsonPath('error.code', 'CHANGE_PROPOSAL_NOBODY_AFFECTED');
+        ->assertStatus(201)
+        ->assertJsonPath('data.status', 'APPLIED');
+
+    expect(ScheduledTrip::findOrFail($this->tripId)->departure_local->format('H:i:s'))->toBe('07:30:00');
 });
 
 /**

@@ -13,11 +13,15 @@ use App\Domains\Commute\Enums\CommuteLocationType;
 use App\Domains\Commute\Models\ChangeProposal;
 use App\Domains\Commute\Models\CommuteLocation;
 use App\Domains\Commute\Models\CommuteWeekdaySchedule;
+use App\Domains\Commute\Models\ScheduledTrip;
+use App\Domains\Commute\Support\ComputedDeparture;
 use App\Domains\Commute\Support\DepartureTimeCalculator;
 use App\Domains\Notification\Enums\NotificationType;
 use App\Domains\Notification\Support\Notifier;
 use App\Domains\Shared\ValueObjects\Coordinate;
+use App\Domains\Shared\ValueObjects\DaysMask;
 use App\Domains\Trip\Actions\BuildNavigationItineraryAction;
+use Carbon\CarbonImmutable;
 use Illuminate\Support\Facades\DB;
 
 /**
@@ -30,11 +34,15 @@ use Illuminate\Support\Facades\DB;
  */
 final readonly class ApplyChangeProposalAction
 {
-    public function __construct(private BuildNavigationItineraryAction $itinerary) {}
+    public function __construct(
+        private BuildNavigationItineraryAction $itinerary,
+        private ComputedDeparture $departure,
+        private SaveCommuteScheduleAction $schedule,
+    ) {}
 
-    public function execute(ChangeProposal $proposal): ChangeProposal
+    public function execute(ChangeProposal $proposal, bool $tell = true): ChangeProposal
     {
-        return DB::transaction(function () use ($proposal): ChangeProposal {
+        return DB::transaction(function () use ($proposal, $tell): ChangeProposal {
             $changes = $proposal->changes;
 
             if (isset($changes['departureTime']) || isset($changes['promisedArrivalTime'])) {
@@ -79,7 +87,9 @@ final readonly class ApplyChangeProposalAction
                 $this->clearTheWaitingList($proposal);
             }
 
-            $this->tellEverybody($proposal);
+            if ($tell) {
+                $this->tellEverybody($proposal);
+            }
 
             return $proposal;
         });
@@ -129,7 +139,42 @@ final readonly class ApplyChangeProposalAction
             }
 
             $trip->forceFill($attributes)->save();
+
+            if (! isset($changes['departureTime']) && isset($changes['promisedArrivalTime'])) {
+                $this->followArrival($proposal, $trip);
+            }
         }
+
+        if ($proposal->scope->rewritesTheTemplate() && isset($changes['promisedArrivalTime']) && $proposal->commuteOffer !== null) {
+            $this->schedule->refreshEstimates($proposal->commuteOffer);
+        }
+    }
+
+    private function followArrival(ChangeProposal $proposal, ScheduledTrip $trip): void
+    {
+        $bit = DaysMask::bitForDate(CarbonImmutable::parse($trip->trip_date));
+
+        $computed = CommuteWeekdaySchedule::query()
+            ->where('commute_offer_id', $proposal->commute_offer_id)
+            ->where('weekday_bit', $bit)
+            ->value('departure_is_computed');
+
+        if (! $computed) {
+            return;
+        }
+
+        $departure = $this->departure->forTrip($trip->refresh());
+
+        if ($departure === null) {
+            return;
+        }
+
+        $timezone = $proposal->commuteOffer?->schedule?->timezone ?? config('app.timezone');
+
+        $trip->forceFill([
+            'departure_at' => $departure,
+            'departure_local' => $departure->setTimezone($timezone)->format('Y-m-d H:i:s'),
+        ])->save();
     }
 
     /**
@@ -159,6 +204,7 @@ final readonly class ApplyChangeProposalAction
 
         if (isset($changes['departureTime'])) {
             $attributes['departure_time'] = $changes['departureTime'];
+            $attributes['departure_is_computed'] = false;
         }
 
         if (isset($changes['promisedArrivalTime'])) {

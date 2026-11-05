@@ -6,8 +6,10 @@ use App\Domains\Booking\Enums\BookingActorType;
 use App\Domains\Booking\Enums\BookingEventType;
 use App\Domains\Booking\Enums\BookingStatus;
 use App\Domains\Booking\Enums\DisplacementReason;
+use App\Domains\Booking\Enums\SeatOfferStatus;
 use App\Domains\Booking\Enums\SwitchReason;
 use App\Domains\Booking\Models\Booking;
+use App\Domains\Booking\Models\SeatOffer;
 use App\Domains\Booking\Support\BookingEventLog;
 use App\Domains\Booking\Support\FreeCancel;
 use App\Domains\Commute\Models\ScheduledTrip;
@@ -84,6 +86,24 @@ final readonly class CancelBookingAction
             );
 
             // PAY-23 (C-5): the driver-cancel fee by the notice he gave, on his side.
+            DriverFees::chargeCancellation($cancelled);
+
+            return $cancelled;
+        });
+    }
+
+    public function byReplacement(Booking $booking, string $driverUserId): Booking
+    {
+        return DB::transaction(function () use ($booking, $driverUserId): Booking {
+            $cancelled = $this->cancel(
+                $booking,
+                BookingStatus::CancelledByDriver,
+                BookingActorType::Driver,
+                $driverUserId,
+                'driver_replaced',
+                offerToWaitlist: false,
+            );
+
             DriverFees::chargeCancellation($cancelled);
 
             return $cancelled;
@@ -323,6 +343,11 @@ final readonly class CancelBookingAction
                     ? (int) config('rafeeq.booking.cancellation_fee_piastres')
                     : 0,
             ])->save();
+
+            SeatOffer::query()
+                ->where('replaces_booking_id', $booking->getKey())
+                ->open()
+                ->update(['status' => SeatOfferStatus::Closed->value, 'closed_at' => now()]);
 
             // Never below zero, however the data got there: a negative seat count
             // would make the trip look bookable past its capacity.

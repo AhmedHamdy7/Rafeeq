@@ -4,6 +4,8 @@ namespace App\Domains\Booking\Actions;
 
 use App\Domains\Booking\Enums\SeatOfferStatus;
 use App\Domains\Booking\Models\SeatOffer;
+use App\Domains\Notification\Enums\NotificationType;
+use App\Domains\Notification\Support\Notifier;
 use App\Domains\Shared\Exceptions\DomainException;
 use App\Domains\Shared\Support\ErrorCode;
 use Illuminate\Support\Facades\DB;
@@ -58,7 +60,26 @@ final readonly class DeclineSeatOfferAction
                 'closed_at' => now(),
             ])->save();
 
+            if ($offer->replaces_booking_id !== null) {
+                $this->tellDriver($offer);
+            }
+
             return $offer;
         });
+    }
+
+    private function tellDriver(SeatOffer $offer): void
+    {
+        $offer->loadMissing('seatRequest.passenger', 'scheduledTrip.commuteOffer.driverProfile.user');
+
+        $trip = $offer->scheduledTrip;
+        $driver = $trip?->commuteOffer?->driverProfile?->user;
+
+        if ($driver !== null) {
+            Notifier::send($driver, NotificationType::SeatReplacementDeclined, [
+                'name' => $offer->seatRequest?->passenger?->public_first_name ?? '',
+                'date' => $trip->trip_date->format('j/n'),
+            ], ['tripId' => $trip->getKey(), 'bookingId' => $offer->replaces_booking_id]);
+        }
     }
 }

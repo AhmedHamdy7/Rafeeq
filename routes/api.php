@@ -43,6 +43,7 @@ use App\Http\Controllers\Api\V1\Search\RecentSearchController;
 use App\Http\Controllers\Api\V1\Search\SavedSearchController;
 use App\Http\Controllers\Api\V1\Search\SearchController;
 use App\Http\Controllers\Api\V1\Trip\AttendanceController;
+use App\Http\Controllers\Api\V1\Trip\DriverTripController;
 use App\Http\Controllers\Api\V1\Trip\NavigationRouteController;
 use App\Http\Controllers\Api\V1\Trip\TripController;
 use App\Http\Controllers\Api\V1\Trip\TripLocationController;
@@ -680,7 +681,11 @@ Route::prefix('v1')->group(function (): void {
         Route::post('seat-requests/{seatRequest}/counteroffer/accept', [SeatRequestController::class, 'acceptCounteroffer']);
         Route::post('seat-requests/{seatRequest}/counteroffer/decline', [SeatRequestController::class, 'declineCounteroffer']);
 
+        Route::get('driver/trips', [DriverTripController::class, 'index']);
         Route::get('driver/bookings', [BookingController::class, 'forDriver']);
+        Route::get('driver/bookings/{booking}/cancel-preview', [BookingController::class, 'driverCancelPreview']);
+        Route::post('driver/bookings/{booking}/replacement-offer', [BookingController::class, 'offerReplacement']);
+        Route::patch('driver/commutes/{commute}/seats', [CommuteController::class, 'changeSeats']);
         // C-5: the driver removing ONE passenger — a driver cancellation, with the fee by timing.
         Route::post('driver/bookings/{booking}/cancel', [BookingController::class, 'cancelAsDriver']);
 

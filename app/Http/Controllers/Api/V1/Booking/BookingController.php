@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Api\V1\Booking;
 
 use App\Domains\Booking\Actions\CancelBookingAction;
+use App\Domains\Booking\Actions\OfferReplacementAction;
 use App\Domains\Booking\Enums\BookingStatus;
 use App\Domains\Booking\Models\Booking;
 use App\Domains\Booking\Support\PassengerBookingScope;
@@ -14,6 +15,7 @@ use App\Domains\Matching\Actions\SuggestAlternativesAction;
 use App\Domains\Matching\Support\AlternativeOrigin;
 use App\Domains\Matching\Support\SearchRateLimit;
 use App\Domains\Notification\Support\ContactInfoDetector;
+use App\Domains\Payment\Support\DriverFees;
 use App\Domains\Payment\Support\PassengerFees;
 use App\Domains\Shared\Exceptions\DomainException;
 use App\Domains\Shared\Support\ErrorCode;
@@ -26,7 +28,9 @@ use App\Http\Controllers\Controller;
 use App\Http\OpenApi\ApiErrors;
 use App\Http\Requests\Booking\AnswerEarlyDropRequest;
 use App\Http\Requests\Booking\CancelBookingAsDriverRequest;
+use App\Http\Requests\Booking\ListDriverBookingsRequest;
 use App\Http\Requests\Booking\ListMyBookingsRequest;
+use App\Http\Requests\Booking\OfferReplacementRequest;
 use App\Http\Requests\Booking\UpdatePickupNoteRequest;
 use App\Http\Resources\BookingResource;
 use App\Http\Resources\MatchResultResource;
@@ -80,17 +84,64 @@ final class BookingController extends Controller
      *
      * The largest list in the API: every seat on every day of every commute they run.
      */
-    public function forDriver(Request $request): JsonResponse
+    public function forDriver(ListDriverBookingsRequest $request): JsonResponse
     {
         $bookings = Booking::query()
             ->where('driver_profile_id', $request->user()->id)
-            // The day's stops and commute too, for `pickupEta` (DISCOVER-14) — once for the page.
-            ->with('scheduledTrip.navigationStops', 'scheduledTrip.commuteOffer')
+            ->when($request->filled('tripId'), fn ($query) => $query->where('scheduled_trip_id', $request->validated('tripId')))
+            ->when($request->filled('commuteId'), fn ($query) => $query->whereIn('scheduled_trip_id', ScheduledTrip::query()
+                ->where('commute_offer_id', $request->validated('commuteId'))
+                ->select('id')))
+            ->when($request->statuses() !== [], fn ($query) => $query->whereIn('status', $request->statuses()))
+            ->with([
+                'scheduledTrip.navigationStops',
+                'scheduledTrip.commuteOffer.locations',
+                'passenger.stats',
+                'passenger.verifications',
+                'latestReplacementOffer.seatRequest.passenger',
+            ])
             ->latest('created_at')
             ->orderByDesc('id')
             ->paginate(ApiResponse::perPage($request));
 
         return ApiResponse::paginated($bookings, BookingResource::collection($bookings->items()));
+    }
+
+    #[ApiErrors(ErrorCode::BookingNotCancellable, ErrorCode::NotFound)]
+    public function driverCancelPreview(Request $request, string $booking): JsonResponse
+    {
+        $target = $this->driversBooking($request, $booking)->load('scheduledTrip');
+
+        if ($target->status !== BookingStatus::Confirmed) {
+            throw DomainException::of(ErrorCode::BookingNotCancellable, fields: [
+                'status' => [strtoupper($target->status->value)],
+            ]);
+        }
+
+        return ApiResponse::success(DriverFees::preview(collect([$target])));
+    }
+
+    #[ApiErrors(
+        ErrorCode::BookingNotCancellable,
+        ErrorCode::ReplacementAlreadyOpen,
+        ErrorCode::ReplacementNotEligible,
+        ErrorCode::ReplacementChangesOthers,
+        ErrorCode::NotFound,
+    )]
+    public function offerReplacement(OfferReplacementRequest $request, string $booking, OfferReplacementAction $action): JsonResponse
+    {
+        $target = $this->driversBooking($request, $booking);
+        $action->execute($target, (string) $request->validated('seatRequestId'));
+
+        return ApiResponse::success(
+            new BookingResource($target->load([
+                'scheduledTrip',
+                'passenger.stats',
+                'passenger.verifications',
+                'latestReplacementOffer.seatRequest.passenger',
+            ])),
+            status: 201,
+        );
     }
 
     /**
@@ -190,11 +241,7 @@ final class BookingController extends Controller
     #[ApiErrors(ErrorCode::BookingNotCancellable, ErrorCode::NotFound)]
     public function cancelAsDriver(CancelBookingAsDriverRequest $request, string $booking, CancelBookingAction $action): JsonResponse
     {
-        $target = Booking::query()
-            ->whereKey($booking)
-            ->where('driver_profile_id', $request->user()->id)
-            ->first()
-            ?? throw DomainException::of(ErrorCode::NotFound);
+        $target = $this->driversBooking($request, $booking);
 
         return ApiResponse::success(new BookingResource(
             $action->byDriver($target, $request->user()->id, $request->validated('reason')),
@@ -454,6 +501,15 @@ final class BookingController extends Controller
         }
 
         return ApiResponse::success(new BookingResource($target));
+    }
+
+    private function driversBooking(Request $request, string $bookingId): Booking
+    {
+        return Booking::query()
+            ->whereKey($bookingId)
+            ->where('driver_profile_id', $request->user()->id)
+            ->first()
+            ?? throw DomainException::of(ErrorCode::NotFound);
     }
 
     private function visible(Request $request, string $bookingId): Booking

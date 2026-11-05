@@ -115,6 +115,9 @@ enum ErrorCode: string
      * qualifying. Show "somebody was quicker", never "something went wrong".
      */
     case SeatOfferClosed = 'SEAT_OFFER_CLOSED';
+    case ReplacementAlreadyOpen = 'REPLACEMENT_ALREADY_OPEN';
+    case ReplacementNotEligible = 'REPLACEMENT_NOT_ELIGIBLE';
+    case ReplacementChangesOthers = 'REPLACEMENT_CHANGES_OTHERS';
     case AlreadyBooked = 'BOOKING_ALREADY_BOOKED';
     case BookingDeadlinePassed = 'BOOKING_DEADLINE_PASSED';
     case SeatRequestNotPending = 'SEAT_REQUEST_NOT_PENDING';
@@ -225,14 +228,6 @@ enum ErrorCode: string
      * comparison. v5's editor is one combined request for that reason: she revises the one she has.
      */
     case ChangeProposalAlreadyOpen = 'CHANGE_PROPOSAL_ALREADY_OPEN';
-
-    /**
-     * Nobody is affected, so there is nobody to agree.
-     *
-     * Refused rather than applied: a change through this path with no approvals would be a route
-     * around the whole mechanism the moment the last passenger cancelled.
-     */
-    case ChangeProposalNobodyAffected = 'CHANGE_PROPOSAL_NOBODY_AFFECTED';
 
     /** It has been applied, withdrawn or expired, so there is nothing left to answer or revise. */
     case ChangeProposalNotLive = 'CHANGE_PROPOSAL_NOT_LIVE';
@@ -461,7 +456,9 @@ enum ErrorCode: string
             self::BookingBreaksFrozenPromise,
             // Also state refusals: the proposal's own state, or the commute's, is what says no.
             self::ChangeProposalAlreadyOpen,
-            self::ChangeProposalNobodyAffected,
+            self::ReplacementAlreadyOpen,
+            self::ReplacementNotEligible,
+            self::ReplacementChangesOthers,
             self::ChangeProposalNotLive,
             self::GroupNotActive,
             self::GroupNoticeAlreadyGiven,

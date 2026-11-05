@@ -11,7 +11,9 @@ use App\Domains\Booking\Enums\SwitchReason;
 use App\Domains\Booking\Enums\SwitchScope;
 use App\Domains\Booking\Models\Booking;
 use App\Domains\Booking\Models\SeatOffer;
+use App\Domains\Booking\Models\SeatRequest;
 use App\Domains\Booking\Support\BookingEventLog;
+use App\Domains\Booking\Support\ReplacementRule;
 use App\Domains\Booking\Support\RequestKinds;
 use App\Domains\Booking\Support\SameTimeBookings;
 use App\Domains\Booking\Support\SeatAcceptance;
@@ -21,6 +23,8 @@ use App\Domains\Commute\Enums\ScheduledTripStatus;
 use App\Domains\Commute\Models\ScheduledTrip;
 use App\Domains\Commute\Support\ScheduleLock;
 use App\Domains\Group\Actions\AddMemberToGroupAction;
+use App\Domains\Notification\Enums\NotificationType;
+use App\Domains\Notification\Support\Notifier;
 use App\Domains\Outbox\Enums\OutboxEventType;
 use App\Domains\Outbox\Support\Outbox;
 use App\Domains\Payment\Support\DriverFees;
@@ -58,6 +62,7 @@ final readonly class AcceptSeatOfferAction
         private AddMemberToGroupAction $addMember,
         private OfferSeatToWaitlistAction $offerSeat,
         private BuildNavigationItineraryAction $itinerary,
+        private CancelBookingAction $cancelBooking,
     ) {}
 
     /**
@@ -209,6 +214,12 @@ final readonly class AcceptSeatOfferAction
                 ...$alsoReleasing->pluck('id')->all(),
             ])));
 
+            $replaced = $this->releaseReplacedSeat($offer, $trip);
+
+            if ($replaced !== null) {
+                $trip->refresh();
+            }
+
             if ($trip->seats_taken + $request->seats > $trip->seats_total) {
                 $this->close($offer, SeatOfferStatus::TakenByOther);
 
@@ -303,9 +314,10 @@ final readonly class AcceptSeatOfferAction
              *    nobody is left holding an offer for a seat that no longer exists even if this
              *    rolls back.
              */
-            $losers = SeatOffer::query()
+            $losers = $replaced !== null ? collect() : SeatOffer::query()
                 ->where('scheduled_trip_id', $trip->id)
                 ->whereKeyNot($offer->id)
+                ->whereNull('replaces_booking_id')
                 ->open()
                 ->pluck('id');
 
@@ -344,6 +356,10 @@ final readonly class AcceptSeatOfferAction
                     ],
                     dedupeKey: 'offer.closed:'.$loserOfferId,
                 );
+            }
+
+            if ($replaced !== null) {
+                $this->tellDriverReplaced($trip, $request, NotificationType::SeatReplacementAccepted);
             }
 
             return new SeatAcceptance($booking, $released);
@@ -388,6 +404,18 @@ final readonly class AcceptSeatOfferAction
      */
     private function assertKeepsTheFrozenPromise(SeatOffer $offer): void
     {
+        if ($offer->replaces_booking_id !== null) {
+            $replaced = $offer->replacedBooking()->first();
+            $trip = $offer->scheduledTrip()->first();
+            $member = $offer->seatRequest()->first();
+
+            if ($replaced !== null && $trip !== null && $member !== null) {
+                ReplacementRule::assertChangesNobody($replaced, $member, $trip);
+            }
+
+            return;
+        }
+
         $trip = ScheduledTrip::query()
             ->whereKey($offer->scheduled_trip_id)
             ->whereNotNull('promised_arrival_at')
@@ -566,6 +594,38 @@ final readonly class AcceptSeatOfferAction
         $rejoined->save();
 
         WaitlistPositions::renumber($old->scheduledTrip->commute_offer_id);
+    }
+
+    private function releaseReplacedSeat(SeatOffer $offer, ScheduledTrip $trip): ?Booking
+    {
+        if ($offer->replaces_booking_id === null) {
+            return null;
+        }
+
+        $replaced = Booking::query()->whereKey($offer->replaces_booking_id)->lockForUpdate()->first();
+
+        if ($replaced === null
+            || $replaced->status !== BookingStatus::Confirmed
+            || $trip->status !== ScheduledTripStatus::Scheduled
+            || $trip->departure_at->isPast()) {
+            throw DomainException::of(ErrorCode::SeatOfferClosed, fields: [
+                'status' => [SeatOfferStatus::Closed->value],
+            ]);
+        }
+
+        return $this->cancelBooking->byReplacement($replaced, (string) $replaced->driver_profile_id);
+    }
+
+    private function tellDriverReplaced(ScheduledTrip $trip, SeatRequest $request, NotificationType $type): void
+    {
+        $driver = $trip->commuteOffer?->driverProfile?->user;
+
+        if ($driver !== null) {
+            Notifier::send($driver, $type, [
+                'name' => $request->passenger?->public_first_name ?? '',
+                'date' => $trip->trip_date->format('j/n'),
+            ], ['tripId' => $trip->getKey()]);
+        }
     }
 
     private function close(SeatOffer $offer, SeatOfferStatus $status): void

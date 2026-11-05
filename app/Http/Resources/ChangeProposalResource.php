@@ -3,7 +3,11 @@
 namespace App\Http\Resources;
 
 use App\Domains\Booking\Models\Booking;
+use App\Domains\Booking\Support\PickupEta;
+use App\Domains\Commute\Enums\ChangeProposalStatus;
 use App\Domains\Commute\Models\ChangeProposal;
+use App\Domains\Geo\Contracts\GeoQueryEngine;
+use Carbon\CarbonImmutable;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
 
@@ -106,11 +110,18 @@ final class ChangeProposalResource extends JsonResource
 
         foreach ($proposals as $proposal) {
             $roster = [];
+            $shift = $proposal->pickupShiftSeconds();
 
             foreach ($proposal->responseRoster() as $row) {
+                $times = self::pickupTimes($proposal, $row['booking'], $shift);
+
                 $roster[] = [
                     'bookingId' => (string) $row['booking']->getKey(),
                     'passengerFirstName' => $row['booking']->passenger?->public_first_name,
+                    'tripDate' => $row['booking']->scheduledTrip?->trip_date?->toDateString(),
+                    'pickupLabel' => $row['booking']->pickup_label,
+                    'previousPickupLocal' => $times['previousPickupLocal'],
+                    'newPickupLocal' => $times['newPickupLocal'],
                     /*
                      * `AWAITING_RESPONSE` is the absence of an answer, named rather than left null
                      * so the screen v5 describes can show it as a state beside `ACCEPTED` and
@@ -131,6 +142,25 @@ final class ChangeProposalResource extends JsonResource
         }
 
         return $items;
+    }
+
+    private static function pickupTimes(ChangeProposal $proposal, Booking $booking, int $shift): array
+    {
+        $trip = $booking->scheduledTrip;
+        $eta = PickupEta::forBooking(app(GeoQueryEngine::class), $booking, $trip?->navigationStops);
+        $local = $trip === null ? null : PickupEta::local($trip, $eta);
+
+        if ($local === null) {
+            return ['previousPickupLocal' => null, 'newPickupLocal' => null];
+        }
+
+        $now = CarbonImmutable::parse($local);
+        $applied = $proposal->status === ChangeProposalStatus::Applied;
+
+        return [
+            'previousPickupLocal' => ($applied ? $now->subSeconds($shift) : $now)->format('H:i:s'),
+            'newPickupLocal' => ($applied ? $now : $now->addSeconds($shift))->format('H:i:s'),
+        ];
     }
 
     /**
