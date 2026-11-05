@@ -1743,6 +1743,8 @@ because the route is replaced whole. The limits are `maxPickupStops` and `maxDro
 `GET /commutes/options` (3 and 3 today). A point used for both goes in both lists, and counts once
 towards each limit.
 
+A suspended driver's draft is read-only: `PUT /commutes/{commute}/route`, `PUT /commutes/{commute}/schedule` and `PATCH /commutes/{commute}` answer `403 DRIVER_NOT_ELIGIBLE`, and `DELETE /commutes/{commute}` still works. `PUT /commutes/{commute}/route` recalculates the estimated departure on days worked out from the arrival. A stop too far from the road answers `pickups.{index}` or `dropoffs.{index}`, by its position in your list, for every such stop.
+
 `422 COMMUTE_ROUTE_INVALID`: `error.fields.route` when the ends are the same place or there are too
 many stops, `error.fields["pickups.0"]` when that stop is too far off the road.
 
@@ -1856,7 +1858,7 @@ vehicle. An unverified driver stops here, not earlier (PROF-19).
 | `COMMUTE_SEATS_EXCEED_APPROVED` | 422 | `seatsTotal[]`, `approvedSeats[]` | A day offers more seats than the car has. |
 | `DRIVER_NOT_ELIGIBLE` | 403 | `driver[]`: the profile status, such as `SUSPENDED` or `PENDING_REVIEW` | The driver isn't approved. A suspended driver gets its own `message`, safe to show. |
 | `DRIVER_LICENCE_EXPIRED` | 422 | none | The licence lapsed. |
-| `DRIVER_COMMISSION_OVERDUE` | 403 | `amountOwedPiastres[]`, `dueAt[]` | Commission is unpaid past its Friday (PAY-12). **Existing rides continue.** The same refusal applies to `resume`. Show the amount and how to pay. |
+| `DRIVER_COMMISSION_OVERDUE` | 403 | `amountOwedPiastres[]`, `dueAt[]`, `weekStart[]` (the oldest unpaid week, `YYYY-MM-DD`) | Commission is unpaid past its Friday (PAY-12). **Existing rides continue.** The same refusal applies to `resume`. Show the amount and how to pay. |
 
 `DRIVER_DEBT_LIMIT_REACHED` is gone (D-0006).
 
@@ -1949,6 +1951,8 @@ confirmed seat (16h+: 0 · 10–16h: 10 % · < 10h: 25 %) — **show it first** 
 | `audience`, `minTrustLevel` | Who may join. |
 | `allowsCustomPickup` | **Defaults to true.** Only decides whether a confirmed passenger may ask to move their pickup. |
 | `routePolyline`, `routeDistanceMeters`, `routeDurationSeconds` | Computed at publish; `null` on a draft (read `GET /commutes/{commute}/route-preview`). **Only ever returned to the commute's own driver.** |
+| `createdAt`, `updatedAt` | UTC timestamps. `updatedAt` changes on every saved step. |
+| `formStep` | The form step the driver stopped at, 1 to 5, sent on `PATCH` to a draft. `null` until sent. Stored only; use `missing[]` for what's still needed. |
 | `publishedAt`, `pausedAt`, `pausedReason`, `archivedAt` | `pausedReason` is `by_driver` · `vehicle_suspended` · `licence_expired` · `commission_unpaid` · `account_suspended` · `driver_suspended` — all but `by_driver` are automatic, so show the right copy. `licence_expired` means her licence lapsed (COM-26): she can resume after the renewed licence is approved. `driver_suspended` means staff suspended her driving only (PROF-27): Resume answers `403 DRIVER_NOT_ELIGIBLE` and Passenger mode still works. `account_suspended` means staff suspended her account (F1-3); once it is lifted she resumes the commute herself. `commission_unpaid` means a week's commission missed two Fridays (PAY-45): show the debt screen; after paying she resumes the commute herself. |
 | `missing[]` | What still has to be done before it can be published. Drive the wizard from this. The values are `origin`, `destination`, `schedule`, `vehicle` and `one_time_single_date`. |
 | `locations[]` | `{id, type, lat, lng, address, placeId, sequence}`; type is `origin` · `pickup` · `dropoff` · `destination`. |
@@ -4797,6 +4801,7 @@ exist, and every live endpoint must be named here.
 | Date | Change |
 |---|---|
 | 2026-11-05 | 🛣️ **Create Commute gaps.** **2 new endpoints:** `GET /commutes/options` and `GET /commutes/{commute}/route-preview`. 🔴 **Behaviour changes:** the form and its drafts no longer need a verified identity, and only publishing and running a commute do (PROF-19), so `GET /commutes` and `POST /commutes` no longer answer `VERIFICATION_REQUIRED`. Every field on `POST /commutes` is optional, `vehicleId` and `seatsTotal` can be `null` on a draft, and `vehicle` is a new `missing[]` value. `allowsCustomPickup` defaults to `true`. `startDate` and `endDate` are optional. New `weekdays[]` on a commute, `?status=` on `GET /commutes`, and `DELETE` works on a draft. New error `COMMUTE_ROUTE_UNAVAILABLE`. `GET /driver/vehicles` answers an empty list, not `404`, before the driver has a profile. Publish refusals corrected. |
+| 2026-11-05 | 📝 **Create Commute round 2.** New `createdAt`, `updatedAt` and `formStep` on a commute. New `weekStart[]` on `DRIVER_COMMISSION_OVERDUE`. `PUT /commutes/{commute}/route` recalculates the estimated departure. Drop-offs too far from the road are now refused, and every far stop is listed. 🔴 A suspended driver can no longer edit a draft. New demo states `CC-WINDOW-PASSED`, `CC-PENDING-REVIEW` and `CC-DRIVER-REJECTED`. |
 | 2026-11-05 | 🗓️ **Weekday rows.** Every commute with a schedule now has `weekdays[]`, filled by a migration where it was empty. `DRIVER_NOT_ELIGIBLE` has its own message for a suspended driver. |
 | 2026-11-05 | 🔧 **Create Commute follow-ups.** New `rejectionReason` on `GET /driver/vehicles`. `DRIVER_LICENCE_EXPIRED` on publish no longer shows a raw `:days`. New demo states `CC-CAR-NO-AC` and `CC-MAN-DRIVER`. |
 | 2026-11-05 | 🧭 **Create Commute answers (D-0034).** 🔴 **Behaviour changes:** detours now have two tiers with no km cap, and `tier` and `extraMinutes` are new on the inbox `impact`, `counteroffer-options`, `pickup-preview` and search. A request beyond them answers `PICKUP_DETOUR_TOO_LONG`, whose fields changed; `maxDetourMinutes` is now 30, and `maxDetourKm` and `runTotalKm` are gone. New `detourTiers` on `GET /commutes/options`. New errors `COMMUTE_AC_NOT_AVAILABLE` and `COMMUTE_WOMEN_ONLY_NOT_ALLOWED`. `rules.ac` on results follows the car, and the `ac` search rule filters on the car. New cancel reason `pickup_moved_earlier`. New notifications `pickup_moved_earlier`, `commute_archived` and `waitlisted_commute_ended`. New `missing[]` values `vehicle_under_review` and `vehicle_rejected` on a draft. Commutes renew by themselves. |

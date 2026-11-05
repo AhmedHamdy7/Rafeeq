@@ -30,7 +30,10 @@ final readonly class SaveCommuteRouteAction
 {
     private const int DESTINATION_SEQUENCE = 999;
 
-    public function __construct(private GeoQueryEngine $geo) {}
+    public function __construct(
+        private GeoQueryEngine $geo,
+        private SaveCommuteScheduleAction $schedule,
+    ) {}
 
     /**
      * @param  array<string, mixed>  $route  validated upstream: origin, destination,
@@ -49,9 +52,9 @@ final readonly class SaveCommuteRouteAction
         $dropoffs = $route['dropoffs'] ?? [];
 
         $this->assertWithinLimits($pickups, $dropoffs);
-        $this->assertPickupsAreOnTheWay($origin, $destination, $pickups);
+        $this->assertStopsAreOnTheWay($origin, $destination, $pickups, $dropoffs);
 
-        return DB::transaction(function () use ($offer, $route, $pickups, $dropoffs): CommuteOffer {
+        DB::transaction(function () use ($offer, $route, $pickups, $dropoffs): void {
             $offer->locations()->delete();
 
             $this->store($offer, CommuteLocationType::Origin, $route['origin'], 0);
@@ -82,8 +85,13 @@ final readonly class SaveCommuteRouteAction
                 'bbox_max_lng' => null,
             ])->save();
 
-            return $offer->load('locations');
+            $offer->touch();
         });
+
+        $offer->load('locations');
+        $this->schedule->refreshEstimates($offer);
+
+        return $offer;
     }
 
     /**
@@ -126,30 +134,34 @@ final readonly class SaveCommuteRouteAction
      *
      * @param  array<int, array<string, mixed>>  $pickups
      */
-    private function assertPickupsAreOnTheWay(
+    private function assertStopsAreOnTheWay(
         Coordinate $origin,
         Coordinate $destination,
         array $pickups,
+        array $dropoffs,
     ): void {
-        if ($pickups === []) {
+        if ($pickups === [] && $dropoffs === []) {
             return;
         }
 
-        // One route call for the whole check, not one per pickup: pitfall #16 is
-        // exactly this loop calling a provider each time round.
         $direct = $this->geo->routeBetween($origin, $destination);
         $maxDetourMinutes = RouteSettings::maxTripDetourMinutes();
+        $fields = [];
 
-        foreach ($pickups as $index => $pickup) {
-            $point = new Coordinate((float) $pickup['lat'], (float) $pickup['lng']);
+        foreach (['pickups' => $pickups, 'dropoffs' => $dropoffs] as $list => $stops) {
+            foreach ($stops as $index => $stop) {
+                $point = new Coordinate((float) $stop['lat'], (float) $stop['lng']);
 
-            if ($this->geo->detourMinutes($direct, $point) > $maxDetourMinutes) {
-                throw DomainException::of(ErrorCode::CommuteRouteInvalid, fields: [
-                    "pickups.{$index}" => [__('commute.route.pickup_off_route', [
+                if ($this->geo->detourMinutes($direct, $point) > $maxDetourMinutes) {
+                    $fields["{$list}.{$index}"] = [__($list === 'pickups' ? 'commute.route.pickup_off_route' : 'commute.route.dropoff_off_route', [
                         'minutes' => $maxDetourMinutes,
-                    ])],
-                ]);
+                    ])];
+                }
             }
+        }
+
+        if ($fields !== []) {
+            throw DomainException::of(ErrorCode::CommuteRouteInvalid, fields: $fields);
         }
     }
 

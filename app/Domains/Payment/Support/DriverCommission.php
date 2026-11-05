@@ -32,6 +32,7 @@ final class DriverCommission
         throw DomainException::of(ErrorCode::DriverCommissionOverdue, fields: [
             'amountOwedPiastres' => [(string) $standing->owedPiastres()],
             'dueAt' => [$standing->dueAt()->utc()->toIso8601String()],
+            'weekStart' => [(string) $standing->oldestUnpaidWeekOf],
         ]);
     }
 }

@@ -24,7 +24,7 @@ use Illuminate\Database\Eloquent\Relations\HasOne;
 #[Fillable([
     'driver_profile_id', 'vehicle_id', 'corridor_id', 'commute_type', 'direction',
     'seats_total', 'currency', 'max_detour_minutes',
-    'max_walk_minutes', 'audience', 'min_trust_level', 'allows_custom_pickup',
+    'max_walk_minutes', 'form_step', 'audience', 'min_trust_level', 'allows_custom_pickup',
 ])]
 class CommuteOffer extends Model
 {
