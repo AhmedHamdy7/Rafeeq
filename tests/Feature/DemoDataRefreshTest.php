@@ -4,6 +4,8 @@ use App\Domains\Booking\Models\Booking;
 use App\Domains\Commute\Models\CommuteLocation;
 use App\Domains\Commute\Models\CommuteRule;
 use App\Domains\Commute\Models\ScheduledTrip;
+use App\Domains\Driver\Models\Vehicle;
+use App\Domains\Identity\Enums\Gender;
 use App\Domains\Identity\Models\User;
 use Database\Seeders\CreateCommuteStatesSeeder;
 use Database\Seeders\DemoDataSeeder;
@@ -187,6 +189,8 @@ it('seeds every Create Commute state and resets them when run again', function (
         ->and($publish('CC-OVERDUE'))->toBe('DRIVER_COMMISSION_OVERDUE')
         ->and($publish('CC-SUSPENDED'))->toBe('DRIVER_NOT_ELIGIBLE')
         ->and($publish('CC-LICENCE-EXPIRED'))->toBe('DRIVER_LICENCE_EXPIRED')
+        ->and(Vehicle::query()->whereHas('driverProfile.user', fn ($user) => $user->where('phone_e164', '+201055557410'))->sole()->has_ac)->toBeFalse()
+        ->and(User::query()->where('phone_e164', '+201055557411')->sole()->gender)->toBe(Gender::Man)
         ->and($publish('CC-READY'))->toBeNull();
 });
 

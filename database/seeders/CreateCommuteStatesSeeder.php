@@ -12,6 +12,7 @@ use App\Domains\Driver\Enums\VehicleVerificationStatus;
 use App\Domains\Driver\Models\DriverProfile;
 use App\Domains\Driver\Models\Vehicle;
 use App\Domains\Identity\Enums\Capability;
+use App\Domains\Identity\Enums\Gender;
 use App\Domains\Identity\Models\User;
 use App\Domains\Payment\Enums\DebtEntryType;
 use App\Domains\Payment\Enums\DebtSide;
@@ -34,6 +35,8 @@ final class CreateCommuteStatesSeeder extends DriverHomeStatesSeeder
         'CC-OVERDUE' => '+201055557407',
         'CC-SUSPENDED' => '+201055557408',
         'CC-LICENCE-EXPIRED' => '+201055557409',
+        'CC-CAR-NO-AC' => '+201055557410',
+        'CC-MAN-DRIVER' => '+201055557411',
     ];
 
     private const array ROUTE = [
@@ -98,6 +101,8 @@ final class CreateCommuteStatesSeeder extends DriverHomeStatesSeeder
                 'verification_status' => VehicleVerificationStatus::Pending->value,
                 'approved_seats' => null,
             ])->save(),
+            'CC-CAR-NO-AC' => $vehicle->forceFill(['has_ac' => false])->save(),
+            'CC-MAN-DRIVER' => $driver->forceFill(['gender' => Gender::Man->value])->save(),
             'CC-OVERDUE' => $this->oweLastWeek($driver),
             'CC-SUSPENDED' => $profile->forceFill([
                 'status' => DriverProfileStatus::Suspended->value,

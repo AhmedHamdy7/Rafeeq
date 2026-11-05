@@ -487,6 +487,26 @@ it('says why a draft with an unapproved car cannot publish', function () {
     test()->withToken($token)->getJson("/api/v1/commutes/{$id}")->assertJsonFragment(['vehicle_rejected']);
 });
 
+it('returns why a car was rejected', function () {
+    $token = approvedDriver();
+
+    Vehicle::sole()->forceFill([
+        'verification_status' => VehicleVerificationStatus::Rejected->value,
+        'rejection_reason' => 'The registration photo is unreadable.',
+    ])->save();
+
+    test()->withToken($token)->getJson('/api/v1/driver/vehicles')
+        ->assertOk()
+        ->assertJsonPath('data.0.rejectionReason', 'The registration photo is unreadable.');
+});
+
+it('leaves no placeholder in the licence refusal', function (string $locale) {
+    app()->setLocale($locale);
+
+    expect(__('errors.DRIVER_LICENCE_EXPIRED'))->not->toContain(':days')
+        ->and(__('errors.DRIVER_LICENCE_MINIMUM_VALIDITY', ['days' => 30]))->toContain('30');
+})->with(['en', 'ar']);
+
 function publishedCommute(string $token): string
 {
     $id = minimalCommute($token)->json('data.id');

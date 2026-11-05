@@ -70,7 +70,7 @@ The promised arrival never moves. The departure moves earlier as riders join, by
 
 ## G3. Price per weekday
 
-- One price stays (COM-30, PAY-42). Remove the tiers, and we'll need Design to update the step.
+- One price stays (COM-41, PAY-42). Remove the tiers, and we'll need Design to update the step.
 - `GET /commutes/{commute}/price` is the right call once the route is saved.
 - `VEHICLE_SEATS_NOT_APPROVED` means the price can't be read yet. Don't block the step: show that the price appears once the car is reviewed.
 - Yes, the driver can create the draft on that car. Publish is what's refused.
@@ -95,7 +95,7 @@ The beta sends nothing and gets `recurring`. One-time isn't in the form. It stil
 
 ## G7. `seatsTotal`
 
-Optional, and defaults to `approvedSeats`. It's `null` until the car has them. A driver can lower a day with `perDay.{bit}.seatsTotal` (COM-30), and the design's seat count is that input. Above `approvedSeats` answers `422 COMMUTE_SEATS_EXCEED_APPROVED`.
+Optional, and defaults to `approvedSeats`. It's `null` until the car has them. A driver can lower a day with `perDay.{bit}.seatsTotal` (COM-41). The rule makes the seat count an input per weekday, stopping at `approvedSeats`, so keep it as an input and ask Design to show the stepper (G46). The API still accepts a schedule without it. Above `approvedSeats` answers `422 COMMUTE_SEATS_EXCEED_APPROVED`.
 
 ## G8. Saving preferences
 
@@ -122,7 +122,7 @@ Send the same point in `pickups[]` and `dropoffs[]`. It counts once towards each
 
 ## G12. Stop limits
 
-The guide now says 3 and 3 (COM-31). Read `maxPickupStops` and `maxDropoffStops` from `GET /commutes/options`, which follow the admin settings. An unverified driver can read them.
+The guide now says 3 and 3 (COM-40). Read `maxPickupStops` and `maxDropoffStops` from `GET /commutes/options`, which follow the admin settings. An unverified driver can read them.
 
 ## G13. Unverified driver
 
@@ -140,7 +140,7 @@ This changes an answer in Driver Requests G10: `GET /commutes` now answers `200`
 
 ## G14. Drafts
 
-A draft's `missing[]` can also hold `vehicle_under_review` ("You can publish as soon as we approve your car.", Publish disabled) and `vehicle_rejected` ("Your car was rejected (reason). Fix its details or choose another car to publish.", button: Car details).
+A draft's `missing[]` can also hold `vehicle_under_review` ("You can publish as soon as we approve your car.", Publish disabled) and `vehicle_rejected` ("Your car was rejected (reason). Fix its details or choose another car to publish.", button: Car details). The reason is `rejectionReason` on `GET /driver/vehicles`.
 
 - `GET /commutes?status=draft` returns them. `status` takes a comma-separated list.
 - A driver can hold several.
@@ -165,6 +165,8 @@ Reset a state with `php artisan demo:create-commute-states --state=CC-READY`.
 | `CC-OVERDUE` | `+201055557407` | Commission unpaid after Friday |
 | `CC-SUSPENDED` | `+201055557408` | Suspended driver |
 | `CC-LICENCE-EXPIRED` | `+201055557409` | Expired licence |
+| `CC-CAR-NO-AC` | `+201055557410` | Reviewed car without A/C, with a draft |
+| `CC-MAN-DRIVER` | `+201055557411` | Driver whose profile gender is male |
 
 **Not done yet:** the live server hasn't been seeded, so there's no sign-in code to send. The backend team has to run it after this is deployed.
 
@@ -177,3 +179,11 @@ The guide's publish section is corrected, and lists each code with its fields. `
 | `DRIVER_COMMISSION_OVERDUE` | `amountOwedPiastres[]`, `dueAt[]` |
 | `COMMUTE_ROUTE_INVALID` | `route[]`, or `pickups.{index}[]` for a stop too far off the road |
 | `DRIVER_NOT_ELIGIBLE` | `driver[]`, the profile status, such as `SUSPENDED` or `PENDING_REVIEW` |
+
+## Follow-ups to your live test
+
+- **Rejected car reason:** added, `rejectionReason` on `GET /driver/vehicles`.
+- **Licence text:** fixed. `DRIVER_LICENCE_EXPIRED` on publish now reads "Your licence isn't valid. Renew it to continue.", so the app can show the server's text.
+- **Captures:** `COMMUTE_AC_NOT_AVAILABLE`, `COMMUTE_WOMEN_ONLY_NOT_ALLOWED`, `COMMUTE_NOT_EDITABLE` and `COMMUTE_ROUTE_UNAVAILABLE` are now in `FLUTTER_CREATE_COMMUTE_RESPONSES.md`. The last was captured on a local server with the routing provider made to fail.
+- **Straight-line route:** the live server still uses the straight-line engine until the real engine is switched on, so road, distance, time and price stay estimates, and "Route not available" can't happen there yet.
+- **Test accounts:** the `CC-*` states aren't on the live server until they are seeded.

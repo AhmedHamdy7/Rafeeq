@@ -60,6 +60,7 @@ final class VehicleResource extends JsonResource
             'fuelType' => $this->fuel_type?->value,
             'isActive' => $this->is_active,
             'status' => strtoupper($this->verification_status->value),
+            'rejectionReason' => $this->rejection_reason,
             'documents' => $documents,
         ];
     }
