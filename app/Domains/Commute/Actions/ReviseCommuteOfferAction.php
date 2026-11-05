@@ -40,7 +40,11 @@ final readonly class ReviseCommuteOfferAction
 
         if (CommuteState::isEditable($offer)) {
             $attributes = $this->draftAttributes($offer, $attributes);
-        } elseif (array_key_exists('vehicleId', $attributes)) {
+        } else {
+            unset($attributes['formStep']);
+        }
+
+        if (! CommuteState::isEditable($offer) && array_key_exists('vehicleId', $attributes)) {
             // Chapter 4's edge case: changing vehicle is allowed only if the
             // replacement is approved and active.
             $vehicle = CreateCommuteOfferAction::usableVehicle($offer->driverProfile, $attributes['vehicleId']);
@@ -77,6 +81,8 @@ final readonly class ReviseCommuteOfferAction
             if (array_key_exists('vehicleId', $attributes)) {
                 CommuteGuards::clearAcOnOffer($offer, $vehicle);
             }
+
+            $offer->touch();
 
             return $offer->load('rules');
         });
@@ -171,6 +177,7 @@ final readonly class ReviseCommuteOfferAction
             'audience' => 'audience',
             'minTrustLevel' => 'min_trust_level',
             'allowsCustomPickup' => 'allows_custom_pickup',
+            'formStep' => 'form_step',
         ];
 
         $columns = [];

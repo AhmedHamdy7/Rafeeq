@@ -157,6 +157,7 @@ final class CommuteController extends Controller
      * PATCH /v1/commutes/{commute} — revises the terms (Chapter 4 §5, §6, §7).
      */
     #[ApiErrors(
+        ErrorCode::DriverNotEligible,
         ErrorCode::CommuteNotEditable,
         ErrorCode::VerificationRequired,
         ErrorCode::CommuteSeatsConflict,
@@ -169,6 +170,7 @@ final class CommuteController extends Controller
     {
         $offer = $this->owned($request, $commute);
 
+        $this->assertDraftNotFrozen($offer);
         $this->assertVerifiedUnlessDraft($request, $offer);
 
         $offer = $action->execute($offer, $request->validated());
@@ -184,13 +186,18 @@ final class CommuteController extends Controller
      * A PUT because the route is replaced as a whole.
      */
     #[ApiErrors(
+        ErrorCode::DriverNotEligible,
         ErrorCode::CommuteNotEditable,
         ErrorCode::CommuteRouteInvalid,
         ErrorCode::NotFound,
     )]
     public function saveRoute(SaveCommuteRouteRequest $request, string $commute, SaveCommuteRouteAction $action): JsonResponse
     {
-        $offer = $action->execute($this->owned($request, $commute), $request->validated());
+        $offer = $this->owned($request, $commute);
+
+        $this->assertDraftNotFrozen($offer);
+
+        $offer = $action->execute($offer, $request->validated());
 
         return ApiResponse::success(new CommuteOfferResource(
             $offer->load(['locations', 'schedule', 'weekdaySchedules', 'rules'])
@@ -201,6 +208,7 @@ final class CommuteController extends Controller
      * PUT /v1/commutes/{commute}/schedule — Chapter 4 §4.
      */
     #[ApiErrors(
+        ErrorCode::DriverNotEligible,
         ErrorCode::CommuteNotEditable,
         ErrorCode::CommuteIncomplete,
         ErrorCode::CommuteSeatsExceedApproved,
@@ -209,7 +217,11 @@ final class CommuteController extends Controller
     )]
     public function saveSchedule(SaveCommuteScheduleRequest $request, string $commute, SaveCommuteScheduleAction $action): JsonResponse
     {
-        $offer = $action->execute($this->owned($request, $commute), $request->validated());
+        $offer = $this->owned($request, $commute);
+
+        $this->assertDraftNotFrozen($offer);
+
+        $offer = $action->execute($offer, $request->validated());
 
         return ApiResponse::success(new CommuteOfferResource(
             $offer->load(['locations', 'schedule', 'weekdaySchedules', 'rules'])
@@ -510,6 +522,13 @@ final class CommuteController extends Controller
         $profile->save();
 
         return $profile;
+    }
+
+    private function assertDraftNotFrozen(CommuteOffer $offer): void
+    {
+        if (CommuteState::isEditable($offer)) {
+            CreateCommuteOfferAction::assertDriverMayDraft(DriverProfile::query()->whereKey($offer->driver_profile_id)->firstOrFail());
+        }
     }
 
     private function assertVerifiedUnlessDraft(Request $request, CommuteOffer $offer): void

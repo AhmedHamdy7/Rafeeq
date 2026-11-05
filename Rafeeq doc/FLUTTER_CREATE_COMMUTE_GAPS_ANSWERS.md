@@ -167,6 +167,9 @@ Reset a state with `php artisan demo:create-commute-states --state=CC-READY`.
 | `CC-LICENCE-EXPIRED` | `+201055557409` | Expired licence |
 | `CC-CAR-NO-AC` | `+201055557410` | Reviewed car without A/C, with a draft |
 | `CC-MAN-DRIVER` | `+201055557411` | Driver whose profile gender is male |
+| `CC-WINDOW-PASSED` | `+201055557412` | Published commute whose whole window has passed |
+| `CC-PENDING-REVIEW` | `+201055557413` | Driver in `PENDING_REVIEW`, with a complete draft |
+| `CC-DRIVER-REJECTED` | `+201055557414` | Driver in `REJECTED`, with a complete draft |
 
 **Not done yet:** the live server hasn't been seeded, so there's no sign-in code to send. The backend team has to run it after this is deployed.
 

@@ -51,6 +51,8 @@ final class ReviseCommuteRequest extends FormRequest
             'minTrustLevel' => ['sometimes', 'integer', 'min:0', 'max:4'],
             'allowsCustomPickup' => ['sometimes', 'boolean'],
 
+            'formStep' => ['sometimes', 'nullable', 'integer', 'min:1', 'max:5'],
+
             /*
              * House preferences, as a map of rule to whether it applies — for
              * example `{"nonsmoking": true, "quiet": true}`. Sending this

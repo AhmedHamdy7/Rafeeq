@@ -190,6 +190,8 @@ it('seeds every Create Commute state and resets them when run again', function (
         ->and($publish('CC-SUSPENDED'))->toBe('DRIVER_NOT_ELIGIBLE')
         ->and($as('CC-READY')->getJson('/api/v1/commutes?status=published')->assertOk()->json('data.0.weekdays.0.promisedArrivalTime'))->toBe('09:00:00')
         ->and($publish('CC-LICENCE-EXPIRED'))->toBe('DRIVER_LICENCE_EXPIRED')
+        ->and($publish('CC-PENDING-REVIEW'))->toBe('DRIVER_NOT_ELIGIBLE')
+        ->and($publish('CC-DRIVER-REJECTED'))->toBe('DRIVER_NOT_ELIGIBLE')
         ->and(Vehicle::query()->whereHas('driverProfile.user', fn ($user) => $user->where('phone_e164', '+201055557410'))->sole()->has_ac)->toBeFalse()
         ->and(User::query()->where('phone_e164', '+201055557411')->sole()->gender)->toBe(Gender::Man)
         ->and($publish('CC-READY'))->toBeNull();

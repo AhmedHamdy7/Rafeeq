@@ -38,6 +38,9 @@ final class CreateCommuteStatesSeeder extends DriverHomeStatesSeeder
         'CC-LICENCE-EXPIRED' => '+201055557409',
         'CC-CAR-NO-AC' => '+201055557410',
         'CC-MAN-DRIVER' => '+201055557411',
+        'CC-WINDOW-PASSED' => '+201055557412',
+        'CC-PENDING-REVIEW' => '+201055557413',
+        'CC-DRIVER-REJECTED' => '+201055557414',
     ];
 
     private const array ROUTE = [
@@ -82,6 +85,7 @@ final class CreateCommuteStatesSeeder extends DriverHomeStatesSeeder
 
         $this->resetDriver($driver, $published);
         $this->clearDrafts($driver->id);
+        $this->clearArchived($driver->id, $published->id);
 
         if (! $published->weekdaySchedules()->exists()) {
             CommuteWeekdaySchedule::fillFromSchedule($published->schedule);
@@ -110,6 +114,15 @@ final class CreateCommuteStatesSeeder extends DriverHomeStatesSeeder
             ])->save(),
             'CC-CAR-NO-AC' => $vehicle->forceFill(['has_ac' => false])->save(),
             'CC-MAN-DRIVER' => $driver->forceFill(['gender' => Gender::Man->value])->save(),
+            'CC-WINDOW-PASSED' => $published->schedule->forceFill([
+                'start_date' => now()->subMonths(2)->toDateString(),
+                'end_date' => now()->subDay()->toDateString(),
+            ])->save(),
+            'CC-PENDING-REVIEW' => $profile->forceFill(['status' => DriverProfileStatus::PendingReview->value])->save(),
+            'CC-DRIVER-REJECTED' => $profile->forceFill([
+                'status' => DriverProfileStatus::Rejected->value,
+                'rejection_reason' => 'The licence photo is unreadable.',
+            ])->save(),
             'CC-OVERDUE' => $this->oweLastWeek($driver),
             'CC-SUSPENDED' => $profile->forceFill([
                 'status' => DriverProfileStatus::Suspended->value,
@@ -158,6 +171,20 @@ final class CreateCommuteStatesSeeder extends DriverHomeStatesSeeder
             ->whereNull('published_at')
             ->whereIn('status', [CommuteOfferStatus::Draft->value, CommuteOfferStatus::Archived->value])
             ->delete();
+    }
+
+    private function clearArchived(string $driverId, string $keepId): void
+    {
+        CommuteOffer::query()
+            ->where('driver_profile_id', $driverId)
+            ->whereKeyNot($keepId)
+            ->where('status', CommuteOfferStatus::Archived->value)
+            ->whereDoesntHave('scheduledTrips.bookings')
+            ->get()
+            ->each(function (CommuteOffer $offer): void {
+                $offer->scheduledTrips()->delete();
+                $offer->delete();
+            });
     }
 
     private function clearDebt(string $driverId): void

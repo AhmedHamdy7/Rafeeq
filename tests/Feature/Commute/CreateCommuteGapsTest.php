@@ -23,7 +23,11 @@ use App\Domains\Identity\Actions\CompleteBasicProfileAction;
 use App\Domains\Identity\Enums\Gender;
 use App\Domains\Identity\Models\User;
 use App\Domains\Notification\Models\Notification;
+use App\Domains\Payment\Enums\DebtEntryType;
+use App\Domains\Payment\Enums\DebtSide;
+use App\Domains\Payment\Support\DebtLedger;
 use App\Domains\Payment\Support\PassengerFees;
+use App\Domains\Payment\Support\SettlementWeek;
 use App\Domains\Shared\ValueObjects\DaysMask;
 use App\Domains\Shared\ValueObjects\Distance;
 use App\Domains\Verification\Models\UserVerification;
@@ -538,6 +542,83 @@ it('tells a suspended driver why, not to apply', function () {
         ->assertStatus(403)
         ->assertJsonPath('error.code', 'DRIVER_NOT_ELIGIBLE')
         ->assertJsonPath('error.message', __('errors.DRIVER_SUSPENDED'));
+});
+
+it('dates every saved step on a draft and keeps the form step', function () {
+    $token = approvedDriver();
+    $id = minimalCommute($token)->json('data.id');
+    $this->travel(1)->minutes();
+
+    $afterRoute = saveRoute($token, $id)->assertOk()->json('data.updatedAt');
+    $this->travel(1)->minutes();
+    $afterSchedule = arrivalSchedule($token, $id)->assertOk()->json('data.updatedAt');
+    $this->travel(1)->minutes();
+    $response = test()->withToken($token)->patchJson("/api/v1/commutes/{$id}", ['rules' => ['music' => true], 'formStep' => 3])->assertOk();
+
+    expect($afterSchedule > $afterRoute)->toBeTrue()
+        ->and($response->json('data.updatedAt') > $afterSchedule)->toBeTrue()
+        ->and($response->json('data.formStep'))->toBe(3);
+
+    test()->withToken($token)->patchJson("/api/v1/commutes/{$id}", ['formStep' => 6])->assertStatus(422);
+});
+
+it('recalculates the estimate when the route changes', function () {
+    $token = approvedDriver();
+    $id = minimalCommute($token)->json('data.id');
+
+    expect(arrivalSchedule($token, $id)->assertOk()->json('data.weekdays.0.departureTime'))->toBe('09:00:00');
+
+    $data = saveRoute($token, $id)->assertOk()->json('data');
+
+    expect($data['weekdays'][0]['departureTime'])->not->toBe('09:00:00')
+        ->and($data['schedule']['departureTime'])->toBe($data['weekdays'][0]['departureTime']);
+});
+
+it('names every stop that is too far, in both lists', function () {
+    $token = approvedDriver();
+    $id = minimalCommute($token)->json('data.id');
+    $far = ['lat' => 30.6000, 'lng' => 31.9000];
+
+    saveRoute($token, $id, ['pickups' => [$far], 'dropoffs' => [$far]])
+        ->assertStatus(422)
+        ->assertJsonPath('error.code', 'COMMUTE_ROUTE_INVALID')
+        ->assertJsonStructure(['error' => ['fields' => ['pickups.0', 'dropoffs.0']]]);
+
+    expect(__('commute.route.pickup_off_route'))->not->toContain('raise');
+});
+
+it('keeps a suspended driver\'s draft read-only, except discarding it', function () {
+    $token = approvedDriver();
+    $id = minimalCommute($token)->json('data.id');
+    DriverProfile::query()->update(['status' => DriverProfileStatus::Suspended->value]);
+
+    saveRoute($token, $id)->assertStatus(403)->assertJsonPath('error.code', 'DRIVER_NOT_ELIGIBLE');
+    arrivalSchedule($token, $id)->assertStatus(403);
+    test()->withToken($token)->patchJson("/api/v1/commutes/{$id}", ['formStep' => 2])->assertStatus(403);
+    test()->withToken($token)->getJson("/api/v1/commutes/{$id}")->assertOk();
+    test()->withToken($token)->deleteJson("/api/v1/commutes/{$id}")->assertOk();
+});
+
+it('says which week of commission is unpaid', function () {
+    $token = approvedDriver();
+    $id = minimalCommute($token)->json('data.id');
+    saveRoute($token, $id)->assertOk();
+    arrivalSchedule($token, $id)->assertOk();
+
+    $week = SettlementWeek::shift(SettlementWeek::current(), -1);
+
+    DebtLedger::record(
+        User::query()->whereHas('driverProfile')->sole()->id,
+        DebtSide::Driver,
+        DebtEntryType::Commission,
+        5000,
+        'seat_commission',
+        weekOf: $week,
+    );
+
+    test()->withToken($token)->postJson("/api/v1/commutes/{$id}/publish")
+        ->assertStatus(403)
+        ->assertJsonPath('error.fields.weekStart.0', $week);
 });
 
 function publishedCommute(string $token): string

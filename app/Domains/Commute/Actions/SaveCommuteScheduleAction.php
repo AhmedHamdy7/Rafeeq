@@ -143,6 +143,32 @@ final readonly class SaveCommuteScheduleAction
             'days_mask' => DaysMask::fromBitList($saved->pluck('weekday_bit')->all())->value,
             'departure_time' => $saved->min('departure_time'),
         ]);
+
+        $offer->touch();
+    }
+
+    public function refreshEstimates(CommuteOffer $offer): void
+    {
+        $days = $offer->weekdaySchedules()
+            ->where('departure_is_computed', true)
+            ->whereNotNull('promised_arrival_time')
+            ->get();
+
+        if ($days->isEmpty()) {
+            return;
+        }
+
+        $timezone = $offer->schedule()->value('timezone') ?? 'Africa/Cairo';
+        $estimates = [];
+
+        foreach ($days as $day) {
+            $arrival = (string) $day->promised_arrival_time;
+            $estimates[$arrival] ??= $this->estimatedDeparture($offer, $arrival, $timezone);
+            $day->departure_time = $estimates[$arrival];
+            $day->save();
+        }
+
+        $offer->schedule()->update(['departure_time' => $offer->weekdaySchedules()->min('departure_time')]);
     }
 
     /**

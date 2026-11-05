@@ -57,6 +57,9 @@ final class CommuteOfferResource extends JsonResource
             // Set when the journey matched a corridor the platform has named.
             // Null is normal and not a problem.
             'corridorId' => $this->corridor_id,
+            'createdAt' => $this->created_at?->toIso8601String(),
+            'updatedAt' => $this->updated_at?->toIso8601String(),
+            'formStep' => $this->form_step,
             'publishedAt' => $this->published_at?->toIso8601String(),
             'pausedAt' => $this->paused_at?->toIso8601String(),
             'pausedReason' => $this->paused_reason?->value,

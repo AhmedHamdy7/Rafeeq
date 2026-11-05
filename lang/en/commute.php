@@ -9,7 +9,8 @@ return [
     'route' => [
         'origin_equals_destination' => 'The starting point and the destination need to be different places.',
         'too_many_stops' => 'That is more pickup or drop-off points than a commute can have.',
-        'pickup_off_route' => 'That pickup point is more than :minutes minutes out of your way. Move it closer to your route, or raise the detour you are willing to make.',
+        'pickup_off_route' => 'That pickup point is more than :minutes minutes out of your way. Move it closer to your route.',
+        'dropoff_off_route' => 'That drop-off point is more than :minutes minutes out of your way. Move it closer to your route.',
     ],
 
     'schedule' => [
