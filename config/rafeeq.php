@@ -205,6 +205,7 @@ return [
          * before departure.
          */
         'late_cancel_hours' => 12,
+        'free_cancel_pickup_moved_minutes' => 10,
         'late_cancel_share_percent' => 25,
 
         // PAY-22, the lateness ladder: 1st and 2nd warnings, then these.
@@ -500,16 +501,19 @@ return [
          *   own points on any one day. Chapter 4 said 4 + 2; the partners decided 3 + 3.
          * - `match_radius_meters`: how far a passenger's pickup or drop-off may sit from the
          *   driver's route.
-         * - `max_trip_detour_minutes` / `max_trip_detour_meters`: the detour the WHOLE trip may
-         *   carry — every rider's points together, measured against the driver's straight run from
-         *   start to end. Both must hold ("10 minutes or 5 km, whichever is less"). This cap is what
-         *   stops "leave at 08:00" turning into "leave at 06:00" as riders join (C-2).
+         * - The detour tiers (COM-40): a passenger's point within `match_radius_meters`, up to
+         *   `on_way_request_minutes` for her and `on_way_trip_minutes` for the whole trip is on the
+         *   way; within `far_radius_meters`, `far_request_minutes` and `far_trip_minutes` is a bit far.
+         *   Beyond that a request can't be sent.
          */
         'max_pickup_points' => 3,
         'max_dropoff_points' => 3,
         'match_radius_meters' => 1500,
-        'max_trip_detour_minutes' => 10,
-        'max_trip_detour_meters' => 5000,
+        'far_radius_meters' => 3000,
+        'on_way_request_minutes' => 10,
+        'far_request_minutes' => 15,
+        'on_way_trip_minutes' => 20,
+        'far_trip_minutes' => 30,
 
         /*
          * 🔴 How many hours before departure a day's arrangements freeze (Feature 03 v5).

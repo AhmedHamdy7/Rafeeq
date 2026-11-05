@@ -3,6 +3,7 @@
 namespace App\Domains\Payment\Support;
 
 use App\Domains\Booking\Models\Booking;
+use App\Domains\Booking\Support\FreeCancel;
 use App\Domains\Trip\Enums\WarningKind;
 use App\Domains\Trip\Models\MemberWarning;
 use Carbon\CarbonImmutable;
@@ -64,6 +65,10 @@ final class PassengerFees
     {
         $departure = $booking->scheduledTrip?->departure_at;
         $hoursAhead = $departure === null ? null : now()->diffInHours($departure, absolute: false);
+
+        if ($hoursAhead !== null && $hoursAhead < FeeSettings::lateCancelHours() && FreeCancel::pickupMovedEarlier($booking)) {
+            return ['feePiastres' => 0, 'reason' => 'pickup_moved_earlier', 'warning' => false, 'rung' => null, 'waivedIfRefilled' => false];
+        }
 
         if ($hoursAhead === null || $hoursAhead >= FeeSettings::lateCancelHours()) {
             return ['feePiastres' => 0, 'reason' => 'none', 'warning' => false, 'rung' => null, 'waivedIfRefilled' => false];

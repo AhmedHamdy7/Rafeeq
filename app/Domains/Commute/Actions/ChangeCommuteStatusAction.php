@@ -9,11 +9,13 @@ use App\Domains\Booking\Enums\SeatOfferStatus;
 use App\Domains\Booking\Enums\SeatRequestStatus;
 use App\Domains\Booking\Models\SeatOffer;
 use App\Domains\Booking\Models\SeatRequest;
+use App\Domains\Commute\Enums\CommuteAudience;
 use App\Domains\Commute\Enums\CommuteOfferStatus;
 use App\Domains\Commute\Enums\CommutePausedReason;
 use App\Domains\Commute\Enums\ScheduledTripStatus;
 use App\Domains\Commute\Models\CommuteOffer;
 use App\Domains\Commute\Models\ScheduledTrip;
+use App\Domains\Commute\Support\CommuteGuards;
 use App\Domains\Driver\Models\DriverProfile;
 use App\Domains\Payment\Support\DriverCommission;
 use Illuminate\Support\Facades\DB;
@@ -90,6 +92,7 @@ final readonly class ChangeCommuteStatusAction
         // Re-checked on the way back: a commute paused because the vehicle was
         // suspended must not resume just because the driver asked.
         CreateCommuteOfferAction::assertDriverMayPublish($offer->driverProfile);
+        CommuteGuards::assertDriverMayUseAudience((string) $offer->driver_profile_id, $offer->audience);
         DriverCommission::assertNotOverdue($offer->driver_profile_id);
         $vehicle = CreateCommuteOfferAction::usableVehicle($offer->driverProfile, $offer->vehicle_id);
         // C-3: the car's approved seats may have been lowered while the commute was paused.
@@ -151,6 +154,16 @@ final readonly class ChangeCommuteStatusAction
      *
      * @return int how many were paused
      */
+    public function pauseWomenOnlyForReview(string $driverUserId): void
+    {
+        CommuteOffer::query()
+            ->where('driver_profile_id', $driverUserId)
+            ->where('status', CommuteOfferStatus::Published->value)
+            ->where('audience', CommuteAudience::WomenOnly->value)
+            ->get()
+            ->each(fn (CommuteOffer $offer) => $this->pause($offer, CommutePausedReason::GenderReview));
+    }
+
     public function pauseUnpublishableOffers(DriverProfile $profile, CommutePausedReason $reason): int
     {
         $paused = 0;

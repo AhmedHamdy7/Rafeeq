@@ -79,7 +79,7 @@ it('puts the day, the route and the impact on a pending inbox row', function () 
         ->and($row['destinationLabel'])->not->toBeNull()
         ->and($row['impact']['tripId'])->toBe($this->trip->id)
         ->and($row['impact']['addedMinutes'])->toBeInt()
-        ->and($row['impact']['maxDetourMinutes'])->toBe(10)
+        ->and($row['impact']['maxDetourMinutes'])->toBe(30)
         ->and($row['impact']['canAccept'])->toBeTrue()
         ->and($row['impact']['blockReason'])->toBeNull();
 });

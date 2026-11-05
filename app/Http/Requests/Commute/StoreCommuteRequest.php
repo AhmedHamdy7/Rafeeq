@@ -32,20 +32,20 @@ final class StoreCommuteRequest extends FormRequest
     public function rules(): array
     {
         return [
-            // `recurring` repeats on chosen weekdays until its end date;
+            // `recurring` repeats on chosen weekdays until its end date (the default);
             // `one_time` happens on a single date.
-            'commuteType' => ['required', 'string', Rule::enum(CommuteType::class)],
+            'commuteType' => ['sometimes', 'string', Rule::enum(CommuteType::class)],
 
-            // Must be one of your own vehicles, approved and currently active.
-            'vehicleId' => ['required', 'string', 'size:26'],
+            // One of your own vehicles. Left out, your active car is used if you have one. A draft
+            // can hold a car that isn't approved yet; publishing needs it approved and active.
+            'vehicleId' => ['sometimes', 'string', 'size:26'],
 
-            // Which way this journey runs, so the return leg can be a separate
-            // commute with its own times.
-            'direction' => ['required', 'string', Rule::enum(CommuteDirection::class)],
+            // Which way this journey runs. Defaults to `to_work`; `return` flips it.
+            'direction' => ['sometimes', 'string', Rule::enum(CommuteDirection::class)],
 
-            // Seats offered to passengers, NOT counting your own. Cannot exceed
-            // the seats approved on your car (`approvedSeats` on the vehicle).
-            'seatsTotal' => ['required', 'integer', 'min:1', 'max:7'],
+            // Seats offered to passengers, NOT counting your own. Defaults to the seats approved on
+            // your car (`approvedSeats` on the vehicle), and cannot exceed them.
+            'seatsTotal' => ['sometimes', 'integer', 'min:1', 'max:7'],
 
             // Do not send. RAFEEQ computes the seat price from your route and your
             // car; sending a price is refused.
@@ -60,14 +60,15 @@ final class StoreCommuteRequest extends FormRequest
             'maxWalkMinutes' => ['prohibited'],
 
             // `women_only` restricts this commute to women. Everybody can see it,
-            // marked women-only; only a woman can request a seat on it.
-            'audience' => ['required', 'string', Rule::enum(CommuteAudience::class)],
+            // marked women-only; only a woman can request a seat on it. Defaults to `any_verified`.
+            'audience' => ['sometimes', 'string', Rule::enum(CommuteAudience::class)],
 
             // Minimum number of verification levels a passenger must have
             // completed before they may request a seat.
             'minTrustLevel' => ['sometimes', 'integer', 'min:0', 'max:4'],
 
-            // Whether a passenger may propose a meeting point you did not list.
+            // Whether a passenger may ask to move a confirmed pickup to a point you did not list.
+            // Defaults to true.
             'allowsCustomPickup' => ['sometimes', 'boolean'],
         ];
     }

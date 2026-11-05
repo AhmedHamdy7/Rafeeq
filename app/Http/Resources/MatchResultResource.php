@@ -212,6 +212,8 @@ final class MatchResultResource extends JsonResource
             ],
 
             'detourMinutes' => round($this->score->detourMinutes, 1),
+            'tier' => $this->score->tier?->value,
+            'extraMinutes' => (int) ceil($this->score->detourMinutes),
             'rules' => (object) $this->rulesMap(),
             // The other days of the same commute that also fit, so one commute is
             // one card rather than twenty near-identical ones.
@@ -259,6 +261,12 @@ final class MatchResultResource extends JsonResource
 
         foreach ($this->offer->rules as $rule) {
             $map[$rule->rule_key->value] = (bool) $rule->rule_value;
+        }
+
+        if ($this->offer->vehicle?->has_ac) {
+            $map['ac'] = true;
+        } else {
+            unset($map['ac']);
         }
 
         return $map;

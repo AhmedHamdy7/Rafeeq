@@ -2,8 +2,11 @@
 
 namespace App\Domains\Commute\Actions;
 
+use App\Domains\Booking\Enums\BookingStatus;
 use App\Domains\Booking\Enums\SeatRequestStatus;
+use App\Domains\Booking\Models\Booking;
 use App\Domains\Booking\Models\SeatRequest;
+use App\Domains\Booking\Support\FreeCancel;
 use App\Domains\Booking\Support\WaitlistPositions;
 use App\Domains\Commute\Enums\ChangeProposalStatus;
 use App\Domains\Commute\Enums\CommuteLocationType;
@@ -48,6 +51,12 @@ final readonly class ApplyChangeProposalAction
              */
             foreach ($proposal->affectedTrips()->pluck('id') as $tripId) {
                 $this->itinerary->bump($tripId);
+
+                Booking::query()
+                    ->where('scheduled_trip_id', $tripId)
+                    ->where('status', BookingStatus::Confirmed->value)
+                    ->get()
+                    ->each(fn (Booking $booking) => FreeCancel::rememberAgreedPickup($booking));
             }
 
             $proposal->forceFill([

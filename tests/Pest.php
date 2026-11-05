@@ -610,6 +610,8 @@ function runLeavingIn(string $tripId, int $minutesUntilDeparture, int $dayOffset
 {
     $at = now()->addMinutes($minutesUntilDeparture);
 
+    Booking::query()->where('scheduled_trip_id', $tripId)->update(['agreed_pickup_at' => null]);
+
     ScheduledTrip::query()->whereKey($tripId)->update([
         'departure_at' => $at,
         'departure_local' => $at,

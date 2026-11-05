@@ -37,7 +37,7 @@ Each `PENDING` row has `impact`, and so does `route-preview`. It's `null` on any
   "tripId": "...",
   "tripDate": "2026-10-18",
   "addedMinutes": 4,
-  "maxDetourMinutes": 10,
+  "maxDetourMinutes": 30,
   "withinLimit": true,
   "promisedArrivalLocal": "2026-10-18 08:10:00",
   "projectedArrivalLocal": "2026-10-18 08:14:00",
@@ -149,7 +149,7 @@ Captured for a driver who hasn't started verification:
 | `GET /driver/seat-requests` | `200`, empty |
 | `GET /driver/waitlist` | `200`, empty |
 | `GET /driver/seat-offers` | `200`, empty |
-| `GET /commutes` | `403 VERIFICATION_REQUIRED` |
+| `GET /commutes` | `200` with an empty list (changed: it answered `403 VERIFICATION_REQUIRED` before Create Commute G13) |
 
 The Requests tab no longer needs `GET /commutes`. Decide `F3U-02` from `verification` on `/driver/home`.
 

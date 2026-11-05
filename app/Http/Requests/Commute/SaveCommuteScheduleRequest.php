@@ -32,7 +32,7 @@ final class SaveCommuteScheduleRequest extends FormRequest
              * Monday 4, Tuesday 8, Wednesday 16, Thursday 32, Friday 64. Sunday
              * to Thursday is 62. Ignored for a one-time commute.
              */
-            'daysMask' => ['required_unless:commuteType,one_time', 'integer', 'min:0', 'max:127'],
+            'daysMask' => ['sometimes', 'integer', 'min:0', 'max:127'],
 
             /*
              * 🔴 Leave this out and send `promisedArrivalTime` instead (C-2, COM-15): you say when
@@ -43,17 +43,17 @@ final class SaveCommuteScheduleRequest extends FormRequest
              * Still accepted, on your own clock (24-hour, not UTC), for a day you want to keep a
              * fixed departure; a day that has one is never recomputed.
              */
-            'departureTime' => ['required_without:promisedArrivalTime', 'nullable', 'string', 'date_format:H:i:s'],
+            'departureTime' => ['required_without_all:promisedArrivalTime,perDay', 'nullable', 'string', 'date_format:H:i:s'],
 
             // IANA timezone the departure time is read in.
             'timezone' => ['sometimes', 'string', Rule::in(['Africa/Cairo'])],
 
-            // First day this commute runs. Cannot be in the past.
-            'startDate' => ['required', 'date', 'date_format:Y-m-d'],
+            // First day this commute runs. Cannot be in the past. Defaults to tomorrow.
+            'startDate' => ['sometimes', 'date', 'date_format:Y-m-d'],
 
-            // Last day it runs. Required: a commute cannot be open-ended. For a
+            // Last day it runs. Defaults to the longest window `GET /commutes/options` gives. For a
             // one-time commute this is ignored and set to the start date.
-            'endDate' => ['required', 'date', 'date_format:Y-m-d', 'after_or_equal:startDate'],
+            'endDate' => ['sometimes', 'date', 'date_format:Y-m-d'],
 
             /*
              * When you promise to arrive, on your own clock. Optional, and the default for every

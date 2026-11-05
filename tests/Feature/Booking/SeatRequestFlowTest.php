@@ -528,7 +528,7 @@ it('still refuses an unverified identity the driver surface', function () {
 
     // The application itself is open in any order since F2-1 (the five items are checked on
     // submit), so the gate that still stands is publishing a commute.
-    test()->withToken($unverified)->postJson('/api/v1/commutes', [])
+    test()->withToken($unverified)->postJson('/api/v1/commutes/01JABCDEFGHJKMNPQRSTVWXYZ0/publish')
         ->assertStatus(403)
         ->assertJsonPath('error.code', 'VERIFICATION_REQUIRED');
 });

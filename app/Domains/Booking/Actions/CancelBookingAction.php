@@ -9,6 +9,7 @@ use App\Domains\Booking\Enums\DisplacementReason;
 use App\Domains\Booking\Enums\SwitchReason;
 use App\Domains\Booking\Models\Booking;
 use App\Domains\Booking\Support\BookingEventLog;
+use App\Domains\Booking\Support\FreeCancel;
 use App\Domains\Commute\Models\ScheduledTrip;
 use App\Domains\Identity\Models\User;
 use App\Domains\Notification\Enums\NotificationType;
@@ -240,6 +241,10 @@ final readonly class CancelBookingAction
         }
 
         if ($to !== BookingStatus::CancelledByPassenger || $trip->departure_at === null) {
+            return;
+        }
+
+        if (FreeCancel::pickupMovedEarlier($booking)) {
             return;
         }
 

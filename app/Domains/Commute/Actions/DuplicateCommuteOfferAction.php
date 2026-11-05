@@ -11,6 +11,8 @@ use App\Domains\Commute\Models\CommuteRule;
 use App\Domains\Commute\Models\CommuteSchedule;
 use App\Domains\Commute\Models\CommuteWeekdaySchedule;
 use App\Domains\Driver\Models\DriverProfile;
+use App\Domains\Shared\Exceptions\DomainException;
+use App\Domains\Shared\Support\ErrorCode;
 use App\Domains\Shared\ValueObjects\Coordinate;
 use Carbon\CarbonImmutable;
 use Illuminate\Support\Facades\DB;
@@ -105,7 +107,11 @@ final readonly class DuplicateCommuteOfferAction
     {
         CreateCommuteOfferAction::assertDriverMayPublish($profile);
 
-        $vehicle = CreateCommuteOfferAction::usableVehicle($profile, (string) $source->vehicle_id);
+        if ($source->vehicle_id === null) {
+            throw DomainException::of(ErrorCode::CommuteVehicleUnavailable);
+        }
+
+        $vehicle = CreateCommuteOfferAction::usableVehicle($profile, $source->vehicle_id);
 
         CreateCommuteOfferAction::assertCommuteFitsVehicle($source, $vehicle);
 
@@ -116,7 +122,7 @@ final readonly class DuplicateCommuteOfferAction
             'vehicle_id' => $vehicle->id,
             'commute_type' => $source->commute_type->value,
             'direction' => $direction->value,
-            'seats_total' => $source->seats_total,
+            'seats_total' => $source->seats_total ?? $vehicle->approved_seats,
             'max_detour_minutes' => $source->max_detour_minutes,
             'max_walk_minutes' => $source->max_walk_minutes,
             'audience' => $source->audience->value,
@@ -291,6 +297,7 @@ final readonly class DuplicateCommuteOfferAction
             $dayCopy->weekday_bit = $weekday->weekday_bit;
             $dayCopy->departure_time = $weekday->departure_time;
             $dayCopy->promised_arrival_time = $weekday->promised_arrival_time;
+            $dayCopy->departure_is_computed = $weekday->departure_is_computed;
             $dayCopy->seats_total = $weekday->seats_total;
 
             $dayCopy->save();

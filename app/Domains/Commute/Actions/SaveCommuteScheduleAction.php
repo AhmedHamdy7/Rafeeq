@@ -6,6 +6,7 @@ use App\Domains\Commute\Enums\CommuteType;
 use App\Domains\Commute\Models\CommuteOffer;
 use App\Domains\Commute\Models\CommuteSchedule;
 use App\Domains\Commute\Models\CommuteWeekdaySchedule;
+use App\Domains\Commute\Support\CommuteDefaults;
 use App\Domains\Commute\Support\ComputedDeparture;
 use App\Domains\Commute\Support\DepartureTimeCalculator;
 use App\Domains\Shared\Exceptions\DomainException;
@@ -35,12 +36,11 @@ final readonly class SaveCommuteScheduleAction
     {
         CommuteState::assertEditable($offer);
 
-        $startDate = CarbonImmutable::parse($input['startDate']);
-        $endDate = CarbonImmutable::parse($input['endDate']);
+        [$startDate, $endDate] = $this->window($offer, $input);
 
         $daysMask = $offer->commute_type === CommuteType::OneTime
             ? DaysMask::bitForDate($startDate)
-            : (int) $input['daysMask'];
+            : (int) ($input['daysMask'] ?? 0);
 
         $this->assertUsable($offer, $startDate, $endDate, $daysMask);
         $this->assertDaySeatsFitVehicle($offer, $input);
@@ -56,7 +56,7 @@ final readonly class SaveCommuteScheduleAction
                 'commute_offer_id' => $offer->id,
                 'days_mask' => $daysMask,
                 // Provisional for an arrival-only schedule: rewritten from the weekdays below.
-                'departure_time' => $input['departureTime'] ?? $input['promisedArrivalTime'],
+                'departure_time' => $input['departureTime'] ?? $input['promisedArrivalTime'] ?? '00:00:00',
                 'timezone' => $input['timezone'] ?? 'Africa/Cairo',
                 'start_date' => $startDate->toDateString(),
                 // A one-time commute ends the day it happens.
@@ -146,6 +146,26 @@ final readonly class SaveCommuteScheduleAction
     }
 
     /**
+     * @param  array<string, mixed>  $input
+     * @return array{CarbonImmutable, CarbonImmutable}
+     */
+    private function window(CommuteOffer $offer, array $input): array
+    {
+        $saved = $offer->schedule()->first();
+        $hasUsableWindow = $saved !== null && ! $saved->start_date->isPast();
+
+        $start = CarbonImmutable::parse(
+            $input['startDate'] ?? ($hasUsableWindow ? $saved->start_date->toDateString() : CommuteDefaults::startDate()),
+        );
+
+        $end = CarbonImmutable::parse(
+            $input['endDate'] ?? ($hasUsableWindow ? $saved->end_date->toDateString() : CommuteDefaults::endDate($start)),
+        );
+
+        return [$start, $end];
+    }
+
+    /**
      * The departure an arrival implies on the route as saved, as a local wall clock. Before a
      * route exists there is nothing to time, so the arrival itself stands in until publishing
      * generates the real days.
@@ -173,6 +193,12 @@ final readonly class SaveCommuteScheduleAction
      */
     private function assertDaySeatsFitVehicle(CommuteOffer $offer, array $input): void
     {
+        $offer->loadMissing('vehicle');
+
+        if ($offer->vehicle?->approved_seats === null) {
+            return;
+        }
+
         foreach ((array) ($input['perDay'] ?? []) as $day) {
             if (isset($day['seatsTotal'])) {
                 CreateCommuteOfferAction::assertSeatsFitVehicle($offer->vehicle, (int) $day['seatsTotal']);

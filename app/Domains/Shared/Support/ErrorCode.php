@@ -80,6 +80,11 @@ enum ErrorCode: string
     case CommuteIncomplete = 'COMMUTE_INCOMPLETE';
     case CommuteInvalidTransition = 'COMMUTE_INVALID_TRANSITION';
     case CommuteRouteInvalid = 'COMMUTE_ROUTE_INVALID';
+    case CommuteRouteUnavailable = 'COMMUTE_ROUTE_UNAVAILABLE';
+
+    case CommuteAcNotAvailable = 'COMMUTE_AC_NOT_AVAILABLE';
+
+    case CommuteWomenOnlyNotAllowed = 'COMMUTE_WOMEN_ONLY_NOT_ALLOWED';
     case CommuteSeatsConflict = 'COMMUTE_SEATS_CONFLICT';
     case CommuteVehicleUnavailable = 'COMMUTE_VEHICLE_UNAVAILABLE';
 
@@ -342,7 +347,8 @@ enum ErrorCode: string
             self::ValidationFailed => 422,
             self::TooManyRequests => 429,
             self::ServerError => 500,
-            self::ServiceUnavailable => 503,
+            self::ServiceUnavailable,
+            self::CommuteRouteUnavailable => 503,
 
             // A wrong/expired code is a failed authentication attempt (401),
             // not a malformed request — the payload was perfectly well formed.
@@ -468,6 +474,8 @@ enum ErrorCode: string
              * for are not days this commute runs, the absence is longer than an
              * absence can be — each is fixed by changing the input.
              */
+            self::CommuteAcNotAvailable,
+            self::CommuteWomenOnlyNotAllowed,
             self::PickupDetourTooLong,
             self::PickupNotOnCommute,
             self::SeatRequestPointsSame,

@@ -50,7 +50,7 @@ final class CommuteOfferResource extends JsonResource
             'audience' => $this->audience->value,
             'minTrustLevel' => $this->min_trust_level,
             'allowsCustomPickup' => $this->allows_custom_pickup,
-            // Present once published: the road as the provider returned it.
+            // Present once published. On a draft, read `GET /commutes/{commute}/route-preview`.
             'routePolyline' => $this->route_polyline,
             'routeDistanceMeters' => $this->route_distance_meters,
             'routeDurationSeconds' => $this->route_duration_seconds,
@@ -62,9 +62,10 @@ final class CommuteOfferResource extends JsonResource
             'pausedReason' => $this->paused_reason?->value,
             'archivedAt' => $this->archived_at?->toIso8601String(),
             // What still stands between this draft and being publishable.
-            'missing' => CommuteChecklist::missingFor($this->resource),
+            'missing' => CommuteChecklist::forReview($this->resource),
             'locations' => CommuteLocationResource::collection($this->whenLoaded('locations')),
             'schedule' => new CommuteScheduleResource($this->whenLoaded('schedule')),
+            'weekdays' => CommuteWeekdayResource::collection($this->whenLoaded('weekdaySchedules')),
             'rules' => (object) $this->rulesMap(),
             'upcomingTrips' => ScheduledTripResource::collection($this->whenLoaded('scheduledTrips')),
         ];

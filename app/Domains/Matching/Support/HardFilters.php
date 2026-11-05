@@ -4,6 +4,7 @@ namespace App\Domains\Matching\Support;
 
 use App\Domains\Commute\Enums\CommuteAudience;
 use App\Domains\Commute\Enums\CommuteOfferStatus;
+use App\Domains\Commute\Enums\CommuteRuleKey;
 use App\Domains\Commute\Enums\ScheduledTripStatus;
 use App\Domains\Commute\Models\CommuteOffer;
 use App\Domains\Commute\Models\ScheduledTrip;
@@ -51,6 +52,10 @@ final class HardFilters
                     $offer->where('audience', CommuteAudience::WomenOnly->value);
                 }
                 self::requireTier($offer, $criteria);
+
+                if (in_array(CommuteRuleKey::Ac->value, $criteria->requiredRules, true)) {
+                    $offer->whereHas('vehicle', fn (Builder $vehicle) => $vehicle->where('has_ac', true));
+                }
             })
             // Only days that can still be booked — up to the departure itself, since there is
             // no earlier cut-off (R-5). A day that has left is not a match, it is a

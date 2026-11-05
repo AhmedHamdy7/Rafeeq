@@ -29,6 +29,11 @@ final class FeeSettings
         });
     }
 
+    public static function freeCancelPickupMovedMinutes(): int
+    {
+        return max(0, (int) self::get('fees.free_cancel_pickup_moved_minutes'));
+    }
+
     public static function lateCancelHours(): int
     {
         return max(1, (int) self::get('fees.late_cancel_hours'));

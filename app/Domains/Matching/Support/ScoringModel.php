@@ -2,6 +2,7 @@
 
 namespace App\Domains\Matching\Support;
 
+use App\Domains\Booking\Enums\DetourTier;
 use App\Domains\Commute\Models\CommuteOffer;
 use App\Domains\Commute\Models\ScheduledTrip;
 use App\Domains\Shared\ValueObjects\WalkTime;
@@ -62,6 +63,7 @@ final class ScoringModel
         array $offerRules,
         ?float $driverOnTimeRate,
         ?int $pickupSeconds = null,
+        ?DetourTier $tier = null,
     ): ScoreBreakdown {
         return new ScoreBreakdown(
             overlap: self::overlap($overlapPercent),
@@ -72,6 +74,7 @@ final class ScoringModel
             reliability: self::reliability($driverOnTimeRate),
             walkMinutes: $walk->minutes,
             detourMinutes: $detourMinutes,
+            tier: $tier,
         );
     }
 

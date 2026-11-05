@@ -110,10 +110,10 @@ it('scores comfort by how many of the requested rules the commute actually has',
     $bothMet = search($this->paxToken, ['rules' => ['nonsmoking', 'quiet']])
         ->assertOk()->json('data.0.score.comfort');
 
-    $oneMet = search($this->paxToken, ['rules' => ['nonsmoking', 'ac']])
+    $oneMet = search($this->paxToken, ['rules' => ['nonsmoking', 'nofood']])
         ->assertOk()->json('data.0.score.comfort');
 
-    $noneMet = search($this->paxToken, ['rules' => ['ac', 'nofood']])
+    $noneMet = search($this->paxToken, ['rules' => ['music', 'nofood']])
         ->assertOk()->json('data.0.score.comfort');
 
     expect($bothMet)->toBe(10)

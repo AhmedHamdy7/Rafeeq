@@ -35,7 +35,7 @@ it('answers what a point would cost before anything is created', function () {
         ->assertOk()->json('data');
 
     expect($preview['addedMinutes'])->toBeLessThan(2.0)
-        ->and($preview['maxDetourMinutes'])->toBe(10)
+        ->and($preview['maxDetourMinutes'])->toBe(30)
         // Stated rather than left for the client to compare two numbers and get the
         // boundary case wrong.
         ->and($preview['withinLimit'])->toBeTrue()

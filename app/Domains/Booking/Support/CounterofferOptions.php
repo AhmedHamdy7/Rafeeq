@@ -42,6 +42,8 @@ final readonly class CounterofferOptions
                 'dropoff' => ['label' => $request->requested_dropoff_label, 'lat' => $dropoff->lat, 'lng' => $dropoff->lng],
                 'addedMinutes' => (int) round($requested->addedMinutes),
                 'withinLimit' => $requested->isWithin(),
+                'tier' => $requested->tier()?->value,
+                'extraMinutes' => $requested->extraMinutes(),
             ],
             'route' => [
                 'polyline' => $offer->route_polyline,
@@ -94,6 +96,8 @@ final readonly class CounterofferOptions
                     'changeFromRequestedMinutes' => (int) round($detour->addedMinutes - $requestedMinutes),
                     'walkMeters' => $this->geo->distanceMeters($chosen, $candidate)->metres,
                     'withinLimit' => $detour->isWithin(),
+                    'tier' => $detour->tier()?->value,
+                    'extraMinutes' => $detour->extraMinutes(),
                     'refusalCode' => $this->refusal($offer, $pickup, $dropoff),
                 ];
             })

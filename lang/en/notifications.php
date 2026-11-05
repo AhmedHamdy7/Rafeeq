@@ -128,6 +128,18 @@ return [
         'title' => 'The proposed change was updated',
         'body' => ':name changed what she is proposing, so any answer you gave no longer counts. Please review it again.',
     ],
+    'pickup_moved_earlier' => [
+        'title' => 'Your pickup is earlier now',
+        'body' => 'Your pickup on :date is now at :time.',
+    ],
+    'commute_archived' => [
+        'title' => 'Your commute has ended',
+        'body' => 'Your commute :from → :to has ended and was archived. You can duplicate it and publish it again.',
+    ],
+    'waitlisted_commute_ended' => [
+        'title' => 'A commute you were waiting for ended',
+        'body' => 'The commute :from → :to you were on the waiting list for has ended.',
+    ],
     'departure_time_changed' => [
         'title' => 'Your departure time changed',
         'body' => 'Riders changed on :date, so leave at :time to arrive on time.',

@@ -116,7 +116,7 @@ final readonly class SuggestAlternativesAction
         $askable = [];
 
         foreach ($results as $result) {
-            if (HardFilters::mayJoinAudience($booking->passenger, $result->offer)) {
+            if ($result->offer->id !== $trip->commute_offer_id && HardFilters::mayJoinAudience($booking->passenger, $result->offer)) {
                 $askable[] = $result;
             }
         }

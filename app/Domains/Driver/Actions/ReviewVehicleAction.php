@@ -3,6 +3,7 @@
 namespace App\Domains\Driver\Actions;
 
 use App\Domains\Admin\Models\AdminUser;
+use App\Domains\Commute\Support\CommuteGuards;
 use App\Domains\Driver\Enums\VehicleTier;
 use App\Domains\Driver\Enums\VerificationLogAction;
 use App\Domains\Driver\Models\Vehicle;
@@ -53,6 +54,8 @@ final readonly class ReviewVehicleAction
                 'tier' => $tier->value,
                 'has_ac' => $hasAc,
             ])->save();
+
+            CommuteGuards::clearAcOnVehicleCommutes($vehicle);
 
             VerificationLog::create([
                 'entity_type' => 'vehicle',

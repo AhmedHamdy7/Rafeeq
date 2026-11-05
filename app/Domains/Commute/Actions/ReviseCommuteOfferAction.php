@@ -6,6 +6,7 @@ use App\Domains\Commute\Enums\CommuteRuleKey;
 use App\Domains\Commute\Models\CommuteOffer;
 use App\Domains\Commute\Models\CommuteRule;
 use App\Domains\Commute\Models\ScheduledTrip;
+use App\Domains\Commute\Support\CommuteGuards;
 use App\Domains\Driver\Models\Vehicle;
 use App\Domains\Shared\Exceptions\DomainException;
 use App\Domains\Shared\Support\ErrorCode;
@@ -37,7 +38,9 @@ final readonly class ReviseCommuteOfferAction
 
         $vehicle = $offer->vehicle;
 
-        if (array_key_exists('vehicleId', $attributes)) {
+        if (CommuteState::isEditable($offer)) {
+            $attributes = $this->draftAttributes($offer, $attributes);
+        } elseif (array_key_exists('vehicleId', $attributes)) {
             // Chapter 4's edge case: changing vehicle is allowed only if the
             // replacement is approved and active.
             $vehicle = CreateCommuteOfferAction::usableVehicle($offer->driverProfile, $attributes['vehicleId']);
@@ -52,20 +55,57 @@ final readonly class ReviseCommuteOfferAction
             }
         }
 
-        if (array_key_exists('seatsTotal', $attributes)) {
+        if (! CommuteState::isEditable($offer) && array_key_exists('seatsTotal', $attributes)) {
             $this->assertSeatsFit($offer, $vehicle, (int) $attributes['seatsTotal']);
+        }
+
+        if (array_key_exists('audience', $attributes)) {
+            CommuteGuards::assertDriverMayUseAudience((string) $offer->driver_profile_id, $attributes['audience']);
         }
 
         return DB::transaction(function () use ($offer, $attributes): CommuteOffer {
             $offer->fill($this->columns($attributes));
             $offer->save();
 
+            $vehicle = $offer->vehicle()->first();
+
             if (array_key_exists('rules', $attributes)) {
+                CommuteGuards::assertCarAllowsAc($vehicle, (bool) ($attributes['rules'][CommuteRuleKey::Ac->value] ?? false));
                 $this->syncRules($offer, $attributes['rules']);
+            }
+
+            if (array_key_exists('vehicleId', $attributes)) {
+                CommuteGuards::clearAcOnOffer($offer, $vehicle);
             }
 
             return $offer->load('rules');
         });
+    }
+
+    /**
+     * @param  array<string, mixed>  $attributes
+     * @return array<string, mixed>
+     */
+    private function draftAttributes(CommuteOffer $offer, array $attributes): array
+    {
+        $vehicle = array_key_exists('vehicleId', $attributes)
+            ? CreateCommuteOfferAction::draftVehicle($offer->driverProfile, $attributes['vehicleId'])
+            : $offer->vehicle;
+
+        if (array_key_exists('seatsTotal', $attributes) || array_key_exists('vehicleId', $attributes)) {
+            $attributes['seatsTotal'] = CreateCommuteOfferAction::draftSeats(
+                $vehicle,
+                $attributes['seatsTotal'] ?? $offer->seats_total,
+            );
+        }
+
+        if (array_key_exists('vehicleId', $attributes) && $vehicle?->approved_seats !== null) {
+            foreach ($offer->weekdaySchedules()->whereNotNull('seats_total')->pluck('seats_total') as $daySeats) {
+                CreateCommuteOfferAction::assertSeatsFitVehicle($vehicle, (int) $daySeats);
+            }
+        }
+
+        return $attributes;
     }
 
     /**

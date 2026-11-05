@@ -2,8 +2,10 @@
 
 namespace App\Domains\Matching\Actions;
 
+use App\Domains\Booking\Enums\DetourTier;
 use App\Domains\Booking\Support\PickupEta;
 use App\Domains\Commute\Enums\CommuteLocationType;
+use App\Domains\Commute\Enums\CommuteRuleKey;
 use App\Domains\Commute\Models\CommuteLocation;
 use App\Domains\Commute\Models\CommuteOffer;
 use App\Domains\Commute\Models\ScheduledTrip;
@@ -137,9 +139,7 @@ final readonly class SearchCommutesAction
 
             $walk = $distance->asWalkTime();
 
-            // The passenger's own limit. A commute they would have to walk
-            // twenty minutes to is not a match for someone who said fifteen.
-            if (! $walk->isWithin($criteria->maxWalk)) {
+            if (! $walk->isWithin($criteria->maxWalk) && ! $this->reachesOrigin($trip->commuteOffer, $criteria)) {
                 continue;
             }
 
@@ -162,6 +162,14 @@ final readonly class SearchCommutesAction
      *
      * @return array{0: CommuteLocation, 1: Distance}|null
      */
+    private function reachesOrigin(CommuteOffer $offer, SearchCriteria $criteria): bool
+    {
+        $route = $this->routeOf($offer);
+
+        return $route !== null
+            && $this->geo->distanceFromRoute($route, $criteria->origin)->metres <= RouteSettings::farRadiusMeters();
+    }
+
     private function nearestMeetingPoint(CommuteOffer $offer, Coordinate $from): ?array
     {
         $best = null;
@@ -247,9 +255,16 @@ final readonly class SearchCommutesAction
 
             $detour = $this->geo->detourMinutes($offerRoute, $criteria->origin);
 
-            // The platform's whole-trip cap (C-1, COM-31), applied as a filter: a detour
-            // beyond it is not something to rank lower, it is not on offer.
-            if ($detour > RouteSettings::maxTripDetourMinutes()) {
+            $tier = DetourTier::for(
+                max(
+                    $this->geo->distanceFromRoute($offerRoute, $criteria->origin)->metres,
+                    $this->geo->distanceFromRoute($offerRoute, $criteria->destination)->metres,
+                ),
+                $detour,
+                $detour,
+            );
+
+            if ($tier === null) {
                 continue;
             }
 
@@ -267,6 +282,7 @@ final readonly class SearchCommutesAction
                     ? null
                     : (float) $offer->driverProfile->on_time_rate,
                 pickupSeconds: $meetingPointSeconds,
+                tier: $tier,
             );
 
             [$dropOff, $dropOffDistance] = $candidate['dropOff'] ?? [null, null];
@@ -334,9 +350,13 @@ final readonly class SearchCommutesAction
         $keys = [];
 
         foreach ($offer->rules as $rule) {
-            if ($rule->rule_value) {
+            if ($rule->rule_value && $rule->rule_key !== CommuteRuleKey::Ac) {
                 $keys[] = $rule->rule_key->value;
             }
+        }
+
+        if ($offer->vehicle?->has_ac) {
+            $keys[] = CommuteRuleKey::Ac->value;
         }
 
         return $keys;
@@ -433,6 +453,7 @@ final readonly class SearchCommutesAction
                 reliability: $row->reliability_score,
                 walkMinutes: (float) $row->walk_minutes,
                 detourMinutes: (float) $row->detour_minutes,
+                tier: DetourTier::tryFrom((string) $row->detour_tier),
             );
         }
 

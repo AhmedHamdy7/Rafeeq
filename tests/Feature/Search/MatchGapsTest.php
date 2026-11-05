@@ -33,7 +33,9 @@ function commuteDetail(string $token, string $commuteId, string $language = 'ar'
 }
 
 it('sends rules as an object even when the commute has none', function () {
-    CommuteOffer::query()->findOrFail($this->commuteId)->rules()->delete();
+    $offer = CommuteOffer::query()->findOrFail($this->commuteId);
+    $offer->rules()->delete();
+    Vehicle::query()->whereKey($offer->vehicle_id)->update(['has_ac' => false]);
 
     expect(commuteDetail($this->paxToken, $this->commuteId)->getContent())->toContain('"rules":{}');
 });

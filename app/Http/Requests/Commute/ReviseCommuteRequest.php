@@ -14,7 +14,7 @@ use Illuminate\Validation\Rule;
  *
  * Maintainer notes:
  *
- * - Allowed after publishing, unlike the route and schedule, because each trip
+ * - Allowed on a draft and after publishing, unlike the route and schedule, because each trip
  *   carries a snapshot of the seat count and price it was generated with.
  * - `pricePerSeatPiastres` is `prohibited` (P-1, D-0016): the price is automatic,
  *   and a refusal is clearer than accepting a value and ignoring it.

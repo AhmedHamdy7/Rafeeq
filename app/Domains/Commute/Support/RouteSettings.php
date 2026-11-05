@@ -25,21 +25,34 @@ final class RouteSettings
         return max(1, (int) self::get('commute.match_radius_meters'));
     }
 
-    /**
-     * The most extra time the WHOLE trip may carry for its riders, in minutes.
-     *
-     * Read together with {@see self::maxTripDetourMeters()}: "10 minutes or 5 km, whichever is
-     * less" means both have to hold.
-     */
-    public static function maxTripDetourMinutes(): int
+    public static function farRadiusMeters(): int
     {
-        return max(0, (int) self::get('commute.max_trip_detour_minutes'));
+        return max(1, (int) self::get('commute.far_radius_meters'));
     }
 
-    /** The most extra distance the whole trip may carry for its riders, in metres. */
-    public static function maxTripDetourMeters(): int
+    public static function onWayRequestMinutes(): int
     {
-        return max(0, (int) self::get('commute.max_trip_detour_meters'));
+        return max(0, (int) self::get('commute.on_way_request_minutes'));
+    }
+
+    public static function farRequestMinutes(): int
+    {
+        return max(0, (int) self::get('commute.far_request_minutes'));
+    }
+
+    public static function onWayTripMinutes(): int
+    {
+        return max(0, (int) self::get('commute.on_way_trip_minutes'));
+    }
+
+    public static function farTripMinutes(): int
+    {
+        return max(0, (int) self::get('commute.far_trip_minutes'));
+    }
+
+    public static function maxTripDetourMinutes(): int
+    {
+        return self::farTripMinutes();
     }
 
     /** The most distinct pickup stops one commute takes — suggested by the driver, or on one day. */

@@ -89,12 +89,17 @@ it('refuses to lower the approved seats under a weekday through a revision eithe
 /**
  * Chapter 4 §2: the vehicle "must be approved and active".
  */
-it('refuses a vehicle that is not approved and active', function () {
+it('keeps a vehicle that is not approved and active on a draft, and refuses it at publish', function () {
     Vehicle::sole()->forceFill([
         'verification_status' => VehicleVerificationStatus::Suspended->value,
     ])->save();
 
-    createCommute($this->token, $this->vehicleId)
+    $id = createCommute($this->token, $this->vehicleId)->assertStatus(201)->json('data.id');
+
+    saveRoute($this->token, $id)->assertOk();
+    saveSchedule($this->token, $id)->assertOk();
+
+    $this->withToken($this->token)->postJson("/api/v1/commutes/{$id}/publish")
         ->assertStatus(422)
         ->assertJsonPath('error.code', 'COMMUTE_VEHICLE_UNAVAILABLE');
 });
@@ -150,7 +155,7 @@ function setRouteLimit(string $key, int $value): void
 }
 
 it('refuses a pickup further out of the way than the platform allows', function () {
-    setRouteLimit('commute.max_trip_detour_minutes', 5);
+    setRouteLimit('commute.far_trip_minutes', 5);
 
     $id = createCommute($this->token, $this->vehicleId)->assertStatus(201)->json('data.id');
 
@@ -166,7 +171,7 @@ it('refuses a pickup further out of the way than the platform allows', function 
  * without a deploy. The driver can no longer send his own.
  */
 it('accepts the same pickup once the platform allows a longer detour', function () {
-    setRouteLimit('commute.max_trip_detour_minutes', 2);
+    setRouteLimit('commute.far_trip_minutes', 2);
 
     $id = createCommute($this->token, $this->vehicleId)->assertStatus(201)->json('data.id');
 
@@ -177,7 +182,7 @@ it('accepts the same pickup once the platform allows a longer detour', function 
 
     saveRoute($this->token, $id, $pickup)->assertStatus(422);
 
-    setRouteLimit('commute.max_trip_detour_minutes', 30);
+    setRouteLimit('commute.far_trip_minutes', 30);
 
     saveRoute($this->token, $id, $pickup)->assertOk();
 });
@@ -364,7 +369,7 @@ it('answers 404 for another driver commute', function () {
     expect(CommuteOffer::findOrFail($mine)->status)->toBe(CommuteOfferStatus::Draft);
 });
 
-it('requires a verified identity for every commute route', function (string $method, string $uri) {
+it('requires a verified identity to publish or run a commute', function (string $method, string $uri) {
     fakeOtpSender();
     $token = signIn(phone: '01223334455', devicePublicId: 'unverified')['session']['accessToken'];
     completeBasicProfile($token);
@@ -373,6 +378,6 @@ it('requires a verified identity for every commute route', function (string $met
         ->assertStatus(403)
         ->assertJsonPath('error.code', 'VERIFICATION_REQUIRED');
 })->with([
-    ['GET', '/api/v1/commutes'],
-    ['POST', '/api/v1/commutes'],
+    ['POST', '/api/v1/commutes/01JABCDEFGHJKMNPQRSTVWXYZ0/publish'],
+    ['POST', '/api/v1/commutes/01JABCDEFGHJKMNPQRSTVWXYZ0/duplicate'],
 ]);
