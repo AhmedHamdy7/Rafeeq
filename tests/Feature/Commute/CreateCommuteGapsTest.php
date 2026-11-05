@@ -13,7 +13,9 @@ use App\Domains\Commute\Models\CommuteOffer;
 use App\Domains\Commute\Models\CommuteRule;
 use App\Domains\Commute\Models\ScheduledTrip;
 use App\Domains\Commute\Support\CommuteGuards;
+use App\Domains\Driver\Enums\DriverProfileStatus;
 use App\Domains\Driver\Enums\VehicleVerificationStatus;
+use App\Domains\Driver\Models\DriverProfile;
 use App\Domains\Driver\Models\Vehicle;
 use App\Domains\Geo\Contracts\GeoQueryEngine;
 use App\Domains\Geo\ValueObjects\Route;
@@ -22,6 +24,7 @@ use App\Domains\Identity\Enums\Gender;
 use App\Domains\Identity\Models\User;
 use App\Domains\Notification\Models\Notification;
 use App\Domains\Payment\Support\PassengerFees;
+use App\Domains\Shared\ValueObjects\DaysMask;
 use App\Domains\Shared\ValueObjects\Distance;
 use App\Domains\Verification\Models\UserVerification;
 use Carbon\CarbonImmutable;
@@ -506,6 +509,36 @@ it('leaves no placeholder in the licence refusal', function (string $locale) {
     expect(__('errors.DRIVER_LICENCE_EXPIRED'))->not->toContain(':days')
         ->and(__('errors.DRIVER_LICENCE_MINIMUM_VALIDITY', ['days' => 30]))->toContain('30');
 })->with(['en', 'ar']);
+
+it('fills weekday rows for a commute that has none, and leaves the others alone', function () {
+    $token = approvedDriver();
+    $id = publishedCommute($token);
+    CommuteOffer::query()->whereKey($id)->sole()->weekdaySchedules()->delete();
+    $other = minimalCommute($token)->json('data.id');
+    saveRoute($token, $other)->assertOk();
+    arrivalSchedule($token, $other)->assertOk();
+    $before = CommuteOffer::query()->whereKey($other)->sole()->weekdaySchedules()->pluck('id')->sort()->values()->all();
+
+    (require database_path('migrations/2026_11_05_110000_backfill_commute_weekday_rows.php'))->up();
+
+    $offer = CommuteOffer::query()->with('schedule')->whereKey($id)->sole();
+
+    expect($offer->weekdaySchedules()->pluck('weekday_bit')->sort()->values()->all())->toBe(DaysMask::fromBits((int) $offer->schedule->days_mask)->bits())
+        ->and(CommuteOffer::query()->whereKey($other)->sole()->weekdaySchedules()->pluck('id')->sort()->values()->all())->toBe($before);
+});
+
+it('tells a suspended driver why, not to apply', function () {
+    $token = approvedDriver();
+    $id = minimalCommute($token)->json('data.id');
+    saveRoute($token, $id)->assertOk();
+    arrivalSchedule($token, $id)->assertOk();
+    DriverProfile::query()->update(['status' => DriverProfileStatus::Suspended->value]);
+
+    test()->withToken($token)->postJson("/api/v1/commutes/{$id}/publish")
+        ->assertStatus(403)
+        ->assertJsonPath('error.code', 'DRIVER_NOT_ELIGIBLE')
+        ->assertJsonPath('error.message', __('errors.DRIVER_SUSPENDED'));
+});
 
 function publishedCommute(string $token): string
 {
