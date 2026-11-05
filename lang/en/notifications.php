@@ -169,6 +169,14 @@ return [
         'title' => 'Your suggested spot was declined',
         'body' => ':name would rather not meet at the point you suggested, so the request is closed.',
     ],
+    'seat_replacement_accepted' => [
+        'title' => 'Seat replaced',
+        'body' => ':name took the seat on :date. The passenger you replaced was told.',
+    ],
+    'seat_replacement_declined' => [
+        'title' => 'Your offer was declined',
+        'body' => ':name declined the seat on :date. Your passenger keeps it, and nothing is charged.',
+    ],
     'seats_offered_by_driver' => [
         'title' => 'A driver offered you a seat',
         'body' => 'You have been offered a seat on :days day(s). Accept to confirm — the first to accept each day gets it.',

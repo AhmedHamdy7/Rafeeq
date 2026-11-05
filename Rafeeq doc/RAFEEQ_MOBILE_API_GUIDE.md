@@ -14,7 +14,7 @@
 >
 > **Base URL:** `{host}/api/v1` · **Auth:** bearer token · **Format:** JSON only.
 
-**Last updated:** 2026-11-05 · **195 endpoints live** · Phases 0–7, 9 and 11 complete · 10, 12 and 13 all but a decision each
+**Last updated:** 2026-11-05 · **199 endpoints live** · Phases 0–7, 9 and 11 complete · 10, 12 and 13 all but a decision each
 
 ---
 
@@ -22,7 +22,7 @@
 
 ### What is ready
 
-**195 endpoints live** and tested, across the 47 designed screens:
+**199 endpoints live** and tested, across the 47 designed screens:
 
 | | Count | Covers |
 |---|---|---|
@@ -763,6 +763,10 @@ fails if this list and the running routes ever disagree in either direction.
 | `POST /bookings/{booking}/dispute` | 4.7 Seat requests and bookings |
 | `GET /driver/bookings` | 4.7 Seat requests and bookings |
 | `POST /driver/bookings/{booking}/cancel` | 4.7 Seat requests and bookings |
+| `GET /driver/bookings/{booking}/cancel-preview` | 4.7 Seat requests and bookings |
+| `POST /driver/bookings/{booking}/replacement-offer` | 4.7 Seat requests and bookings |
+| `GET /driver/trips` | 4.7 Seat requests and bookings |
+| `PATCH /driver/commutes/{commute}/seats` | 4.5 Commutes |
 | `GET /account/debt` | 4.16 Money |
 | `GET /account/debt/statements` | 4.16 Money |
 | `POST /account/debt/payments` | 4.16 Money |
@@ -1749,6 +1753,14 @@ A suspended driver's draft is read-only: `PUT /commutes/{commute}/route`, `PUT /
 `422 COMMUTE_ROUTE_INVALID`: `error.fields.route` when the ends are the same place or there are too
 many stops, `error.fields["pickups.0"]` when that stop is too far off the road.
 
+#### `PATCH /driver/commutes/{commute}/seats` — active, profile complete
+
+Seats on a published or paused commute. **Request:** `seatsTotal`, `scope` (`only_this_occurrence` ·
+`all_future_on_this_weekday` · `all_future_days`), and `scheduledTripId` except for `all_future_days`.
+Reaches days already generated. Answers `{seatsTotal, scope, updatedDays, tripIds[]}`.
+`409 COMMUTE_SEATS_CONFLICT` below the seats taken, `422 COMMUTE_SEATS_EXCEED_APPROVED` above the car's
+approved seats, `409 COMMUTE_NOT_EDITABLE` on a draft or archived commute.
+
 #### `GET /commutes/{commute}/route-preview` — active, profile complete
 
 The road for the Route step (COM-02). Call it after saving the route.
@@ -2447,16 +2459,18 @@ passenger must accept it (Feature 03 v5 §6).
 
 **`POST /driver/commutes/{commute}/change-proposals`** — **Request:** `scheduledTripId`, `scope`
 (`only_this_occurrence` · `all_future_on_this_weekday`), optional `effectiveFrom`, and at least one
-of `departureTime` · `promisedArrivalTime` · `pickupPoints[]` (`{lat, lng, address}`).
+of `departureTime` · `promisedArrivalTime` · `pickupPoints[]` (`{lat, lng, address}`). Send
+`promisedArrivalTime`: the departure is worked out from it when the change applies. **With nobody
+confirmed on those days it applies at once**, answering `201` with `status: APPLIED`.
 
 | Refusal | When |
 |---|---|
 | `409 CHANGE_PROPOSAL_ALREADY_OPEN` | She already has one out. Edit that one. |
-| `409 CHANGE_PROPOSAL_NOBODY_AFFECTED` | Nobody is confirmed on those days — there is nobody to ask, so there is no proposal to make. |
+| `422 COMMUTE_ROUTE_INVALID` | A pickup point is too far from the route: `fields["pickups.{index}"]`. |
 | `422` | Nothing actually changed, or `pickupPoints` with `only_this_occurrence`: the commute has **one** advertised route across its weekdays, so moving the stops applies to all future occurrences of that weekday. |
 
-**`GET /driver/change-proposals`** — her pending view. Adds `affectedCount`, `acceptedCount`, and
-`passengers[]` with `bookingId`, `passengerFirstName` and `response` of `ACCEPTED` ·
+**`GET /driver/change-proposals`** — her pending view, optional `?commuteId=`. Adds `affectedCount`, `acceptedCount`, and
+`passengers[]` with `bookingId`, `passengerFirstName`, `tripDate`, `pickupLabel`, `previousPickupLocal`, `newPickupLocal` and `response` of `ACCEPTED` ·
 `AWAITING_RESPONSE` · `REJECTED` · `WITHDRAWN`.
 
 **`PATCH /driver/change-proposals/{proposal}`** — revise. Same body. Bumps `version` and **resets
@@ -2878,7 +2892,36 @@ without the run starting is in **neither** list until the day's sweep settles it
 
 #### `GET /driver/bookings` — active, profile complete, paginated
 
-Every seat the caller has approved. The largest list in the API.
+Every seat the caller has approved. The largest list in the API. Optional filters: `commuteId`,
+`tripId`, and `status` as a comma-separated list. Adds `passenger` (first name only) and
+`replacementOffer` (`null` or `{offerId, seatRequestId, passengerFirstName, status, offeredAt, closedAt}`).
+
+#### `GET /driver/trips?scope=upcoming|past` — active, profile complete, paginated
+
+One list of the driver's days across all commutes, optional `commuteId`. `upcoming` is oldest first and
+leaves out paused commutes. `past` is newest first: `COMPLETED`, `CANCELLED` and `EXPIRED`. Each row has
+`id`, `commuteId`, `tripDate`, `departureLocal`, `promisedArrivalLocal`, `status`, `originLabel`,
+`destinationLabel`, `seatsTotal`, `seatsTaken`, `seatsAvailable`, `seatPricePiastres`,
+`driverSharePiastres`, `passengerCount`, `durationSeconds`, `ratingAverage`, `cancelledBy`
+(`DRIVER` · `PLATFORM` · `null`), `passengersNotified` and `expiredAt`.
+
+#### `GET /driver/bookings/{booking}/cancel-preview` — active, profile complete, driver only
+
+The fee for removing or replacing this passenger now: `affectedSeats`, `feePiastres`, `reason`,
+`perTrip[]`. `409 BOOKING_NOT_CANCELLABLE` when the seat isn't confirmed.
+
+#### `POST /driver/bookings/{booking}/replacement-offer` — active, profile complete, driver only
+
+Offers this seat on this day to one waiting passenger (COM-22). **Request:** `seatRequestId`. Returns the
+booking with `replacementOffer`. The passenger keeps the seat until the other person accepts; the
+driver-cancel fee and Reliability apply only then. Withdraw with `DELETE /driver/seat-offers/{offer}`.
+
+| Refusal | When |
+|---|---|
+| `409 REPLACEMENT_ALREADY_OPEN` | This seat already has a live offer. |
+| `409 REPLACEMENT_NOT_ELIGIBLE` | `fields.reason`: `same_passenger` · `not_waiting_for_this_day` · `needs_more_seats` · `already_offered`. |
+| `409 REPLACEMENT_CHANGES_OTHERS` | Inside the 16-hour lock, and the new stops differ from the old ones. |
+| `409 BOOKING_NOT_CANCELLABLE` | The seat isn't confirmed, or the day has started. |
 
 #### `GET /bookings/{booking}` — active, profile complete
 
@@ -4824,6 +4867,7 @@ exist, and every live endpoint must be named here.
 | 2026-11-01 | 🕘 **No booking deadline, and the waiting-list flow written down (follow-ups 1.1–1.5, 2, 3, 6).** 🛑 **The 21:00-the-night-before cut-off is gone** (R-5): a day takes requests until it leaves, `bookingDeadlineAt` is **removed** from the scheduled-trip shape, and `BOOKING_DEADLINE_PASSED` now only means the day has departed. **New notification `waitlist_application_received`** to the driver when a request lands on a full day (it used to be `seat_requested`). The waiting-list cap (10, `BOOKING_WAITLIST_FULL`) is now an **admin setting**. 4.7 now documents what was already built: `kind` (`seat_request` / `waitlist_application`) and `hasOtherConfirmedCommute` on the driver's inbox, `/waitlist` as the yes to an application, **requests never expire**, one seat per passenger per time slot (`BOOKING_ALREADY_BOOKED` + `overlapsBookingId`), women-only commutes visible to everybody with `403 SEAT_REQUEST_WOMEN_ONLY`, and the new seat-request statuses. 4.5: deleting a commute cancels **every** upcoming day, booked ones too. 4.12: the block preview's `feePiastres` / `reason` are **real** (they said "always 0"). 4.14: one table of every notification type, including the commission, coupon and +5/+10 "driver late" ones. No new endpoints. |
 | 2026-11-01 | 🧾 **My reports (HISTORY-8, HISTORY-10, HISTORY-11).** New **`POST /incidents/{incident}/appeal`** `{ reason }` — one appeal, a second only with a new file, 48 hours from the decision (D-0021); the report becomes **`APPEALED`** and goes back to the queue; refusals are `422` with `error.fields.appeal` (`NOT_DECIDED` · `NO_APPEALS_LEFT` · `APPEAL_WINDOW_CLOSED` · `NEW_EVIDENCE_REQUIRED`). Reports now carry `appeal { count, appealableUntil, needsNewEvidence }`, and evidence can be added to a decided report while it can still be appealed. `GET /incidents?bookingId=` filters to one journey. Confirmed: `id` and `createdAt` on every report, newest first, a late report is `409 REPORT_WINDOW_CLOSED`; `evidenceCount` on the list was always `0` and is fixed. 183 endpoints after merging main. |
 | 2026-11-01 | ⭐ **Rating edits (HISTORY-5 → HISTORY-7).** `PATCH /ratings/{rating}` changes only the fields sent: `"comment": null` clears it, a left-out `comment`/`tags`/`stars` is unchanged (before, a left-out comment was wiped and `stars` was required). Confirmed and pinned: stars-only `canceled_booking` feedback → `201`, a comment or tags on it → `422 VALIDATION_FAILED` on the field; rateable = `COMPLETED`, `ENDED_EARLY`, and the passenger's feedback on `CANCELLED_BY_DRIVER` — every other status `422 TRIP_NOT_RATEABLE`. No delete endpoint (B-3). |
+| 2026-11-05 | 🚙 **Driver Commutes.** New: `GET /driver/trips`, `GET /driver/bookings/{booking}/cancel-preview`, `POST /driver/bookings/{booking}/replacement-offer`, `PATCH /driver/commutes/{commute}/seats`. `GET /driver/bookings` takes `commuteId`, `tripId` and `status`. A proposal with nobody affected now applies at once, and `CHANGE_PROPOSAL_NOBODY_AFFECTED` is gone. Proposal passengers have pickup times before and after. |
 | 2026-11-01 | 🧾 **Trips history (HISTORY-2, HISTORY-4).** `GET /my-bookings?scope=past` (finished, newest journey first) and `?scope=upcoming` (open, soonest first), paged on the filtered list; no `scope` is unchanged. Every booking on `/my-bookings` and `/bookings/{booking}` carries `myRating` — your own rating or `null`, never the other side's. A rating's `editableUntil` now matches what `PATCH` accepts: `null` once the deadline passed, and kept on visible `canceled_booking` feedback. |
 | 2026-11-01 | 🧾 **Trips history (HISTORY-1, HISTORY-9).** Every booking on `GET /my-bookings` and `GET /bookings/{booking}` now carries `commuteId`, `originLabel`, `destinationLabel` and `driver` (a `person`, first name only); the pickup and drop-off are the existing `meetingPoint`/`dropoffPoint`, fuzzed unless confirmed. New report category **`safety_concern`**, ranked **high**; `false_arrival` is live. |
 | 2026-11-01 | 🏠 **Home covers every passenger state (HOME-1 → HOME-10), additively.** `nextJourney` now also returns a journey that **ended on her today** (cancelled by the driver, expired, exited, completed-not-rated) and a past ride awaiting her rating when nothing is upcoming. New on it: **`phase`** (`scheduled` · `driver_en_route` · `driver_arrived` · `on_board` · `driver_delayed` · `cancelled_by_driver` · `expired` · `exited` · `completed`), `daysMask`, `pickup{label, at, local, lat, lng, isExact}`, `dropoff{label, promisedArrivalAt, promisedArrivalLocal}`, `live{…}` (poll every 30 s while not null), `canLeaveWithoutFee` (→ `POST /bookings/{booking}/exit-without-fee`), `endedAt`, `alternatives[]` (≤ 2), `completedAt`, `canRate`. New on `/home`: `unreadNotifications`, `demandAlert`; on `topMatches[]`: `demandTitle`, `seatsAvailable`, `driver.completedTrips`; on `savedSearches[]`: `lastSearchedAt`. **One new endpoint, `POST /matches/{match}/opened`** — call it when she taps a match, or `demandAlert.newMatchesCount` never goes down. Nothing existing changed meaning. |

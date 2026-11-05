@@ -36,6 +36,11 @@ class SeatOffer extends Model
         return $this->belongsTo(ScheduledTrip::class);
     }
 
+    public function replacedBooking(): BelongsTo
+    {
+        return $this->belongsTo(Booking::class, 'replaces_booking_id');
+    }
+
     public function seatRequest(): BelongsTo
     {
         return $this->belongsTo(SeatRequest::class);

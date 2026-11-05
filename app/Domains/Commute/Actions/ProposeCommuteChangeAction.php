@@ -14,6 +14,7 @@ use App\Domains\Notification\Enums\NotificationType;
 use App\Domains\Notification\Support\Notifier;
 use App\Domains\Shared\Exceptions\DomainException;
 use App\Domains\Shared\Support\ErrorCode;
+use App\Domains\Shared\ValueObjects\Coordinate;
 use Carbon\CarbonImmutable;
 use Illuminate\Support\Facades\DB;
 
@@ -37,6 +38,11 @@ use Illuminate\Support\Facades\DB;
  */
 final readonly class ProposeCommuteChangeAction
 {
+    public function __construct(
+        private ApplyChangeProposalAction $apply,
+        private SaveCommuteRouteAction $route,
+    ) {}
+
     /**
      * @param  array<string, mixed>  $input  validated upstream: scope, scheduledTripId, and any of
      *                                       departureTime / promisedArrivalTime / pickupPoints
@@ -73,19 +79,11 @@ final readonly class ProposeCommuteChangeAction
             throw DomainException::of(ErrorCode::ChangeProposalAlreadyOpen);
         }
 
+        $this->assertPickupsOnTheWay($offer, $changes);
+
         $affected = $this->affectedCount($offer, $trip, $scope, $input);
 
-        if ($affected === 0) {
-            /*
-             * Nobody to ask. Refused rather than applied, because a proposal is a request for
-             * agreement and there is nobody to agree — and because applying a change through this
-             * path with no approvals would be a route around the mechanism. A day with no confirmed
-             * passengers is hers to edit, and that is a different operation.
-             */
-            throw DomainException::of(ErrorCode::ChangeProposalNobodyAffected);
-        }
-
-        return DB::transaction(function () use ($offer, $trip, $scope, $changes, $input): ChangeProposal {
+        return DB::transaction(function () use ($offer, $trip, $scope, $changes, $input, $affected): ChangeProposal {
             $proposal = new ChangeProposal;
 
             $proposal->forceFill([
@@ -103,6 +101,10 @@ final readonly class ProposeCommuteChangeAction
                     : null,
                 'expires_at' => $this->expiryFor($trip),
             ])->save();
+
+            if ($affected === 0) {
+                return $this->apply->execute($proposal, tell: false);
+            }
 
             $this->tellAffectedPassengers($proposal, NotificationType::ChangeProposalReceived);
 
@@ -140,6 +142,7 @@ final readonly class ProposeCommuteChangeAction
         }
 
         $this->assertPickupScope($proposal->scope, $changes);
+        $this->assertPickupsOnTheWay($proposal->commuteOffer, $changes);
 
         return DB::transaction(function () use ($proposal, $changes): ChangeProposal {
             $proposal->forceFill([
@@ -228,6 +231,29 @@ final readonly class ProposeCommuteChangeAction
      *
      * @param  array<string, mixed>  $changes
      */
+    private function assertPickupsOnTheWay(CommuteOffer $offer, array $changes): void
+    {
+        if (empty($changes['pickupPoints'])) {
+            return;
+        }
+
+        $offer->loadMissing('locations');
+
+        $origin = $offer->locations->firstWhere('type', CommuteLocationType::Origin);
+        $destination = $offer->locations->firstWhere('type', CommuteLocationType::Destination);
+
+        if ($origin === null || $destination === null) {
+            return;
+        }
+
+        $this->route->assertStopsAreOnTheWay(
+            new Coordinate((float) $origin->lat, (float) $origin->lng),
+            new Coordinate((float) $destination->lat, (float) $destination->lng),
+            $changes['pickupPoints'],
+            [],
+        );
+    }
+
     private function assertPickupScope(ChangeProposalScope $scope, array $changes): void
     {
         if (isset($changes['pickupPoints']) && ! $scope->rewritesTheTemplate()) {

@@ -247,6 +247,10 @@ enum NotificationType: string
      */
     case SeatsOfferedByDriver = 'seats_offered_by_driver';
 
+    case SeatReplacementAccepted = 'seat_replacement_accepted';
+
+    case SeatReplacementDeclined = 'seat_replacement_declined';
+
     /**
      * The driver answered her request with a different pickup or drop-off, and it is her turn
      * (Feature 03 v5 §2).
@@ -462,6 +466,8 @@ enum NotificationType: string
             self::CommuteDeletedSeatCancelled,
             self::VehicleReplacedSeatCancelled,
             self::SeatsOfferedByDriver,
+            self::SeatReplacementAccepted,
+            self::SeatReplacementDeclined,
             self::SeatCounteroffered,
             self::SeatCounterofferDeclined,
             self::ChangeProposalReceived,

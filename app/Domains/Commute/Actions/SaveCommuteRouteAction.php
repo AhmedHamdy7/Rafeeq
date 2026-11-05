@@ -134,7 +134,7 @@ final readonly class SaveCommuteRouteAction
      *
      * @param  array<int, array<string, mixed>>  $pickups
      */
-    private function assertStopsAreOnTheWay(
+    public function assertStopsAreOnTheWay(
         Coordinate $origin,
         Coordinate $destination,
         array $pickups,

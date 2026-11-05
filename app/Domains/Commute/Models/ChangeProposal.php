@@ -8,6 +8,8 @@ use App\Domains\Commute\Actions\ProposeCommuteChangeAction;
 use App\Domains\Commute\Enums\ChangeApprovalResponse;
 use App\Domains\Commute\Enums\ChangeProposalScope;
 use App\Domains\Commute\Enums\ChangeProposalStatus;
+use App\Domains\Shared\ValueObjects\DaysMask;
+use Carbon\CarbonImmutable;
 use Database\Factories\ChangeProposalFactory;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Concerns\HasUlids;
@@ -140,6 +142,47 @@ class ChangeProposal extends Model
         return $accepted->count() === $affected->count();
     }
 
+    public function pickupShiftSeconds(): int
+    {
+        $changes = $this->getAttribute('changes') ?? [];
+        $previous = $this->getAttribute('previous') ?? [];
+
+        foreach (['departureTime', 'promisedArrivalTime'] as $field) {
+            if (! isset($changes[$field], $previous[$field])) {
+                continue;
+            }
+
+            if ($field === 'promisedArrivalTime' && ! $this->departureFollowsArrival()) {
+                return 0;
+            }
+
+            return self::secondsOfDay((string) $changes[$field]) - self::secondsOfDay((string) $previous[$field]);
+        }
+
+        return 0;
+    }
+
+    private static function secondsOfDay(string $time): int
+    {
+        $parts = array_map('intval', explode(':', $time));
+
+        return ($parts[0] ?? 0) * 3600 + ($parts[1] ?? 0) * 60 + ($parts[2] ?? 0);
+    }
+
+    private function departureFollowsArrival(): bool
+    {
+        $trip = $this->scheduledTrip;
+
+        if ($trip === null) {
+            return false;
+        }
+
+        return (bool) CommuteWeekdaySchedule::query()
+            ->where('commute_offer_id', $this->commute_offer_id)
+            ->where('weekday_bit', DaysMask::bitForDate(CarbonImmutable::parse($trip->trip_date)))
+            ->value('departure_is_computed');
+    }
+
     /**
      * Each affected booking with the answer it has given, for the driver's pending view.
      *
@@ -151,7 +194,7 @@ class ChangeProposal extends Model
      */
     public function responseRoster(): Collection
     {
-        $bookings = $this->affectedBookings()->with('passenger')->get();
+        $bookings = $this->affectedBookings()->with('passenger', 'scheduledTrip.navigationStops', 'scheduledTrip.commuteOffer')->get();
 
         $answers = $this->approvals()
             ->where('proposal_version', $this->version)

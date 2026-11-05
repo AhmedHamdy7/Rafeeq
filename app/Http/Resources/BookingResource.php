@@ -95,6 +95,18 @@ final class BookingResource extends JsonResource
                 fn (): ?array => $this->driverCard($request),
             ),
 
+            'passenger' => $this->when(
+                $this->resource->relationLoaded('passenger')
+                    && $this->passenger?->relationLoaded('stats')
+                    && SeatPriceView::viewerDrives($request, $this->driver_profile_id),
+                fn (): array => PersonSummary::for($this->passenger, $request->user()),
+            ),
+            'replacementOffer' => $this->when(
+                $this->resource->relationLoaded('latestReplacementOffer')
+                    && SeatPriceView::viewerDrives($request, $this->driver_profile_id),
+                fn (): ?array => $this->replacementOffer(),
+            ),
+
             'status' => strtoupper($this->status->value),
             'seatsReserved' => $this->seats_reserved,
 
@@ -248,6 +260,24 @@ final class BookingResource extends JsonResource
      * Worked out once per row, from what the caller loaded: the day's stops when they came with
      * the trip (a list loads them for the page), the route fallback only when the commute did.
      */
+    private function replacementOffer(): ?array
+    {
+        $offer = $this->latestReplacementOffer;
+
+        if ($offer === null) {
+            return null;
+        }
+
+        return [
+            'offerId' => (string) $offer->getKey(),
+            'seatRequestId' => (string) $offer->seat_request_id,
+            'passengerFirstName' => $offer->seatRequest?->passenger?->public_first_name,
+            'status' => strtoupper($offer->status->value),
+            'offeredAt' => $offer->created_at?->toIso8601String(),
+            'closedAt' => $offer->closed_at?->toIso8601String(),
+        ];
+    }
+
     private function pickupEta(): ?CarbonImmutable
     {
         if ($this->pickupEtaResolved) {

@@ -93,6 +93,11 @@ class Booking extends Model
         return $this->belongsTo(CommuteGroup::class);
     }
 
+    public function latestReplacementOffer(): HasOne
+    {
+        return $this->hasOne(SeatOffer::class, 'replaces_booking_id')->latestOfMany('id');
+    }
+
     public function seatRequest(): BelongsTo
     {
         return $this->belongsTo(SeatRequest::class);
