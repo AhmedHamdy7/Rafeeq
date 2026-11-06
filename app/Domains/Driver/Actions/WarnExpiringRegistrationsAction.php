@@ -44,6 +44,7 @@ final readonly class WarnExpiringRegistrationsAction
 
             Notifier::send($driver, NotificationType::DriverItemExpiring, params: [
                 'date' => $document->expires_at->toDateString(),
+                'item' => __('notifications.driver_items.vehicle_registration', [], $driver->preferred_language ?: config('app.locale')),
             ], data: [
                 'itemKey' => 'vehicle_registration',
                 'vehicleId' => (string) $document->vehicle_id,

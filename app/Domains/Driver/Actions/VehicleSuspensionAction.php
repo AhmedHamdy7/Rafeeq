@@ -35,6 +35,7 @@ final readonly class VehicleSuspensionAction
                 ->whereIn('type', VehicleDocument::REGISTRATION_TYPES)
                 ->whereNotNull('expires_at')
                 ->where('expires_at', '<=', now()))
+            ->with('driverProfile.user')
             ->orderBy('id')
             ->chunkById(200, function ($vehicles) use (&$stopped): void {
                 foreach ($vehicles as $vehicle) {
@@ -65,6 +66,8 @@ final readonly class VehicleSuspensionAction
                 ->each(fn (CommuteOffer $offer) => $this->commutes->pause($offer, CommutePausedReason::VehicleSuspended));
 
             $this->log($vehicle, $admin, $reason->value, $note);
+
+            $vehicle->loadMissing('driverProfile.user');
 
             $driver = $vehicle->driverProfile?->user;
 
@@ -144,6 +147,8 @@ final readonly class VehicleSuspensionAction
 
     private function tellReinstated(Vehicle $vehicle): void
     {
+        $vehicle->loadMissing('driverProfile.user');
+
         $driver = $vehicle->driverProfile?->user;
 
         if ($driver !== null) {

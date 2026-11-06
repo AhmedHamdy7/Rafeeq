@@ -16,6 +16,7 @@ use App\Domains\Booking\Models\SeatOffer;
 use App\Domains\Booking\Models\SeatRequest;
 use App\Domains\Commute\Actions\ChangeCommuteStatusAction;
 use App\Domains\Commute\Actions\CreateCommuteOfferAction;
+use App\Domains\Commute\Actions\GenerateScheduledTripsAction;
 use App\Domains\Commute\Actions\ProposeCommuteChangeAction;
 use App\Domains\Commute\Actions\PublishCommuteOfferAction;
 use App\Domains\Commute\Actions\RespondToChangeProposalAction;
@@ -56,6 +57,7 @@ use App\Domains\Trip\Enums\TripSessionStatus;
 use App\Domains\Trip\Models\TripSession;
 use Illuminate\Database\QueryException;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Str;
 
 final class DriverCommutesStatesSeeder extends DriverHomeStatesSeeder
@@ -198,6 +200,16 @@ final class DriverCommutesStatesSeeder extends DriverHomeStatesSeeder
         ReliabilityEvent::query()->where('commute_offer_id', $offer->id)->delete();
         DB::table('occurrence_navigation_stops')->whereIn('scheduled_trip_id', $trips)->delete();
 
+        foreach (['attendance', 'trip_wait_timers', 'booking_events', 'debt_entries', 'occurrence_navigation_stops', 'member_warnings', 'change_approvals'] as $table) {
+            if (Schema::hasTable($table) && Schema::hasColumn($table, 'booking_id')) {
+                try {
+                    DB::table($table)->whereIn('booking_id', $bookings)->delete();
+                } catch (QueryException) {
+                    continue;
+                }
+            }
+        }
+
         foreach ($bookings as $id) {
             try {
                 Booking::query()->whereKey($id)->delete();
@@ -214,9 +226,13 @@ final class DriverCommutesStatesSeeder extends DriverHomeStatesSeeder
             }
         }
 
-        ScheduledTrip::query()->where('commute_offer_id', $offer->id)
-            ->where('trip_date', '<', now($offer->schedule->timezone)->toDateString())
-            ->delete();
+        foreach (ScheduledTrip::query()->where('commute_offer_id', $offer->id)->where('trip_date', '<', now($offer->schedule->timezone)->toDateString())->get() as $past) {
+            try {
+                $past->delete();
+            } catch (QueryException) {
+                continue;
+            }
+        }
 
         ScheduledTrip::query()->where('commute_offer_id', $offer->id)->update([
             'status' => ScheduledTripStatus::Scheduled->value,
@@ -225,6 +241,7 @@ final class DriverCommutesStatesSeeder extends DriverHomeStatesSeeder
             'seats_taken' => 0,
             'seats_total' => 3,
             'expired_at' => null,
+            'itinerary_version' => DB::raw('itinerary_version + 1'),
         ]);
 
         $offer->weekdaySchedules()->update(['promised_arrival_time' => '09:00:00', 'departure_is_computed' => true, 'seats_total' => null]);
@@ -232,6 +249,9 @@ final class DriverCommutesStatesSeeder extends DriverHomeStatesSeeder
         $this->fixUpcomingTimes($offer);
 
         $offer->forceFill(['seats_total' => 3])->save();
+
+        app(GenerateScheduledTripsAction::class)->execute($offer->refresh());
+        $this->fixUpcomingTimes($offer);
     }
 
     private function fixUpcomingTimes(CommuteOffer $offer): void
@@ -245,7 +265,11 @@ final class DriverCommutesStatesSeeder extends DriverHomeStatesSeeder
             $departure = $arrival->copy()->subSeconds($duration)->startOfMinute();
 
             if ($departure->isPast()) {
-                $day->delete();
+                try {
+                    $day->delete();
+                } catch (QueryException) {
+                    $day->forceFill(['status' => ScheduledTripStatus::Expired->value, 'expired_at' => now()])->save();
+                }
 
                 continue;
             }

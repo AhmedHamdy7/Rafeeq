@@ -214,3 +214,26 @@ it('warns once from 30 days before the registration expires', function () {
 
     expect(Notification::query()->where('type', 'driver_item_expiring')->latest('id')->first()->data['itemKey'] ?? null)->toBe('vehicle_registration');
 });
+
+it('suspends every car whose registration expired on the same night', function () {
+    $this->vehicle->documents()->where('type', VehicleDocumentType::Registration->value)->delete();
+    VehicleDocument::factory()->create(['vehicle_id' => $this->vehicle->id, 'type' => VehicleDocumentType::Registration, 'expires_at' => now()->subDay()]);
+
+    $other = Vehicle::factory()->create(['verification_status' => VehicleVerificationStatus::Approved]);
+    VehicleDocument::factory()->create(['vehicle_id' => $other->id, 'type' => VehicleDocumentType::Registration, 'expires_at' => now()->subDay()]);
+
+    expect(app(VehicleSuspensionAction::class)->sweepExpiredRegistrations())->toBe(2)
+        ->and($this->vehicle->refresh()->suspension_reason)->toBe('registration_expired')
+        ->and($other->refresh()->suspension_reason)->toBe('registration_expired');
+});
+
+it('names the car registration, not the licence, in the expiring notice', function () {
+    $this->vehicle->documents()->where('type', VehicleDocumentType::Registration->value)->delete();
+    VehicleDocument::factory()->create(['vehicle_id' => $this->vehicle->id, 'type' => VehicleDocumentType::Registration, 'expires_at' => now()->addDays(20)]);
+
+    app(WarnExpiringRegistrationsAction::class)->sweep();
+
+    $note = Notification::query()->where('type', 'driver_item_expiring')->latest('id')->first();
+
+    expect($note->title)->not->toContain(__('notifications.driver_items.driving_licence', [], 'en'));
+});
