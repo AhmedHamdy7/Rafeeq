@@ -16,6 +16,8 @@ use App\Domains\Reliability\Enums\ReliabilityEventKind;
 use App\Domains\Reliability\Support\ReliabilityLedger;
 use App\Domains\Shared\Exceptions\DomainException;
 use App\Domains\Shared\Support\ErrorCode;
+use App\Domains\Trip\Enums\AttendanceStatus;
+use App\Domains\Trip\Models\Attendance;
 use App\Domains\Trip\Support\DriverDelay;
 use Illuminate\Support\Facades\DB;
 
@@ -44,6 +46,8 @@ use Illuminate\Support\Facades\DB;
  */
 final readonly class ExitForDriverDelayAction
 {
+    public function __construct(private BuildNavigationItineraryAction $itinerary) {}
+
     public function execute(Booking $booking, ?string $reason = null): Booking
     {
         if ($booking->status !== BookingStatus::Confirmed) {
@@ -95,6 +99,13 @@ final readonly class ExitForDriverDelayAction
             if ($release > 0) {
                 $locked->decrement('seats_taken', $release);
             }
+
+            Attendance::query()
+                ->whereKey($booking->getKey())
+                ->where('status', AttendanceStatus::Pending->value)
+                ->update(['status' => AttendanceStatus::Cancelled->value]);
+
+            $this->itinerary->bump($trip->getKey());
 
             BookingEventLog::record(
                 $booking,

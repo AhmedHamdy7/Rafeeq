@@ -102,6 +102,7 @@ final class CallEntitlement
         $nextPickup = NavigationStop::query()
             ->where('scheduled_trip_id', $booking->scheduled_trip_id)
             ->where('kind', NavigationStopKind::PassengerPickup->value)
+            ->whereHas('booking', fn ($query) => $query->where('status', BookingStatus::Confirmed->value))
             ->remaining()
             ->first();
 

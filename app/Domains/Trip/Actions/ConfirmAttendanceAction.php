@@ -10,8 +10,10 @@ use App\Domains\Shared\Exceptions\DomainException;
 use App\Domains\Shared\Support\ErrorCode;
 use App\Domains\Shared\ValueObjects\Coordinate;
 use App\Domains\Trip\Enums\AttendanceStatus;
+use App\Domains\Trip\Enums\NavigationStopKind;
 use App\Domains\Trip\Enums\WarningKind;
 use App\Domains\Trip\Models\Attendance;
+use App\Domains\Trip\Models\NavigationStop;
 use App\Domains\Trip\Models\TripSession;
 use Illuminate\Support\Facades\DB;
 
@@ -164,6 +166,13 @@ final readonly class ConfirmAttendanceAction
              * a passenger who was marked present reads, months later, as somebody the
              * driver abandoned at a gate.
              */
+            NavigationStop::query()
+                ->where('scheduled_trip_id', $session->scheduled_trip_id)
+                ->where('booking_id', $booking->getKey())
+                ->where('kind', NavigationStopKind::PassengerPickup->value)
+                ->whereNull('reached_at')
+                ->update(['reached_at' => now()]);
+
             $status->travelled()
                 ? $this->waitTimers->arrived($session, $booking)
                 : $this->waitTimers->departedWithout($session, $booking);

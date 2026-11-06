@@ -6,6 +6,7 @@ use App\Domains\Booking\Models\SeatOffer;
 use App\Domains\Booking\Models\SeatRequest;
 use App\Domains\Commute\Models\ScheduledTrip;
 use App\Domains\Driver\Models\Vehicle;
+use App\Domains\Trip\Models\NavigationStop;
 use Illuminate\Support\Facades\Storage;
 
 /**
@@ -125,6 +126,19 @@ it('searches from where the car actually stopped, for somebody it was carrying',
  * A position that was never reported must not turn into a form asking her where she is — that form
  * is the safe-stop picker v5 forbids, with a different label.
  */
+it('starts from her own pickup after a check-in when no position was reported', function () {
+    underway($this->driverToken, $this->trip->id);
+    checkIn($this->driverToken, $this->trip->id, ['bookingId' => $this->bookingId])->assertOk();
+
+    test()->withToken($this->driverToken)
+        ->postJson("/api/v1/trips/{$this->trip->id}/cancel-active", ['reason' => 'breakdown'])
+        ->assertOk();
+
+    alternatives($this->paxToken, $this->bookingId)
+        ->assertOk()
+        ->assertJsonPath('meta.origin.kind', 'LAST_STOP_REACHED');
+});
+
 it('still answers for somebody it carried when nothing recorded where the car got to', function () {
     underway($this->driverToken, $this->trip->id);
     checkIn($this->driverToken, $this->trip->id, ['bookingId' => $this->bookingId])->assertOk();
@@ -132,6 +146,8 @@ it('still answers for somebody it carried when nothing recorded where the car go
     test()->withToken($this->driverToken)
         ->postJson("/api/v1/trips/{$this->trip->id}/cancel-active", ['reason' => 'breakdown'])
         ->assertOk();
+
+    NavigationStop::query()->where('scheduled_trip_id', $this->trip->id)->update(['reached_at' => null]);
 
     $booking = Booking::query()->findOrFail($this->bookingId);
 

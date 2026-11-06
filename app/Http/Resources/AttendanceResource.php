@@ -26,6 +26,10 @@ final class AttendanceResource extends JsonResource
         return [
             'bookingId' => $this->booking_id,
             'status' => strtoupper($this->status->value),
+            'bookingStatus' => $this->when(
+                $this->resource->relationLoaded('booking') && $this->booking !== null,
+                fn (): string => strtoupper($this->booking->status->value),
+            ),
 
             /*
              * The passenger's boarding code, so the DRIVER can confirm the number she is told at

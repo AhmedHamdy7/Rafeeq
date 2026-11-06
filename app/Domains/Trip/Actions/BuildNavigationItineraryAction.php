@@ -12,7 +12,9 @@ use App\Domains\Geo\Contracts\GeoQueryEngine;
 use App\Domains\Shared\Exceptions\DomainException;
 use App\Domains\Shared\Support\ErrorCode;
 use App\Domains\Shared\ValueObjects\Coordinate;
+use App\Domains\Trip\Enums\AttendanceStatus;
 use App\Domains\Trip\Enums\NavigationStopKind;
+use App\Domains\Trip\Models\Attendance;
 use App\Domains\Trip\Models\NavigationStop;
 use App\Domains\Trip\Support\ItineraryStop;
 use App\Domains\Trip\Support\NavigationItinerary;
@@ -194,6 +196,11 @@ final readonly class BuildNavigationItineraryAction
                     $stop->booking_id.':'.$stop->kind->value => $stop->reached_at,
                 ]);
 
+            $decided = Attendance::query()
+                ->whereIn('booking_id', collect($itinerary->stops)->pluck('bookingId')->filter()->all())
+                ->whereIn('status', [AttendanceStatus::Present->value, AttendanceStatus::Late->value, AttendanceStatus::PassengerNoShow->value])
+                ->pluck('confirmed_at', 'booking_id');
+
             NavigationStop::query()->where('scheduled_trip_id', $trip->getKey())->delete();
 
             foreach ($itinerary->stops as $stop) {
@@ -204,7 +211,8 @@ final readonly class BuildNavigationItineraryAction
                     'id' => (string) Str::ulid(),
                     'scheduled_trip_id' => $trip->getKey(),
                     'itinerary_version' => $version,
-                    'reached_at' => $reached[$stop->bookingId.':'.$stop->kind->value] ?? null,
+                    'reached_at' => $reached[$stop->bookingId.':'.$stop->kind->value]
+                        ?? ($stop->kind === NavigationStopKind::PassengerPickup ? ($decided[$stop->bookingId] ?? null) : null),
                 ])->save();
             }
 
