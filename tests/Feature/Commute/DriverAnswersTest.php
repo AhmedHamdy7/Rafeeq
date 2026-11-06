@@ -40,7 +40,7 @@ function daPost(string $token, string $url, array $body = [])
 
 function daRecurring(string $token, string $commute)
 {
-    return requestRecurringSeat($token, $commute, 62)->assertStatus(201)->json('data.id');
+    return requestSeat($token, $commute, ['commitment' => 'recurring', 'requestedDaysMask' => 62])->assertStatus(201)->json('data.id');
 }
 
 it('locks a day 12 hours before departure and keeps the fee tiers', function () {
