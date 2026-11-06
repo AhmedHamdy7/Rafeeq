@@ -528,7 +528,7 @@ return [
          * booking has to be compatible with the arrival the riders on board were promised. See
          * {@see \App\Domains\Commute\Support\ScheduleLock}.
          */
-        'schedule_lock_hours' => 16,
+        'schedule_lock_hours' => 12,
 
         /*
          * How far ahead scheduled trips are generated. NOT to the schedule's
@@ -1084,7 +1084,7 @@ return [
          * Which event kind takes which weight is in ReliabilityEventKind::weight(). A driver's
          * cancellation weight depends on the notice she gave, measured from the event to the day's
          * departure: the boundaries are `late_cancellation_hours` (10) and the schedule lock
-         * (`commute.schedule_lock_hours`, 16) — the same lock after which nothing on the day may
+         * (`fees.driver_cancel_free_hours`, 16) — the same lock after which nothing on the day may
          * change without every passenger's yes.
          */
         'weights' => [
