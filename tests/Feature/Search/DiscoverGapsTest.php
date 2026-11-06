@@ -61,7 +61,7 @@ it('carries the promised arrival, the drop-off point and the commute weekdays on
 
     expect($card['promisedArrivalAt'])->toBe($this->firstTrip->fresh()->promised_arrival_at->toIso8601String())
         // The departure's own wall clock moved by the same 70 minutes.
-        ->and(substr($card['promisedArrivalLocal'], 11, 5))->toBe('08:15')
+        ->and(substr($card['promisedArrivalLocal'], 11, 5))->toBe('08:22')
         // The days it RUNS, not the days that fit this search.
         ->and($card['daysMask'])->toBe(62)
         ->and($card['originLabel'])->toBe('Rehab Gate 2')

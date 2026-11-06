@@ -4,14 +4,17 @@ namespace App\Domains\Commute\Actions;
 
 use App\Domains\Booking\Enums\BookingStatus;
 use App\Domains\Booking\Models\Booking;
+use App\Domains\Booking\Support\PickupEta;
 use App\Domains\Commute\Enums\ScheduledTripStatus;
 use App\Domains\Commute\Jobs\RecomputeTripDeparture;
 use App\Domains\Commute\Models\ScheduledTrip;
 use App\Domains\Commute\Support\ComputedDeparture;
 use App\Domains\Commute\Support\ScheduleLock;
+use App\Domains\Geo\Contracts\GeoQueryEngine;
 use App\Domains\Notification\Enums\NotificationType;
 use App\Domains\Notification\Support\Notifier;
 use App\Domains\Shared\ValueObjects\DaysMask;
+use App\Domains\Trip\Actions\BuildNavigationItineraryAction;
 use Carbon\CarbonImmutable;
 use Illuminate\Support\Facades\DB;
 
@@ -34,7 +37,13 @@ use Illuminate\Support\Facades\DB;
  */
 final readonly class RecomputeDepartureAction
 {
-    public function __construct(private ComputedDeparture $departure) {}
+    private const int MINIMUM_CHANGE_SECONDS = 60;
+
+    public function __construct(
+        private ComputedDeparture $departure,
+        private GeoQueryEngine $geo,
+        private BuildNavigationItineraryAction $itinerary,
+    ) {}
 
     /**
      * @return bool whether the departure moved
@@ -62,15 +71,15 @@ final readonly class RecomputeDepartureAction
 
         $computed = $this->departure->forTrip($trip);
 
-        if ($computed === null || $computed->equalTo($trip->departure_at)) {
+        if ($computed === null || $computed->greaterThanOrEqualTo($trip->departure_at)) {
             return false;
         }
 
         $timezone = $trip->commuteSchedule?->timezone ?? 'Africa/Cairo';
         $local = $computed->setTimezone($timezone);
-        $movedEarlier = $computed->lessThan($trip->departure_at);
+        $before = $this->pickups($trip);
 
-        DB::transaction(function () use ($trip, $computed, $local, $movedEarlier): void {
+        DB::transaction(function () use ($trip, $computed, $local): void {
             $trip->forceFill([
                 'departure_at' => $computed,
                 'departure_local' => $local->format('Y-m-d H:i:s'),
@@ -87,34 +96,56 @@ final readonly class RecomputeDepartureAction
                     'commuteId' => (string) $trip->commute_offer_id,
                 ]);
             }
-
-            if ($movedEarlier) {
-                $this->tellPassengers($trip, $local);
-            }
         });
+
+        $this->tellPassengers($trip->refresh(), $before);
 
         return true;
     }
 
-    private function tellPassengers(ScheduledTrip $trip, CarbonImmutable $local): void
+    private function pickups(ScheduledTrip $trip): array
     {
-        Booking::query()
-            ->with('passenger')
+        $times = [];
+
+        foreach ($this->riders($trip) as $booking) {
+            $times[$booking->getKey()] = PickupEta::forBooking($this->geo, $booking);
+        }
+
+        return $times;
+    }
+
+    private function riders(ScheduledTrip $trip): mixed
+    {
+        return Booking::query()
+            ->with('passenger', 'scheduledTrip.commuteOffer.locations')
             ->where('scheduled_trip_id', $trip->getKey())
             ->where('status', BookingStatus::Confirmed->value)
-            ->get()
-            ->each(function (Booking $booking) use ($trip, $local): void {
-                if ($booking->passenger === null) {
-                    return;
-                }
+            ->get();
+    }
 
-                Notifier::send($booking->passenger, NotificationType::PickupMovedEarlier, [
-                    'time' => $local->format('H:i'),
-                    'date' => $local->format('Y-m-d'),
-                ], [
-                    'bookingId' => (string) $booking->getKey(),
-                    'scheduledTripId' => (string) $trip->getKey(),
-                ]);
-            });
+    private function tellPassengers(ScheduledTrip $trip, array $before): void
+    {
+        $this->itinerary->forTrip($trip);
+
+        foreach ($this->riders($trip) as $booking) {
+            $was = $before[$booking->getKey()] ?? null;
+            $now = PickupEta::forBooking($this->geo, $booking);
+
+            if ($booking->passenger === null || $was === null || $now === null || abs($was->diffInSeconds($now, false)) < self::MINIMUM_CHANGE_SECONDS) {
+                continue;
+            }
+
+            $local = PickupEta::local($booking->scheduledTrip, $now);
+
+            Notifier::send($booking->passenger, NotificationType::PickupTimeChanged, [
+                'time' => substr((string) $local, 11, 5),
+                'date' => $trip->trip_date->toDateString(),
+            ], [
+                'bookingId' => (string) $booking->getKey(),
+                'scheduledTripId' => (string) $trip->getKey(),
+                'pickupEta' => $now->toIso8601String(),
+                'pickupEtaLocal' => $local,
+            ]);
+        }
     }
 }

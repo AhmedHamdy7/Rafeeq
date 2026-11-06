@@ -16,7 +16,7 @@ use Illuminate\Support\Collection;
  * to and including hers), or the departure itself when no itinerary was built.
  *
  * 🔴 Counted from `departure_at` rather than read from the stored `eta_at`, because the departure
- * moves (C-2: recomputed as riders join or leave, until the 16 h lock) and an ETA written before the
+ * moves (C-2: recomputed as riders join or leave, until the 12 h lock) and an ETA written before the
  * move would name a time nobody told her any more.
  *
  * One place, because two things read it and they must agree: the grace clock an arrival starts

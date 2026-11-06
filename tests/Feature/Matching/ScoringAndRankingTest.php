@@ -180,7 +180,7 @@ it('ranks a better match above a worse one', function () {
     $later = createCommute($otherDriver, $otherVehicle->id)->assertStatus(201)->json('data.id');
 
     saveRoute($otherDriver, $later)->assertOk();
-    saveSchedule($otherDriver, $later, ['departureTime' => '08:30:00'])->assertOk();
+    saveSchedule($otherDriver, $later, ['promisedArrivalTime' => '10:25:00'])->assertOk();
 
     test()->withToken($otherDriver)->postJson("/api/v1/commutes/{$later}/publish")->assertOk();
 

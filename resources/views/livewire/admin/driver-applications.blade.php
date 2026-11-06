@@ -120,4 +120,44 @@
     @endforelse
 
     <x-rq-pager :page="$applications" />
+
+    <h2 class="rq-h1" style="margin-top:24px">{{ __('admin.drivers.cars_review.title') }}</h2>
+
+    @forelse ($renewals as $car)
+        <article class="rq-card" wire:key="renewal-{{ $car->id }}">
+            <div style="font-weight:600">{{ $car->driverProfile?->user?->full_name }} &middot; {{ $car->make }} {{ $car->model }} &middot; {{ $car->plate_number }}</div>
+            <p class="rq-note">{{ __('admin.drivers.cars_review.renewal_waiting') }}</p>
+            @if ($mayDecide)
+                <label class="rq-check__label" for="renewal-date-{{ $car->id }}">{{ __('admin.drivers.cars_review.new_expiry') }}</label>
+                <input id="renewal-date-{{ $car->id }}" class="rq-field" type="date" wire:model="renewalDates.{{ $car->id }}">
+                @error("renewalDates.{$car->id}") <p class="rq-error">{{ $message }}</p> @enderror
+                <button class="rq-btn" type="button" wire:click="approveRenewal('{{ $car->id }}')">{{ __('admin.drivers.cars_review.approve') }}</button>
+                <input class="rq-field" type="text" placeholder="{{ __('admin.drivers.cars_review.reject_reason') }}" wire:model="renewalReasons.{{ $car->id }}">
+                @error("renewalReasons.{$car->id}") <p class="rq-error">{{ $message }}</p> @enderror
+                <button class="rq-btn" type="button" wire:click="rejectRenewal('{{ $car->id }}')">{{ __('admin.drivers.cars_review.reject') }}</button>
+            @endif
+        </article>
+    @empty
+        <p class="rq-empty">{{ __('admin.drivers.cars_review.no_renewals') }}</p>
+    @endforelse
+
+    @foreach ($reportedCars as $car)
+        <article class="rq-card" wire:key="reported-{{ $car->id }}">
+            <div style="font-weight:600">{{ $car->driverProfile?->user?->full_name }} &middot; {{ $car->make }} {{ $car->model }} &middot; {{ $car->plate_number }}</div>
+            @if ($mayDecide)
+                <button class="rq-btn" type="button" wire:click="reinstate('{{ $car->id }}')">{{ __('admin.drivers.cars_review.reinstate') }}</button>
+            @endif
+        </article>
+    @endforeach
+
+    @if ($mayDecide)
+        <form wire:submit="suspendAfterReport" class="rq-card">
+            <p class="rq-note">{{ __('admin.drivers.cars_review.suspend_hint') }}</p>
+            <input class="rq-field" type="text" placeholder="{{ __('admin.drivers.cars_review.plate') }}" wire:model="suspendPlate">
+            @error('suspendPlate') <p class="rq-error">{{ $message }}</p> @enderror
+            <input class="rq-field" type="text" placeholder="{{ __('admin.drivers.cars_review.report_note') }}" wire:model="suspendNote">
+            @error('suspendNote') <p class="rq-error">{{ $message }}</p> @enderror
+            <button class="rq-btn" type="submit">{{ __('admin.drivers.cars_review.suspend') }}</button>
+        </form>
+    @endif
 </div>

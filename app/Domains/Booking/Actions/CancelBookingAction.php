@@ -157,7 +157,7 @@ final readonly class CancelBookingAction
 
     /**
      * Her account was suspended for debt or conduct, so every upcoming seat she holds goes — even
-     * inside the 16-hour lock (PAY-46, decision D-0018; Feature 03 backend file L-12).
+     * inside the schedule lock (PAY-46, decision D-0018; Feature 03 backend file L-12).
      *
      * Recorded as cancelled on HER side, because her standing is why, but by the SYSTEM: she did
      * not choose it, so it costs her no cancellation fee and puts nothing on her reliability record

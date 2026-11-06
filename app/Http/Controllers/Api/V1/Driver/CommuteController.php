@@ -215,6 +215,7 @@ final class CommuteController extends Controller
         ErrorCode::CommuteIncomplete,
         ErrorCode::CommuteSeatsExceedApproved,
         ErrorCode::ValidationFailed,
+        ErrorCode::CommuteArrivalRequired,
         ErrorCode::NotFound,
     )]
     public function saveSchedule(SaveCommuteScheduleRequest $request, string $commute, SaveCommuteScheduleAction $action): JsonResponse

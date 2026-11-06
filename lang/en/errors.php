@@ -67,6 +67,7 @@ return [
     'COMMUTE_AC_NOT_AVAILABLE' => 'Your car is registered without AC.',
     'COMMUTE_WOMEN_ONLY_NOT_ALLOWED' => 'Only a woman driver can make a commute Women-only.',
     'COMMUTE_ROUTE_INVALID' => 'Please check the route: the origin and destination must differ, and pickup points must be along the way.',
+    'COMMUTE_ARRIVAL_REQUIRED' => 'Choose when you need to arrive on every day. We work out when you leave.',
     'COMMUTE_SEATS_CONFLICT' => 'You already have more passengers booked than that number of seats.',
     'COMMUTE_VEHICLE_UNAVAILABLE' => 'That vehicle is not approved and active, so it cannot be used for a commute.',
     'COMMUTE_SEATS_EXCEED_APPROVED' => 'That is more seats than were approved on your car.',

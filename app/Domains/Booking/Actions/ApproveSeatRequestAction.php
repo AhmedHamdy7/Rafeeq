@@ -139,7 +139,7 @@ final readonly class ApproveSeatRequestAction
         }
 
         /*
-         * 🔴 Inside the 16-hour window, one more rider may not push the day's promised arrival past
+         * 🔴 Inside the 12-hour window, one more rider may not push the day's promised arrival past
          * what the people already on board were promised (Feature 03 v5: "New bookings after lock
          * only when compatible with frozen commitments").
          *
@@ -148,9 +148,9 @@ final readonly class ApproveSeatRequestAction
          * that under the lock on `seats_taken` would put a third party's latency inside the busiest
          * lock in the system. {@see ScheduleLock} documents the small race that buys.
          */
-        $this->assertKeepsFrozenPromises($request, $tripIds);
+        $breaking = $this->daysBreakingThePromise($request, $tripIds);
 
-        return DB::transaction(function () use ($request, $approver, $tripIds): SeatApproval {
+        return DB::transaction(function () use ($request, $approver, $tripIds, $breaking): SeatApproval {
             /*
              * The lock, in one consistent order. Everything below reads values no
              * other transaction can change until this one commits — which is the
@@ -185,11 +185,26 @@ final readonly class ApproveSeatRequestAction
             $bookings = [];
             $skipped = [];
 
+            $waiting = [];
+
             foreach ($trips as $trip) {
+                if (isset($breaking[$trip->getKey()])) {
+                    $skipped[$trip->trip_date->toDateString()] = SeatApproval::BREAKS_ARRIVAL;
+                    $waiting[] = $trip;
+
+                    continue;
+                }
+
                 $refusal = $this->refusalFor($trip, $request);
 
                 if ($refusal !== null) {
-                    $skipped[$trip->trip_date->toDateString()] = $refusal->value;
+                    $isFull = $refusal === ErrorCode::SeatUnavailable;
+
+                    $skipped[$trip->trip_date->toDateString()] = $isFull ? SeatApproval::FULL : SeatApproval::UNAVAILABLE;
+
+                    if ($isFull) {
+                        $waiting[] = $trip;
+                    }
 
                     continue;
                 }
@@ -237,10 +252,24 @@ final readonly class ApproveSeatRequestAction
 
             // Inside the transaction on purpose: if anything above had thrown, the passenger
             // must not be told they have a seat. The push itself waits for the commit.
-            Notifier::send($request->passenger, NotificationType::SeatApproved,
-                ['name' => $offer->driverProfile->user->public_first_name],
-                ['seatRequestId' => $request->id, 'commuteId' => $offer->id],
-            );
+            $this->waitForSkippedDays($request, $waiting);
+
+            if ($waiting === []) {
+                Notifier::send($request->passenger, NotificationType::SeatApproved,
+                    ['name' => $offer->driverProfile->user->public_first_name],
+                    ['seatRequestId' => $request->id, 'commuteId' => $offer->id],
+                );
+            } else {
+                Notifier::send($request->passenger, NotificationType::SeatApprovedPartly, [
+                    'seated' => count($bookings),
+                    'days' => implode(', ', array_map(fn (ScheduledTrip $day): string => $day->trip_date->format('j/n'), $waiting)),
+                ], [
+                    'seatRequestId' => $request->id,
+                    'commuteId' => $offer->id,
+                    'seatedDays' => count($bookings),
+                    'skippedDays' => implode(',', array_map(fn (ScheduledTrip $day): string => $day->trip_date->toDateString(), $waiting)),
+                ]);
+            }
 
             return new SeatApproval($request, $member, $bookings, $skipped);
         });
@@ -257,8 +286,10 @@ final readonly class ApproveSeatRequestAction
      */
     public function breaksFrozenPromise(SeatRequest $request): bool
     {
+        $tripIds = $this->candidateTripIds($request);
+
         try {
-            $this->assertKeepsFrozenPromises($request, $this->candidateTripIds($request));
+            $breaking = $this->daysBreakingThePromise($request, $tripIds);
         } catch (DomainException $refused) {
             if ($refused->errorCode === ErrorCode::BookingBreaksFrozenPromise) {
                 return true;
@@ -267,45 +298,73 @@ final readonly class ApproveSeatRequestAction
             throw $refused;
         }
 
-        return false;
+        return $tripIds !== [] && count($breaking) === count($tripIds);
     }
 
-    private function assertKeepsFrozenPromises(SeatRequest $request, array $tripIds): void
+    /**
+     * @return array<string, DomainException>
+     */
+    private function daysBreakingThePromise(SeatRequest $request, array $tripIds): array
     {
         $locked = ScheduledTrip::query()
             ->whereIn('id', $tripIds)
-            // No promise, no breach — the principle `CompleteTripAction` already works to. Nothing
-            // is scored, or refused, against null.
             ->whereNotNull('promised_arrival_at')
             ->with('commuteOffer.locations')
             ->get()
             ->filter(fn (ScheduledTrip $trip): bool => ScheduleLock::isLocked($trip));
 
-        if ($locked->isEmpty()) {
+        $pickup = new Coordinate((float) $request->requested_pickup_lat, (float) $request->requested_pickup_lng);
+        $dropoff = new Coordinate((float) $request->requested_dropoff_lat, (float) $request->requested_dropoff_lng);
+        $breaking = [];
+
+        foreach ($locked as $trip) {
+            try {
+                ScheduleLock::assertNewRiderKeepsThePromise(
+                    $this->itinerary,
+                    $trip,
+                    $pickup,
+                    $request->requested_pickup_label,
+                    $dropoff,
+                    $request->requested_dropoff_label,
+                );
+            } catch (DomainException $refused) {
+                if ($request->commitment === SeatRequestCommitment::Trial) {
+                    throw $refused;
+                }
+
+                $breaking[$trip->getKey()] = $refused;
+            }
+        }
+
+        return $breaking;
+    }
+
+    private function waitForSkippedDays(SeatRequest $request, array $days): void
+    {
+        if ($days === []) {
             return;
         }
 
-        $pickup = new Coordinate((float) $request->requested_pickup_lat, (float) $request->requested_pickup_lng);
-        $dropoff = new Coordinate((float) $request->requested_dropoff_lat, (float) $request->requested_dropoff_lng);
+        $position = (int) SeatRequest::query()
+            ->where('commute_offer_id', $request->commute_offer_id)
+            ->where('status', SeatRequestStatus::Waitlisted->value)
+            ->max('waitlist_position');
 
-        foreach ($locked as $trip) {
-            ScheduleLock::assertNewRiderKeepsThePromise(
-                $this->itinerary,
-                $trip,
-                $pickup,
-                $request->requested_pickup_label,
-                $dropoff,
-                $request->requested_dropoff_label,
-            );
+        foreach ($days as $day) {
+            $waiting = $request->replicate(['status', 'waitlist_position', 'responded_by', 'responded_at', 'response_note', 'active_request_key', 'expires_at']);
+
+            $waiting->forceFill([
+                'status' => SeatRequestStatus::Waitlisted->value,
+                'waitlist_position' => ++$position,
+                'scheduled_trip_id' => $day->getKey(),
+                'commitment' => SeatRequestCommitment::Trial->value,
+                'requested_days_mask' => null,
+                'responded_at' => now(),
+                'expires_at' => null,
+            ])->save();
         }
     }
 
-    /**
-     * The days this approval could seat: one for a trial, the committed pattern
-     * over the horizon for a recurring membership.
-     *
-     * @return array<int, string>
-     */
     private function candidateTripIds(SeatRequest $request): array
     {
         if ($request->commitment === SeatRequestCommitment::Trial) {

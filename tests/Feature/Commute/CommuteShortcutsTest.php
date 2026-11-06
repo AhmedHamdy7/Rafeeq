@@ -56,14 +56,14 @@ beforeEach(function () {
 
     saveSchedule($this->driverToken, $this->commuteId, [
         'daysMask' => DaysMask::weekdaysSunToThu()->value,
-        'departureTime' => '07:05:00',
+        'promisedArrivalTime' => '09:00:00',
         'promisedArrivalTime' => '08:00:00',
         'startDate' => CarbonImmutable::tomorrow()->toDateString(),
         'endDate' => CarbonImmutable::today()->addMonths(3)->toDateString(),
         // One different Thursday, so the per-day table has something worth carrying.
         'perDay' => [
             (string) DaysMask::THURSDAY => [
-                'departureTime' => '07:30:00',
+                'promisedArrivalTime' => '09:30:00',
                 'seatsTotal' => 2,
             ],
         ],
@@ -123,8 +123,8 @@ it('copies the terms, the route and the weekly pattern into a draft', function (
         ->toBe($source->rules->pluck('rule_key')->map->value->sort()->values()->all())
         ->and($draft->weekdaySchedules->firstWhere('weekday_bit', DaysMask::THURSDAY)->seats_total)
         ->toBe(2)
-        ->and($draft->weekdaySchedules->firstWhere('weekday_bit', DaysMask::THURSDAY)->departure_time)
-        ->toBe('07:30:00');
+        ->and($draft->weekdaySchedules->firstWhere('weekday_bit', DaysMask::THURSDAY)->promised_arrival_time)
+        ->toBe('09:30:00');
 });
 
 /**

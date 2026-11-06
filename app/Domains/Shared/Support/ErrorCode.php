@@ -93,6 +93,7 @@ enum ErrorCode: string
      * carries the most that may be offered, so the seat stepper can stop there.
      */
     case CommuteSeatsExceedApproved = 'COMMUTE_SEATS_EXCEED_APPROVED';
+    case CommuteArrivalRequired = 'COMMUTE_ARRIVAL_REQUIRED';
 
     /**
      * The car has not been through the admin's car review, so it has no approved seats yet and no
@@ -201,7 +202,7 @@ enum ErrorCode: string
     case SeatRequestSuggestionUnknown = 'SEAT_REQUEST_SUGGESTION_UNKNOWN';
 
     /*
-     * ---- The 16-hour schedule lock (Feature 03 v5) ---------------------
+     * ---- The schedule lock (Feature 03 v5) ---------------------
      */
 
     /**
@@ -416,6 +417,7 @@ enum ErrorCode: string
 
             // 422: fixed by offering fewer seats.
             self::CommuteSeatsExceedApproved,
+            self::CommuteArrivalRequired,
             // 422: fixed by choosing cash.
             self::PaymentTypeNotAvailable => 422,
 
