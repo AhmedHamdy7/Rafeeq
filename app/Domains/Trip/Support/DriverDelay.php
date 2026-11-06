@@ -4,7 +4,9 @@ namespace App\Domains\Trip\Support;
 
 use App\Domains\Booking\Models\Booking;
 use App\Domains\Commute\Models\ScheduledTrip;
+use App\Domains\Trip\Enums\AttendanceStatus;
 use App\Domains\Trip\Enums\NavigationStopKind;
+use App\Domains\Trip\Models\Attendance;
 use App\Domains\Trip\Models\NavigationStop;
 use App\Domains\Trip\Models\TripWaitTimer;
 use Carbon\CarbonImmutable;
@@ -137,6 +139,10 @@ final class DriverDelay
      */
     public static function reasonFor(Booking $booking, ScheduledTrip $trip): ?string
     {
+        if (Attendance::query()->whereKey($booking->getKey())->whereNot('status', AttendanceStatus::Pending->value)->exists()) {
+            return null;
+        }
+
         return match (true) {
             self::neverSetOff($trip) => 'not_started',
             self::drovePastHer($booking) => 'passed_your_stop',

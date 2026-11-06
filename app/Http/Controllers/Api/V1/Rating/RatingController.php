@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Api\V1\Rating;
 
 use App\Domains\Booking\Enums\BookingStatus;
 use App\Domains\Booking\Models\Booking;
+use App\Domains\Commute\Enums\ScheduledTripStatus;
 use App\Domains\Commute\Models\CommuteOffer;
 use App\Domains\Matching\Support\HardFilters;
 use App\Domains\Rating\Actions\ReportReviewAction;
@@ -50,7 +51,16 @@ final class RatingController extends Controller
         $user = $request->user();
 
         $bookings = Booking::query()
-            ->where('status', BookingStatus::Completed)
+            ->where(fn ($query) => $query
+                ->where('status', BookingStatus::Completed)
+                ->orWhere(fn ($ended) => $ended
+                    ->where('status', BookingStatus::EndedEarly)
+                    ->where(fn ($who) => $who
+                        ->where('passenger_user_id', $user->id)
+                        ->orWhereHas('scheduledTrip', fn ($trip) => $trip->whereIn('status', [
+                            ScheduledTripStatus::Completed->value,
+                            ScheduledTripStatus::Cancelled->value,
+                        ])))))
             ->where(fn ($query) => $query
                 ->where('passenger_user_id', $user->id)
                 ->orWhere('driver_profile_id', $user->id))

@@ -496,7 +496,7 @@ collecting people, so finishing from it would record a journey nobody was on.
 
 ```
 22 GET /ratings/pending
-   → 200  the journeys awaiting this person's rating, with rateableUntil
+   → 200  the journeys awaiting this person's rating, with rateableUntil. Includes ENDED_EARLY: at once for her, after the run for the driver
 
 23 POST /bookings/{booking}/rating   { stars, comment?, tags? }
    → 201  your own rating; isVisible is false until the other side rates
@@ -2826,7 +2826,7 @@ Published as `pointCount` so you do not have to count, and so the screen can say
 | `stops[].lat` · `lng` · `label` | Exact. She has to drive there, and she accepted every one of these. |
 | `stops[].etaAt` | When she is expected. **Measured**, not apportioned: each leg is routed and the ETAs are the running sum. Null when the day has no departure time or a leg could not be routed — we do not invent one. |
 | `stops[].legDurationSeconds` · `legDistanceMeters` | The leg **into** this stop. Zero on the first. They sum to `durationSeconds` / `distanceMeters`. |
-| `stops[].reachedAt` | Null means still to come. This is the one value that is not derived, and it survives every rebuild. |
+| `stops[].reachedAt` | Null means still to come. A pickup is marked reached by `check-in` or `no-show`, a drop-off by a drop-off or an early exit. This is the one value that is not derived, and it survives every rebuild. |
 | `polyline` · `distanceMeters` · `durationSeconds` | The whole run, summed from the legs. |
 | `googleMapsDirectionsUrl` | Open this for the external map. **Can be null** — see below. |
 | `exceedsWaypointLimit` · `waypointLimit` · `segments` | The fallback. |
@@ -3398,6 +3398,8 @@ ruined**. This moves all three to the driver.
 | **No fee for her** | `cancellationFeePiastres` is `0`. The **driver** pays 25 % of her seat (PAY-29) — half of it instead if the morning then expires as a no-show (PAY-26). |
 | **Nothing on her record** | The reliability event lands on the **driver** (`driver_late_caused_exit`). |
 | **The driver is told, WITH the reason** | `passenger_exited_driver_delay`. Unlike `passenger_ended_early`, where the reason is withheld because it may be about her, this one *is* about her driving — and a driver told she lost somebody without being told why cannot act on it. |
+| **Her stops leave the driver's route** | Attendance becomes `CANCELLED` with `bookingStatus: EXITED_DUE_TO_DRIVER_DELAY`, the next `navigation-route` read drops her stops, and Call moves to the next passenger. |
+| **Not once she is aboard** | After a check-in or a no-show, `driverDelay` is `null` and this answers `409 BOOKING_NOT_CANCELLABLE`. |
 | `reason` in the body | Optional. The server records its own finding regardless. |
 
 🔒 **When she is entitled is the server's finding, never a claim you can make.** There is no
@@ -3514,6 +3516,7 @@ moments.
 |---|---|
 | `bookingId` | Which seat. |
 | `status` | `PENDING` (nobody recorded it) · `PRESENT` · `LATE` · `PASSENGER_NO_SHOW` · `DRIVER_NO_SHOW` · `CANCELLED`. |
+| `bookingStatus` | The booking's status, on `GET /trips/{trip}/attendance`. `EXITED_DUE_TO_DRIVER_DELAY` with `CANCELLED` means she left because the driver was late. `ENDED_EARLY` with `PRESENT` and `checkedOutAt` means she got out mid-run. |
 | `travelled` | Whether this counts as having travelled — what Phase 8 will collect on. Sent rather than inferred so you do not hard-code which values count. |
 | `checkedInAt` / `checkedOutAt` | Boarding, and the end of the journey (set for everybody at once on completion). |
 | `confirmedBy` | `driver` under D18. Sent rather than assumed, so an old record still says which method produced it once a second one exists. |
@@ -4867,6 +4870,7 @@ exist, and every live endpoint must be named here.
 | 2026-11-01 | 🕘 **No booking deadline, and the waiting-list flow written down (follow-ups 1.1–1.5, 2, 3, 6).** 🛑 **The 21:00-the-night-before cut-off is gone** (R-5): a day takes requests until it leaves, `bookingDeadlineAt` is **removed** from the scheduled-trip shape, and `BOOKING_DEADLINE_PASSED` now only means the day has departed. **New notification `waitlist_application_received`** to the driver when a request lands on a full day (it used to be `seat_requested`). The waiting-list cap (10, `BOOKING_WAITLIST_FULL`) is now an **admin setting**. 4.7 now documents what was already built: `kind` (`seat_request` / `waitlist_application`) and `hasOtherConfirmedCommute` on the driver's inbox, `/waitlist` as the yes to an application, **requests never expire**, one seat per passenger per time slot (`BOOKING_ALREADY_BOOKED` + `overlapsBookingId`), women-only commutes visible to everybody with `403 SEAT_REQUEST_WOMEN_ONLY`, and the new seat-request statuses. 4.5: deleting a commute cancels **every** upcoming day, booked ones too. 4.12: the block preview's `feePiastres` / `reason` are **real** (they said "always 0"). 4.14: one table of every notification type, including the commission, coupon and +5/+10 "driver late" ones. No new endpoints. |
 | 2026-11-01 | 🧾 **My reports (HISTORY-8, HISTORY-10, HISTORY-11).** New **`POST /incidents/{incident}/appeal`** `{ reason }` — one appeal, a second only with a new file, 48 hours from the decision (D-0021); the report becomes **`APPEALED`** and goes back to the queue; refusals are `422` with `error.fields.appeal` (`NOT_DECIDED` · `NO_APPEALS_LEFT` · `APPEAL_WINDOW_CLOSED` · `NEW_EVIDENCE_REQUIRED`). Reports now carry `appeal { count, appealableUntil, needsNewEvidence }`, and evidence can be added to a decided report while it can still be appealed. `GET /incidents?bookingId=` filters to one journey. Confirmed: `id` and `createdAt` on every report, newest first, a late report is `409 REPORT_WINDOW_CLOSED`; `evidenceCount` on the list was always `0` and is fixed. 183 endpoints after merging main. |
 | 2026-11-01 | ⭐ **Rating edits (HISTORY-5 → HISTORY-7).** `PATCH /ratings/{rating}` changes only the fields sent: `"comment": null` clears it, a left-out `comment`/`tags`/`stars` is unchanged (before, a left-out comment was wiped and `stars` was required). Confirmed and pinned: stars-only `canceled_booking` feedback → `201`, a comment or tags on it → `422 VALIDATION_FAILED` on the field; rateable = `COMPLETED`, `ENDED_EARLY`, and the passenger's feedback on `CANCELLED_BY_DRIVER` — every other status `422 TRIP_NOT_RATEABLE`. No delete endpoint (B-3). |
+| 2026-11-06 | 🛣️ **Live run fixes.** `check-in` and `no-show` now mark the pickup stop reached, so Call moves to the next passenger. A late `exit-without-fee` sets attendance to `CANCELLED`, removes her stops from the route, and is refused once she is aboard. Attendance rows add `bookingStatus`. `GET /ratings/pending` includes ended-early rides. |
 | 2026-11-05 | 🚙 **Driver Commutes.** New: `GET /driver/trips`, `GET /driver/bookings/{booking}/cancel-preview`, `POST /driver/bookings/{booking}/replacement-offer`, `PATCH /driver/commutes/{commute}/seats`. `GET /driver/bookings` takes `commuteId`, `tripId` and `status`. A proposal with nobody affected now applies at once, and `CHANGE_PROPOSAL_NOBODY_AFFECTED` is gone. Proposal passengers have pickup times before and after. |
 | 2026-11-01 | 🧾 **Trips history (HISTORY-2, HISTORY-4).** `GET /my-bookings?scope=past` (finished, newest journey first) and `?scope=upcoming` (open, soonest first), paged on the filtered list; no `scope` is unchanged. Every booking on `/my-bookings` and `/bookings/{booking}` carries `myRating` — your own rating or `null`, never the other side's. A rating's `editableUntil` now matches what `PATCH` accepts: `null` once the deadline passed, and kept on visible `canceled_booking` feedback. |
 | 2026-11-01 | 🧾 **Trips history (HISTORY-1, HISTORY-9).** Every booking on `GET /my-bookings` and `GET /bookings/{booking}` now carries `commuteId`, `originLabel`, `destinationLabel` and `driver` (a `person`, first name only); the pickup and drop-off are the existing `meetingPoint`/`dropoffPoint`, fuzzed unless confirmed. New report category **`safety_concern`**, ranked **high**; `false_arrival` is live. |
