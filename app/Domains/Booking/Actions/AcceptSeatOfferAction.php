@@ -79,7 +79,7 @@ final readonly class AcceptSeatOfferAction
         SwitchScope $scope = SwitchScope::ThisDate,
     ): SeatAcceptance {
         /*
-         * 🔴 The 16-hour lock, before the transaction opens (Feature 03 v5: "New bookings after
+         * 🔴 The 12-hour lock, before the transaction opens (Feature 03 v5: "New bookings after
          * lock only when compatible with frozen commitments").
          *
          * A seat freed by somebody cancelling the night before is exactly the case this guards: the
@@ -230,8 +230,15 @@ final readonly class AcceptSeatOfferAction
 
             // 4. She wins. The request becomes approved — the driver already approved her onto the
             //    waiting list, so there is no second decision to wait for.
+            $standing = SeatRequest::query()
+                ->where('passenger_user_id', $request->passenger_user_id)
+                ->where('commute_offer_id', $request->commute_offer_id)
+                ->where('status', SeatRequestStatus::Approved->value)
+                ->whereKeyNot($request->getKey())
+                ->first();
+
             $request->forceFill([
-                'status' => SeatRequestStatus::Approved->value,
+                'status' => $standing === null ? SeatRequestStatus::Approved->value : SeatRequestStatus::Ended->value,
                 'waitlist_position' => null,
                 'responded_at' => now(),
             ])->save();
@@ -239,7 +246,7 @@ final readonly class AcceptSeatOfferAction
             $offer->loadMissing('scheduledTrip.commuteOffer');
             $group = $this->addMember->groupFor($trip->commuteOffer);
 
-            $booking = $this->createBooking->execute($request, $trip, $group);
+            $booking = $this->createBooking->execute($standing ?? $request, $trip, $group);
 
             /*
              * `increment` rather than `$trip->seats_taken + $n` (pitfall #2): the former is one
@@ -252,7 +259,7 @@ final readonly class AcceptSeatOfferAction
             // {@see BuildNavigationItineraryAction} on why a provider call cannot happen here.
             $this->itinerary->bump($trip->getKey());
 
-            $this->addMember->execute($request, $trip->commuteOffer);
+            $this->addMember->execute($standing ?? $request, $trip->commuteOffer);
 
             $released = [];
 

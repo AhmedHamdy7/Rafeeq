@@ -420,11 +420,21 @@ enum NotificationType: string
     /**
      * To the driver: RAFEEQ moved his departure for one day because a rider joined or left
      * (C-2, COM-15) — "Leave at 07:10 on 2026-11-03". Only on days where he gave an arrival time
-     * and not a fixed departure, and never inside the 16-hour lock.
+     * and not a fixed departure, and never inside the schedule lock.
      */
     case DepartureTimeChanged = 'departure_time_changed';
 
     case PickupMovedEarlier = 'pickup_moved_earlier';
+
+    case PickupTimeChanged = 'pickup_time_changed';
+
+    case SeatApprovedPartly = 'seat_approved_partly';
+
+    case VehicleRegistrationExpired = 'vehicle_registration_expired';
+
+    case VehicleSuspended = 'vehicle_suspended';
+
+    case VehicleReinstated = 'vehicle_reinstated';
 
     case CommuteArchived = 'commute_archived';
 
@@ -478,6 +488,11 @@ enum NotificationType: string
             self::TripDayCancelled,
             self::DepartureTimeChanged,
             self::PickupMovedEarlier,
+            self::PickupTimeChanged,
+            self::SeatApprovedPartly,
+            self::VehicleRegistrationExpired,
+            self::VehicleSuspended,
+            self::VehicleReinstated,
             self::CommuteArchived,
             self::WaitlistedCommuteEnded,
             self::MatchFound => NotificationCategory::Booking,

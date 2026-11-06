@@ -8,6 +8,7 @@ use App\Domains\Driver\Enums\VehicleRejectedItem;
 use App\Domains\Driver\Enums\VehicleVerificationStatus;
 use App\Domains\Driver\Models\DriverProfile;
 use App\Domains\Driver\Models\Vehicle;
+use App\Domains\Identity\Enums\AccountStatus;
 use App\Domains\Identity\Models\User;
 use App\Domains\Verification\Enums\VerificationStatus;
 use App\Domains\Verification\Enums\VerificationType;
@@ -73,8 +74,18 @@ final class DriverChecklist
 
         $completed = count(array_filter($items, fn (array $item): bool => $item['status'] === 'approved'));
 
+        $accountSuspended = $user->account_status === AccountStatus::Suspended;
+        $overall = $accountSuspended ? 'suspended' : self::overall($profile, $items, $verifications);
+
+        if ($accountSuspended || $profile?->status === DriverProfileStatus::Suspended) {
+            foreach ($items as $index => $item) {
+                $items[$index]['status'] = 'suspended';
+                $items[$index]['rejectionReason'] = null;
+            }
+        }
+
         return [
-            'overall' => self::overall($profile, $items, $verifications),
+            'overall' => $overall,
             'completed' => $completed,
             'of' => count($items),
             'items' => $items,
@@ -210,6 +221,7 @@ final class DriverChecklist
                 self::isRejected($vehicle, VehicleRejectedItem::Registration) => 'action_needed',
                 $document === null => 'not_started',
                 ! $complete => 'in_progress',
+                $vehicle->registration_renewal_submitted_at !== null => 'under_review',
                 $expired => 'expired',
                 // A vehicle document is approved with the vehicle it belongs to: the reviewer
                 // decides on the car, not on each page of its paperwork separately.

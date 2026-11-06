@@ -22,6 +22,12 @@ use App\Domains\Group\Models\GroupMember;
  */
 final readonly class SeatApproval
 {
+    public const string FULL = 'full';
+
+    public const string BREAKS_ARRIVAL = 'breaks_arrival';
+
+    public const string UNAVAILABLE = 'unavailable';
+
     /**
      * @param  array<int, Booking>  $bookings
      * @param  array<string, string>  $skipped  trip date (Y-m-d) => the reason it could not be seated

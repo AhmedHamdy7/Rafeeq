@@ -358,7 +358,7 @@ it('names the commute a match points at, not just that one was found', function 
     // only way to tell two apart is to open both.
     expect($card['originLabel'])->toBe('Rehab Gate 2')
         ->and($card['destinationLabel'])->toBe('Smart Village B6')
-        ->and($card['departureTimeLocal'])->toStartWith('07:05')
+        ->and($card['departureTimeLocal'])->toStartWith('07:12')
         ->and($card['timezone'])->toBe('Africa/Cairo')
         ->and($card['seatPricePiastres'])->toBe(CommuteOffer::query()->whereKey($this->commuteId)->value('seat_price_piastres'));
 });

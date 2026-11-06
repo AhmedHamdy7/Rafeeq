@@ -104,7 +104,7 @@ PATCH /driver/commutes/{commute}/seats
 | `all_future_on_this_weekday` | That weekday from that day on, including days not generated yet | Required |
 | `all_future_days` | Every future day | Not needed |
 
-It answers `{seatsTotal, scope, updatedDays, tripIds[]}`. It reaches days already generated, including inside the 16-hour lock.
+It answers `{seatsTotal, scope, updatedDays, tripIds[]}`. It reaches days already generated, including inside the 12-hour lock.
 
 - **Below the seats taken:** `409 COMMUTE_SEATS_CONFLICT`, with the highest number taken in `fields.seatsTotal`. Nothing changes and nobody loses a seat. The driver removes a passenger first.
 - **Above the car's approved seats:** `422 COMMUTE_SEATS_EXCEED_APPROVED`.
@@ -149,7 +149,7 @@ The other passenger answers with the usual `POST /seat-offers/{offer}/accept` or
 |---|---|
 | `409 REPLACEMENT_ALREADY_OPEN` | This seat already has a live offer |
 | `409 REPLACEMENT_NOT_ELIGIBLE` | `fields.reason`: `same_passenger`, `not_waiting_for_this_day`, `needs_more_seats` or `already_offered` |
-| `409 REPLACEMENT_CHANGES_OTHERS` | Inside the 16-hour lock, and it would change the trip for others |
+| `409 REPLACEMENT_CHANGES_OTHERS` | Inside the 12-hour lock, and it would change the trip for others |
 | `409 BOOKING_NOT_CANCELLABLE` | The seat isn't confirmed, or the day has started |
 | `404 NOT_FOUND` | Not on this commute's waiting list |
 
@@ -163,14 +163,14 @@ A person on a recurring waiting list who accepts gets that one day only.
 
 - **Edit is arrival only, like Create.** Please ask Design to remove earliest departure from `F3-05`. COM-41 covers this for Create; applying it to Edit is our reading.
 - **Send only `promisedArrivalTime`.** On apply, the departure is now worked out again from the new arrival. Before this, it stayed where it was.
-- **`departureTime` stays on the API, but the app shouldn't send it.** COM-17 and its example still describe a departure change after the lock, and Product hasn't decided whether to remove it. If sent, it fixes that time, and with `all_future_on_this_weekday` that weekday stops being worked out automatically.
+- **`departureTime` stays on the API, but the app shouldn't send it.** COM-17 and its example still describe a departure change after the lock, and Product hasn't decided whether to remove it. If sent, the time only holds inside the lock; before the lock the next re-time replaces it.
 - **Price tiers stay removed.** The price is automatic (COM-41, PAY-42).
 
 ## G11. Reliability on the cancel sheets
 
 **There are no levels.** No rule or field defines "Level 3 of 4". The only figure is `asDriver.score` on `GET /account/reliability`, out of `perfectScore` (100).
 
-The preview won't say what a cancellation changes, because how the score is calculated is still an open question (Q-067). Please ask Design to remove both the level and the fall. The sheets can still say a cancellation lowers Reliability (SAFE-04).
+The preview won't say what a cancellation changes. The score's formula is now decided (SAFE-24), but it has no levels. Please ask Design to remove both the level and the fall. The sheets can still say a cancellation lowers Reliability (SAFE-04).
 
 ## G12. Commute list shape
 

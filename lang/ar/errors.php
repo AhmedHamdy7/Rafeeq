@@ -67,6 +67,7 @@ return [
     'COMMUTE_AC_NOT_AVAILABLE' => 'عربيتك مسجلة من غير تكييف.',
     'COMMUTE_WOMEN_ONLY_NOT_ALLOWED' => 'مشوار للسيدات فقط متاح للسائقات بس.',
     'COMMUTE_ROUTE_INVALID' => 'راجع المسار: نقطة البداية لازم تختلف عن النهاية، ونقاط الالتقاء لازم تكون على الطريق.',
+    'COMMUTE_ARRIVAL_REQUIRED' => 'اختار ميعاد وصولك في كل يوم. إحنا هنحسب ميعاد تحركك.',
     'COMMUTE_SEATS_CONFLICT' => 'عندك ركّاب محجوزين أكتر من عدد المقاعد ده.',
     'COMMUTE_VEHICLE_UNAVAILABLE' => 'العربية دي مش معتمَدة ونشطة، فمش ممكن تُستخدم لرحلة.',
     'COMMUTE_SEATS_EXCEED_APPROVED' => 'ده عدد مقاعد أكتر من اللي اتعتمد على عربيتك.',

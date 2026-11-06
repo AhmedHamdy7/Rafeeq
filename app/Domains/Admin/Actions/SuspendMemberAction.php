@@ -40,7 +40,7 @@ use Illuminate\Support\Facades\DB;
  * - **A permanent ban** — the full Account restricted screen (`RESTRICTED_ACCOUNT`), everything
  *   behind `account.active` refused, no appeal in the app.
  *
- * Either way **every upcoming seat is cancelled, inside the 16-hour lock too, with no fee for
+ * Either way **every upcoming seat is cancelled, inside the schedule lock too, with no fee for
  * anybody** (D-0018 Q-027, PAY-46): her seats as a passenger go to the waiting list, and as a
  * driver every published commute is paused, which cancels its days and puts its riders back on
  * the waiting list. Lifting the hold gives none of it back — the seats went to other people.
@@ -193,7 +193,7 @@ final readonly class SuspendMemberAction
     }
 
     /**
-     * D-0018 Q-027, PAY-46: every upcoming seat, inside the 16-hour lock too, with no fee.
+     * D-0018 Q-027, PAY-46: every upcoming seat, inside the schedule lock too, with no fee.
      *
      * As a passenger, each confirmed seat on a day that has not set off is cancelled by the
      * system — nothing on her reliability record, the seat to the waiting list. As a driver,

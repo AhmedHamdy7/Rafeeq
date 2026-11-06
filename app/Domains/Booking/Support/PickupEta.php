@@ -25,7 +25,7 @@ use Illuminate\Support\Collection;
  * - **Once the day's itinerary is built** — the departure plus the measured legs up to her stop.
  *   This is the figure the wait timer starts her grace from ({@see ArriveAtPickupAction}),
  *   so the time she is shown and the time she is held to are one number. The itinerary is rebuilt
- *   only while stops can still change, and they stop changing at the 16-hour lock
+ *   only while stops can still change, and they stop changing at the 12-hour lock
  *   ({@see ScheduleLock}), so from then on it is frozen.
  * - **Before that, or before any booking exists** — the departure plus the share of the
  *   published route's duration that lies before her point. Arithmetic on geometry already stored:

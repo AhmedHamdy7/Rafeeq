@@ -106,22 +106,14 @@ final readonly class SaveCommuteScheduleAction
             $weekday->weekday_bit = $bit;
             $weekday->promised_arrival_time = $day['promisedArrivalTime'] ?? ($input['promisedArrivalTime'] ?? null);
 
-            $fixedDeparture = $day['departureTime'] ?? ($input['departureTime'] ?? null);
-
-            if ($fixedDeparture === null && $weekday->promised_arrival_time === null) {
-                // A day with neither has nothing to leave or arrive by.
-                throw DomainException::of(ErrorCode::ValidationFailed, fields: [
+            if ($weekday->promised_arrival_time === null) {
+                throw DomainException::of(ErrorCode::CommuteArrivalRequired, fields: [
                     "perDay.{$bit}.promisedArrivalTime" => [__('validation.required', ['attribute' => 'promisedArrivalTime'])],
                 ]);
             }
 
-            /*
-             * C-2 (COM-15, decision C9): no departure for this day means RAFEEQ computes it from
-             * the arrival. What is stored here is an estimate on today's route without traffic,
-             * for display and ordering; each generated day gets its own, and riders move it.
-             */
-            $weekday->departure_is_computed = $fixedDeparture === null;
-            $weekday->departure_time = $fixedDeparture ?? $this->estimatedDeparture($offer, (string) $weekday->promised_arrival_time, $input['timezone'] ?? 'Africa/Cairo');
+            $weekday->departure_is_computed = true;
+            $weekday->departure_time = $this->estimatedDeparture($offer, (string) $weekday->promised_arrival_time, (string) ($offer->schedule()->value('timezone') ?? 'Africa/Cairo'));
             // Null, not a copy of the parent: null means "follow the commute", so a later change
             // reaches every day he did not deliberately set differently.
             $weekday->seats_total = $day['seatsTotal'] ?? null;

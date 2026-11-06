@@ -5,6 +5,7 @@ use App\Domains\Admin\Enums\AdminRole;
 use App\Domains\Admin\Models\AdminAction;
 use App\Domains\Driver\Enums\DriverProfileStatus;
 use App\Domains\Driver\Enums\VehicleTier;
+use App\Domains\Driver\Enums\VehicleVerificationStatus;
 use App\Domains\Driver\Enums\VerificationLogAction;
 use App\Domains\Driver\Models\DriverProfile;
 use App\Domains\Driver\Models\Vehicle;
@@ -214,4 +215,33 @@ it('reserves creating admins to the super admin', function () {
     }
 
     expect(adminWithRole(AdminRole::SuperAdmin)->can(AdminPermission::AdminManage->value))->toBeTrue();
+});
+
+it('lets a reviewer suspend a car after a report, reinstate it, and approve a renewal', function () {
+    $admin = adminWithRole(AdminRole::Verification);
+    $vehicle = Vehicle::factory()->create(['verification_status' => VehicleVerificationStatus::Approved, 'plate_number' => 'ABC 123']);
+
+    Livewire::actingAs($admin, 'admin')->test(DriverApplications::class)
+        ->set('suspendPlate', 'ABC 123')
+        ->set('suspendNote', 'Report 12: the car is not the registered one.')
+        ->call('suspendAfterReport')
+        ->assertHasNoErrors();
+
+    expect($vehicle->refresh()->suspension_reason)->toBe('report');
+
+    Livewire::actingAs($admin, 'admin')->test(DriverApplications::class)->call('reinstate', $vehicle->id);
+
+    expect($vehicle->refresh()->suspension_reason)->toBeNull()
+        ->and($vehicle->verification_status)->toBe(VehicleVerificationStatus::Approved);
+
+    $vehicle->forceFill(['registration_renewal_submitted_at' => now()])->save();
+
+    Livewire::actingAs($admin, 'admin')->test(DriverApplications::class)
+        ->call('approveRenewal', $vehicle->id)
+        ->assertHasErrors()
+        ->set("renewalDates.{$vehicle->id}", now()->addYear()->toDateString())
+        ->call('approveRenewal', $vehicle->id)
+        ->assertHasNoErrors();
+
+    expect($vehicle->refresh()->registration_renewal_submitted_at)->toBeNull();
 });

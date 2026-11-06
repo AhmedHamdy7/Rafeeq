@@ -32,6 +32,8 @@ beforeEach(function () {
         ->postJson("/api/v1/commutes/{$this->commuteId}/publish")->assertOk();
 
     $this->tripId = ScheduledTrip::query()->orderBy('trip_date')->firstOrFail()->id;
+
+    CommuteWeekdaySchedule::query()->where('commute_offer_id', $this->commuteId)->update(['departure_is_computed' => false]);
 });
 
 /**
@@ -83,7 +85,7 @@ it('records what is being proposed against what it is now', function () {
         ->and($proposal['version'])->toBe(1)
         ->and($proposal['changes']['departureTime'])->toBe('07:30:00')
         // 🔴 The comparison is captured now, so what she agreed to cannot drift under her.
-        ->and($proposal['previous']['departureTime'])->toBe('07:05:00')
+        ->and($proposal['previous']['departureTime'])->toBe('07:12:00')
         // It stops being answerable when the car goes.
         ->and($proposal['expiresAt'])->toBe(ScheduledTrip::findOrFail($this->tripId)->departure_at->toIso8601String());
 
@@ -170,7 +172,7 @@ it('ends the proposal when somebody refuses', function () {
         ->assertOk()
         ->assertJsonPath('data.status', 'REJECTED');
 
-    expect(ScheduledTrip::findOrFail($this->tripId)->departure_local->format('H:i:s'))->toBe('07:05:00')
+    expect(ScheduledTrip::findOrFail($this->tripId)->departure_local->format('H:i:s'))->toBe('07:12:00')
         ->and(Notification::query()->where('type', 'change_proposal_rejected')->count())->toBe(1);
 });
 
@@ -195,7 +197,7 @@ it('is not unanimous once somebody new is confirmed on the day', function () {
 
     // 🔴 Still pending: the newcomer's silence counts, with nothing having hooked into her booking.
     expect(ChangeProposal::findOrFail($proposalId)->status)->toBe(ChangeProposalStatus::Pending)
-        ->and(ScheduledTrip::findOrFail($this->tripId)->departure_local->format('H:i:s'))->toBe('07:05:00');
+        ->and(ScheduledTrip::findOrFail($this->tripId)->departure_local->format('H:i:s'))->toBe('07:12:00');
 });
 
 /**
@@ -227,7 +229,7 @@ it('resets every approval when the driver revises it', function () {
     answerProposal($second['token'], $proposalId, 'accepted')->assertOk();
 
     expect(ChangeProposal::findOrFail($proposalId)->status)->toBe(ChangeProposalStatus::Pending)
-        ->and(ScheduledTrip::findOrFail($this->tripId)->departure_local->format('H:i:s'))->toBe('07:05:00');
+        ->and(ScheduledTrip::findOrFail($this->tripId)->departure_local->format('H:i:s'))->toBe('07:12:00');
 
     // 🔴 And the old answer is kept, not deleted: the driver's screen can still show she had agreed.
     expect(ChangeProposal::findOrFail($proposalId)->approvals()->where('proposal_version', 1)->count())->toBe(1);
@@ -310,7 +312,7 @@ it('does not tell a passenger how the others answered', function () {
         ->assertOk()->json('data.0');
 
     expect($mine['changes']['departureTime'])->toBe('07:30:00')
-        ->and($mine['previous']['departureTime'])->toBe('07:05:00')
+        ->and($mine['previous']['departureTime'])->toBe('07:12:00')
         ->and($mine)->not->toHaveKey('passengers')
         ->and($mine)->not->toHaveKey('acceptedCount')
         ->and($mine)->not->toHaveKey('affectedCount');
@@ -333,7 +335,7 @@ it('refuses an answer from somebody with no seat on the day', function () {
 
     answerProposal($stranger, $proposalId, 'accepted')->assertStatus(404);
 
-    expect(ScheduledTrip::findOrFail($this->tripId)->departure_local->format('H:i:s'))->toBe('07:05:00');
+    expect(ScheduledTrip::findOrFail($this->tripId)->departure_local->format('H:i:s'))->toBe('07:12:00');
 });
 
 it('applies at once when it affects nobody', function () {
@@ -502,7 +504,7 @@ it('runs v5’s scenario D end to end', function () {
     answerProposal($mariam['token'], $proposalId, 'accepted')->assertOk();
 
     expect(ChangeProposal::findOrFail($proposalId)->status)->toBe(ChangeProposalStatus::Pending)
-        ->and(ScheduledTrip::findOrFail($this->tripId)->departure_local->format('H:i:s'))->toBe('07:05:00');
+        ->and(ScheduledTrip::findOrFail($this->tripId)->departure_local->format('H:i:s'))->toBe('07:12:00');
 
     // The driver revises to 07:45 → both approvals reset.
     test()->flushHeaders()->withToken($this->driverToken)

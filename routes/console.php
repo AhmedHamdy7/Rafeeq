@@ -231,6 +231,16 @@ Schedule::command('licences:warn-expiring')
     ->timezone('Africa/Cairo')
     ->withoutOverlapping();
 
+Schedule::command('registrations:warn-expiring')
+    ->dailyAt('10:20')
+    ->timezone('Africa/Cairo')
+    ->withoutOverlapping();
+
+Schedule::command('registrations:stop-expired')
+    ->dailyAt('00:15')
+    ->timezone('UTC')
+    ->withoutOverlapping();
+
 Schedule::command('licences:stop-expired')
     ->dailyAt('00:10')
     ->timezone('UTC')

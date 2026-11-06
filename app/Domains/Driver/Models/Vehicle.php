@@ -27,6 +27,7 @@ class Vehicle extends Model
     protected function casts(): array
     {
         return [
+            'registration_renewal_submitted_at' => 'datetime',
             'year' => 'integer',
             'seats' => 'integer',
             /*

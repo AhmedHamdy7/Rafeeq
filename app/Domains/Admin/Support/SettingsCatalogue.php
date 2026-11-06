@@ -117,7 +117,7 @@ final class SettingsCatalogue
         // ---- Reliability score (Feature 03 files X-3, D3/D4) -------------
         // Points lost per event. Only a number for now: it gates nothing (D4).
         'reliability.window_days' => ['group' => 'reliability', 'min' => 30, 'max' => 365, 'unit' => 'days'],
-        // Below the schedule lock (16 h): the mid-notice row is "10–16 h".
+        // Below the driver-cancel free window (16 h): the mid-notice row is "10–16 h".
         'reliability.late_cancellation_hours' => ['group' => 'reliability', 'min' => 1, 'max' => 15, 'unit' => 'hours'],
         'reliability.weights.driver_no_show' => ['group' => 'reliability', 'min' => 0, 'max' => 50, 'unit' => 'score_points'],
         'reliability.weights.passenger_no_show' => ['group' => 'reliability', 'min' => 0, 'max' => 50, 'unit' => 'score_points'],

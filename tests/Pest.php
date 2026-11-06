@@ -365,7 +365,7 @@ function saveSchedule(string $token, string $commuteId, array $overrides = [])
 {
     return test()->withToken($token)->putJson("/api/v1/commutes/{$commuteId}/schedule", array_merge([
         'daysMask' => DaysMask::weekdaysSunToThu()->value,
-        'departureTime' => '07:05:00',
+        'promisedArrivalTime' => '09:00:00',
         'startDate' => CarbonImmutable::tomorrow()->toDateString(),
         'endDate' => CarbonImmutable::today()->addMonths(4)->toDateString(),
     ], $overrides));

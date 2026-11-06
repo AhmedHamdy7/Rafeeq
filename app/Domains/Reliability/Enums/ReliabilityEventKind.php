@@ -2,7 +2,7 @@
 
 namespace App\Domains\Reliability\Enums;
 
-use App\Domains\Commute\Support\ScheduleLock;
+use App\Domains\Payment\Support\FeeSettings;
 use App\Domains\Reliability\Support\ReliabilitySettings;
 
 /**
@@ -141,7 +141,7 @@ enum ReliabilityEventKind: string
      *
      * 🔴 For a cancellation the notice decides: `$hoursNotice` is the time from the event to the
      * day's departure. Fewer than `late_cancellation_hours` (10) is short notice; up to the
-     * schedule lock (16) is mid; beyond it is long. No notice known — a day with no departure time
+     * driver-cancel free window (16) is mid; beyond it is long. No notice known — a day with no departure time
      * — is weighed as short notice, the side that does not flatter the person who cancelled.
      *
      * A displacement (a paused commute, a replaced vehicle) and a called-off day are cancellations
@@ -169,7 +169,7 @@ enum ReliabilityEventKind: string
             self::DriverCancelledDay => match (true) {
                 $hoursNotice === null,
                 $hoursNotice < ReliabilitySettings::lateCancellationHours() => ReliabilitySettings::driverCancelShortNotice(),
-                $hoursNotice < ScheduleLock::hours() => ReliabilitySettings::driverCancelMidNotice(),
+                $hoursNotice < FeeSettings::driverCancelFreeHours() => ReliabilitySettings::driverCancelMidNotice(),
                 default => ReliabilitySettings::driverCancelLongNotice(),
             },
         };

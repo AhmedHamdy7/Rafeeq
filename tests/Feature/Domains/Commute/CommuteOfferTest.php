@@ -23,7 +23,7 @@ it('reports women-only audience correctly', function () {
 
 it('follows the documented offer status state machine', function () {
     expect(CommuteOfferStatus::Draft->canTransitionTo(CommuteOfferStatus::Published))->toBeTrue()
-        ->and(CommuteOfferStatus::Draft->canTransitionTo(CommuteOfferStatus::Archived))->toBeFalse()
+        ->and(CommuteOfferStatus::Draft->canTransitionTo(CommuteOfferStatus::Archived))->toBeTrue()
         ->and(CommuteOfferStatus::Published->canTransitionTo(CommuteOfferStatus::Paused))->toBeTrue()
         ->and(CommuteOfferStatus::Archived->canTransitionTo(CommuteOfferStatus::Published))->toBeFalse();
 });

@@ -95,6 +95,25 @@ return [
         'rejected' => 'Rejected :name.',
 
         // The car review (F2-7): what the reviewer decides about each car before approving.
+        'cars_review' => [
+            'title' => 'Cars after approval',
+            'renewal_waiting' => 'A renewed registration is waiting for review.',
+            'new_expiry' => 'New expiry date',
+            'approve' => 'Approve the renewal',
+            'reject' => 'Reject the renewal',
+            'reject_reason' => 'Why it was rejected',
+            'no_renewals' => 'No renewed registrations are waiting.',
+            'reinstate' => 'Reinstate this car',
+            'suspend_hint' => 'Suspend a car only after you have reviewed a report about it. A report never suspends a car by itself.',
+            'plate' => 'Plate number, as registered',
+            'report_note' => 'What the review found, and the report it came from',
+            'suspend' => 'Suspend the car',
+            'not_found' => 'No approved car has that plate number.',
+            'renewal_approved' => 'Renewal approved.',
+            'renewal_rejected' => 'Renewal rejected.',
+            'suspended' => 'Car suspended, and its commutes paused.',
+            'reinstated' => 'Car reinstated. The driver resumes the commutes.',
+        ],
         'car' => [
             'entered_seats' => 'Driver entered :count seats (including the driver)',
             'approved_seats' => 'Approved seats (working belts, passengers only)',

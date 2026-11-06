@@ -64,9 +64,9 @@ it('refuses a schedule with neither a departure nor an arrival', function () {
     $id = createCommute($this->driverToken, $this->vehicleId)->assertStatus(201)->json('data.id');
     saveRoute($this->driverToken, $id)->assertOk();
 
-    saveSchedule($this->driverToken, $id, ['departureTime' => null])
+    saveSchedule($this->driverToken, $id, ['promisedArrivalTime' => null])
         ->assertStatus(422)
-        ->assertJsonStructure(['error' => ['fields' => ['departureTime']]]);
+        ->assertJsonPath('error.code', 'COMMUTE_ARRIVAL_REQUIRED');
 });
 
 it('works out each day\'s departure from the arrival and the route', function () {

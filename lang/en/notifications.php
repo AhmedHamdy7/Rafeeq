@@ -128,6 +128,26 @@ return [
         'title' => 'The proposed change was updated',
         'body' => ':name changed what she is proposing, so any answer you gave no longer counts. Please review it again.',
     ],
+    'pickup_time_changed' => [
+        'title' => 'Your pickup time changed',
+        'body' => 'Your pickup on :date is now at :time.',
+    ],
+    'seat_approved_partly' => [
+        'title' => 'You have seats on :seated days',
+        'body' => 'Confirmed on :seated days. There was no space on :days, so we added you to the waiting list for them. We\'ll tell you if a seat opens up.',
+    ],
+    'vehicle_registration_expired' => [
+        'title' => 'Your car registration has expired',
+        'body' => 'Your commutes are paused and your bookings were cancelled. Upload the new registration, and you can resume once we approve it.',
+    ],
+    'vehicle_suspended' => [
+        'title' => 'Your car was suspended',
+        'body' => 'Your commutes are paused after we reviewed a report about your car. Contact support to find out what is needed.',
+    ],
+    'vehicle_reinstated' => [
+        'title' => 'Your car is approved again',
+        'body' => 'You can resume your commutes now. Cancelled bookings do not come back automatically.',
+    ],
     'pickup_moved_earlier' => [
         'title' => 'Your pickup is earlier now',
         'body' => 'Your pickup on :date is now at :time.',
@@ -175,7 +195,7 @@ return [
     ],
     'seat_replacement_declined' => [
         'title' => 'Your offer was declined',
-        'body' => ':name declined the seat on :date. Your passenger keeps it, and nothing is charged.',
+        'body' => 'Your offer for :date was declined. Your passenger keeps the seat, and nothing is charged.',
     ],
     'seats_offered_by_driver' => [
         'title' => 'A driver offered you a seat',

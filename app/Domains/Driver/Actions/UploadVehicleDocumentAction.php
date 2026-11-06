@@ -2,8 +2,11 @@
 
 namespace App\Domains\Driver\Actions;
 
+use App\Domains\Driver\Enums\DriverProfileStatus;
 use App\Domains\Driver\Enums\VehicleDocumentType;
 use App\Domains\Driver\Enums\VehicleRejectedItem;
+use App\Domains\Driver\Enums\VehicleSuspensionReason;
+use App\Domains\Driver\Enums\VehicleVerificationStatus;
 use App\Domains\Driver\Models\DriverProfile;
 use App\Domains\Driver\Models\Vehicle;
 use App\Domains\Driver\Models\VehicleDocument;
@@ -43,14 +46,20 @@ final readonly class UploadVehicleDocumentAction
         UploadedFile $file,
         ?string $expiresAt = null,
     ): VehicleDocument {
-        DriverApplicationState::assertEditable($profile->status);
+        $renewal = $this->isRenewal($profile, $vehicle, $type);
+
+        if (! $renewal) {
+            DriverApplicationState::assertEditable($profile->status);
+        }
 
         $stored = $this->intake->accept($owner, $file, auditContext: [
             'vehicle_id' => $vehicle->id,
             'document_type' => $type->value,
         ]);
 
-        return DB::transaction(function () use ($profile, $vehicle, $type, $stored, $expiresAt): VehicleDocument {
+        return DB::transaction(function () use ($profile, $vehicle, $type, $stored, $expiresAt, $renewal): VehicleDocument {
+            $previousExpiry = $vehicle->documents()->where('type', $type->value)->value('expires_at');
+
             // One document per type: re-uploading a blurry registration
             // replaces it rather than leaving a reviewer two to choose from.
             $this->replaceExisting($vehicle, $type);
@@ -62,7 +71,7 @@ final readonly class UploadVehicleDocumentAction
                 'type' => $type->value,
                 'file_path' => $stored['path'],
                 'file_hash' => $stored['hash'],
-                'expires_at' => $expiresAt,
+                'expires_at' => $renewal ? $previousExpiry : $expiresAt,
                 // §18 retention: set at upload so a purge job never has to
                 // infer it.
                 'purge_after' => now()->addDays(VerificationSettings::documentRetentionDays())->toDateString(),
@@ -70,12 +79,24 @@ final readonly class UploadVehicleDocumentAction
 
             $document->save();
 
+            if ($renewal) {
+                $vehicle->forceFill(['registration_renewal_submitted_at' => now(), 'rejection_reason' => null])->save();
+            }
+
             if ($type->isRegistration()) {
                 $this->clearRejection->execute($profile, $vehicle, VehicleRejectedItem::Registration);
             }
 
             return $document;
         });
+    }
+
+    private function isRenewal(DriverProfile $profile, Vehicle $vehicle, VehicleDocumentType $type): bool
+    {
+        return $type->isRegistration()
+            && $profile->status === DriverProfileStatus::Approved
+            && ($vehicle->verification_status === VehicleVerificationStatus::Approved
+                || $vehicle->suspension_reason === VehicleSuspensionReason::RegistrationExpired->value);
     }
 
     private function replaceExisting(Vehicle $vehicle, VehicleDocumentType $type): void

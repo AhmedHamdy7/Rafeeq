@@ -6,10 +6,14 @@ use App\Domains\Admin\Enums\AdminPermission;
 use App\Domains\Admin\Support\AdminActionLog;
 use App\Domains\Driver\Actions\ReviewDriverApplicationAction;
 use App\Domains\Driver\Actions\ReviewVehicleAction;
+use App\Domains\Driver\Actions\VehicleSuspensionAction;
 use App\Domains\Driver\Enums\DriverProfileStatus;
 use App\Domains\Driver\Enums\VehicleRejectedItem;
+use App\Domains\Driver\Enums\VehicleSuspensionReason;
 use App\Domains\Driver\Enums\VehicleTier;
+use App\Domains\Driver\Enums\VehicleVerificationStatus;
 use App\Domains\Driver\Models\DriverProfile;
+use App\Domains\Driver\Models\Vehicle;
 use App\Domains\Driver\Support\VehicleSettings;
 use App\Domains\Shared\Exceptions\DomainException;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
@@ -68,6 +72,14 @@ class DriverApplications extends Component
      * @var array<string, array{approvedSeats?: mixed, tier?: string, hasAc?: bool}>
      */
     public array $cars = [];
+
+    public array $renewalDates = [];
+
+    public array $renewalReasons = [];
+
+    public string $suspendPlate = '';
+
+    public string $suspendNote = '';
 
     public function mount(): void
     {
@@ -280,6 +292,67 @@ class DriverApplications extends Component
         return $profile;
     }
 
+    public function approveRenewal(string $vehicleId, VehicleSuspensionAction $action): void
+    {
+        $this->authorizeTo(AdminPermission::DriverDecide);
+
+        $this->validate(["renewalDates.{$vehicleId}" => ['required', 'date', 'after:today']]);
+
+        $action->approveRenewal(Vehicle::query()->findOrFail($vehicleId), Auth::guard('admin')->user(), (string) $this->renewalDates[$vehicleId]);
+
+        session()->flash('status', __('admin.drivers.cars_review.renewal_approved'));
+    }
+
+    public function rejectRenewal(string $vehicleId, VehicleSuspensionAction $action): void
+    {
+        $this->authorizeTo(AdminPermission::DriverDecide);
+
+        $this->validate(["renewalReasons.{$vehicleId}" => ['required', 'string', 'min:10', 'max:255']]);
+
+        $action->rejectRenewal(Vehicle::query()->findOrFail($vehicleId), Auth::guard('admin')->user(), (string) $this->renewalReasons[$vehicleId]);
+
+        session()->flash('status', __('admin.drivers.cars_review.renewal_rejected'));
+    }
+
+    public function suspendAfterReport(VehicleSuspensionAction $action): void
+    {
+        $this->authorizeTo(AdminPermission::DriverDecide);
+
+        $this->validate([
+            'suspendPlate' => ['required', 'string'],
+            'suspendNote' => ['required', 'string', 'min:10', 'max:255'],
+        ]);
+
+        $vehicle = Vehicle::query()
+            ->where('plate_number', $this->suspendPlate)
+            ->where('verification_status', VehicleVerificationStatus::Approved->value)
+            ->first();
+
+        if ($vehicle === null) {
+            $this->addError('suspendPlate', __('admin.drivers.cars_review.not_found'));
+
+            return;
+        }
+
+        $action->suspend($vehicle, VehicleSuspensionReason::Report, Auth::guard('admin')->user(), $this->suspendNote);
+
+        $this->reset('suspendPlate', 'suspendNote');
+
+        session()->flash('status', __('admin.drivers.cars_review.suspended'));
+    }
+
+    public function reinstate(string $vehicleId, VehicleSuspensionAction $action): void
+    {
+        $this->authorizeTo(AdminPermission::DriverDecide);
+
+        $action->reinstate(
+            Vehicle::query()->whereKey($vehicleId)->where('suspension_reason', VehicleSuspensionReason::Report->value)->firstOrFail(),
+            Auth::guard('admin')->user(),
+        );
+
+        session()->flash('status', __('admin.drivers.cars_review.reinstated'));
+    }
+
     private function authorizeTo(AdminPermission $permission): void
     {
         abort_unless(
@@ -321,6 +394,8 @@ class DriverApplications extends Component
     {
         return view('livewire.admin.driver-applications', [
             'applications' => $this->pendingPage(),
+            'renewals' => Vehicle::query()->whereNotNull('registration_renewal_submitted_at')->with('driverProfile.user')->orderBy('registration_renewal_submitted_at')->limit(50)->get(),
+            'reportedCars' => Vehicle::query()->where('suspension_reason', VehicleSuspensionReason::Report->value)->with('driverProfile.user')->limit(50)->get(),
             'mayDecide' => Auth::guard('admin')->user()?->can(AdminPermission::DriverDecide->value) === true,
             'minApprovedSeats' => VehicleSettings::minApprovedSeats(),
             'maxApprovedSeats' => (int) config('rafeeq.driver.max_approved_seats'),

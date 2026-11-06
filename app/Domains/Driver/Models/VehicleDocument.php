@@ -19,9 +19,16 @@ class VehicleDocument extends Model
     /** @use HasFactory<VehicleDocumentFactory> */
     use HasFactory, HasUlids;
 
+    public const array REGISTRATION_TYPES = [
+        VehicleDocumentType::Registration->value,
+        VehicleDocumentType::RegistrationFront->value,
+        VehicleDocumentType::RegistrationBack->value,
+    ];
+
     protected function casts(): array
     {
         return [
+            'expiry_warned_for' => 'datetime',
             'type' => VehicleDocumentType::class,
             'verification_status' => VehicleVerificationStatus::class,
             'expires_at' => 'date',

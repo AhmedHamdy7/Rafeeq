@@ -41,7 +41,8 @@ it('writes one row per day in the mask', function () {
         ])
         // Every day gets the single time when no per-day override is sent, which is exactly how
         // this behaved before the table existed.
-        ->and($rows->pluck('departure_time')->unique()->all())->toBe(['07:05:00'])
+        ->and($rows->pluck('promised_arrival_time')->unique()->all())->toBe(['09:00:00'])
+        ->and($rows->pluck('departure_is_computed')->unique()->all())->toBe([true])
         // Null means "follow the commute" — not a copy of its seats, which would stop following it.
         ->and($rows->pluck('seats_total')->unique()->all())->toBe([null]);
 });
@@ -49,13 +50,13 @@ it('writes one row per day in the mask', function () {
 /**
  * 🔴 The feature itself: one day genuinely different from the rest.
  */
-it('lets one day leave earlier and carry fewer people', function () {
+it('lets one day arrive earlier and carry fewer people', function () {
     saveSchedule($this->token, $this->commuteId, [
         'daysMask' => DaysMask::weekdaysSunToThu()->value,
-        'departureTime' => '07:05:00',
+        'promisedArrivalTime' => '09:00:00',
         'perDay' => [
             (string) DaysMask::SUNDAY => [
-                'departureTime' => '06:30:00',
+                'promisedArrivalTime' => '08:25:00',
                 'seatsTotal' => 2,
             ],
         ],
@@ -64,11 +65,10 @@ it('lets one day leave earlier and carry fewer people', function () {
     $sunday = CommuteWeekdaySchedule::query()->where('weekday_bit', DaysMask::SUNDAY)->sole();
     $monday = CommuteWeekdaySchedule::query()->where('weekday_bit', DaysMask::MONDAY)->sole();
 
-    expect($sunday->departure_time)->toBe('06:30:00')
+    expect($sunday->promised_arrival_time)->toBe('08:25:00')
         ->and($sunday->seats_total)->toBe(2)
-        // And the other days are untouched.
-        ->and($monday->departure_time)->toBe('07:05:00')
-        ->and($monday->seats_total)->toBeNull();
+        ->and($sunday->departure_time < $monday->departure_time)->toBeTrue()
+        ->and($monday->promised_arrival_time)->toBe('09:00:00');
 });
 
 /**
@@ -131,20 +131,23 @@ it('stores a promised arrival on each day it was given for', function () {
         ->and(ScheduledTrip::query()->whereNull('promised_arrival_at')->count())->toBe(0);
 });
 
-/**
- * No promise, no breach. A commute published without an arrival time must not acquire one, because
- * missing it counts against the driver.
- */
-it('leaves the promise null when she never made one', function () {
+it('refuses a day with no promised arrival, even with a departure', function () {
     saveSchedule($this->token, $this->commuteId, [
         'daysMask' => DaysMask::weekdaysSunToThu()->value,
+        'promisedArrivalTime' => null,
         'departureTime' => '07:05:00',
+    ])->assertStatus(422)->assertJsonPath('error.code', 'COMMUTE_ARRIVAL_REQUIRED');
+});
+
+it('computes the departure even when one is sent with the arrival', function () {
+    saveSchedule($this->token, $this->commuteId, [
+        'daysMask' => DaysMask::weekdaysSunToThu()->value,
+        'promisedArrivalTime' => '09:00:00',
+        'departureTime' => '05:00:00',
     ])->assertOk();
 
-    test()->withToken($this->token)->postJson("/api/v1/commutes/{$this->commuteId}/publish")->assertOk();
-
-    expect(CommuteWeekdaySchedule::query()->whereNotNull('promised_arrival_time')->count())->toBe(0)
-        ->and(ScheduledTrip::query()->whereNotNull('promised_arrival_at')->count())->toBe(0);
+    expect(CommuteWeekdaySchedule::query()->pluck('departure_time')->unique()->all())->not->toContain('05:00:00')
+        ->and(CommuteWeekdaySchedule::query()->where('departure_is_computed', false)->count())->toBe(0);
 });
 
 /**
@@ -153,9 +156,11 @@ it('leaves the promise null when she never made one', function () {
 it('keeps the parent mask and time derived from the rows that exist', function () {
     saveSchedule($this->token, $this->commuteId, [
         'daysMask' => DaysMask::weekdaysSunToThu()->value,
-        'departureTime' => '07:05:00',
-        'perDay' => [(string) DaysMask::SUNDAY => ['departureTime' => '06:30:00']],
+        'promisedArrivalTime' => '09:00:00',
+        'perDay' => [(string) DaysMask::SUNDAY => ['promisedArrivalTime' => '08:25:00']],
     ])->assertOk();
+
+    $earliest = CommuteWeekdaySchedule::query()->where('weekday_bit', DaysMask::SUNDAY)->sole()->departure_time;
 
     $schedule = CommuteOffer::findOrFail($this->commuteId)->schedule;
 
@@ -164,7 +169,7 @@ it('keeps the parent mask and time derived from the rows that exist', function (
          * The EARLIEST departure across the week, which is the honest single answer to "when does
          * this leave": it is the time a passenger has to be ready by on her earliest day.
          */
-        ->and($schedule->departure_time)->toBe('06:30:00');
+        ->and($schedule->departure_time)->toBe($earliest);
 });
 
 it('replaces the whole set rather than leaving a day behind', function () {

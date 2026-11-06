@@ -43,7 +43,7 @@ final class SaveCommuteScheduleRequest extends FormRequest
              * Still accepted, on your own clock (24-hour, not UTC), for a day you want to keep a
              * fixed departure; a day that has one is never recomputed.
              */
-            'departureTime' => ['required_without_all:promisedArrivalTime,perDay', 'nullable', 'string', 'date_format:H:i:s'],
+            'departureTime' => ['sometimes', 'nullable', 'string', 'date_format:H:i:s'],
 
             // IANA timezone the departure time is read in.
             'timezone' => ['sometimes', 'string', Rule::in(['Africa/Cairo'])],

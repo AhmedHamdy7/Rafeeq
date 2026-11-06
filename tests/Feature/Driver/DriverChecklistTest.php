@@ -216,7 +216,7 @@ it('reads the car items as suspended, with nothing for the driver to do', functi
         ->and($items['vehicle_registration']['status'])->toBe('suspended')
         ->and($items['vehicle_details']['status'])->toBe('suspended')
         ->and($items['vehicle_details']['rejectionReason'])->toBeNull()
-        ->and($items['driving_licence']['status'])->toBe('approved');
+        ->and($items['driving_licence']['status'])->toBe('suspended');
 });
 
 it('takes the licence out of review while no reviewer has the application', function (DriverProfileStatus $status, string $expected) {

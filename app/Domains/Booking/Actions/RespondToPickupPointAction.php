@@ -140,7 +140,7 @@ final readonly class RespondToPickupPointAction
             ->get();
 
         /*
-         * 🔴 The 16-hour lock, checked for EVERY day before any of them moves (Feature 03 v5).
+         * 🔴 The 12-hour lock, checked for EVERY day before any of them moves (Feature 03 v5).
          *
          * An approved pickup change is the one edit that still reaches into a published commute's
          * future days, which makes it the one place the lock has teeth. Tomorrow morning's kerb

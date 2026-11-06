@@ -142,7 +142,7 @@ it('skips a day that is already full and says which', function () {
     expect($approval['seatedDays'])->toBe($expected - 1)
         ->and($approval['skippedDays'])->toHaveCount(1)
         ->and($approval['skippedDays'][0]['tripDate'])->toBe($full->trip_date->toDateString())
-        ->and($approval['skippedDays'][0]['reason'])->toBe('SEAT_UNAVAILABLE');
+        ->and($approval['skippedDays'][0]['reason'])->toBe('full');
 
     expect(Booking::query()->where('scheduled_trip_id', $full->id)->exists())->toBeFalse();
 });
