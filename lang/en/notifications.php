@@ -410,8 +410,8 @@ return [
         'body' => 'Open the app to see what to fix and send it again.',
     ],
     'driver_item_expiring' => [
-        'title' => 'Your driving licence expires soon',
-        'body' => 'It expires on :date. Upload the renewed licence to keep driving.',
+        'title' => ':item expires soon',
+        'body' => 'It expires on :date. Upload the renewed one to keep driving.',
     ],
     'driver_licence_expired' => [
         'title' => 'Your driving licence has expired',
