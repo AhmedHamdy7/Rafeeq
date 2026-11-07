@@ -7,6 +7,7 @@ use App\Domains\Booking\Models\SeatRequest;
 use App\Domains\Commute\Models\CommuteOffer;
 use App\Domains\Notification\Actions\ReportChatMessageAction;
 use App\Domains\Notification\Actions\SendChatMessageAction;
+use App\Domains\Notification\Events\ChatMessagesRead;
 use App\Domains\Notification\Models\Conversation;
 use App\Domains\Notification\Models\Message;
 use App\Domains\Notification\Support\ChatWindow;
@@ -49,15 +50,9 @@ final class ChatController extends Controller
             ->orderByDesc('id')
             ->paginate(ApiResponse::perPage($request));
 
-        if ($conversation !== null) {
-            Message::query()
-                ->where('conversation_id', $conversation->id)
-                ->where('sender_user_id', '!=', $request->user()->id)
-                ->whereNull('read_at')
-                ->update(['read_at' => now()]);
-        }
-
         $otherId = SendChatMessageAction::otherParty($booking, $request->user());
+
+        $this->markRead($conversation, $otherId);
 
         return ApiResponse::paginated($page, ChatMessageResource::collection($page->items()), [
             // Whether a message can be sent now. False before the window, after it, and — without
@@ -103,15 +98,9 @@ final class ChatController extends Controller
             ->orderByDesc('id')
             ->paginate(ApiResponse::perPage($request));
 
-        if ($conversation !== null) {
-            Message::query()
-                ->where('conversation_id', $conversation->id)
-                ->where('sender_user_id', '!=', $request->user()->id)
-                ->whereNull('read_at')
-                ->update(['read_at' => now()]);
-        }
-
         $otherId = SendChatMessageAction::otherPartyOfRequest($seatRequest, $request->user());
+
+        $this->markRead($conversation, $otherId);
 
         return ApiResponse::paginated($page, ChatMessageResource::collection($page->items()), [
             // False once the request is answered, and — without saying so — when either of the two
@@ -163,6 +152,29 @@ final class ChatController extends Controller
         $incident = $action->execute($request->user(), $found, $request->validated('reason'));
 
         return ApiResponse::success(['incidentId' => $incident->id], status: 201);
+    }
+
+    /**
+     * Opening a thread reads what the other person wrote, and tells them so if anything changed.
+     * Nothing new to read means no event: reopening a thread would otherwise re-announce it.
+     */
+    private function markRead(?Conversation $conversation, string $otherId): void
+    {
+        if ($conversation === null) {
+            return;
+        }
+
+        $readAt = now();
+
+        $marked = Message::query()
+            ->where('conversation_id', $conversation->id)
+            ->where('sender_user_id', $otherId)
+            ->whereNull('read_at')
+            ->update(['read_at' => $readAt]);
+
+        if ($marked > 0) {
+            ChatMessagesRead::dispatch($otherId, $conversation, $readAt->toIso8601String());
+        }
     }
 
     /**
