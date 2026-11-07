@@ -4507,6 +4507,8 @@ booking has no conversation. All three numbers are platform settings — read `m
 
 **Opening the conversation marks the other person's messages read** — there is no separate call.
 
+New messages and read receipts also arrive live: see **6.3**.
+
 #### `POST /bookings/{booking}/messages` — `{ "body": "..." }`, 1–500 characters
 
 `201` with the message. `CHAT_NOT_OPEN` (409, `error.fields.opensAt` / `closesAt`) outside the window.
@@ -4799,10 +4801,59 @@ everybody on the commute which of them lost.
 approval, a pickup arrival, a change proposal, an SOS — reaches you through `GET /notifications`
 (4.14) and is **not** on the socket yet. Nothing is lost; it is simply not live. Poll the inbox.
 
-⚠️ **Not yet verified against a running broker.** Reverb is installed, the events are dispatched and
-the channel authorisation is proven by automated assertions against the real
-`POST /broadcasting/auth` path, but no test has run against a live Reverb instance. Coordinate with
-us before you build against it.
+⚠️ **The seat-race events have not been run against a live broker.** Their channel authorisation is
+proven by automated assertions against the real `POST /broadcasting/auth` path, but only the chat
+events in 6.3 have been sent through a running Reverb. Coordinate with us before you build against them.
+
+### 6.3 Chat — `private-user.{userId}`
+
+Subscribe once after sign-in, using `user.id` from `GET /auth/me`. Both events reach only the person
+they are for, on the same channel and envelope as `offer.closed`. There is no channel per thread.
+
+| Event | Who gets it | Payload |
+|---|---|---|
+| `chat.message` | The receiver, never the sender | `{bookingId, seatRequestId, message}`. One of the two ids is `null`. `message` has the same fields as `GET .../messages`, and `mine` is always `false`. |
+| `chat.read` | The person who wrote the messages | `{bookingId, seatRequestId, readAt}`. Every message you wrote in that thread is now read. |
+
+```json
+{
+  "id": "01m6vaqw84pbj9dggp6pfq217g",
+  "type": "chat.message",
+  "occurredAt": "2026-09-26T05:00:00+00:00",
+  "payload": {
+    "bookingId": null,
+    "seatRequestId": "01m6vaqqyt88gvhkymy2fq86ch",
+    "message": {
+      "id": "01m6vaqw84pbj9dggp6pfq217g",
+      "mine": false,
+      "body": "أنا عند البوابة ٢",
+      "containsContactInfo": false,
+      "readAt": null,
+      "sentAt": "2026-09-26T05:00:00+00:00"
+    }
+  }
+}
+```
+
+**What the app does:**
+
+- **`chat.message` for the thread on screen:** add it, skipping a `message.id` you already have, then
+  call `GET .../messages?perPage=1`. The socket does not mark anything read; that `GET` does, and it
+  is what sends the other person their `chat.read`.
+- **`chat.message` for any other thread:** ignore it. The `chat_message` notification (4.14) still
+  goes out for every message, so keep muting it while the thread is open.
+- **`chat.read` for the thread on screen:** set `readAt` on your messages that don't have one.
+- **The socket reconnects, or the app comes back to the foreground:** refetch the open thread. Events
+  sent while you were disconnected are not replayed.
+- **The socket is down:** poll `GET .../messages` while a thread is open. The API is the source of
+  truth, and the socket only makes it faster.
+
+Your own message comes back in the `201`, not on the socket, so a second phone signed in to the same
+account sees it only on its next fetch. A thread closing is not on the socket either: read
+`meta.canSend` when you fetch, and handle `409 CHAT_NOT_OPEN` when you send.
+
+Messages arrive through the queue, so idle delivery can take up to the worker's `--sleep` (3 seconds
+in `deploy/systemd/rafeeq-queue.service`).
 
 ---
 

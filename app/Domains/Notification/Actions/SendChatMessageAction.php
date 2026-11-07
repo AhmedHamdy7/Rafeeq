@@ -7,6 +7,7 @@ use App\Domains\Booking\Models\SeatRequest;
 use App\Domains\Commute\Models\CommuteOffer;
 use App\Domains\Identity\Models\User;
 use App\Domains\Notification\Enums\NotificationType;
+use App\Domains\Notification\Events\ChatMessageSent;
 use App\Domains\Notification\Models\Conversation;
 use App\Domains\Notification\Models\Message;
 use App\Domains\Notification\Support\ChatWindow;
@@ -174,6 +175,9 @@ final readonly class SendChatMessageAction
                 ['name' => $sender->public_first_name],
                 $data,
             );
+
+            // After the commit, so a message that rolls back is never pushed.
+            ChatMessageSent::dispatch($recipientId, $message, $conversation);
 
             return $message;
         });

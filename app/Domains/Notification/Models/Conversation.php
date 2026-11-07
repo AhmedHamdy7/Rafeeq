@@ -37,6 +37,17 @@ class Conversation extends Model
         ];
     }
 
+    /**
+     * Which thread this is, as a client knows it: the same keys as a chat notification's deep link.
+     * One of the two is always null.
+     *
+     * @return array{bookingId: ?string, seatRequestId: ?string}
+     */
+    public function threadIds(): array
+    {
+        return ['bookingId' => $this->booking_id, 'seatRequestId' => $this->seat_request_id];
+    }
+
     public function booking(): BelongsTo
     {
         return $this->belongsTo(Booking::class);
