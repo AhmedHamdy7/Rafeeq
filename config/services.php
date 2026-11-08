@@ -38,6 +38,8 @@ return [
      */
     'fcm' => [
         'credentials' => env('FIREBASE_CREDENTIALS'),
+        // The service-account JSON itself (or base64 of it), for a platform with no file to point at.
+        'credentials_json' => env('FIREBASE_CREDENTIALS_JSON'),
         'project_id' => env('FIREBASE_PROJECT_ID'),
     ],
 

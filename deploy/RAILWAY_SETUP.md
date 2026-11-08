@@ -221,6 +221,20 @@ php artisan db:seed --force
 
 بيعمل نور (سائقة معتمدة) ومريم (راكبة موثّقة) ومسار الرحاب ← القرية الذكية.
 
+### ٣.٥ الإشعارات على الموبايل (FCM) + الـ worker
+
+ضيف المتغيرات دي في Railway → Variables:
+
+| المتغير | القيمة |
+|---|---|
+| `RAFEEQ_PUSH_DRIVER` | `fcm` |
+| `FIREBASE_CREDENTIALS_JSON` | محتوى ملف الـ service account JSON بتاع Firebase **كله** — أو base64 منه (`base64 -w0 key.json`) لو الداشبورد بيبوّظ الأسطر |
+| `RAFEEQ_RUN_WORKERS` | `true` — **لو مفيش خدمة worker منفصلة**. من غيره الإشعارات بتتحط في جدول `jobs` ومابتطلعش خالص، ومفيش أي خطأ بيقول كده. **instance واحدة بس** |
+
+🔒 الملف ده **مفتاح خاص**: مايتحطّش في الريبو ولا في شات ولا issue. لو اتسرّب: Firebase Console → Project settings → Service accounts → امسح المفتاح واعمل واحد جديد.
+
+للآيفون كمان: ارفع مفتاح APNs (`.p8`) في Firebase → Project settings → Cloud Messaging → Apple app.
+
 ### ٤. الكاش — **مابقاش محتاج حاجة**
 
 الـ entrypoint بيعمله وقت تشغيل الحاويّة، لما المتغيّرات تبقى موجودة فعلًا. **ماتحطّهوش في pre-deploy ولا post-deploy** — هيتكرّر بلا داعي، ولو حصل في pre-deploy هيثبّت إعدادات فاضية.
