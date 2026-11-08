@@ -141,3 +141,39 @@ it('reports any other refusal without the token in it', function () {
         ->and($thrown->getMessage())->toBe('fcm_unavailable')
         ->and($thrown->getCode())->toBe(503);
 });
+
+/**
+ * Railway and its like give a container no file of its own to put a key in, so the service-account
+ * JSON can come in a variable instead: as is, or base64 of it.
+ */
+it('reads the service account from a variable, as JSON or base64 of it', function (bool $base64) {
+    Http::fake([
+        'oauth2.googleapis.com/*' => Http::response(['access_token' => 'ya29.token', 'expires_in' => 3600]),
+        'fcm.googleapis.com/*' => Http::response(['name' => 'projects/rafeeq-test/messages/1']),
+    ]);
+
+    $json = file_get_contents($this->credentials);
+
+    config([
+        'rafeeq.notifications.push_driver' => 'fcm',
+        'services.fcm.credentials' => null,
+        'services.fcm.credentials_json' => $base64 ? base64_encode($json) : $json,
+    ]);
+
+    app(PushSender::class)->send('device-token', 'Title', 'Body', ['bookingId' => 'b1']);
+
+    Http::assertSent(fn (Request $request) => $request->url() === 'https://fcm.googleapis.com/v1/projects/rafeeq-test/messages:send'
+        && $request['message']['token'] === 'device-token');
+})->with(['raw JSON' => false, 'base64' => true]);
+
+it('refuses a variable that is not a service account, without repeating it', function () {
+    config([
+        'rafeeq.notifications.push_driver' => 'fcm',
+        'services.fcm.credentials_json' => 'not json and not base64 !!',
+    ]);
+
+    expect(fn () => app(PushSender::class))->toThrow(
+        RuntimeException::class,
+        'FIREBASE_CREDENTIALS_JSON is neither the service-account JSON nor base64 of it.',
+    );
+});

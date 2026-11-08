@@ -157,4 +157,41 @@ fi
 # notifications never arrive, the live map never moves, and GPS trails are lost — none of which
 # reports an error anywhere. See deploy/RAILWAY_SETUP.md.
 
+# ---------------------------------------------------------------------------
+# RAFEEQ_RUN_WORKERS=true — the queue worker and the scheduler in THIS container.
+# ---------------------------------------------------------------------------
+#
+# The default stays separate services (supervisord.conf says why: two web replicas would run every
+# job and every scheduled command twice). But a single-instance deploy with no worker service sends
+# no push notification at all — they wait in the `jobs` table for ever, and nothing reports it —
+# and runs none of the scheduled work (reminders, cash settlement, trip generation). For that case,
+# this one variable runs both here. 🔴 Only with ONE web instance.
+if [ "${RAFEEQ_RUN_WORKERS}" = "true" ]; then
+    cat >> /etc/supervisord.conf <<'PROGRAMS'
+
+[program:queue-worker]
+command=php /var/www/html/artisan queue:work --tries=3 --max-time=3600 --sleep=3
+user=www-data
+autostart=true
+autorestart=true
+stdout_logfile=/dev/stdout
+stdout_logfile_maxbytes=0
+stderr_logfile=/dev/stderr
+stderr_logfile_maxbytes=0
+priority=30
+
+[program:scheduler]
+command=php /var/www/html/artisan schedule:work
+user=www-data
+autostart=true
+autorestart=true
+stdout_logfile=/dev/stdout
+stdout_logfile_maxbytes=0
+stderr_logfile=/dev/stderr
+stderr_logfile_maxbytes=0
+priority=40
+PROGRAMS
+    printf '\n▶ RAFEEQ — queue worker and scheduler running in this container (RAFEEQ_RUN_WORKERS=true). One instance only.\n\n' >&2
+fi
+
 exec supervisord -c /etc/supervisord.conf
