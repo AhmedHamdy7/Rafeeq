@@ -16,6 +16,10 @@ use App\Domains\Driver\Models\DriverProfile;
 use App\Domains\Driver\Models\Vehicle;
 use App\Domains\Driver\Support\VehicleSettings;
 use App\Domains\Shared\Exceptions\DomainException;
+use App\Domains\Verification\Actions\ReviewVerificationAction;
+use App\Domains\Verification\Enums\VerificationStatus;
+use App\Domains\Verification\Enums\VerificationType;
+use App\Domains\Verification\Models\UserVerification;
 use App\Livewire\Admin\Concerns\ShowsMemberDetails;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Facades\Auth;
@@ -133,13 +137,53 @@ class DriverApplications extends Component
             // F2-2: an ID or selfie still waiting in the verification queue is named, so the
             // reviewer knows where to go first.
             $this->addError('queue', $e->fields['approvedSeats'][0]
-                ?? (isset($e->fields['missing']) ? __('admin.drivers.identity_not_approved', ['items' => implode(', ', $e->fields['missing'])]) : null)
+                ?? (isset($e->fields['missing']) ? __('admin.drivers.identity_not_approved', ['items' => implode(app()->getLocale() === 'ar' ? '، ' : ', ', array_map(fn ($item) => __('admin.details.values.'.$item), $e->fields['missing']))]) : null)
                 ?? __('errors.'.$e->errorCode->value));
 
             return;
         }
 
         $this->closeAndFlash(__('admin.drivers.approved', ['name' => $profile->user->full_name]));
+    }
+
+    public function approveIdentity(string $verificationId, ReviewVerificationAction $action): void
+    {
+        $this->authorizeTo(AdminPermission::VerificationDecide);
+
+        $verification = UserVerification::query()
+            ->whereKey($verificationId)
+            ->whereIn('type', [VerificationType::GovernmentId->value, VerificationType::Selfie->value])
+            ->where('status', VerificationStatus::Pending->value)
+            ->whereHas('user.driverProfile', fn ($query) => $query->where('status', DriverProfileStatus::PendingReview->value))
+            ->with('user')
+            ->first();
+
+        abort_if($verification === null, 404);
+
+        $admin = Auth::guard('admin')->user();
+
+        try {
+            $before = ['status' => $verification->status->value];
+
+            $action->approve($verification, $admin);
+
+            AdminActionLog::record(
+                $admin,
+                'verification.approve',
+                $verification,
+                before: $before,
+                after: ['status' => $verification->fresh()->status->value],
+            );
+        } catch (DomainException $e) {
+            $this->addError('queue', __('errors.'.$e->errorCode->value));
+
+            return;
+        }
+
+        session()->flash('status', __('admin.drivers.identity_approved', [
+            'item' => __('admin.details.values.'.$verification->type->value),
+            'name' => $verification->user->full_name,
+        ]));
     }
 
     public function reject(string $id, ReviewDriverApplicationAction $action): void
@@ -400,6 +444,7 @@ class DriverApplications extends Component
             'reportedCars' => Vehicle::query()->where('suspension_reason', VehicleSuspensionReason::Report->value)->with('driverProfile.user')->limit(50)->get(),
             'mayDecide' => Auth::guard('admin')->user()?->can(AdminPermission::DriverDecide->value) === true,
             'maySeeDocuments' => $this->maySeeDocuments(),
+            'mayDecideIdentity' => Auth::guard('admin')->user()?->can(AdminPermission::VerificationDecide->value) === true,
             'minApprovedSeats' => VehicleSettings::minApprovedSeats(),
             'maxApprovedSeats' => (int) config('rafeeq.driver.max_approved_seats'),
         ]);

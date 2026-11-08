@@ -21,6 +21,39 @@
                 @endif
             </div>
 
+            @php
+                $identity = $application->user->verifications
+                    ->filter(fn ($verification) => in_array($verification->type->value, ['government_id', 'selfie'], true))
+                    ->keyBy(fn ($verification) => $verification->type->value);
+            @endphp
+            <ul class="rq-checks">
+                @foreach (['government_id', 'selfie'] as $type)
+                    @php($verification = $identity->get($type))
+                    <li class="rq-check" wire:key="identity-{{ $application->user_id }}-{{ $type }}">
+                        <span class="rq-check__label">
+                            {{ __('admin.details.values.'.$type) }}
+                            &middot; {{ __('admin.details.values.'.($verification?->status->value ?? 'not_started')) }}
+                        </span>
+                        <span class="rq-actions" style="margin:0">
+                            @if ($maySeeDocuments && $verification)
+                                @foreach ($verification->documents as $document)
+                                    <a class="rq-btn rq-btn--quiet" target="_blank" rel="noopener"
+                                       href="{{ route('admin.files.document', $document->id) }}">{{ __('admin.files.open', ['what' => __('admin.files.kinds.'.$document->kind->value)]) }}</a>
+                                @endforeach
+                            @endif
+                            @if ($mayDecideIdentity && $verification?->status->value === 'pending')
+                                <button type="button" class="rq-btn rq-btn--approve"
+                                        wire:click="approveIdentity('{{ $verification->id }}')"
+                                        wire:loading.attr="disabled"
+                                        wire:target="approveIdentity('{{ $verification->id }}')">
+                                    {{ __('admin.drivers.approve_item', ['item' => __('admin.details.values.'.$type)]) }}
+                                </button>
+                            @endif
+                        </span>
+                    </li>
+                @endforeach
+            </ul>
+
             <details wire:ignore.self style="margin-top:10px">
                 <summary class="rq-btn rq-btn--quiet">{{ __('admin.details.show_all') }}</summary>
                 <x-rq-member-details :member="$application->user" :may-see-documents="$maySeeDocuments"
