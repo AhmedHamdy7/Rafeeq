@@ -122,9 +122,9 @@ it('refuses resume until the renewed licence is approved', function () {
         'licenceExpiry' => now()->addYears(3)->toDateString(),
     ])->assertOk();
 
-    $resume()->assertStatus(422)->assertJsonPath('error.code', 'DRIVER_LICENCE_EXPIRED');
+    expect(DriverProfile::sole()->status)->toBe(DriverProfileStatus::PendingReview);
 
-    $this->withToken($this->driverToken)->postJson('/api/v1/driver/application/submit')->assertOk();
+    $resume()->assertStatus(403)->assertJsonPath('error.code', 'DRIVER_NOT_ELIGIBLE');
 
     app(ReviewDriverApplicationAction::class)->approve(DriverProfile::sole(), AdminUser::factory()->create());
 

@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Api\V1\Driver;
 
+use App\Domains\Driver\Actions\AutoSubmitDriverApplicationAction;
 use App\Domains\Driver\Actions\RecordLicenceDetailsAction;
 use App\Domains\Driver\Actions\StartDriverApplicationAction;
 use App\Domains\Driver\Actions\SubmitDriverApplicationAction;
@@ -64,9 +65,10 @@ final class DriverApplicationController extends Controller
      * POST /v1/driver/application — opens the application (Chapter 3 §3).
      */
     #[ApiErrors(ErrorCode::DriverNotEligible)]
-    public function store(Request $request, StartDriverApplicationAction $action): JsonResponse
+    public function store(Request $request, StartDriverApplicationAction $action, AutoSubmitDriverApplicationAction $autoSubmit): JsonResponse
     {
         $profile = $action->execute($request->user());
+        $profile = $autoSubmit->attempt($request->user()) ?? $profile;
 
         return ApiResponse::success(
             new DriverApplicationResource($profile->load('vehicles.documents')),
@@ -83,7 +85,7 @@ final class DriverApplicationController extends Controller
         ErrorCode::LicenceExpired,
         ErrorCode::NotFound,
     )]
-    public function updateLicence(RecordLicenceRequest $request, RecordLicenceDetailsAction $action): JsonResponse
+    public function updateLicence(RecordLicenceRequest $request, RecordLicenceDetailsAction $action, AutoSubmitDriverApplicationAction $autoSubmit): JsonResponse
     {
         $profile = $action->execute(
             profile: $this->application($request),
@@ -91,6 +93,7 @@ final class DriverApplicationController extends Controller
             licenceNumber: $request->validated('licenceNumber'),
             licenceExpiry: CarbonImmutable::parse($request->validated('licenceExpiry')),
         );
+        $profile = $autoSubmit->attempt($request->user()) ?? $profile;
 
         return ApiResponse::success(new DriverApplicationResource($profile->load('vehicles.documents')));
     }

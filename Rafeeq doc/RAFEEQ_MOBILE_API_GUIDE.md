@@ -1594,6 +1594,8 @@ missing, so gating it would leave them with a refusal and no explanation.
 
 #### `POST /driver/application/submit` — active, profile complete
 
+🔴 **The app no longer needs to call this (D-0047).** The application goes to review by itself when the last of the 5 items arrives: on `POST /account/verifications/{type}/documents`, `POST /account/verifications/{type}/submit`, `POST /driver/application`, `PUT /driver/application/licence`, `POST /driver/vehicles`, `PATCH /driver/vehicles/{vehicle}` and `POST /driver/vehicles/{vehicle}/documents`. An ID or selfie that was uploaded but not sent goes to review with it. Read the result from `GET /driver/verification` (`overall: under_review`). The endpoint still works, is idempotent, and is the way to get the reason when a complete application stays a draft (for example an expired licence).
+
 `422 DRIVER_APPLICATION_INCOMPLETE` lists what is missing in `error.fields.missing`: any of
 `government_id` · `selfie` (not yet submitted) · `national_id` · `licence_number` · `licence_expiry` ·
 `licence_front` · `licence_back` · `vehicle` · `vehicle_registration` (no registration at all) ·
@@ -4898,6 +4900,7 @@ exist, and every live endpoint must be named here.
 
 | Date | Change |
 |---|---|
+| 2026-11-08 | 🚦 **The driver application goes to review by itself (D-0047).** When the last of the 5 items arrives, the backend sends the application, and any uploaded-but-unsent ID or selfie, to review. Remove the Submit button; `POST /driver/application/submit` still works and is idempotent. A replaced rejected item sends the application straight back to review. |
 | 2026-11-05 | 🧪 **Omar's and Ahmed's staging accounts are now full on both sides** (driver and passenger, with trips on the days ahead): see "Accounts seeded on staging" in 2.1. No API change. |
 | 2026-11-05 | 🛣️ **Create Commute gaps.** **2 new endpoints:** `GET /commutes/options` and `GET /commutes/{commute}/route-preview`. 🔴 **Behaviour changes:** the form and its drafts no longer need a verified identity, and only publishing and running a commute do (PROF-19), so `GET /commutes` and `POST /commutes` no longer answer `VERIFICATION_REQUIRED`. Every field on `POST /commutes` is optional, `vehicleId` and `seatsTotal` can be `null` on a draft, and `vehicle` is a new `missing[]` value. `allowsCustomPickup` defaults to `true`. `startDate` and `endDate` are optional. New `weekdays[]` on a commute, `?status=` on `GET /commutes`, and `DELETE` works on a draft. New error `COMMUTE_ROUTE_UNAVAILABLE`. `GET /driver/vehicles` answers an empty list, not `404`, before the driver has a profile. Publish refusals corrected. |
 | 2026-11-05 | 📝 **Create Commute round 2.** New `createdAt`, `updatedAt` and `formStep` on a commute. New `weekStart[]` on `DRIVER_COMMISSION_OVERDUE`. `PUT /commutes/{commute}/route` recalculates the estimated departure. Drop-offs too far from the road are now refused, and every far stop is listed. 🔴 A suspended driver can no longer edit a draft. New demo states `CC-WINDOW-PASSED`, `CC-PENDING-REVIEW` and `CC-DRIVER-REJECTED`. |

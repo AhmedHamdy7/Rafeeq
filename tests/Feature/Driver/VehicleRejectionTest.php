@@ -198,7 +198,7 @@ it('refuses a resubmission until the rejected item is replaced', function () {
         ->assertJsonPath('error.fields.missing', ['vehicle_registration']);
 });
 
-it('clears a rejected registration when a registration is replaced, and goes back to review on resubmit', function () {
+it('clears a rejected registration when a registration is replaced, and goes back to review by itself', function () {
     rejectCarOnPage('vehicle_registration');
 
     test()->withToken($this->token)->postJson("/api/v1/driver/vehicles/{$this->vehicle->id}/documents", [
@@ -212,10 +212,7 @@ it('clears a rejected registration when a registration is replaced, and goes bac
         ->and($vehicle->rejection_reason)->toBeNull()
         ->and($vehicle->rejected_item)->toBeNull()
         ->and(carChecklist()['actionItem'])->toBeNull()
-        ->and($this->profile->refresh()->status)->toBe(DriverProfileStatus::Draft)
-        ->and($this->profile->rejection_reason)->toBeNull();
-
-    test()->withToken($this->token)->postJson('/api/v1/driver/application/submit')->assertOk();
+        ->and($this->profile->refresh()->rejection_reason)->toBeNull();
 
     $data = carChecklist();
 

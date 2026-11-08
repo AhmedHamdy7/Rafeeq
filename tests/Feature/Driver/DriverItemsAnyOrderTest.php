@@ -213,11 +213,7 @@ it('sends the licence with the application, and approves it with the driver', fu
 
     $licence = UserVerification::query()->where('type', VerificationType::DrivingLicence->value)->sole();
 
-    expect($licence->status)->not->toBe(VerificationStatus::Pending);
-
-    test()->withToken($token)->postJson('/api/v1/driver/application/submit')->assertOk();
-
-    expect($licence->refresh()->status)->toBe(VerificationStatus::Pending);
+    expect($licence->status)->toBe(VerificationStatus::Pending);
 
     $profile = DriverProfile::query()->sole();
     $reviewer = AdminUser::factory()->create();

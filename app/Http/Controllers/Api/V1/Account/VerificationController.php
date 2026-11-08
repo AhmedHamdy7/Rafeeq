@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Api\V1\Account;
 
+use App\Domains\Driver\Actions\AutoSubmitDriverApplicationAction;
 use App\Domains\Identity\Enums\SecurityEventType;
 use App\Domains\Identity\Models\Organization;
 use App\Domains\Identity\Support\SecurityLog;
@@ -56,6 +57,7 @@ final class VerificationController extends Controller
         UploadVerificationDocumentRequest $request,
         string $type,
         UploadVerificationDocumentAction $action,
+        AutoSubmitDriverApplicationAction $autoSubmit,
     ): JsonResponse {
         $document = $action->execute(
             user: $request->user(),
@@ -63,6 +65,8 @@ final class VerificationController extends Controller
             kind: $request->kind(),
             file: $request->file('file'),
         );
+
+        $autoSubmit->attempt($request->user());
 
         return ApiResponse::success([
             'id' => $document->id,
@@ -85,9 +89,11 @@ final class VerificationController extends Controller
         ErrorCode::VerificationAttemptsExhausted,
         ErrorCode::NotFound,
     )]
-    public function submit(Request $request, string $type, SubmitVerificationAction $action): JsonResponse
+    public function submit(Request $request, string $type, SubmitVerificationAction $action, AutoSubmitDriverApplicationAction $autoSubmit): JsonResponse
     {
         $action->execute($request->user(), $this->verificationType($type));
+
+        $autoSubmit->attempt($request->user());
 
         return ApiResponse::success(VerificationCentre::for($request->user()->refresh()));
     }

@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Api\V1\Driver;
 
+use App\Domains\Driver\Actions\AutoSubmitDriverApplicationAction;
 use App\Domains\Driver\Actions\ManageVehicleAction;
 use App\Domains\Driver\Actions\UploadVehicleDocumentAction;
 use App\Domains\Driver\Enums\VehicleDocumentType;
@@ -47,9 +48,10 @@ final class VehicleController extends Controller
         ErrorCode::VehicleLimitReached,
         ErrorCode::NotFound,
     )]
-    public function store(StoreVehicleRequest $request, ManageVehicleAction $action): JsonResponse
+    public function store(StoreVehicleRequest $request, ManageVehicleAction $action, AutoSubmitDriverApplicationAction $autoSubmit): JsonResponse
     {
         $vehicle = $action->create($this->profile($request), $request->validated());
+        $autoSubmit->attempt($request->user());
 
         return ApiResponse::success(new VehicleResource($vehicle->load('documents')), status: 201);
     }
@@ -62,11 +64,12 @@ final class VehicleController extends Controller
         ErrorCode::DriverDuplicateDetected,
         ErrorCode::NotFound,
     )]
-    public function update(UpdateVehicleRequest $request, string $vehicle, ManageVehicleAction $action): JsonResponse
+    public function update(UpdateVehicleRequest $request, string $vehicle, ManageVehicleAction $action, AutoSubmitDriverApplicationAction $autoSubmit): JsonResponse
     {
         $profile = $this->profile($request);
 
         $updated = $action->update($profile, $this->ownedVehicle($profile, $vehicle), $request->validated());
+        $autoSubmit->attempt($request->user());
 
         return ApiResponse::success(new VehicleResource($updated->load('documents')));
     }
@@ -108,6 +111,7 @@ final class VehicleController extends Controller
         UploadVehicleDocumentRequest $request,
         string $vehicle,
         UploadVehicleDocumentAction $action,
+        AutoSubmitDriverApplicationAction $autoSubmit,
     ): JsonResponse {
         $profile = $this->profile($request);
         $target = $this->ownedVehicle($profile, $vehicle);
@@ -120,6 +124,8 @@ final class VehicleController extends Controller
             file: $request->file('file'),
             expiresAt: $request->validated('expiresAt'),
         );
+
+        $autoSubmit->attempt($request->user());
 
         return ApiResponse::success(new VehicleResource($target->load('documents')), status: 201);
     }

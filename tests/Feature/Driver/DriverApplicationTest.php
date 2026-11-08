@@ -205,7 +205,8 @@ it('refuses to withdraw an application that is not under review', function () {
 it('re-checks the licence at submission, not only when it was typed', function () {
     completeDriverApplication($this->token);
 
-    // The application sat in draft long enough for the licence to lapse.
+    $this->withToken($this->token)->deleteJson('/api/v1/driver/application')->assertOk();
+
     DriverProfile::sole()->forceFill(['licence_expiry' => now()->subDay()->toDateString()])->save();
 
     $this->withToken($this->token)->postJson('/api/v1/driver/application/submit')

@@ -19,7 +19,7 @@
 | 7 | Show "chose to join your waiting list" only when `rejoinedWaitlist` is `true`. | DH-9 |
 | 8 | Use `canStart` and `startOpensLocal` for the Start button. Still handle a refusal on Pre-start, because things can change between the two calls. | DH-10 |
 | 9 | Draw the verification card from `verification`. Remove the second call to `GET /driver/verification` on Home. | DH-11 |
-| 10 | Treat a complete draft as `in_progress`. When `GET /driver/application` returns `missing: []`, send the driver to submit. | DH-16 |
+| 10 | No Submit button: the application goes to review by itself when the last item arrives (D-0047). A complete application that is still a draft (for example an expired licence) is `in_progress`; call `POST /driver/application/submit` to show the reason. | DH-16 |
 | 11 | Use `actionItem` for "replace only this document", including the two car items. | DH-13 |
 | 12 | Handle the new notifications and `pausedReason` values in section 5. | COM-26, PROF-27 |
 
@@ -223,7 +223,7 @@ A reviewer can now reject the registration or the car details alone. That item r
 | `vehicle_registration` | `POST /driver/vehicles/{vehicle}/documents` with any registration type |
 | `vehicle_details` | `PATCH /driver/vehicles/{vehicle}` with a change. A save that changes nothing doesn't count. |
 
-That call clears the reason, and the application reads `DRAFT`. The driver then submits again. Until the item is fixed, submit answers `422 DRIVER_APPLICATION_INCOMPLETE` with the item's key in `missing`.
+That call clears the reason, and the application goes back to review by itself (D-0047). Until the item is fixed, submit answers `422 DRIVER_APPLICATION_INCOMPLETE` with the item's key in `missing`.
 
 ### Licence date
 
@@ -240,7 +240,7 @@ That call clears the reason, and the application reads `DRAFT`. The driver then 
 | **Notification** | `driver_licence_expired` with `itemKey`, `expiresAt` | `driver_suspended` with `driverProfileId` |
 | **Upcoming seats** | Cancelled, no fee | Cancelled, no fee |
 
-For an expired licence, the driver resends the licence and submits. Resume answers `422 DRIVER_LICENCE_EXPIRED` until a reviewer approves it.
+For an expired licence, the driver resends the licence; it goes to review by itself (D-0047). Resume answers `422 DRIVER_LICENCE_EXPIRED` until a reviewer approves it.
 
 `driver_item_rejected` can now also carry `itemKey: vehicle_registration` or `vehicle_details`.
 
@@ -264,7 +264,7 @@ For an expired licence, the driver resends the licence and submits. Resume answe
 | DH-14: a short place name for Later rows? | **Not added.** Use the full label with an ellipsis. |
 | DH-15: old data or a bug? | **Both.** Older and seeded accounts never got capability rows, and these are backfilled. Adding driving also didn't restore a missing `PASSENGER`, which is fixed. A driver-only sign-up stays `["DRIVER"]` and uses "Become a Passenger" (PROF-06). |
 | DH-15: ID and selfie counted without the driver capability? | **Intended.** They are the same documents on the same account. |
-| DH-16: automatic submit? | **No, the driver submits** (PROF-16). |
+| DH-16: automatic submit? | **Yes, since D-0047.** The application goes to review when the last item arrives. |
 | DH-17: does the admin always send a date? | **No, it never did.** The typed date is now copied at approval, and existing approved licences are backfilled. |
 | Can a driver who can't drive still have runs? | **Those days get cancelled** (section 5). Until the daily job runs, `nextRun` may still show a run for an expired licence, so keep ignoring it in `suspended` and `renewal_required`. `canStart` is `false` there. Days of a paused commute no longer appear on `nextRun` or `laterThisWeek`. |
 | `Level X of 5`? | **Show the API's number.** It counts approved items only. |
