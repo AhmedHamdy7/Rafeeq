@@ -16,6 +16,7 @@ use App\Domains\Driver\Models\DriverProfile;
 use App\Domains\Driver\Models\Vehicle;
 use App\Domains\Driver\Support\VehicleSettings;
 use App\Domains\Shared\Exceptions\DomainException;
+use App\Livewire\Admin\Concerns\ShowsMemberDetails;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
@@ -52,6 +53,7 @@ class DriverApplications extends Component
 {
     // Paged for the same reason as the verification queue: a cap on a queue ordered
     // oldest-first makes everybody past the cap invisible rather than merely later.
+    use ShowsMemberDetails;
     use WithPagination;
 
     public ?string $openId = null;
@@ -384,7 +386,7 @@ class DriverApplications extends Component
     {
         return DriverProfile::query()
             ->where('status', DriverProfileStatus::PendingReview->value)
-            ->with('user', 'vehicles')
+            ->with(['user', 'vehicles', ...self::detailRelations('user.')])
             ->orderBy('updated_at')
             ->orderBy('user_id')
             ->paginate(10);
@@ -397,6 +399,7 @@ class DriverApplications extends Component
             'renewals' => Vehicle::query()->whereNotNull('registration_renewal_submitted_at')->with('driverProfile.user')->orderBy('registration_renewal_submitted_at')->limit(50)->get(),
             'reportedCars' => Vehicle::query()->where('suspension_reason', VehicleSuspensionReason::Report->value)->with('driverProfile.user')->limit(50)->get(),
             'mayDecide' => Auth::guard('admin')->user()?->can(AdminPermission::DriverDecide->value) === true,
+            'maySeeDocuments' => $this->maySeeDocuments(),
             'minApprovedSeats' => VehicleSettings::minApprovedSeats(),
             'maxApprovedSeats' => (int) config('rafeeq.driver.max_approved_seats'),
         ]);

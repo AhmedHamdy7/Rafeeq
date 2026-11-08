@@ -86,6 +86,12 @@
                     @endif
                 </dl>
 
+                <details wire:ignore.self style="margin-top:10px">
+                    <summary class="rq-btn rq-btn--quiet">{{ __('admin.details.show_all') }}</summary>
+                    <x-rq-member-details :member="$opened" :may-see-documents="$maySeeDocuments"
+                                         :revealed="$revealedId === $opened->id" />
+                </details>
+
                 {{-- Her appeals against the hold (F1-3). Overturning lifts it. --}}
                 @if ($opened->activeSuspension?->appeals?->isNotEmpty())
                     <h2 class="rq-h2" style="margin-top:16px">{{ __('admin.members.appeals') }}</h2>

@@ -21,6 +21,12 @@
                 @endif
             </div>
 
+            <details wire:ignore.self style="margin-top:10px">
+                <summary class="rq-btn rq-btn--quiet">{{ __('admin.details.show_all') }}</summary>
+                <x-rq-member-details :member="$application->user" :may-see-documents="$maySeeDocuments"
+                                     :revealed="$revealedId === $application->user_id" />
+            </details>
+
             <ul class="rq-checks">
                 @foreach ($application->vehicles as $vehicle)
                     <li class="rq-check" wire:key="car-{{ $vehicle->id }}">

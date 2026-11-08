@@ -4,6 +4,8 @@ namespace App\Http\Controllers\Admin;
 
 use App\Domains\Admin\Enums\AdminPermission;
 use App\Domains\Admin\Support\AdminActionLog;
+use App\Domains\Driver\Models\VehicleDocument;
+use App\Domains\Identity\Models\User;
 use App\Domains\Safety\Models\IncidentEvidence;
 use App\Domains\Verification\Models\IdentityDocument;
 use App\Domains\Verification\Support\DocumentStorage;
@@ -60,6 +62,26 @@ final class StaffFileController extends Controller
         $this->assertNotPurged($file->purged_at);
 
         return $this->serve($storage, $file->file_path, $file->file_hash, 'evidence.view', $file);
+    }
+
+    public function vehicleDocument(string $vehicleDocument, DocumentStorage $storage): Response
+    {
+        $this->authorizeTo(AdminPermission::VerificationViewDocument);
+
+        $file = VehicleDocument::query()->whereKey($vehicleDocument)->firstOrFail();
+
+        $this->assertNotPurged($file->purged_at);
+
+        return $this->serve($storage, $file->file_path, $file->file_hash, 'vehicle.view_document', $file);
+    }
+
+    public function photo(string $user, DocumentStorage $storage): Response
+    {
+        $this->authorizeTo(AdminPermission::VerificationViewDocument);
+
+        $member = User::query()->whereKey($user)->whereNotNull('profile_photo_path')->firstOrFail();
+
+        return $this->serve($storage, $member->profile_photo_path, null, 'member.view_photo', $member);
     }
 
     private function serve(DocumentStorage $storage, string $path, ?string $expectedHash, string $auditAction, $subject): Response

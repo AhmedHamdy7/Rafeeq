@@ -17,6 +17,7 @@ use App\Domains\Identity\Models\User;
 use App\Domains\Safety\Enums\IncidentStatus;
 use App\Domains\Safety\Models\Incident;
 use App\Domains\Shared\Exceptions\DomainException;
+use App\Livewire\Admin\Concerns\ShowsMemberDetails;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Validation\Rule;
 use Livewire\Attributes\Layout;
@@ -39,6 +40,7 @@ use Livewire\WithPagination;
 #[Layout('components.layouts.admin')]
 class Members extends Component
 {
+    use ShowsMemberDetails;
     use WithPagination;
 
     #[Url(as: 'tab')]
@@ -86,6 +88,7 @@ class Members extends Component
     public function open(?string $id): void
     {
         $this->openId = $this->openId === $id ? null : $id;
+        $this->revealedId = null;
         $this->closeForm();
     }
 
@@ -252,6 +255,7 @@ class Members extends Component
         $opened = $this->openId === null ? null : User::query()
             ->whereKey($this->openId)
             ->with([
+                ...self::detailRelations(),
                 'driverProfile',
                 'stats',
                 'activeSuspension.appeals',
@@ -275,6 +279,7 @@ class Members extends Component
             'reasons' => SuspensionReason::cases(),
             'mayAct' => $this->admin()?->can(AdminPermission::MemberSuspend->value) === true,
             'maySeeSafety' => $this->admin()?->can(AdminPermission::SafetyView->value) === true,
+            'maySeeDocuments' => $this->maySeeDocuments(),
         ])->title(__('admin.members.title'));
     }
 }
