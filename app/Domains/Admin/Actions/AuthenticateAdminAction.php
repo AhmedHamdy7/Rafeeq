@@ -4,11 +4,13 @@ namespace App\Domains\Admin\Actions;
 
 use App\Domains\Admin\Models\AdminUser;
 use App\Domains\Admin\Support\AdminActionLog;
+use App\Domains\Admin\Support\AdminMfa;
 use App\Domains\Identity\Support\SecurityLog;
 use App\Domains\Shared\Exceptions\DomainException;
 use App\Domains\Shared\Support\ErrorCode;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\RateLimiter;
+use LogicException;
 use PragmaRX\Google2FA\Google2FA;
 
 /**
@@ -82,7 +84,7 @@ final readonly class AuthenticateAdminAction
             throw DomainException::of(ErrorCode::AdminCredentialsInvalid);
         }
 
-        if (! $admin->hasMfaConfirmed()) {
+        if (AdminMfa::enabled() && ! $admin->hasMfaConfirmed()) {
             /*
              * An admin who never finished enrolling has a secret but has not proved
              * they can generate codes from it. Letting them through on the password
@@ -125,10 +127,24 @@ final readonly class AuthenticateAdminAction
             throw DomainException::of(ErrorCode::AdminCredentialsInvalid);
         }
 
+        return $this->recordSignIn($admin, $ip, ['mfa_last_used_timestamp' => $timestamp]);
+    }
+
+    public function completeWithoutMfa(AdminUser $admin, ?string $ip): AdminUser
+    {
+        if (AdminMfa::enabled()) {
+            throw new LogicException('The authenticator code is required while admin MFA is enabled.');
+        }
+
+        return $this->recordSignIn($admin, $ip);
+    }
+
+    private function recordSignIn(AdminUser $admin, ?string $ip, array $attributes = []): AdminUser
+    {
         RateLimiter::clear($this->emailKey($admin->email));
 
         $admin->forceFill([
-            'mfa_last_used_timestamp' => $timestamp,
+            ...$attributes,
             'last_login_at' => now(),
             'last_login_ip_hash' => SecurityLog::hashIp($ip),
         ])->save();

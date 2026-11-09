@@ -2,6 +2,7 @@
 
 namespace App\Http\Middleware;
 
+use App\Domains\Admin\Support\AdminMfa;
 use Closure;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -36,7 +37,7 @@ final class EnsureAdminMfaIsConfirmed
         // Enrolment, and whether THIS session proved it. Both, because a confirmed
         // secret says the account can generate codes and the session flag says this
         // browser actually did.
-        if (! $admin->hasMfaConfirmed() || $request->session()->get(self::PASSED) !== true) {
+        if (AdminMfa::enabled() && (! $admin->hasMfaConfirmed() || $request->session()->get(self::PASSED) !== true)) {
             Auth::guard('admin')->logout();
             $request->session()->invalidate();
             $request->session()->regenerateToken();

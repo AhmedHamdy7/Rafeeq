@@ -252,3 +252,55 @@ it('lands each role on the first page it can open', function (AdminRole $role, s
 it('sends a signed-out visitor at the bare dashboard address to the sign-in page', function () {
     $this->get('/admin')->assertRedirect(route('admin.login'));
 });
+
+it('signs in on the password alone when admin MFA is switched off', function () {
+    config(['rafeeq.admin_mfa_enabled' => false]);
+
+    Livewire::test(Login::class)
+        ->set('email', 'nour@rafeeq.test')
+        ->set('password', 'password')
+        ->call('submitPassword')
+        ->assertHasNoErrors()
+        ->assertSet('pendingAdminId', null)
+        ->assertRedirect(route('admin.home'));
+
+    expect(Auth::guard('admin')->id())->toBe($this->admin->id)
+        ->and($this->admin->refresh()->last_login_at)->not->toBeNull()
+        ->and(AdminAction::query()->where('action', 'admin.login')->exists())->toBeTrue();
+});
+
+it('opens dashboard pages without the authenticator when admin MFA is switched off', function () {
+    config(['rafeeq.admin_mfa_enabled' => false]);
+
+    $this->actingAs($this->admin, 'admin')
+        ->get(route('admin.home'))
+        ->assertRedirect();
+
+    expect(Auth::guard('admin')->check())->toBeTrue();
+});
+
+it('still refuses a wrong password when admin MFA is switched off', function () {
+    config(['rafeeq.admin_mfa_enabled' => false]);
+
+    Livewire::test(Login::class)
+        ->set('email', 'nour@rafeeq.test')
+        ->set('password', 'wrong-password')
+        ->call('submitPassword')
+        ->assertHasErrors('email');
+
+    expect(Auth::guard('admin')->check())->toBeFalse();
+});
+
+it('ignores the admin MFA switch in production', function () {
+    config(['rafeeq.admin_mfa_enabled' => false]);
+    app()->detectEnvironment(fn () => 'production');
+
+    Livewire::test(Login::class)
+        ->set('email', 'nour@rafeeq.test')
+        ->set('password', 'password')
+        ->call('submitPassword')
+        ->assertHasNoErrors()
+        ->assertSet('pendingAdminId', $this->admin->id);
+
+    expect(Auth::guard('admin')->check())->toBeFalse();
+});

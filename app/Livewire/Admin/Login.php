@@ -4,6 +4,7 @@ namespace App\Livewire\Admin;
 
 use App\Domains\Admin\Actions\AuthenticateAdminAction;
 use App\Domains\Admin\Models\AdminUser;
+use App\Domains\Admin\Support\AdminMfa;
 use App\Domains\Shared\Exceptions\DomainException;
 use App\Http\Middleware\EnsureAdminMfaIsConfirmed;
 use Illuminate\Support\Facades\Auth;
@@ -53,11 +54,16 @@ class Login extends Component
             return;
         }
 
-        $this->pendingAdminId = $admin->id;
-
-        // Cleared immediately: there is no step that needs it again, and a Livewire
-        // component's state survives in the browser between requests.
         $this->password = '';
+
+        if (! AdminMfa::enabled()) {
+            $action->completeWithoutMfa($admin, request()->ip());
+            $this->signIn($admin);
+
+            return;
+        }
+
+        $this->pendingAdminId = $admin->id;
     }
 
     public function submitCode(AuthenticateAdminAction $action): void
@@ -86,6 +92,11 @@ class Login extends Component
             return;
         }
 
+        $this->signIn($admin);
+    }
+
+    private function signIn(AdminUser $admin): void
+    {
         Auth::guard('admin')->login($admin);
 
         /*
