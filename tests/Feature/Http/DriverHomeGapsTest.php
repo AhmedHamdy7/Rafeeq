@@ -309,9 +309,21 @@ it('reads a rejected application as action required, not under review', function
         ]);
 });
 
-it('reads a complete draft as in progress until it is submitted', function () {
+it('reads a complete application as under review without a submit step', function () {
     $token = readyDriverApplicant(phone: '01012345999', devicePublicId: 'applicant-ready');
     completeDriverApplication($token, seed: 2);
+
+    $data = test()->withToken($token)->getJson('/api/v1/driver/verification')->assertOk()->json('data');
+    $items = collect($data['items'])->keyBy('key');
+
+    expect($data['overall'])->toBe('under_review')
+        ->and($items['vehicle_details']['status'])->toBe('under_review');
+});
+
+it('reads a withdrawn complete draft as in progress until it is submitted again', function () {
+    $token = readyDriverApplicant(phone: '01012345999', devicePublicId: 'applicant-ready');
+    completeDriverApplication($token, seed: 2);
+    test()->withToken($token)->deleteJson('/api/v1/driver/application')->assertOk();
 
     $data = test()->withToken($token)->getJson('/api/v1/driver/verification')->assertOk()->json('data');
     $items = collect($data['items'])->keyBy('key');
