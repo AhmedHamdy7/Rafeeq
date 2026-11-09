@@ -119,7 +119,27 @@ Opening a thread marks the other person's messages read. Messages read by this s
     "lastPage": 1,
     "hasMore": false,
     "canSend": true,
-    "requestStatus": "PENDING"
+    "requestStatus": "PENDING",
+    "otherParty": {
+      "userId": "01m40k6whhbr6k1ym5ptrn059y",
+      "publicFirstName": "داليا",
+      "trustLevel": 3,
+      "verifiedLevels": ["phone", "government_id", "selfie"],
+      "sameOrganisation": false,
+      "rating": 4.9,
+      "ratingCount": 27,
+      "completedTrips": 41,
+      "onTimeRate": 0.96,
+      "role": "driver"
+    },
+    "commute": {
+      "originLabel": "Rehab Gate 2",
+      "destinationLabel": "Smart Village B6",
+      "departureAt": "2026-11-09T04:40:00+00:00"
+    },
+    "events": [
+      { "event": "request_sent", "at": "2026-09-26T04:58:00+00:00" }
+    ]
   }
 }
 ```
@@ -137,9 +157,34 @@ After approval, the same call returns the history with `"canSend": false` and `"
   "hasMore": true,
   "canSend": true,
   "opensAt": "2026-09-25T05:30:00+00:00",
-  "closesAt": "2026-09-26T19:30:00+00:00"
+  "closesAt": "2026-09-26T19:30:00+00:00",
+  "seatRequestId": "01m6v9x2k4q8r0s3t5w7y9z1ab",
+  "otherParty": { "...": "same shape as above", "role": "passenger" },
+  "commute": { "originLabel": "Rehab Gate 2", "destinationLabel": "Smart Village B6", "departureAt": "2026-09-26T05:30:00+00:00" },
+  "events": [
+    { "event": "booking_confirmed", "at": "2026-09-25T18:03:00+00:00" },
+    { "event": "driver_arrived", "at": "2026-09-26T05:28:00+00:00" },
+    { "event": "picked_up", "at": "2026-09-26T05:31:00+00:00" },
+    { "event": "ride_completed", "at": "2026-09-26T06:12:00+00:00" }
+  ]
 }
 ```
+
+### System lines (`meta.events`)
+
+Both threads return `meta.events`, oldest first and never paginated. Draw each one as a centred line and merge them with the messages by time. The app writes the wording in the user's language. Skip a value you don't know.
+
+| `event` | When | Thread | The design's line |
+|---|---|---|---|
+| `request_sent` | The request was made | Request | Passenger: "Seat request sent · chat opened". Driver: "Seat request received · chat opened". |
+| `waitlist_joined` | She joined the waiting list | Request | "You joined the waiting list · chat opened" |
+| `counteroffered` | The driver sent a counteroffer | Request | "A chat message isn't acceptance. Review the counteroffer to agree." |
+| `booking_confirmed` | The booking was made | Booking | "Booking confirmed" |
+| `driver_arrived` | She was told the driver is at her pickup | Booking | "Your driver has arrived at your pickup point. Please meet your driver." |
+| `picked_up` | The driver checked her in | Booking | "Picked up · 07:06" |
+| `ride_completed` | She was dropped off, the run was completed, or she ended the ride early | Booking | "Ride completed · 08:09" |
+
+To show one continuous conversation, load the request thread from `meta.seatRequestId` and draw it above the booking thread: request lines, then "Booking confirmed", then the ride.
 
 **Booking, before the window** → `200`
 
@@ -229,6 +274,14 @@ After approval, the same call returns the history with `"canSend": false` and `"
 ```
 
 On any `CHAT_NOT_OPEN`, keep the typed text and refetch the thread to update the state.
+
+### Typing
+
+`POST /bookings/{id}/typing` or `POST /seat-requests/{id}/typing`, no body → `202`
+
+- Call it while the user types, at most every 3 seconds. Extra calls get `202` and send nothing.
+- No "stopped typing" call: the other side hides the bubble on its own.
+- Closed thread or blocked pair → `409 CHAT_NOT_OPEN`, the same as sending. Ignore it here; the send will show the state.
 
 ### Report a message
 
@@ -367,6 +420,39 @@ Goes to the person who wrote the messages. Everything they wrote in that thread 
 }
 ```
 
+### `chat.event`
+
+Goes to both people on a booking when a ride moment happens: `driver_arrived`, `picked_up` or `ride_completed`. `event` is the same item `meta.events` returns from now on.
+
+```json
+{
+  "id": "01M6VB2H8T4N6Q1R3S5V7X9Z0C",
+  "type": "chat.event",
+  "occurredAt": "2026-09-26T05:31:00+00:00",
+  "payload": {
+    "bookingId": "01m6vaqqyt88gvhkymy2fq86ch",
+    "seatRequestId": null,
+    "event": { "event": "picked_up", "at": "2026-09-26T05:31:00+00:00" }
+  }
+}
+```
+
+### `chat.typing`
+
+Goes to the other person in the thread. Sent straight to the socket, so it isn't delayed by the queue.
+
+```json
+{
+  "id": "01M6VAQZ7KQ2B8N4C5D6E7F8G9",
+  "type": "chat.typing",
+  "occurredAt": "2026-09-26T05:00:00+00:00",
+  "payload": {
+    "bookingId": null,
+    "seatRequestId": "01m6vaqqyt88gvhkymy2fq86ch"
+  }
+}
+```
+
 ### What to do with each event
 
 | When | Do this |
@@ -374,6 +460,10 @@ Goes to the person who wrote the messages. Everything they wrote in that thread 
 | `chat.message` for the thread on screen | Add it, skipping any `message.id` you already have. Then call `GET .../messages?perPage=1`: **the socket doesn't mark anything read**, and that call is what marks it and sends the other person `chat.read`. |
 | `chat.message` for another thread | Ignore it. The push and inbox still cover it. |
 | `chat.read` for the thread on screen | Set `readAt` on your messages that don't have one. |
+| `chat.typing` for the thread on screen | Show the typing bubble. Hide it after 5 seconds with no new `chat.typing`, or when their `chat.message` arrives. |
+| `chat.typing` for another thread | Ignore it. |
+| `chat.event` for the thread on screen | Add the line, skipping one with the same `event` you already have. |
+| `chat.event` for another thread | Ignore it. The next fetch returns it in `meta.events`. |
 | Socket reconnects, or the app returns to the foreground | Refetch the open thread. **Events missed while disconnected aren't replayed.** |
 | Socket is down and a thread is open | Poll `GET .../messages`. The API is the source of truth. |
 
@@ -398,4 +488,4 @@ Messages go through the queue, so expect up to about 3 seconds' delay, and more 
 ## Still open
 
 - **Q-054 (calls and chat):** confirm the real number going to the dialler, with no masking, for the beta.
-- **Retention:** product docs say chat is kept 90 days, but the server currently keeps it 12 months. This doesn't change anything in the app. The backend team is settling it.
+- **Retention:** settled. Chat is kept 90 days (TRIP-28, SAFE-19), and the server now deletes messages older than that.

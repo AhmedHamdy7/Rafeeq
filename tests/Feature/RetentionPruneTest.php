@@ -22,7 +22,7 @@ use Illuminate\Database\Eloquent\SoftDeletes;
 dataset('retained', [
     'login codes, 7 days' => [OtpChallenge::class, fn () => now()->subDays(8), fn () => now()->subDays(6)],
     'notifications, 90 days' => [Notification::class, fn () => now()->subDays(91), fn () => now()->subDays(89)],
-    'trip chat, 12 months' => [Message::class, fn () => now()->subMonths(12)->subDay(), fn () => now()->subMonths(11)],
+    'trip chat, 90 days' => [Message::class, fn () => now()->subDays(91), fn () => now()->subDays(89)],
     'payment webhooks, 90 days' => [PaymentWebhook::class, fn () => now()->subDays(91), fn () => now()->subDays(89)],
     'security log, 24 months' => [SecurityEvent::class, fn () => now()->subMonths(24)->subDay(), fn () => now()->subMonths(23)],
     'admin audit log, 24 months' => [AdminAction::class, fn () => now()->subMonths(24)->subDay(), fn () => now()->subMonths(23)],

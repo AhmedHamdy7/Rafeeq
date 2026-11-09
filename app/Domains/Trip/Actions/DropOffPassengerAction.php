@@ -8,6 +8,7 @@ use App\Domains\Booking\Enums\BookingStatus;
 use App\Domains\Booking\Models\Booking;
 use App\Domains\Booking\Support\BookingEventLog;
 use App\Domains\Notification\Enums\NotificationType;
+use App\Domains\Notification\Support\ChatThreadEvents;
 use App\Domains\Notification\Support\Notifier;
 use App\Domains\Payment\Actions\SettleBookingAction;
 use App\Domains\Shared\Exceptions\DomainException;
@@ -87,6 +88,8 @@ final readonly class DropOffPassengerAction
 
         return DB::transaction(function () use ($session, $attendance, $booking, $confirmedBy): Attendance {
             $attendance->forceFill(['checked_out_at' => now()])->save();
+
+            ChatThreadEvents::announce($booking, ChatThreadEvents::RideCompleted, $attendance->checked_out_at);
 
             /*
              * 🔴 Her booking completes NOW, which is what enables her rating: `SubmitRatingAction`

@@ -567,6 +567,7 @@ return [
             'chat__grace_minutes' => 'المحادثة بتفضل مفتوحة بعد الرحلة',
             'chat__max_hours_after_departure' => 'المحادثة بتتقفل بعد القيام لو الرحلة ماتقفلتش',
             'chat__messages_per_minute' => 'رسايل المحادثة لكل عضو في الدقيقة',
+            'chat__typing_interval_seconds' => 'أقل وقت بين تنبيهين "بيكتب" (ثواني)',
             'notifications__trip_reminder_early_minutes' => 'أول تذكير بالرحلة قبل التحرك',
             'notifications__trip_reminder_final_minutes' => 'آخر تذكير بالرحلة قبل التحرك',
             'safety__report_window_hours' => 'مهلة الإبلاغ عن مشكلة في رحلة',

@@ -14,7 +14,7 @@
 >
 > **Base URL:** `{host}/api/v1` · **Auth:** bearer token · **Format:** JSON only.
 
-**Last updated:** 2026-11-05 · **199 endpoints live** · Phases 0–7, 9 and 11 complete · 10, 12 and 13 all but a decision each
+**Last updated:** 2026-11-09 · **201 endpoints live** · Phases 0–7, 9 and 11 complete · 10, 12 and 13 all but a decision each
 
 ---
 
@@ -22,7 +22,7 @@
 
 ### What is ready
 
-**199 endpoints live** and tested, across the 47 designed screens:
+**201 endpoints live** and tested, across the 47 designed screens:
 
 | | Count | Covers |
 |---|---|---|
@@ -876,6 +876,8 @@ fails if this list and the running routes ever disagree in either direction.
 | `POST /bookings/{booking}/messages` | 4.15 Trip chat |
 | `GET /seat-requests/{seatRequest}/messages` | 4.15 Trip chat |
 | `POST /seat-requests/{seatRequest}/messages` | 4.15 Trip chat |
+| `POST /bookings/{booking}/typing` | 4.15 Trip chat |
+| `POST /seat-requests/{seatRequest}/typing` | 4.15 Trip chat |
 | `POST /messages/{message}/report` | 4.15 Trip chat |
 
 One route is deliberately **not** in this index and **not** in the OpenAPI document: `/s/{token}`,
@@ -4506,6 +4508,24 @@ booking has no conversation. All three numbers are platform settings — read `m
 | `sentAt` | |
 | `meta.canSend` | Whether a message can be sent right now. |
 | `meta.opensAt` / `meta.closesAt` | The window. |
+| `meta.otherParty` | The other person: `userId`, `publicFirstName`, `role` (`driver` or `passenger`, their role in this thread), `rating`, `ratingCount`, `completedTrips`, `trustLevel`, `verifiedLevels`, `sameOrganisation`, `onTimeRate`. The same card as everywhere else (`PersonSummary`). Never a phone number. |
+| `meta.commute` | `originLabel`, `destinationLabel`, `departureAt`. Enough to draw the route card when chat opens from a push. |
+| `meta.seatRequestId` | Booking thread only. The request this booking came from, or `null`. Its thread (`GET /seat-requests/{seatRequest}/messages`) stays readable, so the app can show the earlier talk above the booking thread. |
+| `meta.events` | The thread's system lines, oldest first: `[{ "event": "picked_up", "at": "…" }]`. Not paginated, and always the whole list. Merge them with the messages by time. The app writes the wording, in the user's language. |
+
+**`meta.events` values.** The app shows each one as a centred line between the messages:
+
+| `event` | When | Thread | The design's line |
+|---|---|---|---|
+| `request_sent` | The request was made | Request | Passenger: "Seat request sent · chat opened". Driver: "Seat request received · chat opened". |
+| `waitlist_joined` | She joined the waiting list | Request | "You joined the waiting list · chat opened" |
+| `counteroffered` | The driver sent a counteroffer | Request | "A chat message isn't acceptance. Review the counteroffer to agree." |
+| `booking_confirmed` | The booking was made | Booking | "Booking confirmed" |
+| `driver_arrived` | She was told the driver is at her pickup | Booking | "Your driver has arrived at your pickup point. Please meet your driver." |
+| `picked_up` | The driver checked her in | Booking | "Picked up · 07:06" |
+| `ride_completed` | She was dropped off, the run was completed, or she ended the ride early | Booking | "Ride completed · 08:09" |
+
+A value the app doesn't know: skip it. More may be added.
 
 **Opening the conversation marks the other person's messages read** — there is no separate call.
 
@@ -4591,6 +4611,18 @@ Somebody who is neither of the two gets **`404`**.
 real number. Masking behind a relay needs a telephony provider, which v5 defers — until then the
 disclosure is narrowed by the gates above and logged. Do not cache it, do not store it, and do not
 show it as text where it can be screenshotted: hand it to the dialler.
+
+#### `POST /bookings/{booking}/typing` and `POST /seat-requests/{seatRequest}/typing` — no body
+
+Tells the other person you are typing. `202` with `"data": null`. The other person gets `chat.typing`
+on the socket (6.3).
+
+- Call it when the user types, at most every 3 seconds. The server sends one signal per person per
+  thread every 3 seconds (`chat.typing_interval_seconds`, a platform setting) and accepts extra calls
+  with `202` without sending anything.
+- There is no "stopped typing" call. The other side hides the bubble on its own.
+- The same refusals as sending: `409 CHAT_NOT_OPEN` (same `fields`) when the thread is closed or the
+  two are blocked, and `404` for anybody else.
 
 #### `POST /messages/{message}/report` — `{ "reason": "..." }`
 
@@ -4809,13 +4841,15 @@ events in 6.3 have been sent through a running Reverb. Coordinate with us before
 
 ### 6.3 Chat — `private-user.{userId}`
 
-Subscribe once after sign-in, using `user.id` from `GET /auth/me`. Both events reach only the person
+Subscribe once after sign-in, using `user.id` from `GET /auth/me`. Every event reaches only the person
 they are for, on the same channel and envelope as `offer.closed`. There is no channel per thread.
 
 | Event | Who gets it | Payload |
 |---|---|---|
 | `chat.message` | The receiver, never the sender | `{bookingId, seatRequestId, message}`. One of the two ids is `null`. `message` has the same fields as `GET .../messages`, and `mine` is always `false`. |
 | `chat.read` | The person who wrote the messages | `{bookingId, seatRequestId, readAt}`. Every message you wrote in that thread is now read. |
+| `chat.event` | Both people on the booking | `{bookingId, seatRequestId: null, event: {event, at}}`. A ride moment just happened (`driver_arrived`, `picked_up`, `ride_completed`). The same item that `meta.events` will now return. |
+| `chat.typing` | The other person in the thread | `{bookingId, seatRequestId}`. They are typing. Sent straight to the socket, not through the queue. Show the typing bubble for that thread, and hide it after 5 seconds with no new `chat.typing` or when their `chat.message` arrives. |
 
 ```json
 {
@@ -4900,6 +4934,7 @@ exist, and every live endpoint must be named here.
 
 | Date | Change |
 |---|---|
+| 2026-11-09 | 💬 **Chat gaps.** **2 new endpoints:** `POST /bookings/{booking}/typing` and `POST /seat-requests/{seatRequest}/typing`, with the new `chat.typing` socket event (6.3). Both `GET .../messages` now return `meta.otherParty` (the other person's card and `role`) and `meta.commute` (route labels and `departureAt`). The booking thread also returns `meta.seatRequestId`. Both threads return `meta.events`, the system lines ("Booking confirmed", "Picked up · 07:06"…), and the new `chat.event` socket event sends the ride moments live. Chat is now kept 90 days instead of 12 months (TRIP-28). |
 | 2026-11-08 | 🚦 **The driver application goes to review by itself (D-0047).** When the last of the 5 items arrives, the backend sends the application, and any uploaded-but-unsent ID or selfie, to review. Remove the Submit button; `POST /driver/application/submit` still works and is idempotent. A replaced rejected item sends the application straight back to review. |
 | 2026-11-05 | 🧪 **Omar's and Ahmed's staging accounts are now full on both sides** (driver and passenger, with trips on the days ahead): see "Accounts seeded on staging" in 2.1. No API change. |
 | 2026-11-05 | 🛣️ **Create Commute gaps.** **2 new endpoints:** `GET /commutes/options` and `GET /commutes/{commute}/route-preview`. 🔴 **Behaviour changes:** the form and its drafts no longer need a verified identity, and only publishing and running a commute do (PROF-19), so `GET /commutes` and `POST /commutes` no longer answer `VERIFICATION_REQUIRED`. Every field on `POST /commutes` is optional, `vehicleId` and `seatsTotal` can be `null` on a draft, and `vehicle` is a new `missing[]` value. `allowsCustomPickup` defaults to `true`. `startDate` and `endDate` are optional. New `weekdays[]` on a commute, `?status=` on `GET /commutes`, and `DELETE` works on a draft. New error `COMMUTE_ROUTE_UNAVAILABLE`. `GET /driver/vehicles` answers an empty list, not `404`, before the driver has a profile. Publish refusals corrected. |

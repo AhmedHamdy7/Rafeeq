@@ -570,6 +570,7 @@ return [
             'chat__grace_minutes' => 'Chat stays open after the trip',
             'chat__max_hours_after_departure' => 'Chat closes after departure if the run never ends',
             'chat__messages_per_minute' => 'Chat messages per member per minute',
+            'chat__typing_interval_seconds' => 'Seconds between two "typing" signals',
             'notifications__trip_reminder_early_minutes' => 'First trip reminder, before departure',
             'notifications__trip_reminder_final_minutes' => 'Last trip reminder, before departure',
             'safety__report_window_hours' => 'Time to report a problem with a journey',

@@ -278,7 +278,7 @@ Schedule::command('files:purge-expired')
 
 /*
  * 🔒 Retention for the rows ERD §18 gives a lifetime: login codes (7 days), the inbox and push log
- * (90 days), trip chat (12 months), payment webhooks (90 days), the security log and the admin audit log (24 months each). The
+ * (90 days), trip chat (90 days), payment webhooks (90 days), the security log and the admin audit log (24 months each). The
  * models are listed by name because `model:prune` only looks in app/Models on its own, and every
  * model here lives under app/Domains — without the list it would run, find nothing, and succeed.
  *

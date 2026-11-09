@@ -4,6 +4,7 @@ namespace App\Domains\Trip\Actions;
 
 use App\Domains\Booking\Models\Booking;
 use App\Domains\Geo\Contracts\GeoQueryEngine;
+use App\Domains\Notification\Support\ChatThreadEvents;
 use App\Domains\Reliability\Enums\ReliabilityEventKind;
 use App\Domains\Reliability\Support\ReliabilityLedger;
 use App\Domains\Shared\Exceptions\DomainException;
@@ -156,6 +157,10 @@ final readonly class ConfirmAttendanceAction
             // Not `fill`: attendance is what triggers billing, so none of these fields is
             // mass-assignable (pitfall #51).
             $attendance->forceFill($changes)->save();
+
+            if ($status->travelled()) {
+                ChatThreadEvents::announce($booking, ChatThreadEvents::PickedUp, $attendance->checked_in_at);
+            }
 
             /*
              * The same act closes any timer that was running for this passenger — one call

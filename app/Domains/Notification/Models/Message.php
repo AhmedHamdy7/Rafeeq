@@ -49,6 +49,6 @@ class Message extends Model
      */
     public function prunable(): Builder
     {
-        return static::query()->where('created_at', '<', now()->subMonths((int) config('rafeeq.retention.messages_months')));
+        return static::query()->where('created_at', '<', now()->subDays((int) config('rafeeq.retention.messages_days')));
     }
 }
