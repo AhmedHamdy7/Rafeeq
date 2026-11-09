@@ -88,6 +88,19 @@ it('lets the two of them talk while the driver is deciding', function () {
  * One thread per request, created on the first message rather than when the request is made — the
  * same reason a booking's is: an empty row per request nobody wrote in is a row per request.
  */
+it('names the other person and the commute on a request thread', function () {
+    readRequestChat($this->paxToken, $this->requestId)
+        ->assertOk()
+        ->assertJsonPath('meta.otherParty.userId', $this->driver->id)
+        ->assertJsonPath('meta.otherParty.role', 'driver')
+        ->assertJsonPath('meta.commute.departureAt', ScheduledTrip::find($this->tripId)->departure_at->toIso8601String());
+
+    readRequestChat($this->driverToken, $this->requestId)
+        ->assertJsonPath('meta.otherParty.userId', $this->pax->id)
+        ->assertJsonPath('meta.otherParty.role', 'passenger')
+        ->assertJsonPath('meta.otherParty.publicFirstName', $this->pax->public_first_name);
+});
+
 it('opens one thread on the first message and no more', function () {
     expect(Conversation::query()->count())->toBe(0);
 

@@ -912,6 +912,7 @@ Route::prefix('v1')->group(function (): void {
         Route::get('bookings/{booking}/messages', [ChatController::class, 'index']);
         Route::post('bookings/{booking}/messages', [ChatController::class, 'store'])
             ->middleware('throttle:chat-messages');
+        Route::post('bookings/{booking}/typing', [ChatController::class, 'typing']);
 
         /*
          * The same chat on a seat request nobody has answered yet (Feature 03 v5: chat is scoped to
@@ -930,6 +931,7 @@ Route::prefix('v1')->group(function (): void {
         Route::get('seat-requests/{seatRequest}/messages', [ChatController::class, 'requestIndex']);
         Route::post('seat-requests/{seatRequest}/messages', [ChatController::class, 'requestStore'])
             ->middleware('throttle:chat-messages');
+        Route::post('seat-requests/{seatRequest}/typing', [ChatController::class, 'requestTyping']);
 
         Route::post('messages/{message}/report', [ChatController::class, 'report'])
             ->middleware('throttle:safety-reports');

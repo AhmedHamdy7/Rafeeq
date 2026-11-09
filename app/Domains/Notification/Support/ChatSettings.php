@@ -29,6 +29,11 @@ final class ChatSettings
         return max(1, (int) self::get('chat.messages_per_minute'));
     }
 
+    public static function typingIntervalSeconds(): int
+    {
+        return max(1, (int) self::get('chat.typing_interval_seconds'));
+    }
+
     private static function get(string $key): mixed
     {
         return PlatformSetting::value($key, config("rafeeq.{$key}"));

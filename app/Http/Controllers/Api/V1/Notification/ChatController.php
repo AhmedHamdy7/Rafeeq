@@ -5,11 +5,15 @@ namespace App\Http\Controllers\Api\V1\Notification;
 use App\Domains\Booking\Models\Booking;
 use App\Domains\Booking\Models\SeatRequest;
 use App\Domains\Commute\Models\CommuteOffer;
+use App\Domains\Commute\Models\ScheduledTrip;
+use App\Domains\Identity\Models\User;
 use App\Domains\Notification\Actions\ReportChatMessageAction;
 use App\Domains\Notification\Actions\SendChatMessageAction;
+use App\Domains\Notification\Actions\SendChatTypingAction;
 use App\Domains\Notification\Events\ChatMessagesRead;
 use App\Domains\Notification\Models\Conversation;
 use App\Domains\Notification\Models\Message;
+use App\Domains\Notification\Support\ChatThreadEvents;
 use App\Domains\Notification\Support\ChatWindow;
 use App\Domains\Safety\Models\BlockedUser;
 use App\Domains\Shared\Exceptions\DomainException;
@@ -19,6 +23,8 @@ use App\Http\OpenApi\ApiErrors;
 use App\Http\Requests\Notification\ReportChatMessageRequest;
 use App\Http\Requests\Notification\SendChatMessageRequest;
 use App\Http\Resources\ChatMessageResource;
+use App\Http\Resources\JourneyCard;
+use App\Http\Resources\PersonSummary;
 use App\Http\Responses\ApiResponse;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -60,6 +66,10 @@ final class ChatController extends Controller
             'canSend' => ChatWindow::isOpen($booking) && ! BlockedUser::existsBetween($request->user()->id, $otherId),
             'opensAt' => ChatWindow::opensAt($booking)->toIso8601String(),
             'closesAt' => ChatWindow::closesAt($booking)->toIso8601String(),
+            'seatRequestId' => $booking->seat_request_id,
+            'otherParty' => $this->otherPartyCard($request, $otherId, $otherId === $booking->driver_profile_id),
+            'commute' => $this->commuteCard($booking->scheduledTrip->commuteOffer, $booking->scheduledTrip),
+            'events' => ChatThreadEvents::forBooking($booking),
         ]);
     }
 
@@ -114,6 +124,9 @@ final class ChatController extends Controller
              * time would be inventing one.
              */
             'requestStatus' => strtoupper($seatRequest->status->value),
+            'otherParty' => $this->otherPartyCard($request, $otherId, $otherId !== $seatRequest->passenger_user_id),
+            'commute' => $this->commuteCard($seatRequest->commuteOffer, $seatRequest->scheduledTrip),
+            'events' => ChatThreadEvents::forRequest($seatRequest),
         ]);
     }
 
@@ -138,6 +151,22 @@ final class ChatController extends Controller
         return ApiResponse::success(new ChatMessageResource($message), status: 201);
     }
 
+    #[ApiErrors(ErrorCode::ChatNotOpen, ErrorCode::NotFound)]
+    public function typing(Request $request, string $booking, SendChatTypingAction $action): JsonResponse
+    {
+        $action->onBooking($request->user(), $this->participatingIn($request, $booking));
+
+        return ApiResponse::success(status: 202);
+    }
+
+    #[ApiErrors(ErrorCode::ChatNotOpen, ErrorCode::NotFound)]
+    public function requestTyping(Request $request, string $seatRequest, SendChatTypingAction $action): JsonResponse
+    {
+        $action->onSeatRequest($request->user(), $this->participatingInRequest($request, $seatRequest));
+
+        return ApiResponse::success(status: 202);
+    }
+
     /**
      * POST /v1/messages/{message}/report — report a message you received. Files a report with
      * the safety team, quoting the message; returns its id so the app can show it in the
@@ -152,6 +181,28 @@ final class ChatController extends Controller
         $incident = $action->execute($request->user(), $found, $request->validated('reason'));
 
         return ApiResponse::success(['incidentId' => $incident->id], status: 201);
+    }
+
+    private function otherPartyCard(Request $request, string $otherId, bool $isDriver): array
+    {
+        $other = User::query()->with(['stats', 'verifications', 'driverProfile'])->findOrFail($otherId);
+        $card = PersonSummary::for($other, $request->user(), asDriver: $isDriver);
+
+        if ($isDriver && $other->driverProfile !== null) {
+            $card['completedTrips'] = (int) $other->driverProfile->completed_trips_count;
+        }
+
+        return ['userId' => $other->id, ...$card, 'role' => $isDriver ? 'driver' : 'passenger'];
+    }
+
+    private function commuteCard(CommuteOffer $offer, ?ScheduledTrip $trip): array
+    {
+        $offer->loadMissing('locations');
+
+        return [
+            ...JourneyCard::route($offer),
+            'departureAt' => $trip?->departure_at->toIso8601String(),
+        ];
     }
 
     /**
@@ -197,6 +248,7 @@ final class ChatController extends Controller
                 ->orWhereIn('commute_offer_id', CommuteOffer::query()
                     ->where('driver_profile_id', $userId)
                     ->select('id')))
+            ->with(['commuteOffer.locations', 'scheduledTrip'])
             ->first()
             ?? throw DomainException::of(ErrorCode::NotFound);
     }
@@ -208,7 +260,7 @@ final class ChatController extends Controller
         return Booking::query()
             ->whereKey($bookingId)
             ->where(fn ($query) => $query->where('passenger_user_id', $userId)->orWhere('driver_profile_id', $userId))
-            ->with('scheduledTrip.tripSession')
+            ->with(['scheduledTrip.tripSession', 'scheduledTrip.commuteOffer.locations', 'attendance'])
             ->first()
             ?? throw DomainException::of(ErrorCode::NotFound);
     }

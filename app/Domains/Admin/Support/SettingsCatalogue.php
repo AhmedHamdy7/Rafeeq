@@ -134,6 +134,7 @@ final class SettingsCatalogue
         'chat.grace_minutes' => ['group' => 'chat', 'min' => 0, 'max' => 1_440, 'unit' => 'minutes'],
         'chat.max_hours_after_departure' => ['group' => 'chat', 'min' => 2, 'max' => 48, 'unit' => 'hours'],
         'chat.messages_per_minute' => ['group' => 'chat', 'min' => 5, 'max' => 120, 'unit' => 'per_minute'],
+        'chat.typing_interval_seconds' => ['group' => 'chat', 'min' => 1, 'max' => 30, 'unit' => 'seconds'],
 
         // ---- Debt and weekly settlement (PAY-08 → PAY-19, PAY-34) ---------
         // No cap on a driver's debt (PAY-15): the Friday deadline is what stops her.

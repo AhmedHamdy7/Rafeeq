@@ -5,6 +5,7 @@ namespace App\Domains\Trip\Support;
 use App\Domains\Booking\Models\Booking;
 use App\Domains\Identity\Models\User;
 use App\Domains\Notification\Enums\NotificationType;
+use App\Domains\Notification\Support\ChatThreadEvents;
 use App\Domains\Notification\Support\Notifier;
 use App\Domains\Trip\Actions\WaitTimerAction;
 use App\Domains\Trip\Models\Attendance;
@@ -59,6 +60,8 @@ final class DriverArrivalNotice
         if ($claimed === 0) {
             return false;
         }
+
+        ChatThreadEvents::announce($booking, ChatThreadEvents::DriverArrived, now());
 
         $driver = User::query()->find($booking->driver_profile_id);
 

@@ -14,6 +14,7 @@ use App\Domains\Driver\Models\DriverProfile;
 use App\Domains\Group\Models\CommuteGroup;
 use App\Domains\Identity\Models\UserStat;
 use App\Domains\Notification\Enums\NotificationType;
+use App\Domains\Notification\Support\ChatThreadEvents;
 use App\Domains\Notification\Support\Notifier;
 use App\Domains\Payment\Actions\SettleBookingAction;
 use App\Domains\Shared\Exceptions\DomainException;
@@ -140,6 +141,12 @@ final readonly class CompleteTripAction
         foreach ($checkedOut as $attendance) {
             // The journey ended for everybody who was on it at the same moment.
             $attendance->forceFill(['checked_out_at' => now()])->save();
+
+            $booking = $bookings->firstWhere('id', $attendance->booking_id);
+
+            if ($booking !== null) {
+                ChatThreadEvents::announce($booking, ChatThreadEvents::RideCompleted, $attendance->checked_out_at);
+            }
         }
 
         /*

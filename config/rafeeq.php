@@ -827,6 +827,8 @@ return [
 
         // Per sender, per minute. Generous for "I'm here / where are you"; tight for flooding.
         'messages_per_minute' => 20,
+
+        'typing_interval_seconds' => 3,
     ],
 
     'safety' => [
@@ -1353,7 +1355,7 @@ return [
     'retention' => [
         'otp_challenges_days' => 7,
         'notifications_days' => 90,
-        'messages_months' => 12,
+        'messages_days' => 90,
         'payment_webhooks_days' => 90,
         'security_events_months' => 24,
         'admin_actions_months' => 24,

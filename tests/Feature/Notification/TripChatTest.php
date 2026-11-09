@@ -61,6 +61,26 @@ it('lets the passenger and the driver talk about the pickup', function () {
 /**
  * 🔒 Who wrote, never what: the body would be on a lock screen.
  */
+it('names the other person and the commute in the thread meta, never a phone number', function () {
+    $passengerView = test()->withToken($this->paxToken)->getJson("/api/v1/bookings/{$this->booking->id}/messages")
+        ->assertOk()
+        ->assertJsonPath('meta.otherParty.userId', $this->driver->id)
+        ->assertJsonPath('meta.otherParty.role', 'driver')
+        ->assertJsonPath('meta.otherParty.publicFirstName', $this->driver->public_first_name)
+        ->assertJsonPath('meta.seatRequestId', $this->booking->seat_request_id)
+        ->assertJsonPath('meta.commute.departureAt', ScheduledTrip::find($this->tripId)->departure_at->toIso8601String())
+        ->assertJsonStructure(['meta' => [
+            'otherParty' => ['rating', 'ratingCount', 'completedTrips'],
+            'commute' => ['originLabel', 'destinationLabel'],
+        ]]);
+
+    expect(json_encode($passengerView->json('meta')))->not->toContain('1012345678');
+
+    test()->withToken($this->driverToken)->getJson("/api/v1/bookings/{$this->booking->id}/messages")
+        ->assertJsonPath('meta.otherParty.userId', $this->pax->id)
+        ->assertJsonPath('meta.otherParty.role', 'passenger');
+});
+
 it('tells the other person a message arrived, without the message', function () {
     sendChat($this->paxToken, $this->booking->id, 'waiting by the north gate')->assertStatus(201);
 
@@ -191,5 +211,7 @@ it('limits how fast one person can send', function () {
         sendChat($this->paxToken, $this->booking->id, "message {$i}")->assertStatus(201);
     }
 
-    sendChat($this->paxToken, $this->booking->id, 'one too many')->assertStatus(429);
+    sendChat($this->paxToken, $this->booking->id, 'one too many')
+        ->assertStatus(429)
+        ->assertHeader('Retry-After');
 });
