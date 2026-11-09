@@ -4,13 +4,13 @@
 
 ## 1. Live delivery
 
-Not confirmed yet. We need to run the two-account test with you on production.
+**Confirmed on production on 2026-11-09** with the two-account test.
 
-What your checks already tell us:
+How it works:
 
 - **Production broadcasts through Reverb.** Your `403` for another user's channel shows it. With `BROADCAST_CONNECTION=log`, `/broadcasting/auth` checks nothing and returns `200` for every channel.
-- **Events go through the queue.** `chat.message` and `chat.read` are queued broadcasts, so they reach the socket only while a worker runs: `RAFEEQ_RUN_WORKERS=true` on the web container, or a separate `queue:work` service. We still have to confirm this on Railway. If the worker is down, pushes stop too, not only the socket.
-- **Delay:** up to about 3 seconds on a busy queue, as the handoff says. We'll measure it in the test.
+- **Events go through the queue.** `chat.message` and `chat.read` are queued broadcasts, so they reach the socket only while a worker runs: `RAFEEQ_RUN_WORKERS=true` on the web container, or a separate `queue:work` service. The worker runs on Railway. If the worker is down, pushes stop too, not only the socket.
+- **Delay:** up to about 3 seconds for queued events, as the handoff says.
 
 Keep the 10-second polling fallback.
 
