@@ -21,7 +21,7 @@ beforeEach(function () {
     Storage::fake('documents');
 });
 
-function publishedCommute(): array
+function asksPublishedCommute(): array
 {
     $driverToken = approvedDriver(phone: '01012345678', devicePublicId: 'driver-1');
     $commuteId = readyCommute($driverToken, Vehicle::sole()->id, ['allowsCustomPickup' => true]);
@@ -32,7 +32,7 @@ function publishedCommute(): array
 }
 
 it('lists commutes in Discover with no points, soonest first', function () {
-    [, $commuteId, $tripId] = publishedCommute();
+    [, $commuteId, $tripId] = asksPublishedCommute();
     $paxToken = verifiedPassenger('01112223344');
 
     $page = test()->withToken($paxToken)->getJson('/api/v1/search/commutes/browse')->assertOk();
@@ -46,7 +46,7 @@ it('lists commutes in Discover with no points, soonest first', function () {
 });
 
 it('previews the cost of a drop-off', function () {
-    [, $commuteId] = publishedCommute();
+    [, $commuteId] = asksPublishedCommute();
     $paxToken = verifiedPassenger('01112223344');
 
     $preview = test()->withToken($paxToken)
@@ -64,7 +64,7 @@ it('previews the cost of a drop-off', function () {
 });
 
 it('edits the points of a pending seat request', function () {
-    [$driverToken, $commuteId, $tripId] = publishedCommute();
+    [$driverToken, $commuteId, $tripId] = asksPublishedCommute();
     $paxToken = verifiedPassenger('01112223344');
 
     $requestId = requestSeat($paxToken, $commuteId, ['scheduledTripId' => $tripId])->assertStatus(201)->json('data.id');
@@ -122,7 +122,7 @@ it('returns the InstaPay payee on the debt screen', function () {
 });
 
 it('filters live shares by run', function () {
-    [$driverToken, , $tripId] = publishedCommute();
+    [$driverToken, , $tripId] = asksPublishedCommute();
 
     underway($driverToken, $tripId);
 
@@ -182,7 +182,7 @@ it('approves a test driver in one call, with a Comfort car', function () {
 it('moves a test trip departure and deletes a test account', function () {
     config(['rafeeq.testing.api' => true]);
 
-    [$driverToken, , $tripId] = publishedCommute();
+    [$driverToken, , $tripId] = asksPublishedCommute();
 
     $moved = test()->withToken($driverToken)
         ->postJson("/api/v1/testing/trips/{$tripId}/departure", ['minutesFromNow' => 5])
