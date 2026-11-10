@@ -576,6 +576,7 @@ Route::prefix('v1')->group(function (): void {
          */
         Route::post('commutes/{commute}/seat-requests', [SeatRequestController::class, 'store']);
         Route::get('seat-requests', [SeatRequestController::class, 'index']);
+        Route::get('seat-requests/{seatRequest}', [SeatRequestController::class, 'show']);
 
         /*
          * Seats offered to her while she waits (Feature 03 v3).

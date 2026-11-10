@@ -302,24 +302,18 @@ order of precedence:
 |---|---|---|
 | `PHONE_OTP` | Screen 5 | No usable session. Returned by refresh when the token is dead, so you have one vocabulary for "go back to the phone screen" rather than inferring it from a 401. |
 | `RESTRICTED_ACCOUNT` | Screen 35 | A **permanently banned** account must never be routed home, whatever else is true. 🔴 **Only a ban** (AUTH-19, F1-3): a **suspension** routes like any other account — normally `HOME` — and you show the suspension banner from `user.suspension` (`permanent: false`) with **Appeal**; her trips are readable and every write answers `403 ACCOUNT_SUSPENDED`. A **driver-only** restriction does NOT return this — that person goes `HOME` with full passenger access, and you detect it from `GET /driver/eligibility`, which returns the `driver_suspended` blocker with a message and `nextStep: CONTACT_SUPPORT`. Her commutes also stop appearing in search, and publishing answers `403`. |
-| `BASIC_PROFILE` | Screen 7, then 8 | The profile is unfinished **or no role has been chosen yet**, so it is resumed — never skipped. See the warning below: this is the answer even when the profile looks complete. |
-| `ROLE_SELECTION` | Screen 8 | Passenger / Driver / Both. 🔴 Returned by `PUT /account/profile/basic` **and by nothing else** — see below. |
+| `BASIC_PROFILE` | Screen 7, then 8 | The profile is unfinished, so it is resumed — never skipped. |
+| `ROLE_SELECTION` | Screen 8 | Passenger / Driver / Both. The profile is saved and no role is chosen yet (AUTH-02). |
 | `HOME` | Screen 9 | Nothing is outstanding. Read `user.capabilities` and `activeMode` to pick which home. |
 
 Do not infer the destination from which fields happen to be null, and do not add a sixth case of
 your own: `GET /auth/me` returns the same field and is reachable **while suspended**, which is how
 the app recovers if it ever loses its place.
 
-> 🔴 **`ROLE_SELECTION` comes from one endpoint only, and this surprises everybody once.**
->
-> A **cold start** with the profile saved but no role chosen answers **`BASIC_PROFILE`**, not
-> `ROLE_SELECTION`. That is deliberate (Feature 01 §5): somebody who closed the app on the role
-> screen comes back to her profile, sees the name and date she entered, confirms them, and is then
-> asked for the role. Dropping her straight on Role would show a screen with no context behind it.
->
-> So the sequence is: `PUT /account/profile/basic` → `ROLE_SELECTION` → `POST /account/initial-role`
-> → `HOME`. If you ask `GET /auth/me` or `GET /account/onboarding-state` in the middle of that, you
-> get `BASIC_PROFILE` — and submitting the profile again is the correct way forward, not a loop.
+> 🔴 **Since 2026-11-10 (AUTH-02):** a cold start with the profile saved but no role chosen answers
+> **`ROLE_SELECTION`**, on sign-in, refresh, `GET /auth/me` and `GET /account/onboarding-state` alike.
+> The sequence is: `PUT /account/profile/basic` → `ROLE_SELECTION` → `POST /account/initial-role`
+> → `HOME`, and reopening the app in the middle of it lands on Role.
 >
 > **If you still send `registeredRole` with the profile, nothing changes for you.** The role is
 > recorded in the same request and you go straight to `HOME`, exactly as before. The new screen is
@@ -798,6 +792,7 @@ fails if this list and the running routes ever disagree in either direction.
 | `POST /seat-offers/{offer}/accept` | 4.7 Seat requests and bookings |
 | `POST /seat-offers/{offer}/decline` | 4.7 Seat requests and bookings |
 | `GET /seat-requests` | 4.7 Seat requests and bookings |
+| `GET /seat-requests/{seatRequest}` | 4.7 Seat requests and bookings |
 | `PATCH /seat-requests/{seatRequest}/availability` | 4.7 Seat requests and bookings |
 | `DELETE /seat-requests/{seatRequest}` | 4.7 Seat requests and bookings |
 | `POST /seat-requests/{seatRequest}/pickup-request` | 4.7 Seat requests and bookings |
@@ -926,7 +921,7 @@ numbers are admin settings, so read them from the response, never hard-code them
 | Response field | Meaning |
 |---|---|
 | `accountState` | `NEW` (just created) or `EXISTING`. Drives whether you show onboarding. |
-| `nextStep` | **The screen to go to next**, decided by the server. Exactly five values: `PHONE_OTP`, `RESTRICTED_ACCOUNT`, `BASIC_PROFILE`, `ROLE_SELECTION`, `HOME` — in that order of precedence, explained in 2.1. Follow it rather than deciding yourself; it accounts for restriction and half-finished profiles you cannot see. 🔴 `ROLE_SELECTION` comes from `PUT /account/profile/basic` only — a cold start answers `BASIC_PROFILE`, see 2.1. 🔴 Verification is **not** one of them — it is a per-endpoint gate on the DRIVER surface, not a sign-up step. |
+| `nextStep` | **The screen to go to next**, decided by the server. Exactly five values: `PHONE_OTP`, `RESTRICTED_ACCOUNT`, `BASIC_PROFILE`, `ROLE_SELECTION`, `HOME` — in that order of precedence, explained in 2.1. Follow it rather than deciding yourself; it accounts for restriction and half-finished profiles you cannot see. `ROLE_SELECTION` once the profile is saved and no role is chosen, see 2.1. 🔴 Verification is **not** one of them — it is a per-endpoint gate on the DRIVER surface, not a sign-up step. |
 | `pinLength` | How many digits your local PIN entry should take (currently 4). Configurable server-side; do not hard-code. |
 | `session` | See 4.1. |
 | `user` | See 4.2. |
@@ -1780,8 +1775,8 @@ available" with Retry and keep Next disabled. A failed answer isn't cached, so R
 
 #### `PUT /commutes/{commute}/schedule` — active, profile complete
 
-**Request:** `daysMask`, `promisedArrivalTime` **or** `departureTime` (`HH:MM:SS`, **local wall
-clock**), `timezone`, `startDate`, `endDate`, `perDay`.
+**Request:** `daysMask`, `promisedArrivalTime` **or** `departureTime` (`HH:MM` or `HH:MM:SS`, **local wall
+clock**; `HH:MM` is read as `HH:MM:00`, here and in `perDay`), `timezone`, `startDate`, `endDate`, `perDay`.
 
 `startDate` defaults to tomorrow and `endDate` to 12 months later (`defaults` on
 `GET /commutes/options`). Saving again without dates keeps the dates already saved. **Never show the
@@ -1809,7 +1804,7 @@ before** — one time, one price, one seat count for the whole week.
 
 | Field | Means |
 |---|---|
-| `promisedArrivalTime` | `HH:MM:SS` local. When you promise to arrive, applied to every day unless a day overrides it. ⚠️ **Arriving later than this counts against the driver's on-time rate**, outside a five-minute tolerance. Omit it and no promise is recorded — and nothing is scored. |
+| `promisedArrivalTime` | `HH:MM` or `HH:MM:SS` local. When you promise to arrive, applied to every day unless a day overrides it. ⚠️ **Arriving later than this counts against the driver's on-time rate**, outside a five-minute tolerance. Omit it and no promise is recorded — and nothing is scored. |
 | `perDay` | Per-day differences, **keyed by the day's bit**: `{"2": {"departureTime": "06:30:00", "seatsTotal": 2}}` sets Sunday only. It can stand alone when every day has its own time. Each day accepts `departureTime`, `promisedArrivalTime`, `seatsTotal` (≤ `approvedSeats`). **No per-day price**: the price is RAFEEQ's, the same every day of the commute. |
 
 ```
@@ -1892,7 +1887,7 @@ go back on your waiting list."*
 | | |
 |---|---|
 | **What is cancelled** | Confirmed bookings on days that are still `scheduled` and still in the future. Each becomes `CANCELLED_BY_DRIVER` with `cancelledReason: commute_paused`. |
-| **A run already underway is NOT touched** | That is Cancel Active Trip, a different decision with its own fees. Pausing cannot reach into a journey people are sitting in. |
+| **Not during a live run (COM-24)** | While one of its runs is `PREPARING`, `EN_ROUTE` or `IN_PROGRESS`, pause answers `409 COMMUTE_TRIP_IN_PROGRESS` with `error.fields.tripId`. The driver ends that run with Cancel Active Trip (`POST /trips/{trip}/cancel-active`) first. Hide Pause during a live run. |
 | **Where the passengers go** | Onto this commute's waiting list, keeping the terms she already approved, marked `displacedReason: commute_paused`. They are told once each, naming the number of days, with `commute_paused_seat_cancelled`. |
 | **No fan-out** | The freed seats are **not** offered to anybody. An offer would announce "a seat just opened" for a journey that has stopped — and would land on the women who just lost theirs. |
 | **Resume gives nothing back** | Cancelled seats never auto-restore. She offers them to the waiting members she chooses, with `POST /driver/commutes/{commute}/waitlist/offers`. |
@@ -1948,7 +1943,9 @@ On anything else it archives. Nothing is deleted: history stays. 🔴 **Every up
 included** (Feature 03 C-8, COM-35): each confirmed seat becomes `CANCELLED_BY_DRIVER`, each
 passenger gets one `commute_deleted_seat_cancelled` (4.14), and every open request and waiting-list
 place on it closes as `COMMUTE_ARCHIVED` — nobody is put on a waiting list for a commute that no
-longer exists. A run already under way is left alone. The driver pays the cancel fee by notice per
+longer exists. 🔴 **Refused while a run is live (COM-24, COM-35):** if one of its runs is `PREPARING`,
+`EN_ROUTE` or `IN_PROGRESS`, delete answers `409 COMMUTE_TRIP_IN_PROGRESS` with `error.fields.tripId`, and
+nothing changes. The driver ends that run with Cancel Active Trip first. The driver pays the cancel fee by notice per
 confirmed seat (16h+: 0 · 10–16h: 10 % · < 10h: 25 %) — **show it first** with
 `GET /commutes/{commute}/cancel-preview?action=delete`.
 
@@ -1989,7 +1986,8 @@ confirmed seat (16h+: 0 · 10–16h: 10 % · < 10h: 25 %) — **show it first** 
 **Query:** `origin[lat,lng]`, `destination[lat,lng]`, `daysMask`, `arrivalWindowStart`,
 `arrivalWindowEnd` (`HH:MM:SS` or `HH:MM`), `maxWalkMinutes` (0–45, optional, default 10), `maxDetourMinutes` (0–45, optional, default 15),
 `seatsNeeded`, `audiencePreference`, `womenOnly`, `flexibilityMinutes` (0–60),
-`wantsReturnTrip`, `rules[]`, `tier`, `minRating`. Optionally `origin[label]`, `origin[placeId]`,
+`wantsReturnTrip`, `rules[]`, `tier`, `minRating`. `womenOnly` and `wantsReturnTrip` take `true` /
+`false` or `1` / `0`. Optionally `origin[label]`, `origin[placeId]`,
 `destination[label]`, `destination[placeId]` — they change nothing about the search; they are kept
 on her recent search so the row can say "New Cairo → Smart Village" (DISCOVER-8).
 
@@ -2274,6 +2272,14 @@ list (`POST /driver/seat-requests/{seatRequest}/waitlist`), it does not seat her
 A `seat_request` can **turn into** a `waitlist_application` while it waits — the day filled up, or
 another driver confirmed her for the same time — never back. Re-read `kind` rather than caching it.
 
+| `kind` | Means | Driver's yes | Driver's no |
+|---|---|---|---|
+| `seat_request` | A seat on a day with room. | `POST /driver/seat-requests/{seatRequest}/approve` (seats her) | `.../reject`, or `.../waitlist` to park her |
+| `waitlist_application` | The day is full, or she rides with somebody else then. | `POST /driver/seat-requests/{seatRequest}/waitlist` (puts her on the list) | `.../reject` |
+
+`approve` on a `waitlist_application` for a full day answers `SEAT_UNAVAILABLE`. These are the only two
+values.
+
 **One seat per passenger per time slot** (R-3, BOOK-17). She can hold a 07:05 to work and a 17:00
 home on the same date, but never two seats whose times overlap, on any commutes. That is enforced
 wherever a seat is given (approval, accepting a waiting-list offer, the nightly recurring
@@ -2336,6 +2342,11 @@ otherwise), and `commute` — `originLabel`, `destinationLabel`, **`commuteGroup
 **`?status=`** (TRIPS-14): a comma-separated list, any case, e.g. `?status=PENDING,COUNTEROFFERED`
 for Requests and `?status=WAITLISTED` for the Waiting list. Paging and `meta` describe the filtered
 list. An unknown status → `422 VALIDATION_FAILED`. Left out: every request, as before.
+
+#### `GET /seat-requests/{seatRequest}` — active, profile complete
+
+One of her own requests, in the same shape as a row of `GET /seat-requests`. Anybody else's, or an
+unknown id, is `404 NOT_FOUND`. Use it to open a request from a notification.
 
 #### `DELETE /seat-requests/{seatRequest}` — active, profile complete
 
@@ -3045,6 +3056,8 @@ attendance decision acceptable, and it is the passenger's only move.
 | Field | Meaning |
 |---|---|
 | `id`, `tripId`, `commuteGroupId` | |
+| `tripDate` | `YYYY-MM-DD`, the Cairo date of the day this seat is on. On every booking, including `bookings[]` from approve. Use it to find today's seat. |
+| `vehicle` | `{make, model, colour, seats, plateNumber}` — the car to look for, the same shape as on `nextJourney`. On `GET /bookings/{booking}`, and `null` until the seat is `CONFIRMED` (BOOK-12). |
 | `commuteId` | The commute the booking belongs to — for "Ride again" and `GET /commutes/{commute}/reviews`. On `GET /my-bookings` and `GET /bookings/{booking}` (HISTORY-1). |
 | `originLabel` · `destinationLabel` | The commute's start and end, as on `nextJourney` (`Rehab Gate 2` → `Smart Village B6`) — the History card's title. Same two endpoints. |
 | `driver` | The driver as a `person` (5.1) — **`publicFirstName`**, badges, `rating`, `completedTrips`. 🔒 **Never a full name, phone or user id**; Block uses `otherPartyUserId`. `null` if the driver's account is gone. Same two endpoints. |
@@ -3278,6 +3291,15 @@ work. Sending nothing is completely normal.
 
 Its own endpoint rather than a status flag, because it is a different act with a different
 consequence: one puts somebody in a car, the other puts a mark on their record.
+
+🔴 **Only after arrival and the grace (TRIP-11, TRIP-16).** The driver must first mark arrival at
+her pickup (`POST /trips/{trip}/wait-timers`, within 150 m), and her 5 minutes must have ended. The
+grace runs from the later of the arrival and her pickup time. Otherwise nothing changes and:
+
+| Refusal | When |
+|---|---|
+| `409 NO_ARRIVAL_MARKED` | No arrival was marked for this booking. If GPS will not let the driver mark it, that goes to support or an incident, not a no-show. |
+| `409 NO_SHOW_TOO_EARLY` | The grace is still running. `error.fields.expiresAt` is when it ends (the same as `expiresAt` on `GET /trips/{trip}/wait-timers`). |
 
 **An unconfirmed passenger is NOT a no-show.** If the driver never taps anything, the row stays
 `PENDING` at completion — her silence is not an absence, and nobody carries a mark for something
@@ -3808,6 +3830,7 @@ role switch lives on this screen, and a 404 would make tapping "drive" look brok
 | `pendingRequests.items[]` | The first 5, oldest first, each a seat request (4.7) with its `passenger`. |
 | `waitlist.count` | Distinct people waiting across all this driver's commutes: one person waiting on two days counts once. |
 | `pausedCommutes` | How many of this driver's commutes are paused, for any reason. `nextRun` can be `null` with this above 0. |
+| `unreadNotifications` | The bell badge: the same number as `GET /notifications` → `meta.unreadCount`, as on `GET /home`. Also on the empty payload. |
 | `pausedCommuteReasons` | Why they are paused, each reason once: `by_driver`, `commission_unpaid`, `driver_suspended`, `account_suspended`, `licence_expired`, `vehicle_suspended`. Read this to choose the message: `overall` stays `verified` for a debt suspension. |
 | `stats.onTimeRate` | `null` until it has been computed from completed runs. **Show a dash, not 0%** — a 0% badge on somebody's first morning is a number nobody earned. |
 | `stats.completedTrips` | |
@@ -4934,6 +4957,7 @@ exist, and every live endpoint must be named here.
 
 | Date | Change |
 |---|---|
+| 2026-11-10 | 🧪 **Patrol run gaps (B1–B10).** **`GET /driver/home` → `unreadNotifications`**, same as on `/home`. 🔴 **`nextStep` is `ROLE_SELECTION`** on every launch call once the profile is saved and no role is chosen (AUTH-02); it used to answer `BASIC_PROFILE`. 🔴 **`POST /trips/{trip}/no-show` needs the arrival and the end of the grace:** `409 NO_ARRIVAL_MARKED` with no arrival marked, `409 NO_SHOW_TOO_EARLY` with `fields.expiresAt` during the grace. **Bookings** gain `tripDate` (every row, approve included) and, on `GET /bookings/{booking}`, `vehicle {make, model, colour, seats, plateNumber}` once `CONFIRMED`. 🔴 **`DELETE /commutes/{commute}` and `POST /commutes/{commute}/pause` refuse while a run is live:** `409 COMMUTE_TRIP_IN_PROGRESS` with `fields.tripId`; end it with Cancel Active Trip first. New **`GET /seat-requests/{seatRequest}`**. `GET /search/commutes` takes `true` / `false` for `womenOnly` and `wantsReturnTrip`. `PUT /commutes/{commute}/schedule` takes `HH:MM` or `HH:MM:SS`. The `kind` table (which driver answer fits which request) is in 4.7. |
 | 2026-11-09 | 💬 **Chat gaps.** **2 new endpoints:** `POST /bookings/{booking}/typing` and `POST /seat-requests/{seatRequest}/typing`, with the new `chat.typing` socket event (6.3). Both `GET .../messages` now return `meta.otherParty` (the other person's card and `role`) and `meta.commute` (route labels and `departureAt`). The booking thread also returns `meta.seatRequestId`. Both threads return `meta.events`, the system lines ("Booking confirmed", "Picked up · 07:06"…), and the new `chat.event` socket event sends the ride moments live. Chat is now kept 90 days instead of 12 months (TRIP-28). |
 | 2026-11-08 | 🚦 **The driver application goes to review by itself (D-0047).** When the last of the 5 items arrives, the backend sends the application, and any uploaded-but-unsent ID or selfie, to review. Remove the Submit button; `POST /driver/application/submit` still works and is idempotent. A replaced rejected item sends the application straight back to review. |
 | 2026-11-05 | 🧪 **Omar's and Ahmed's staging accounts are now full on both sides** (driver and passenger, with trips on the days ahead): see "Accounts seeded on staging" in 2.1. No API change. |

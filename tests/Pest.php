@@ -22,6 +22,7 @@ use App\Domains\Payment\Support\DebtLedger;
 use App\Domains\Payment\Support\SettlementWeek;
 use App\Domains\Shared\ValueObjects\DaysMask;
 use App\Domains\Shared\ValueObjects\PhoneNumber;
+use App\Domains\Trip\Models\TripWaitTimer;
 use App\Domains\Verification\Actions\ReviewVerificationAction;
 use App\Domains\Verification\Enums\VerificationStatus;
 use App\Domains\Verification\Enums\VerificationType;
@@ -835,4 +836,19 @@ function atPickupOf(string $bookingId): array
     $booking = Booking::query()->whereKey($bookingId)->sole();
 
     return ['lat' => (float) $booking->pickup_lat, 'lng' => (float) $booking->pickup_lng];
+}
+
+/**
+ * The driver marks arrival at her pickup and her 5 minutes run out: what a no-show needs (TRIP-16).
+ */
+function arrivedAndWaited(string $driverToken, string $tripId, string $bookingId): void
+{
+    test()->withToken($driverToken)
+        ->postJson("/api/v1/trips/{$tripId}/wait-timers", ['bookingId' => $bookingId, ...atPickupOf($bookingId)])
+        ->assertStatus(201);
+
+    TripWaitTimer::query()->where('booking_id', $bookingId)->update([
+        'started_at' => now()->subMinutes(6),
+        'grace_starts_at' => now()->subMinutes(6),
+    ]);
 }

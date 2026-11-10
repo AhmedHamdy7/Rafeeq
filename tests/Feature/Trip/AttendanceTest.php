@@ -58,6 +58,7 @@ it('records a passenger as present when the driver confirms them', function () {
 
 it('records a no-show as an explicit act, not by omission', function () {
     underway($this->driverToken, $this->tripId);
+    arrivedAndWaited($this->driverToken, $this->tripId, $this->bookingId);
 
     $row = test()->withToken($this->driverToken)
         ->postJson("/api/v1/trips/{$this->tripId}/no-show", ['bookingId' => $this->bookingId])
@@ -239,6 +240,7 @@ it('lets a passenger say the record is wrong', function () {
 
 it('lets a passenger contest a no-show recorded against them', function () {
     underway($this->driverToken, $this->tripId);
+    arrivedAndWaited($this->driverToken, $this->tripId, $this->bookingId);
 
     test()->withToken($this->driverToken)
         ->postJson("/api/v1/trips/{$this->tripId}/no-show", ['bookingId' => $this->bookingId])->assertOk();
@@ -457,6 +459,7 @@ it('closes the journey for everybody who was on it at the same moment', function
 
 it('leaves a no-show without a checkout, because they were never aboard', function () {
     underway($this->driverToken, $this->tripId);
+    arrivedAndWaited($this->driverToken, $this->tripId, $this->bookingId);
 
     test()->withToken($this->driverToken)
         ->postJson("/api/v1/trips/{$this->tripId}/no-show", ['bookingId' => $this->bookingId])->assertOk();
@@ -474,6 +477,7 @@ it('leaves a no-show without a checkout, because they were never aboard', functi
  */
 it('completes the booking of somebody who did not travel', function () {
     underway($this->driverToken, $this->tripId);
+    arrivedAndWaited($this->driverToken, $this->tripId, $this->bookingId);
 
     test()->withToken($this->driverToken)
         ->postJson("/api/v1/trips/{$this->tripId}/no-show", ['bookingId' => $this->bookingId])->assertOk();

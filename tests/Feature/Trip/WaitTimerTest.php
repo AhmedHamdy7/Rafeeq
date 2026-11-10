@@ -338,10 +338,7 @@ it('records a passenger nobody waited for as simply present', function () {
 });
 
 /**
- * 🔴 The single most careful judgement in this slice. A driver may always depart — she
- * cannot be held hostage by somebody who is not coming — but departing after ninety seconds
- * of a five-minute grace is a different morning from departing after the grace ran out, and
- * the passenger marked absent is entitled to have that difference recorded.
+ * 🔴 TRIP-11, TRIP-16: a no-show needs the GPS-checked arrival and the end of her 5 minutes.
  */
 it('calls it a no-show when the driver waited the full grace', function () {
     underway($this->driverToken, $this->tripId);
@@ -358,44 +355,35 @@ it('calls it a no-show when the driver waited the full grace', function () {
         ->and(Attendance::sole()->status)->toBe(AttendanceStatus::PassengerNoShow);
 });
 
-it('says the driver left early when she departs inside the grace', function () {
+it('refuses a no-show while the grace is still running (TRIP-11, TRIP-16)', function () {
     underway($this->driverToken, $this->tripId);
-    startTimer($this->driverToken, $this->tripId, $this->bookingId)->assertStatus(201);
+    $timerId = startTimer($this->driverToken, $this->tripId, $this->bookingId)
+        ->assertStatus(201)->json('data.id');
 
-    // Ninety seconds into a five-minute promise.
-    graceStartedAgo(TripWaitTimer::sole()->id, 90);
-
-    test()->withToken($this->driverToken)
-        ->postJson("/api/v1/trips/{$this->tripId}/no-show", ['bookingId' => $this->bookingId])
-        ->assertOk();
-
-    /*
-     * 🔴 The attendance still says no-show, because the driver did leave without her — but
-     * the timer says the grace had not run out. Collapsing the two into one value would
-     * hide the only fact a dispute turns on.
-     */
-    expect(TripWaitTimer::sole()->outcome)->toBe(WaitTimerOutcome::DriverLeft)
-        ->and(Attendance::sole()->status)->toBe(AttendanceStatus::PassengerNoShow);
-});
-
-/**
- * The outcome is decided by the CLOCK, not by what the driver says it is. There is no field
- * on any request that sets it.
- */
-it('gives the driver no way to choose the outcome herself', function () {
-    underway($this->driverToken, $this->tripId);
-    startTimer($this->driverToken, $this->tripId, $this->bookingId)->assertStatus(201);
-
-    TripWaitTimer::query()->update(['started_at' => now()->subSeconds(30)]);
+    graceStartedAgo($timerId, 90);
 
     test()->withToken($this->driverToken)
         ->postJson("/api/v1/trips/{$this->tripId}/no-show", [
             'bookingId' => $this->bookingId,
-            // Ignored: there is no such field, and the clock says otherwise.
             'outcome' => 'no_show',
-        ])->assertOk();
+        ])
+        ->assertStatus(409)
+        ->assertJsonPath('error.code', 'NO_SHOW_TOO_EARLY')
+        ->assertJsonPath('error.fields.expiresAt.0', TripWaitTimer::sole()->expiresAt()->toIso8601String());
 
-    expect(TripWaitTimer::sole()->outcome)->toBe(WaitTimerOutcome::DriverLeft);
+    expect(TripWaitTimer::sole()->outcome)->toBeNull()
+        ->and(Attendance::sole()->status)->not->toBe(AttendanceStatus::PassengerNoShow);
+});
+
+it('refuses a no-show when arrival was never marked', function () {
+    underway($this->driverToken, $this->tripId);
+
+    test()->withToken($this->driverToken)
+        ->postJson("/api/v1/trips/{$this->tripId}/no-show", ['bookingId' => $this->bookingId])
+        ->assertStatus(409)
+        ->assertJsonPath('error.code', 'NO_ARRIVAL_MARKED');
+
+    expect(Attendance::sole()->status)->not->toBe(AttendanceStatus::PassengerNoShow);
 });
 
 /**

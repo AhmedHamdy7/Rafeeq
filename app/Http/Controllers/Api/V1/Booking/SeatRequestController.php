@@ -107,6 +107,22 @@ final class SeatRequestController extends Controller
     }
 
     /**
+     * GET /v1/seat-requests/{seatRequest} — one of the caller's own requests, as a passenger, in the
+     * same shape as a row of `GET /v1/seat-requests`. Anybody else's is a 404.
+     */
+    #[ApiErrors(ErrorCode::NotFound)]
+    public function show(Request $request, string $seatRequest): JsonResponse
+    {
+        $hers = SeatRequest::query()
+            ->whereKey($seatRequest)
+            ->where('passenger_user_id', $request->user()->id)
+            ->with(SeatRequestResource::passengerRelations())
+            ->first() ?? throw DomainException::of(ErrorCode::NotFound);
+
+        return ApiResponse::success(new SeatRequestResource($hers));
+    }
+
+    /**
      * GET /v1/driver/seat-requests — requests waiting for the caller's answer, as a
      * driver.
      *

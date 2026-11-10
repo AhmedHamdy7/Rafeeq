@@ -97,6 +97,8 @@ final class AttendanceController extends Controller
     #[ApiErrors(
         ErrorCode::TripNotStarted,
         ErrorCode::AttendanceNotConfirmable,
+        ErrorCode::NoShowTooEarly,
+        ErrorCode::NoArrivalMarked,
         ErrorCode::NotFound,
     )]
     public function noShow(CheckInPassengerRequest $request, string $trip, ConfirmAttendanceAction $action): JsonResponse

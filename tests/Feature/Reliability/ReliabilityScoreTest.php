@@ -196,6 +196,7 @@ it('marks a passenger the driver recorded as absent', function () {
     $her = rider($this->driverToken, $this->commuteId, $this->tripId, '01112223344', 'pax-1');
 
     underway($this->driverToken, $this->tripId);
+    arrivedAndWaited($this->driverToken, $this->tripId, $her['bookingId']);
 
     test()->flushHeaders()->withToken($this->driverToken)
         ->postJson("/api/v1/trips/{$this->tripId}/no-show", ['bookingId' => $her['bookingId']])

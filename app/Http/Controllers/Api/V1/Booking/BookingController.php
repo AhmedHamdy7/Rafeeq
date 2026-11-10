@@ -152,7 +152,7 @@ final class BookingController extends Controller
     {
         return ApiResponse::success(
             // The same history fields as the list, so the past trip screen needs one call.
-            new BookingResource($this->visible($request, $booking)->load(['scheduledTrip', ...BookingResource::historyRelations($request->user()), ...BookingResource::pickupEtaRelations()]))
+            new BookingResource($this->visible($request, $booking)->load(['scheduledTrip', 'scheduledTrip.commuteOffer.vehicle', ...BookingResource::historyRelations($request->user()), ...BookingResource::pickupEtaRelations()]))
         );
     }
 
@@ -204,7 +204,7 @@ final class BookingController extends Controller
         $hers->forceFill(['pickup_note' => $note === '' ? null : $note])->save();
 
         return ApiResponse::success(
-            new BookingResource($hers->load(['scheduledTrip', ...BookingResource::historyRelations($request->user()), ...BookingResource::pickupEtaRelations()]))
+            new BookingResource($hers->load(['scheduledTrip', 'scheduledTrip.commuteOffer.vehicle', ...BookingResource::historyRelations($request->user()), ...BookingResource::pickupEtaRelations()]))
         );
     }
 

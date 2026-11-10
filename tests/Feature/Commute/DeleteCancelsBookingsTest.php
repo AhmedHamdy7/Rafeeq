@@ -87,11 +87,14 @@ it('closes every open request and waiting-list place on it', function () {
         ->and(SeatRequest::findOrFail($asking)->status)->toBe(SeatRequestStatus::CommuteArchived);
 });
 
-it('leaves a run that has already begun alone', function () {
+it('refuses while a run is live and leaves it alone (COM-24, COM-35)', function () {
     ScheduledTrip::query()->whereKey($this->tripId)
         ->update(['status' => ScheduledTripStatus::InProgress->value]);
 
-    deleteCommute($this->driverToken, $this->commuteId);
+    test()->withToken($this->driverToken)->deleteJson("/api/v1/commutes/{$this->commuteId}")
+        ->assertStatus(409)
+        ->assertJsonPath('error.code', 'COMMUTE_TRIP_IN_PROGRESS')
+        ->assertJsonPath('error.fields.tripId.0', $this->tripId);
 
     expect(Booking::findOrFail($this->bookingId)->status)->toBe(BookingStatus::Confirmed)
         ->and(ScheduledTrip::findOrFail($this->tripId)->status)->toBe(ScheduledTripStatus::InProgress);

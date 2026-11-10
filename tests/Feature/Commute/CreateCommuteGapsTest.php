@@ -631,3 +631,19 @@ function publishedCommute(string $token): string
 
     return $id;
 }
+
+it('takes HH:MM times on the schedule as well as HH:MM:SS', function () {
+    $token = approvedDriver();
+    $id = minimalCommute($token)->json('data.id');
+
+    saveRoute($token, $id)->assertOk();
+
+    $weekdays = test()->withToken($token)->putJson("/api/v1/commutes/{$id}/schedule", [
+        'daysMask' => 10,
+        'promisedArrivalTime' => '12:00',
+        'perDay' => ['8' => ['promisedArrivalTime' => '10:30']],
+    ])->assertOk()->json('data.weekdays');
+
+    expect(collect($weekdays)->firstWhere('weekdayBit', 2)['promisedArrivalTime'])->toBe('12:00:00')
+        ->and(collect($weekdays)->firstWhere('weekdayBit', 8)['promisedArrivalTime'])->toBe('10:30:00');
+});

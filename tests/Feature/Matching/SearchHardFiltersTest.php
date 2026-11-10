@@ -342,3 +342,14 @@ it('keeps a driver who has no stats row at all', function () {
     expect(search(passenger('01112223344'), ['minRating' => 5])->assertOk()->json('data'))
         ->toHaveCount(1);
 });
+
+it('takes true and false as query booleans', function () {
+    $token = passenger('01112223344');
+
+    expect(search($token, ['womenOnly' => 'true', 'wantsReturnTrip' => 'false'])->assertOk()->json('data'))->toHaveCount(1);
+
+    CommuteOffer::sole()->forceFill(['audience' => 'any_verified'])->save();
+
+    expect(search($token, ['womenOnly' => 'TRUE'])->assertOk()->json('data'))->toBe([])
+        ->and(search($token, ['womenOnly' => 'false'])->assertOk()->json('data'))->toHaveCount(1);
+});

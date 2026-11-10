@@ -48,7 +48,7 @@ final class OnboardingController extends Controller
         return ApiResponse::success([
             'user' => new UserResource($user),
             // Home once the role is in, which is the only outstanding step by this point.
-            'nextStep' => LaunchRouter::nextStepAfterBasicProfile($user)->value,
+            'nextStep' => LaunchRouter::nextStepFor($user)->value,
         ]);
     }
 

@@ -24,6 +24,35 @@ use Illuminate\Validation\Rule;
  */
 final class SaveCommuteScheduleRequest extends FormRequest
 {
+    protected function prepareForValidation(): void
+    {
+        $pad = fn (mixed $time): mixed => is_string($time) && preg_match('/^\d{2}:\d{2}$/', $time) === 1 ? $time.':00' : $time;
+
+        foreach (['departureTime', 'promisedArrivalTime'] as $key) {
+            if ($this->has($key)) {
+                $this->merge([$key => $pad($this->input($key))]);
+            }
+        }
+
+        $perDay = $this->input('perDay');
+
+        if (is_array($perDay)) {
+            foreach ($perDay as $day => $times) {
+                if (! is_array($times)) {
+                    continue;
+                }
+
+                foreach (['departureTime', 'promisedArrivalTime'] as $key) {
+                    if (array_key_exists($key, $times)) {
+                        $perDay[$day][$key] = $pad($times[$key]);
+                    }
+                }
+            }
+
+            $this->merge(['perDay' => $perDay]);
+        }
+    }
+
     public function rules(): array
     {
         return [

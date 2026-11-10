@@ -121,11 +121,13 @@ it('does not offer the freed seat to the waiting list', function () {
  *
  * Somebody sitting in the car is not displaced by a setting.
  */
-it('leaves a run that has already begun alone', function () {
+it('refuses while a run is live and leaves it alone', function () {
     ScheduledTrip::query()->whereKey($this->tripId)
         ->update(['status' => ScheduledTripStatus::InProgress->value]);
 
-    pauseCommute($this->driverToken, $this->commuteId);
+    test()->withToken($this->driverToken)->postJson("/api/v1/commutes/{$this->commuteId}/pause")
+        ->assertStatus(409)
+        ->assertJsonPath('error.code', 'COMMUTE_TRIP_IN_PROGRESS');
 
     expect(Booking::findOrFail($this->bookingId)->status)->toBe(BookingStatus::Confirmed)
         ->and(SeatRequest::findOrFail($this->requestId)->status)->toBe(SeatRequestStatus::Approved);

@@ -560,3 +560,43 @@ it('answers 404 when a driver tries to approve a request on someone else commute
 
     expect(SeatRequest::sole()->status)->toBe(SeatRequestStatus::Pending);
 });
+
+it('dates every booking and shows the car once the seat is confirmed', function () {
+    $requestId = requestSeat($this->paxToken, $this->commuteId, ['scheduledTripId' => $this->tripId])
+        ->assertStatus(201)->json('data.id');
+
+    $booking = test()->withToken($this->driverToken)
+        ->postJson("/api/v1/driver/seat-requests/{$requestId}/approve")
+        ->assertStatus(201)->json('data.bookings.0');
+
+    $tripDate = ScheduledTrip::query()->whereKey($this->tripId)->sole()->trip_date->toDateString();
+    $vehicle = Vehicle::sole();
+
+    expect($booking['tripDate'])->toBe($tripDate);
+
+    test()->withToken($this->paxToken)->getJson('/api/v1/my-bookings')->assertOk()
+        ->assertJsonPath('data.0.tripDate', $tripDate);
+
+    test()->withToken($this->paxToken)->getJson("/api/v1/bookings/{$booking['id']}")->assertOk()
+        ->assertJsonPath('data.vehicle.make', $vehicle->make)
+        ->assertJsonPath('data.vehicle.model', $vehicle->model)
+        ->assertJsonPath('data.vehicle.plateNumber', $vehicle->plate_number);
+
+    Booking::query()->whereKey($booking['id'])->update(['status' => BookingStatus::CancelledByPassenger->value]);
+
+    test()->withToken($this->paxToken)->getJson("/api/v1/bookings/{$booking['id']}")->assertOk()
+        ->assertJsonPath('data.vehicle', null);
+});
+
+it('reads one of her own requests, and nobody else\'s', function () {
+    $requestId = requestSeat($this->paxToken, $this->commuteId, ['scheduledTripId' => $this->tripId])
+        ->assertStatus(201)->json('data.id');
+
+    $row = test()->withToken($this->paxToken)->getJson('/api/v1/seat-requests')->assertOk()->json('data.0');
+
+    test()->withToken($this->paxToken)->getJson("/api/v1/seat-requests/{$requestId}")->assertOk()
+        ->assertJsonPath('data', $row);
+
+    test()->withToken($this->driverToken)->getJson("/api/v1/seat-requests/{$requestId}")
+        ->assertNotFound();
+});

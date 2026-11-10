@@ -88,6 +88,7 @@ it('settles a ride the drop-off missed, once, however many times the sweep runs'
 
 it('never settles a no-show as a fare', function () {
     underway($this->driverToken, $this->tripId);
+    arrivedAndWaited($this->driverToken, $this->tripId, $this->bookingId);
     $this->withToken($this->driverToken)->postJson("/api/v1/trips/{$this->tripId}/no-show", ['bookingId' => $this->bookingId])->assertOk();
 
     $this->artisan('payments:settle-cash')->expectsOutputToContain('Settled 0')->assertSuccessful();

@@ -48,57 +48,8 @@ final class LaunchRouter
              */
             $user->isBanned() => NextStep::RestrictedAccount,
 
-            /*
-             * An unfinished profile is resumed, never skipped. v3 §5 extends this: once the initial
-             * role exists, somebody who closed the app on the role screen also comes back HERE
-             * rather than being dropped on Role with no context behind it.
-             */
             $user->profile_status !== ProfileStatus::BasicComplete => NextStep::BasicProfile,
 
-            /*
-             * 🔴 Role missing answers BASIC_PROFILE, not ROLE_SELECTION, and that is deliberate.
-             *
-             * F01 §5: "if the user exits before completing role selection, resume at Basic Profile
-             * (prefilled and editable), then Role; do not skip straight to Role" — and the
-             * acceptance criteria repeat it: resume at Basic Profile "even if profile fields are
-             * already populated". The person gets to see what she entered before being asked the
-             * next question.
-             *
-             * `ROLE_SELECTION` comes from {@see self::nextStepAfterBasicProfile()} instead.
-             */
-            $user->initial_role_selected_at === null => NextStep::BasicProfile,
-
-            default => NextStep::Home,
-        };
-    }
-
-    /**
-     * The answer for the one caller that has just accepted a basic profile.
-     *
-     * 🔴 A separate method rather than a flag on the one above, because the same user state has to
-     * produce two different answers and the reason is not guessable from a boolean. The failure
-     * mode is also worse than a wrong screen: if this call site returned `BASIC_PROFILE` for a
-     * person with no role — which is what the cold-start rule says — the app would submit the
-     * profile, be told to submit the profile, and loop for ever.
-     *
-     * No `$device`: unlike a cold start there is nothing about the installation that could matter
-     * here, and taking an argument this never reads would invite somebody to start reading it.
-     */
-    public static function nextStepAfterBasicProfile(User $user): NextStep
-    {
-        return match (true) {
-            $user->isBanned() => NextStep::RestrictedAccount,
-
-            // Still incomplete after a successful save means the save did not include everything,
-            // so the person stays where she is rather than being advanced past a gap.
-            $user->profile_status !== ProfileStatus::BasicComplete => NextStep::BasicProfile,
-
-            /*
-             * The role may already be set, because a client that still sends `registeredRole` with
-             * the profile — every client live today — has just chosen it in the same request. Those
-             * go straight Home and never see the new screen, which is what makes the split additive
-             * at the API edge.
-             */
             $user->initial_role_selected_at === null => NextStep::RoleSelection,
 
             default => NextStep::Home,

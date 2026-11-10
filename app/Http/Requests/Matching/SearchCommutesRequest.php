@@ -30,6 +30,17 @@ use Illuminate\Validation\Rule;
  */
 final class SearchCommutesRequest extends FormRequest
 {
+    protected function prepareForValidation(): void
+    {
+        foreach (['womenOnly', 'wantsReturnTrip'] as $key) {
+            $value = $this->input($key);
+
+            if (is_string($value) && in_array(strtolower($value), ['true', 'false'], true)) {
+                $this->merge([$key => strtolower($value) === 'true']);
+            }
+        }
+    }
+
     public function rules(): array
     {
         return [

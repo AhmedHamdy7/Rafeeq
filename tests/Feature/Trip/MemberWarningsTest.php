@@ -266,6 +266,7 @@ it('starts a counter again after 90 days without an event', function () {
  */
 it('tells her about a no-show as it is recorded', function () {
     underway($this->driverToken, $this->tripId);
+    arrivedAndWaited($this->driverToken, $this->tripId, $this->bookingId);
 
     test()->flushHeaders()->withToken($this->driverToken)
         ->postJson("/api/v1/trips/{$this->tripId}/no-show", ['bookingId' => $this->bookingId])

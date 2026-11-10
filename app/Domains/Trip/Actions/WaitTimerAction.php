@@ -126,6 +126,15 @@ final readonly class WaitTimerAction
     /**
      * The timer still counting for this passenger, if there is one.
      */
+    public function latest(TripSession $session, string $bookingId): ?TripWaitTimer
+    {
+        return TripWaitTimer::query()
+            ->where('trip_session_id', $session->id)
+            ->where('booking_id', $bookingId)
+            ->latest('started_at')
+            ->first();
+    }
+
     public function running(TripSession $session, string $bookingId): ?TripWaitTimer
     {
         return TripWaitTimer::query()

@@ -50,6 +50,7 @@ final class BookingResource extends JsonResource
         return [
             'id' => $this->id,
             'tripId' => $this->scheduled_trip_id,
+            'tripDate' => $this->resource->loadMissing('scheduledTrip')->scheduledTrip?->trip_date?->toDateString(),
             'commuteGroupId' => $this->commute_group_id,
 
             /*
@@ -93,6 +94,15 @@ final class BookingResource extends JsonResource
             'driver' => $this->when(
                 $this->resource->relationLoaded('driverProfile'),
                 fn (): ?array => $this->driverCard($request),
+            ),
+
+            'vehicle' => $this->when(
+                $this->resource->relationLoaded('scheduledTrip')
+                    && $this->scheduledTrip?->relationLoaded('commuteOffer')
+                    && $this->scheduledTrip->commuteOffer?->relationLoaded('vehicle'),
+                fn (): ?array => $this->status->grantsExactDetails()
+                    ? JourneyCard::vehicle($this->scheduledTrip->commuteOffer, $this->status)
+                    : null,
             ),
 
             'passenger' => $this->when(

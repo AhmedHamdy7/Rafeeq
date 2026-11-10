@@ -189,6 +189,7 @@ final class HomeController extends Controller
                 'pausedCommutes' => 0,
                 'pausedCommuteReasons' => [],
                 'stats' => ['onTimeRate' => null, 'completedTrips' => 0, 'avgDetourMinutes' => null],
+                'unreadNotifications' => $this->unreadNotifications($request->user()->id),
             ]);
         }
 
@@ -208,6 +209,7 @@ final class HomeController extends Controller
                 ->where('status', CommuteOfferStatus::Paused)
                 ->count(),
             'pausedCommuteReasons' => $this->pausedCommuteReasons($profile),
+            'unreadNotifications' => $this->unreadNotifications($request->user()->id),
 
             /*
              * The three figures in a row under the card: "98% reliability · +6′ avg
@@ -479,33 +481,7 @@ final class HomeController extends Controller
                 'completedTrips' => $driver->completed_trips_count,
             ],
 
-            'vehicle' => $this->vehicleCard($offer, $booking),
-        ];
-    }
-
-    /**
-     * The car to look for.
-     *
-     * 🔒 The plate appears only once the booking is CONFIRMED, under the same rule as
-     * the exact meeting point — a plate identifies the car outside somebody's house, and
-     * a pending booking has not earned it. Search results never carry it at all.
-     *
-     * Colour and model always: that much is how a passenger tells a silver Sportage from
-     * a white one at a busy gate, and it identifies nobody on its own.
-     *
-     * @return array<string, mixed>
-     */
-    private function vehicleCard(CommuteOffer $offer, Booking $booking): array
-    {
-        return [
-            'make' => $offer->vehicle?->make,
-            'model' => $offer->vehicle?->model,
-            'colour' => LocalisedLabel::of($offer->vehicle?->colour),
-            // Total seats including the driver's — "3-seat group" on the card.
-            'seats' => $offer->vehicle?->seats,
-            'plateNumber' => $booking->status->grantsExactDetails()
-                ? $offer->vehicle?->plate_number
-                : null,
+            'vehicle' => JourneyCard::vehicle($offer, $booking->status),
         ];
     }
 

@@ -37,29 +37,12 @@ enum NextStep: string
     case RestrictedAccount = 'RESTRICTED_ACCOUNT';
 
     /**
-     * The basic profile, prefilled and editable.
-     *
-     * 🔴 Returned while the profile is incomplete **or the initial role was never chosen**, and the
-     * second half is a deliberate product decision rather than an oversight (F01 §5): somebody who
-     * closed the app on the role screen comes back to the profile, sees what they entered, and
-     * continues forward. Dropping them straight on Role would show a screen with no context behind
-     * it.
+     * The basic profile, prefilled and editable, returned while the profile is incomplete.
      */
     case BasicProfile = 'BASIC_PROFILE';
 
     /**
-     * Passenger, Driver or Both — the last step of onboarding.
-     *
-     * 🔴 Returned by `PUT /account/profile/basic` and by nothing else, which is the opposite of
-     * what the decision tree's "role missing → ROLE_SELECTION" reads like, so it is written down
-     * here rather than left to be rediscovered.
-     *
-     * A cold start with no role answers `BASIC_PROFILE`, because F01 §5 says to resume there
-     * "even if profile fields are already populated". Only submitting the profile moves somebody
-     * forward to Role. Letting the launch router return this instead would mean a person who
-     * closed the app on the role screen lands straight back on it with no context behind it —
-     * and letting the profile endpoint return `BASIC_PROFILE` would be an infinite loop: submit
-     * the profile, be told to submit the profile.
+     * Passenger, Driver or Both, returned once the profile is saved and no role was chosen (AUTH-02).
      */
     case RoleSelection = 'ROLE_SELECTION';
 

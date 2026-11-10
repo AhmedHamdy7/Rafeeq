@@ -139,6 +139,7 @@ it('tells the next passenger in route order when the pickup before hers is done'
         ->and(typed($first['user'], 'driver_heading_to_you'))->toBe(0);
 
     // A no-show of the last pickup tells nobody: there is nobody after her.
+    arrivedAndWaited($this->driverToken, $this->tripId, $second['bookingId']);
     test()->withToken($this->driverToken)
         ->postJson("/api/v1/trips/{$this->tripId}/no-show", ['bookingId' => $second['bookingId']])->assertOk();
 

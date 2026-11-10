@@ -33,10 +33,6 @@ final class OnboardingStateResource extends JsonResource
             /*
              * Where to go now. Computed by the same router that answers sign-in and refresh, so
              * the three can never disagree.
-             *
-             * A cold start with the profile saved but no role chosen answers `BASIC_PROFILE`, not
-             * `ROLE_SELECTION` — by design (F01 §5): the person sees what she entered, confirms
-             * it, and is then asked for the role.
              */
             'nextStep' => LaunchRouter::nextStepFor($this->resource)->value,
 

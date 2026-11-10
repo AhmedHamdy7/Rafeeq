@@ -123,6 +123,10 @@ final readonly class ConfirmAttendanceAction
             ]);
         }
 
+        if ($status === AttendanceStatus::PassengerNoShow) {
+            $this->assertGraceEnded($session, $booking);
+        }
+
         $decided = DB::transaction(function () use ($session, $attendance, $booking, $status, $confirmedBy, $at): Attendance {
             $changes = [
                 'status' => $status->value,
@@ -315,5 +319,24 @@ final readonly class ConfirmAttendanceAction
          * and "within 250 metres" hides the difference between five metres and two hundred.
          */
         return round(1 - ($metres / self::CORROBORATION_RADIUS_METERS), 2);
+    }
+
+    /**
+     * TRIP-11, TRIP-16: a no-show needs the driver's GPS-checked arrival at her pickup and the end of
+     * her 5 minutes. Without an arrival it goes through support, not a no-show.
+     */
+    private function assertGraceEnded(TripSession $session, Booking $booking): void
+    {
+        $timer = $this->waitTimers->latest($session, $booking->id);
+
+        if ($timer === null) {
+            throw DomainException::of(ErrorCode::NoArrivalMarked);
+        }
+
+        if (! $timer->hasExpired()) {
+            throw DomainException::of(ErrorCode::NoShowTooEarly, fields: [
+                'expiresAt' => [$timer->expiresAt()->toIso8601String()],
+            ]);
+        }
     }
 }

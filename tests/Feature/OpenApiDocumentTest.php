@@ -271,6 +271,7 @@ it('generates a document describing every /v1 route', function () {
         'POST /v1/seat-offers/{offer}/accept',
         'POST /v1/seat-offers/{offer}/decline',
         'GET /v1/seat-requests',
+        'GET /v1/seat-requests/{seatRequest}',
         'PATCH /v1/seat-requests/{seatRequest}/availability',
         'DELETE /v1/seat-requests/{seatRequest}',
         'GET /v1/my-bookings',

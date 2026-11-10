@@ -70,6 +70,8 @@ it('moves Call to the next passenger after a check-in', function () {
 });
 
 it('moves Call to the next passenger after a no-show', function () {
+    arrivedAndWaited($this->driver, $this->trip, $this->first);
+
     test()->flushHeaders()->withToken($this->driver)
         ->postJson("/api/v1/trips/{$this->trip}/no-show", ['bookingId' => $this->first, ...position()])
         ->assertOk();

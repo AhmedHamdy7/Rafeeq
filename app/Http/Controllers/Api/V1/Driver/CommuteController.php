@@ -19,7 +19,9 @@ use App\Domains\Commute\Enums\CommuteOfferStatus;
 use App\Domains\Commute\Enums\CommutePausedReason;
 use App\Domains\Commute\Enums\CommuteRuleKey;
 use App\Domains\Commute\Enums\CommuteType;
+use App\Domains\Commute\Enums\ScheduledTripStatus;
 use App\Domains\Commute\Models\CommuteOffer;
+use App\Domains\Commute\Models\ScheduledTrip;
 use App\Domains\Commute\Support\CommuteDefaults;
 use App\Domains\Commute\Support\RouteSettings;
 use App\Domains\Commute\Support\SeatPricing;
@@ -326,10 +328,14 @@ final class CommuteController extends Controller
      * Resuming does NOT give the seats back. She offers them to the waiting members she chooses,
      * through `POST /v1/driver/commutes/{commute}/waitlist/offers`.
      */
-    #[ApiErrors(ErrorCode::CommuteInvalidTransition, ErrorCode::NotFound)]
+    #[ApiErrors(ErrorCode::CommuteInvalidTransition, ErrorCode::CommuteTripInProgress, ErrorCode::NotFound)]
     public function pause(Request $request, string $commute, ChangeCommuteStatusAction $action): JsonResponse
     {
-        $offer = $action->pause($this->owned($request, $commute), CommutePausedReason::ByDriver);
+        $offer = $this->owned($request, $commute);
+
+        $this->assertNoLiveTrip($offer);
+
+        $offer = $action->pause($offer, CommutePausedReason::ByDriver);
 
         return ApiResponse::success(new CommuteOfferResource(
             $offer->load(['locations', 'schedule', 'weekdaySchedules', 'rules'])
@@ -436,14 +442,16 @@ final class CommuteController extends Controller
      * Every upcoming day is cancelled, booked ones included (Feature 03 C-8). Each
      * passenger who loses a seat is told once (`commute_deleted_seat_cancelled`), and
      * every open request or waiting-list place on it closes as `COMMUTE_ARCHIVED`.
-     * A run already under way is not touched. No fee is charged yet.
+     * Refused with `COMMUTE_TRIP_IN_PROGRESS` while one of its runs is live (COM-24, COM-35): the
+     * driver ends that run with Cancel Active Trip first.
      */
-    #[ApiErrors(ErrorCode::CommuteInvalidTransition, ErrorCode::VerificationRequired, ErrorCode::NotFound)]
+    #[ApiErrors(ErrorCode::CommuteInvalidTransition, ErrorCode::CommuteTripInProgress, ErrorCode::VerificationRequired, ErrorCode::NotFound)]
     public function destroy(Request $request, string $commute, ChangeCommuteStatusAction $action): JsonResponse
     {
         $offer = $this->owned($request, $commute);
 
         $this->assertVerifiedUnlessDraft($request, $offer);
+        $this->assertNoLiveTrip($offer);
 
         $offer = $action->archive($offer);
 
@@ -625,5 +633,17 @@ final class CommuteController extends Controller
             ->with('driverProfile')
             ->first()
             ?? throw DomainException::of(ErrorCode::NotFound);
+    }
+
+    private function assertNoLiveTrip(CommuteOffer $offer): void
+    {
+        $live = ScheduledTrip::query()
+            ->where('commute_offer_id', $offer->id)
+            ->whereIn('status', [ScheduledTripStatus::Preparing->value, ScheduledTripStatus::EnRoute->value, ScheduledTripStatus::InProgress->value])
+            ->value('id');
+
+        if ($live !== null) {
+            throw DomainException::of(ErrorCode::CommuteTripInProgress, fields: ['tripId' => [(string) $live]]);
+        }
     }
 }

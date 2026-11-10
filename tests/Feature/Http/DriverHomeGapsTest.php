@@ -21,6 +21,8 @@ use App\Domains\Identity\Enums\AccountStatus;
 use App\Domains\Identity\Enums\Capability;
 use App\Domains\Identity\Enums\RegisteredRole;
 use App\Domains\Identity\Models\User;
+use App\Domains\Notification\Enums\NotificationType;
+use App\Domains\Notification\Support\Notifier;
 use App\Domains\Shared\ValueObjects\DaysMask;
 use App\Domains\Trip\Actions\SweepDelayedTripsAction;
 use App\Domains\Verification\Actions\ReviewVerificationAction;
@@ -469,3 +471,13 @@ it('says why commutes are paused, so a debt suspension does not read as the driv
 
     expect(driverHome()['pausedCommuteReasons'])->toBe([$reason->value]);
 })->with([CommutePausedReason::ByDriver, CommutePausedReason::CommissionUnpaid, CommutePausedReason::DriverSuspended]);
+
+it('carries the unread notification count the inbox reports', function () {
+    Notifier::send(DriverProfile::sole()->user, NotificationType::PassengerExitedDriverDelay, params: ['name' => 'X']);
+
+    $inbox = test()->withToken(test()->driverToken)
+        ->getJson('/api/v1/notifications?perPage=1')->assertOk()->json('meta.unreadCount');
+
+    expect(driverHome()['unreadNotifications'])->toBe($inbox)
+        ->and($inbox)->toBeGreaterThan(0);
+});

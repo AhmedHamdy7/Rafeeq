@@ -79,6 +79,7 @@ enum ErrorCode: string
     case CommuteNotEditable = 'COMMUTE_NOT_EDITABLE';
     case CommuteIncomplete = 'COMMUTE_INCOMPLETE';
     case CommuteInvalidTransition = 'COMMUTE_INVALID_TRANSITION';
+    case CommuteTripInProgress = 'COMMUTE_TRIP_IN_PROGRESS';
     case CommuteRouteInvalid = 'COMMUTE_ROUTE_INVALID';
     case CommuteRouteUnavailable = 'COMMUTE_ROUTE_UNAVAILABLE';
 
@@ -257,6 +258,8 @@ enum ErrorCode: string
     case AttendanceDisputeWindowClosed = 'ATTENDANCE_DISPUTE_WINDOW_CLOSED';
     case WaitTimerAlreadyRunning = 'WAIT_TIMER_ALREADY_RUNNING';
     case WaitTimerNotRunning = 'WAIT_TIMER_NOT_RUNNING';
+    case NoShowTooEarly = 'NO_SHOW_TOO_EARLY';
+    case NoArrivalMarked = 'NO_ARRIVAL_MARKED';
 
     /**
      * "I've arrived" from further than `trip.arrival_radius_meters` from THIS passenger's pickup
@@ -408,6 +411,7 @@ enum ErrorCode: string
             self::VehicleLimitReached,
             self::CommuteNotEditable,
             self::CommuteInvalidTransition,
+            self::CommuteTripInProgress,
             // A conflict, not a validation error: the request is well formed and
             // the seat count is legal — it is the already-booked passengers that
             // make it impossible right now.
@@ -506,6 +510,8 @@ enum ErrorCode: string
             self::AttendanceNotConfirmable,
             self::WaitTimerAlreadyRunning,
             self::WaitTimerNotRunning,
+            self::NoShowTooEarly,
+            self::NoArrivalMarked,
             // 409: the request is fine; where the car is right now is not. Drive closer and tap again.
             self::NotAtPickup => 409,
 

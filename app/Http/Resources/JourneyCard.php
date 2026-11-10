@@ -2,6 +2,7 @@
 
 namespace App\Http\Resources;
 
+use App\Domains\Booking\Enums\BookingStatus;
 use App\Domains\Commute\Enums\CommuteLocationType;
 use App\Domains\Commute\Models\CommuteOffer;
 use App\Domains\Commute\Models\ScheduledTrip;
@@ -112,6 +113,22 @@ final class JourneyCard
             // by having no row at all — the client should not have to know which.
             'awaiting' => max(0, $total - $coming - $away),
             'total' => $total,
+        ];
+    }
+
+    /**
+     * The car to look for: colour and model always, the plate only once the seat is confirmed (BOOK-12).
+     *
+     * @return array<string, mixed>
+     */
+    public static function vehicle(CommuteOffer $offer, BookingStatus $status): array
+    {
+        return [
+            'make' => $offer->vehicle?->make,
+            'model' => $offer->vehicle?->model,
+            'colour' => LocalisedLabel::of($offer->vehicle?->colour),
+            'seats' => $offer->vehicle?->seats,
+            'plateNumber' => $status->grantsExactDetails() ? $offer->vehicle?->plate_number : null,
         ];
     }
 }

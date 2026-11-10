@@ -133,29 +133,20 @@ it('adds a capability without rewriting the role declared at sign-up', function 
         ->and(User::sole()->registered_role->value)->toBe('passenger');
 });
 
-/**
- * 🔴 The anti-loop guarantee, and the subtlest rule in this feature.
- *
- * A cold start with the profile saved but no role answers BASIC_PROFILE, not ROLE_SELECTION
- * (F01 §5: resume at Basic Profile "even if profile fields are already populated"). If the
- * PROFILE endpoint followed that same rule it would tell the app to submit the profile it just
- * submitted, for ever — which is why the two call sites deliberately disagree.
- */
-it('resumes an interrupted sign-up at the profile, never straight on Role', function () {
+it('resumes an interrupted sign-up on Role once the profile is saved (AUTH-02)', function () {
     $signIn = signIn();
-    completeProfileWithoutRole($signIn['session']['accessToken'])->assertOk();
+    completeProfileWithoutRole($signIn['session']['accessToken'])->assertOk()
+        ->assertJsonPath('data.nextStep', 'ROLE_SELECTION');
 
-    // Cold start: the app was killed on the role screen and asks again where to go.
     $this->withToken($signIn['session']['accessToken'])->getJson('/api/v1/auth/me')
-        ->assertOk()->assertJsonPath('data.nextStep', 'BASIC_PROFILE');
+        ->assertOk()->assertJsonPath('data.nextStep', 'ROLE_SELECTION');
 
     $this->withToken($signIn['session']['accessToken'])->getJson('/api/v1/account/onboarding-state')
         ->assertOk()
-        ->assertJsonPath('data.nextStep', 'BASIC_PROFILE')
+        ->assertJsonPath('data.nextStep', 'ROLE_SELECTION')
         ->assertJsonPath('data.profileComplete', true)
         ->assertJsonPath('data.initialRoleSelected', false);
 
-    // And re-submitting the profile moves forward rather than round in a circle.
     expect(completeProfileWithoutRole($signIn['session']['accessToken'])->json('data.nextStep'))
         ->toBe('ROLE_SELECTION');
 });
