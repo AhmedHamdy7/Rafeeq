@@ -104,6 +104,7 @@ final class PassengerCommuteResource extends JsonResource
             'allowsCustomPickup' => (bool) $offer->allows_custom_pickup,
             'maxPointDistanceMetres' => RouteSettings::farRadiusMeters(),
             'maxDetourMinutes' => RouteSettings::maxTripDetourMinutes(),
+            'detourTiers' => RouteSettings::detourTiers(),
 
             'schedule' => [
                 // The days it RUNS: "Every Sun · Tue · Thu", "Nour drives Sun · Tue · Thu only".

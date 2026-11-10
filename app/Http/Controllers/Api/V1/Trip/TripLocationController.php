@@ -10,6 +10,9 @@ use App\Domains\Shared\Exceptions\DomainException;
 use App\Domains\Shared\Support\ErrorCode;
 use App\Domains\Trip\Actions\AdvanceTripAction;
 use App\Domains\Trip\Actions\RecordTripLocationAction;
+use App\Domains\Trip\Enums\NavigationStopKind;
+use App\Domains\Trip\Models\NavigationStop;
+use App\Domains\Trip\Support\LiveStopEtas;
 use App\Domains\Trip\ValueObjects\TripPosition;
 use App\Http\Controllers\Controller;
 use App\Http\OpenApi\ApiErrors;
@@ -91,9 +94,11 @@ final class TripLocationController extends Controller
     #[ApiErrors(ErrorCode::TripNotStarted, ErrorCode::NotFound)]
     public function show(Request $request, string $trip, RecordTripLocationAction $action): JsonResponse
     {
-        $session = AdvanceTripAction::sessionFor($this->visible($request, $trip));
+        $occurrence = $this->visible($request, $trip);
+        $session = AdvanceTripAction::sessionFor($occurrence);
 
         $position = $action->current($session);
+        $towards = $this->towardsHer($request, $occurrence);
 
         return ApiResponse::success([
             'position' => $position?->toArray(),
@@ -101,7 +106,50 @@ final class TripLocationController extends Controller
             // how a client knows its map is out of date rather than that the car has stopped.
             'lastLocationAt' => $session->last_location_at?->toIso8601String(),
             'isUnderway' => $session->current_status->isUnderway(),
+            'pickupEtaAt' => $towards['pickupEtaAt'],
+            'carToPickupPolyline' => $towards['carToPickupPolyline'],
         ]);
+    }
+
+    /**
+     * @return array{pickupEtaAt: string|null, carToPickupPolyline: string|null}
+     */
+    private function towardsHer(Request $request, ScheduledTrip $occurrence): array
+    {
+        $none = ['pickupEtaAt' => null, 'carToPickupPolyline' => null];
+
+        $booking = Booking::query()
+            ->where('scheduled_trip_id', $occurrence->id)
+            ->where('passenger_user_id', $request->user()->id)
+            ->where('status', BookingStatus::Confirmed)
+            ->first();
+
+        if ($booking === null) {
+            return $none;
+        }
+
+        $stops = NavigationStop::query()
+            ->where('scheduled_trip_id', $occurrence->id)
+            ->orderBy('sequence')
+            ->get();
+
+        $hers = $stops->first(fn (NavigationStop $stop): bool => $stop->booking_id === $booking->id
+            && $stop->kind === NavigationStopKind::PassengerPickup);
+
+        if ($hers === null || $hers->reached_at !== null) {
+            return $none;
+        }
+
+        $live = LiveStopEtas::for($occurrence, $stops);
+
+        if (! $live->isLive || $live->arrivedAtFor($hers) !== null) {
+            return $none;
+        }
+
+        return [
+            'pickupEtaAt' => $live->etaFor($hers)?->toIso8601String(),
+            'carToPickupPolyline' => $live->nextStopId === (string) $hers->getKey() ? $live->carToNextStopPolyline : null,
+        ];
     }
 
     /**

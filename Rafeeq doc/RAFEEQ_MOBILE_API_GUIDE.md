@@ -14,7 +14,7 @@
 >
 > **Base URL:** `{host}/api/v1` · **Auth:** bearer token · **Format:** JSON only.
 
-**Last updated:** 2026-11-09 · **201 endpoints live** · Phases 0–7, 9 and 11 complete · 10, 12 and 13 all but a decision each
+**Last updated:** 2026-11-10 · **202 endpoints live** · Phases 0–7, 9 and 11 complete · 10, 12 and 13 all but a decision each
 
 ---
 
@@ -22,7 +22,7 @@
 
 ### What is ready
 
-**201 endpoints live** and tested, across the 47 designed screens:
+**202 endpoints live** and tested, across the 47 designed screens:
 
 | | Count | Covers |
 |---|---|---|
@@ -2009,6 +2009,7 @@ that is not published, answers `404`. A women-only commute is shown to everybody
 | `commuteId`, `status`, `commuteType`, `direction`, `audience`, `womenOnly`, `seatsTotal` | |
 | `seatPricePiastres` | The current seat price. Each day's own frozen price is on `upcomingTrips[]`. (`pricePerSeatPiastres`: deprecated alias.) |
 | `allowsCustomPickup`, `maxPointDistanceMetres`, `maxDetourMinutes` | Whether she may drop her own pin, and the outer limits it is checked against: 3 km from the route and 30 min for the whole trip (COM-40). Preview a pin with `POST /commutes/{commute}/pickup-preview`. |
+| `detourTiers` | `{onWay: {pointMeters, requestMinutes, tripMinutes}, far: {...}}` — 🟢 1500 m / 10 / 20 and 🔴 3000 m / 15 / 30 today. Draw the green area from `onWay.pointMeters` and the red ring from `far.pointMeters` (= `maxPointDistanceMetres`). A point in the red ring can be sent like any other ("A bit far"); beyond it, it can't. Distance is a straight line to the route polyline. |
 | `schedule` | `{daysMask, departureTime, timezone, startDate, endDate}` — **the days it runs** ("Every Sun · Tue · Thu"). |
 | `route` | `{start, end, distanceKm, durationMinutes, polyline, isTrimmed}`. 🔒 **Before she holds a confirmed seat the line is trimmed ~1 km at each end** and `start` / `end` are `{label, lat, lng}` of the trimmed ends, labelled by **area only** ("Nasr City"); `isTrimmed: true`. Once she has a confirmed booking on it, the whole line (`isTrimmed: false`). `distanceKm` / `durationMinutes` are the whole run's ("27 km · about 52 min"). |
 | `pickups[]` / `dropoffs[]` | The driver's suggested points, in road order: `{id, label, lat, lng, estimatedTime}`. **`id` is the `suggestionId` a seat request takes.** `estimatedTime` is `HH:MM:SS` on the commute's clock from the usual departure. Empty arrays when the driver gave none (B07) — her own pin is always the other way to choose. |
@@ -2841,7 +2842,12 @@ Published as `pointCount` so you do not have to count, and so the screen can say
 | `stops[].lat` · `lng` · `label` | Exact. She has to drive there, and she accepted every one of these. |
 | `stops[].etaAt` | When she is expected. **Measured**, not apportioned: each leg is routed and the ETAs are the running sum. Null when the day has no departure time or a leg could not be routed — we do not invent one. |
 | `stops[].legDurationSeconds` · `legDistanceMeters` | The leg **into** this stop. Zero on the first. They sum to `durationSeconds` / `distanceMeters`. |
-| `stops[].reachedAt` | Null means still to come. A pickup is marked reached by `check-in` or `no-show`, a drop-off by a drop-off or an early exit. This is the one value that is not derived, and it survives every rebuild. |
+| `stops[].etaAt` while the run is live | 🔴 **Recalculated on every read once the run has started** (`etasAreLive: true`): the next stop is routed from the car's latest position, the stops after it follow with their measured leg times. Never in the past. Without a position in the last 5 minutes it counts from the last stop reached (or the start). Before the start it is the planned time above. Cached for 30 s, so polling every 30 s costs one route. |
+| `stops[].reachedAt` | Null means still to come. A pickup is marked reached by `check-in` or `no-show`, a drop-off by a drop-off or an early exit. This is the one value that is not derived, and it survives every rebuild. `DRIVER_START` reads as reached from the moment the run started. |
+| `stops[].arrivedAt` | `PASSENGER_PICKUP` only: when the driver marked **I've arrived** there (`POST /trips/{trip}/wait-timers`). The stop stays next (not reached) while he waits for her; it is reached when she boards or is marked a no-show. Null elsewhere. |
+| `nextStopIndex` | Index in `stops` of the next stop: the first not reached, skipping `DRIVER_START`. Null when every stop is reached. Use it as "next"; don't work it out yourself. |
+| `nextStopDistanceMeters` | Road distance from the car to the next stop. Null without a live position. |
+| `etasAreLive` | `true` once the run is underway and the ETAs are recalculated as above. |
 | `polyline` · `distanceMeters` · `durationSeconds` | The whole run, summed from the legs. |
 | `googleMapsDirectionsUrl` | Open this for the external map. **Can be null** — see below. |
 | `exceedsWaypointLimit` · `waypointLimit` · `segments` | The fallback. |
@@ -3121,30 +3127,54 @@ the seat is approved; the seat-request route refuses with `SEAT_REQUEST_NOT_PEND
 
 **Request (both):** `lat`, `lng`, `label`.
 
-Refusals: `PICKUP_NOT_ON_COMMUTE` (too far off the route), `PICKUP_DETOUR_TOO_LONG` (over the
-driver's limit for the whole run), `PICKUP_ALREADY_REQUESTED`. A commute with
-`allowsCustomPickup: false` refuses all of them.
+Refusals:
+
+| Code | When | `error.fields` |
+|---|---|---|
+| `422 PICKUP_DETOUR_TOO_LONG` | Beyond the red tier (COM-40): more than 3 km from the route, or over 15 min for her or 30 min for the whole run. | `addedMinutes`, `runTotalMinutes`, `maxDetourMinutes`, `pointMeters`, `maxPointMeters` |
+| `422 PICKUP_NOT_ON_COMMUTE` | The commute has `allowsCustomPickup: false`, or its route can't be read. | — |
+| `409 PICKUP_ALREADY_REQUESTED` | She already has a `PENDING` or `SUGGESTED_ALTERNATIVE` request on this seat request / membership. | — |
+| `409 SEAT_REQUEST_NOT_PENDING` · `409 GROUP_NOT_ACTIVE` | The seat request was answered / the membership ended. | — |
+
+The point is measured as a **straight line to the published route** (the nearest point on the
+polyline, not by road, not to the suggested points). The minutes are by road. `COMMUTE_SCHEDULE_LOCKED`
+is never answered here: the 12-hour lock is checked when the change is **applied** (approve,
+accept-alternative).
 
 #### `GET /pickup-requests` · `GET /driver/pickup-requests` — active, profile complete, paginated
 
 | Field | Meaning |
 |---|---|
 | `status` | `PENDING` · `APPROVED` · `SUGGESTED_ALTERNATIVE` · `REJECTED`. |
-| `proposedPoint` | `{lat, lng, isExact}`. 🔒 **Fuzzed until approved** — the driver sees the neighbourhood while deciding and the exact point once she has agreed to go there. |
+| `commuteId` · `commuteGroupId` · `seatRequestId` · `groupMemberId` | Which commute, group and seat request the row belongs to. A new joiner's row has `seatRequestId` and no group; a member's row has `commuteGroupId` and no seat request. |
+| `tripId` · `bookingId` | The first day it would apply to: the seat request's day, or the member's next confirmed booking on this commute (`bookingId` is null for a seat request). |
+| `passenger` | **Driver list only:** `{id, publicFirstName, avatarPath}`. |
+| `currentPoint` | `{label, lat, lng, isExact}`: her pickup today (the member's next booking, or the seat request's chosen pickup). Null when there is none. |
+| `label` | What she typed when she asked. |
+| `proposedPoint` | `{label, lat, lng, isExact}`. 🔒 **Fuzzed until approved** — the driver sees the neighbourhood while deciding and the exact point once she has agreed to go there. `label` is the area ("Nasr City") until approved, then what she typed (or the area). |
+| `alternativePlace` | `{id, label, lat, lng, isExact: true}` when the driver countered with a place; null otherwise. |
 | `addedMinutes` / `addedKm` | Our measurement. |
 | `runTotalMinutes` / `maxDetourMinutes` | The cumulative figure and the limit, so the driver decides with the whole picture. |
 | `effectiveFrom` | `next_trip` today. |
-| `alternativePlaceId` | Set when the driver countered with a different place. |
+| `alternativePlaceId` | Set when the driver countered with a different place (same as `alternativePlace.id`). |
+
+**Filters (both lists):** `?status=PENDING` (comma-separate several), `?commuteId=`, `?commuteGroupId=`,
+`?seatRequestId=`. The commute screen asks `GET /driver/pickup-requests?commuteId={id}&status=PENDING`.
 
 #### `POST /driver/pickup-requests/{pickupRequest}/approve` · `/suggest-alternative` · `/reject` — active, profile complete
 
 The three buttons on screen 29. `suggest-alternative` takes `placeId` and **moves nothing until
-the passenger accepts**. Approving writes the agreed point onto the upcoming bookings, so the
-meeting point and the decision cannot disagree.
+the passenger accepts**. Approving writes the agreed point onto **every** upcoming confirmed
+booking at once (`meetingPoint` changes immediately), so the meeting point and the decision cannot
+disagree. `effectiveFrom` is always `next_trip`; there is no other value. All-or-nothing: if any of
+those days is inside its 12-hour lock, the approval is refused with `409 COMMUTE_SCHEDULE_LOCKED`
+(`fields.lockedFrom`, `fields.lockHours`) and nothing moves. After a reject she can ask again at once;
+there is no cooldown.
 
 #### `POST /pickup-requests/{pickupRequest}/accept-alternative` — active, profile complete
 
-The passenger accepting the driver's counter-offer.
+The passenger accepting the driver's counter-offer. Applied the same way as an approval, so it
+answers `409 COMMUTE_SCHEDULE_LOCKED` inside the 12-hour lock too.
 
 ---
 
@@ -3620,6 +3650,14 @@ of six with one bad point delivers five.
 | `position` | `{lat, lng, recordedAt, accuracyMeters, speedKmh}`, or **`null` when the run has gone quiet**. |
 | `lastLocationAt` | When the last reading arrived, whether or not a position is still current. **This is how you know your map is stale rather than that the car has stopped.** |
 | `isUnderway` | Whether the run is out on the road. |
+| `pickupEtaAt` | **Passenger with a confirmed seat, before her pickup:** when the car should reach her. The same number the driver sees as `etaAt` on her stop in `navigation-route`, and as `nextJourney.live.pickupEtaAt` on `/home`. Null for the driver, before the start, once he marked arrival, and after she boarded. |
+| `carToPickupPolyline` | Encoded road from the car to her pickup, **only while her pickup is the next stop** and a position is current. Null otherwise: draw it yourself or not at all. |
+
+A late batch never moves the car back: when every point in a batch is older than the newest one
+already received, the points join the trail but `position` and `lastLocationAt` stay as they were.
+`position.recordedAt` and `lastLocationAt` are the **phone's** time of the fix. `position` becomes
+`null` 5 minutes after the last fix; `lastLocationAt` stays, so "Last seen 7 min ago" is
+`now − lastLocationAt`.
 
 🔒 Narrower than reading the trip itself: a **cancelled or completed** booking cannot read the
 position. Someone who has finished their journey has no reason to keep watching the car, and where
@@ -3772,7 +3810,7 @@ they explain.
 | `nextJourney.daysMask` | The days she rides — her requested days, or the commute's days. Sat 1 … Fri 64. |
 | `nextJourney.pickup` | `{label, at, local, lat, lng, isExact}` — "Your agreed pickup · Rehab Gate 2 · 07:05". `label`/`lat`/`lng`/`isExact` are `meetingPoint`'s (fuzzed, label `null`, until confirmed). **`at` is her pickup time** — departure plus the drive to her stop — and is the same instant her arrival grace counts from. `meetingPoint` stays. |
 | `nextJourney.dropoff` | `{label, promisedArrivalAt, promisedArrivalLocal}`. The promise is the day's; `null` when the driver promised no arrival. |
-| `nextJourney.live` | `{pickupEtaAt, arrivalEtaAt, progressPercent, driverArrivedAt, boardedAt}`, **only** while `phase` is `driver_en_route` / `driver_arrived` / `on_board`, or `driver_delayed` on a run that has started (filled as en route); `null` otherwise. `pickupEtaAt` + `progressPercent` (to her pickup) on en-route; `driverArrivedAt` and `progressPercent: 100` on arrived; `arrivalEtaAt` + `progressPercent` (to her drop-off) + `boardedAt` on board. ETAs are counted from the last stop the car reached plus the itinerary's measured leg times, never in the past; `null` when no itinerary was built. `progressPercent` stops at 99 until the car is recorded there. **Poll `/home` every 30 s while `live` is not null**, and not otherwise. |
+| `nextJourney.live` | `{pickupEtaAt, arrivalEtaAt, progressPercent, driverArrivedAt, boardedAt}`, **only** while `phase` is `driver_en_route` / `driver_arrived` / `on_board`, or `driver_delayed` on a run that has started (filled as en route); `null` otherwise. `pickupEtaAt` + `progressPercent` (to her pickup) on en-route; `driverArrivedAt` and `progressPercent: 100` on arrived; `arrivalEtaAt` + `progressPercent` (to her drop-off) + `boardedAt` on board. `pickupEtaAt` is the same live time as `navigation-route` (routed from the car's latest position, 4.9); otherwise ETAs are counted from the last stop the car reached plus the itinerary's measured leg times, never in the past; `null` when no itinerary was built. `progressPercent` stops at 99 until the car is recorded there. **Poll `/home` every 30 s while `live` is not null**, and not otherwise. |
 | `nextJourney.canLeaveWithoutFee` | Show **Leave Without Fee** only when `true`. It calls `POST /bookings/{booking}/exit-without-fee` (4.9) — the same server finding, so it is never refused when this is `true`. Also `true` mid-run when the driver has not arrived 5 min after her pickup time, or the car has passed her stop. |
 | `nextJourney.checkIn` | `{groupId, answer, cutoffAt, canAnswer}` (TRIP-26). `answer` is `coming` or `null` (no answer = coming; "I can't make it" cancels the day, so it never shows here). `cutoffAt` is 2 h before departure; show the two buttons only while `canAnswer`. Answer with `POST /groups/{group}/attendance` `{tripId, status: "coming" \| "away"}`. |
 | `nextJourney.endedAt` | When it was cancelled / expired / she exited; `null` otherwise. With `cancellationFeePiastres` (`0` → "no fee to you" / "no penalty"). |
@@ -4439,6 +4477,9 @@ hold must still be able to read the notice that says so.
 | ⭐ `waitlist_application_received` | driver | the request card, as a waiting-list application (4.7) | `seatRequestId`, `kind` (`waitlist_application`) |
 | `seat_approved` · `seat_declined` | passenger | her request / booking | `seatRequestId` (+ `commuteId` on approval) |
 | `seat_counteroffered` · `seat_counteroffer_declined` | the other side | the request | `seatRequestId` (+ `commuteId`) |
+| `pickup_change_requested` | driver | the pickup request (4.8) | `pickupRequestId`, `commuteId` (+ `commuteGroupId` or `seatRequestId`) |
+| `pickup_change_approved` · `pickup_change_alternative` · `pickup_change_rejected` | passenger | the pickup request (4.8) | `pickupRequestId`, `commuteId` (+ `bookingId`, `commuteGroupId` for a member, or `seatRequestId`) |
+| `pickup_change_alternative_accepted` | driver | the pickup request (4.8) | `pickupRequestId`, `commuteId` (+ `commuteGroupId`) |
 | `seat_offered` | passenger on a waiting list | the offer (`GET /seat-offers`) | `offerId`, `tripId`, `commuteId` |
 | `seats_offered_by_driver` | passenger on a waiting list | her offers | `commuteId`, `seatRequestId` |
 | `booking_cancelled` | the other side | the booking | `bookingId` |
@@ -4957,6 +4998,7 @@ exist, and every live endpoint must be named here.
 
 | Date | Change |
 |---|---|
+| 2026-11-10 | 🗺️ **Maps redesign.** **Pickup requests** (4.8) carry `commuteId`, `commuteGroupId`, `tripId`, `bookingId`, `currentPoint`, `proposedPoint.label` (area until approved) and `alternativePlace`; the driver's list adds `passenger {id, publicFirstName, avatarPath}`; both lists filter by `status`, `commuteId`, `commuteGroupId`, `seatRequestId`. Five new pushes: `pickup_change_requested`, `_approved`, `_alternative`, `_rejected`, `_alternative_accepted`. **`navigation-route`**: live `etaAt` once the run starts, `arrivedAt` per pickup, `DRIVER_START` reached at the start, `nextStopIndex`, `nextStopDistanceMeters`, `etasAreLive`. **`GET /trips/{trip}/location`**: `pickupEtaAt` and `carToPickupPolyline` for the passenger; a late batch no longer moves the car back. `/home` → `nextJourney.live.pickupEtaAt` uses the same live time; `nextJourney.dropoff` gains `lat`, `lng`, `isExact`. **`GET /commutes/{commute}/public`** gains `detourTiers`. |
 | 2026-11-10 | 🧪 **Patrol run gaps (B1–B10).** **`GET /driver/home` → `unreadNotifications`**, same as on `/home`. 🔴 **`nextStep` is `ROLE_SELECTION`** on every launch call once the profile is saved and no role is chosen (AUTH-02); it used to answer `BASIC_PROFILE`. 🔴 **`POST /trips/{trip}/no-show` needs the arrival and the end of the grace:** `409 NO_ARRIVAL_MARKED` with no arrival marked, `409 NO_SHOW_TOO_EARLY` with `fields.expiresAt` during the grace. **Bookings** gain `tripDate` (every row, approve included) and, on `GET /bookings/{booking}`, `vehicle {make, model, colour, seats, plateNumber}` once `CONFIRMED`. 🔴 **`DELETE /commutes/{commute}` and `POST /commutes/{commute}/pause` refuse while a run is live:** `409 COMMUTE_TRIP_IN_PROGRESS` with `fields.tripId`; end it with Cancel Active Trip first. New **`GET /seat-requests/{seatRequest}`**. `GET /search/commutes` takes `true` / `false` for `womenOnly` and `wantsReturnTrip`. `PUT /commutes/{commute}/schedule` takes `HH:MM` or `HH:MM:SS`. The `kind` table (which driver answer fits which request) is in 4.7. |
 | 2026-11-09 | 💬 **Chat gaps.** **2 new endpoints:** `POST /bookings/{booking}/typing` and `POST /seat-requests/{seatRequest}/typing`, with the new `chat.typing` socket event (6.3). Both `GET .../messages` now return `meta.otherParty` (the other person's card and `role`) and `meta.commute` (route labels and `departureAt`). The booking thread also returns `meta.seatRequestId`. Both threads return `meta.events`, the system lines ("Booking confirmed", "Picked up · 07:06"…), and the new `chat.event` socket event sends the ride moments live. Chat is now kept 90 days instead of 12 months (TRIP-28). |
 | 2026-11-08 | 🚦 **The driver application goes to review by itself (D-0047).** When the last of the 5 items arrives, the backend sends the application, and any uploaded-but-unsent ID or selfie, to review. Remove the Submit button; `POST /driver/application/submit` still works and is idempotent. A replaced rejected item sends the application straight back to review. |

@@ -7,13 +7,19 @@ use App\Domains\Booking\Enums\PickupPointRequestStatus;
 use App\Domains\Booking\Models\Booking;
 use App\Domains\Booking\Models\PickupPointRequest;
 use App\Domains\Booking\Support\FreeCancel;
+use App\Domains\Booking\Support\PickupRequestContext;
+use App\Domains\Commute\Models\CommuteOffer;
 use App\Domains\Commute\Models\ScheduledTrip;
 use App\Domains\Commute\Support\ScheduleLock;
 use App\Domains\Geo\Models\Place;
+use App\Domains\Identity\Models\User;
+use App\Domains\Notification\Enums\NotificationType;
+use App\Domains\Notification\Support\Notifier;
 use App\Domains\Shared\Exceptions\DomainException;
 use App\Domains\Shared\Support\ErrorCode;
 use App\Domains\Shared\ValueObjects\Coordinate;
 use App\Domains\Trip\Actions\BuildNavigationItineraryAction;
+use App\Http\Resources\LocalisedLabel;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Facades\DB;
 
@@ -52,6 +58,8 @@ final readonly class RespondToPickupPointAction
 
             $this->applyToUpcomingBookings($pickup, $pickup->proposed_point, placeId: null);
 
+            $this->tellPassenger($pickup, NotificationType::PickupChangeApproved);
+
             return $pickup;
         });
     }
@@ -69,6 +77,10 @@ final readonly class RespondToPickupPointAction
             'alternative_place_id' => $place->id,
         ])->save();
 
+        $this->tellPassenger($pickup, NotificationType::PickupChangeAlternative, [
+            'place' => LocalisedLabel::place($place, null) ?? '',
+        ]);
+
         return $pickup;
     }
 
@@ -77,6 +89,8 @@ final readonly class RespondToPickupPointAction
         $this->assertPending($pickup);
 
         $pickup->forceFill(['status' => PickupPointRequestStatus::Rejected->value])->save();
+
+        $this->tellPassenger($pickup, NotificationType::PickupChangeRejected);
 
         return $pickup;
     }
@@ -115,6 +129,8 @@ final readonly class RespondToPickupPointAction
                 new Coordinate((float) $place->lat, (float) $place->lng),
                 placeId: $place->id,
             );
+
+            $this->tellDriver($pickup, $place);
 
             return $pickup;
         });
@@ -216,6 +232,57 @@ final readonly class RespondToPickupPointAction
         return $pickup->seat_request_id !== null
             ? $pickup->seatRequest->commute_offer_id
             : $pickup->groupMember->commuteGroup->commute_offer_id;
+    }
+
+    /**
+     * @param  array<string, string|int>  $params
+     */
+    private function tellPassenger(PickupPointRequest $pickup, NotificationType $type, array $params = []): void
+    {
+        $passenger = $pickup->requestedBy;
+        $driver = $this->driverOf($pickup);
+
+        if ($passenger === null) {
+            return;
+        }
+
+        Notifier::send($passenger, $type, params: [
+            'name' => $driver?->public_first_name ?? '',
+            ...$params,
+        ], data: array_filter([
+            'pickupRequestId' => $pickup->id,
+            'bookingId' => PickupRequestContext::nextBooking($pickup)?->id,
+            'commuteGroupId' => PickupRequestContext::commuteGroupId($pickup),
+            'commuteId' => PickupRequestContext::commuteId($pickup),
+            'seatRequestId' => $pickup->seat_request_id,
+        ]));
+    }
+
+    private function tellDriver(PickupPointRequest $pickup, Place $place): void
+    {
+        $driver = $this->driverOf($pickup);
+
+        if ($driver === null) {
+            return;
+        }
+
+        Notifier::send($driver, NotificationType::PickupChangeAlternativeAccepted, params: [
+            'name' => $pickup->requestedBy?->public_first_name ?? '',
+            'place' => LocalisedLabel::place($place, null) ?? '',
+        ], data: array_filter([
+            'pickupRequestId' => $pickup->id,
+            'commuteId' => PickupRequestContext::commuteId($pickup),
+            'commuteGroupId' => PickupRequestContext::commuteGroupId($pickup),
+        ]));
+    }
+
+    private function driverOf(PickupPointRequest $pickup): ?User
+    {
+        $driverId = CommuteOffer::query()
+            ->whereKey(PickupRequestContext::commuteId($pickup))
+            ->value('driver_profile_id');
+
+        return $driverId === null ? null : User::query()->find($driverId);
     }
 
     private function assertPending(PickupPointRequest $pickup): void

@@ -490,3 +490,12 @@ it('keeps a user stat count in step with the stars after a takedown', function (
 
     expect(User::query()->findOrFail($driverId)->stats->fresh()->rating_count_as_driver)->toBe(0);
 });
+
+it('gives the place picker both detour tiers', function () {
+    $detail = test()->withToken($this->paxToken)
+        ->getJson("/api/v1/commutes/{$this->commuteId}/public")->assertOk()->json('data');
+
+    expect($detail['maxPointDistanceMetres'])->toBe(3000)
+        ->and($detail['detourTiers']['onWay'])->toBe(['pointMeters' => 1500, 'requestMinutes' => 10, 'tripMinutes' => 20])
+        ->and($detail['detourTiers']['far'])->toBe(['pointMeters' => 3000, 'requestMinutes' => 15, 'tripMinutes' => 30]);
+});

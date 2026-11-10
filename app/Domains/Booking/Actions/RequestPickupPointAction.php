@@ -10,6 +10,9 @@ use App\Domains\Booking\Support\PickupDetour;
 use App\Domains\Commute\Models\CommuteOffer;
 use App\Domains\Geo\Contracts\GeoQueryEngine;
 use App\Domains\Group\Models\GroupMember;
+use App\Domains\Identity\Models\User;
+use App\Domains\Notification\Enums\NotificationType;
+use App\Domains\Notification\Support\Notifier;
 use App\Domains\Shared\Exceptions\DomainException;
 use App\Domains\Shared\Support\ErrorCode;
 use App\Domains\Shared\ValueObjects\Coordinate;
@@ -134,6 +137,21 @@ final readonly class RequestPickupPointAction
         $pickup->status = PickupPointRequestStatus::Pending->value;
 
         $pickup->save();
+
+        $driver = User::query()->find($offer->driver_profile_id);
+        $requester = User::query()->find($requesterUserId);
+
+        if ($driver !== null) {
+            Notifier::send($driver, NotificationType::PickupChangeRequested, params: [
+                'name' => $requester?->public_first_name ?? '',
+                'minutes' => (int) ceil((float) $detour->addedMinutes),
+            ], data: array_filter([
+                'pickupRequestId' => $pickup->id,
+                'commuteId' => $offer->id,
+                'commuteGroupId' => $groupMemberId === null ? null : GroupMember::query()->whereKey($groupMemberId)->value('commute_group_id'),
+                'seatRequestId' => $seatRequestId,
+            ]));
+        }
 
         return $pickup;
     }

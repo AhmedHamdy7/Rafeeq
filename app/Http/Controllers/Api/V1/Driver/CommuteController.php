@@ -103,18 +103,7 @@ final class CommuteController extends Controller
             'maxDropoffStops' => RouteSettings::maxDropoffStops(),
             'maxDetourMinutes' => RouteSettings::maxTripDetourMinutes(),
             'matchRadiusMeters' => RouteSettings::matchRadiusMeters(),
-            'detourTiers' => [
-                'onWay' => [
-                    'pointMeters' => RouteSettings::matchRadiusMeters(),
-                    'requestMinutes' => RouteSettings::onWayRequestMinutes(),
-                    'tripMinutes' => RouteSettings::onWayTripMinutes(),
-                ],
-                'far' => [
-                    'pointMeters' => RouteSettings::farRadiusMeters(),
-                    'requestMinutes' => RouteSettings::farRequestMinutes(),
-                    'tripMinutes' => RouteSettings::farTripMinutes(),
-                ],
-            ],
+            'detourTiers' => RouteSettings::detourTiers(),
             'maxScheduleMonths' => CommuteDefaults::maxScheduleMonths(),
             'preferences' => [
                 CommuteRuleKey::NonSmoking->value,

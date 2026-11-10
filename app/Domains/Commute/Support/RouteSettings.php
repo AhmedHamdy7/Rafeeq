@@ -82,4 +82,23 @@ final class RouteSettings
     {
         return PlatformSetting::value($key, config("rafeeq.{$key}"));
     }
+
+    /**
+     * @return array{onWay: array{pointMeters: int, requestMinutes: int, tripMinutes: int}, far: array{pointMeters: int, requestMinutes: int, tripMinutes: int}}
+     */
+    public static function detourTiers(): array
+    {
+        return [
+            'onWay' => [
+                'pointMeters' => self::matchRadiusMeters(),
+                'requestMinutes' => self::onWayRequestMinutes(),
+                'tripMinutes' => self::onWayTripMinutes(),
+            ],
+            'far' => [
+                'pointMeters' => self::farRadiusMeters(),
+                'requestMinutes' => self::farRequestMinutes(),
+                'tripMinutes' => self::farTripMinutes(),
+            ],
+        ];
+    }
 }
