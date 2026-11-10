@@ -13,6 +13,7 @@ use App\Domains\Trip\Models\Attendance;
 use App\Domains\Trip\Models\NavigationStop;
 use App\Domains\Trip\Models\TripWaitTimer;
 use App\Domains\Trip\Support\DriverDelay;
+use App\Domains\Trip\Support\LiveStopEtas;
 use App\Domains\Trip\Support\PickupTime;
 use Carbon\CarbonImmutable;
 use Carbon\CarbonInterface;
@@ -200,7 +201,7 @@ final class HomeJourney
      * a new rider may not push past; null when the driver promised no arrival for that day.
      *
      * @param  array<string, mixed>|null  $dropoffPoint  the booking resource's own `dropoffPoint`
-     * @return array{label: string|null, promisedArrivalAt: string|null, promisedArrivalLocal: string|null}
+     * @return array{label: string|null, lat: float|null, lng: float|null, isExact: bool, promisedArrivalAt: string|null, promisedArrivalLocal: string|null}
      */
     public function dropoff(?array $dropoffPoint, ?string $destinationLabel): array
     {
@@ -208,6 +209,9 @@ final class HomeJourney
 
         return [
             'label' => $dropoffPoint['label'] ?? $destinationLabel,
+            'lat' => $dropoffPoint === null ? null : (float) $dropoffPoint['lat'],
+            'lng' => $dropoffPoint === null ? null : (float) $dropoffPoint['lng'],
+            'isExact' => $dropoffPoint !== null && (bool) $dropoffPoint['isExact'],
             'promisedArrivalAt' => $promised?->toIso8601String(),
             'promisedArrivalLocal' => $promised === null ? null : $this->local(CarbonImmutable::instance($promised)),
         ];
@@ -243,7 +247,8 @@ final class HomeJourney
         $progress = null;
 
         if ($phase === self::DRIVER_EN_ROUTE) {
-            $pickupEta = $this->etaTo(NavigationStopKind::PassengerPickup, $startedAt, $now);
+            $pickupEta = $this->liveEtaTo(NavigationStopKind::PassengerPickup)
+                ?? $this->etaTo(NavigationStopKind::PassengerPickup, $startedAt, $now);
             $progress = $this->progress($startedAt, $pickupEta, $now);
         } elseif ($phase === self::DRIVER_ARRIVED) {
             // The car is at her kerb: the bar to her pickup is full, and that is recorded, not guessed.
@@ -273,6 +278,20 @@ final class HomeJourney
      * 07:04" at 07:09 would be the card asserting something the run disproves. It reads "now" until
      * the car gets there, which is the truthful version of "any moment".
      */
+    private function liveEtaTo(NavigationStopKind $kind): ?CarbonImmutable
+    {
+        $target = $this->stops->first(fn (NavigationStop $stop): bool => $stop->booking_id === $this->booking->getKey()
+            && $stop->kind === $kind);
+
+        if ($target === null || $target->reached_at !== null) {
+            return null;
+        }
+
+        $live = LiveStopEtas::for($this->trip, $this->stops);
+
+        return $live->isLive ? $live->etaFor($target) : null;
+    }
+
     private function etaTo(NavigationStopKind $kind, ?CarbonImmutable $since, CarbonImmutable $now): ?CarbonImmutable
     {
         $target = $this->stops->first(fn (NavigationStop $stop): bool => $stop->booking_id === $this->booking->getKey()

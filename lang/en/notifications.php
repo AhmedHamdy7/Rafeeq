@@ -421,4 +421,24 @@ return [
         'title' => 'Your driving is suspended',
         'body' => 'Your commutes are paused and upcoming trips are cancelled, with no fee. You can still ride as a passenger. Contact support.',
     ],
+    'pickup_change_requested' => [
+        'title' => ':name asks for a new pickup',
+        'body' => ':name asks to be picked up somewhere else, :minutes min more for you. Open it to accept or decline.',
+    ],
+    'pickup_change_approved' => [
+        'title' => ':name accepted your new pickup',
+        'body' => 'From your next trip, :name picks you up at the new spot.',
+    ],
+    'pickup_change_alternative' => [
+        'title' => ':name suggested another spot',
+        'body' => ':name can pick you up at :place instead. Open it to accept or keep your pickup.',
+    ],
+    'pickup_change_rejected' => [
+        'title' => ':name kept your pickup',
+        'body' => ':name can\'t pick you up at the new spot. Your pickup stays the same.',
+    ],
+    'pickup_change_alternative_accepted' => [
+        'title' => ':name accepted your spot',
+        'body' => 'From the next trip, you pick :name up at :place.',
+    ],
 ];

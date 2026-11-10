@@ -457,3 +457,56 @@ it('publishes no endpoint that returns the GPS trail', function () {
         .'If a client genuinely needs it, that is a product decision about privacy, not a route.'
     );
 });
+
+it('never lets a late batch move the car back to an older position', function () {
+    underway($this->driverToken, $this->tripId);
+
+    reportPosition($this->driverToken, $this->tripId, [position(lat: 30.0600, agoSeconds: 5)])->assertOk();
+    reportPosition($this->driverToken, $this->tripId, [position(lat: 30.0400, agoSeconds: 90)])
+        ->assertOk()
+        ->assertJsonPath('data.accepted', 1);
+
+    $live = test()->withToken($this->driverToken)->getJson("/api/v1/trips/{$this->tripId}/location")
+        ->assertOk()->json('data');
+
+    expect($live['position']['lat'])->toBe(30.06)
+        ->and(TripSession::sole()->last_location_at->diffInSeconds(now(), absolute: true))->toBeLessThan(30);
+});
+
+it('gives the driver and the passenger the same live time for her pickup', function () {
+    underway($this->driverToken, $this->tripId);
+
+    $planned = test()->withToken($this->driverToken)
+        ->getJson("/api/v1/driver/commute-occurrences/{$this->tripId}/navigation-route")
+        ->assertOk()->json('data');
+
+    reportPosition($this->driverToken, $this->tripId, [position(lat: 30.0500, lng: 31.2000, agoSeconds: 3)])->assertOk();
+
+    $route = test()->withToken($this->driverToken)
+        ->getJson("/api/v1/driver/commute-occurrences/{$this->tripId}/navigation-route")
+        ->assertOk()->json('data');
+
+    $index = $route['nextStopIndex'];
+    $next = $route['stops'][$index];
+
+    expect($route['etasAreLive'])->toBeTrue()
+        ->and($route['stops'][0]['kind'])->toBe('DRIVER_START')
+        ->and($route['stops'][0]['reachedAt'])->not->toBeNull()
+        ->and($next['kind'])->toBe('PASSENGER_PICKUP')
+        ->and($next['arrivedAt'])->toBeNull()
+        ->and($route['nextStopDistanceMeters'])->toBeGreaterThan(0)
+        ->and($next['etaAt'])->not->toBe($planned['stops'][$index]['etaAt']);
+
+    $live = test()->withToken($this->paxToken)->getJson("/api/v1/trips/{$this->tripId}/location")
+        ->assertOk()->json('data');
+
+    expect($live['pickupEtaAt'])->toBe($next['etaAt'])
+        ->and($live['carToPickupPolyline'])->not->toBeNull();
+});
+
+it('has no pickup time for the driver himself', function () {
+    underway($this->driverToken, $this->tripId);
+
+    expect(test()->withToken($this->driverToken)->getJson("/api/v1/trips/{$this->tripId}/location")
+        ->assertOk()->json('data.pickupEtaAt'))->toBeNull();
+});

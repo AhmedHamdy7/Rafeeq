@@ -66,8 +66,13 @@ final readonly class RecordTripLocationAction
 
         $latest = end($accepted);
 
-        $this->store->putCurrent($session->id, $latest);
         $this->store->buffer($session->id, $accepted);
+
+        if ($session->last_location_at !== null && $latest->recordedAt->lte($session->last_location_at)) {
+            return $accepted;
+        }
+
+        $this->store->putCurrent($session->id, $latest);
 
         /*
          * `last_location_at` on the session is the GPS-dropout signal, and it is the one

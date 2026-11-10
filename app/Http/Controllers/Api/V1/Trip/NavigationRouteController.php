@@ -12,6 +12,7 @@ use App\Domains\Shared\Support\ErrorCode;
 use App\Domains\Shared\ValueObjects\Coordinate;
 use App\Domains\Shared\ValueObjects\DaysMask;
 use App\Domains\Trip\Actions\BuildNavigationItineraryAction;
+use App\Domains\Trip\Support\LiveStopEtas;
 use App\Http\Controllers\Controller;
 use App\Http\OpenApi\ApiErrors;
 use App\Http\Resources\NavigationRouteResource;
@@ -59,6 +60,7 @@ final class NavigationRouteController extends Controller
                 $occurrence->itinerary_polyline,
                 $occurrence->itinerary_distance_meters,
                 $occurrence->itinerary_duration_seconds,
+                LiveStopEtas::for($occurrence->loadMissing('tripSession'), $stops),
             ),
 
             /*

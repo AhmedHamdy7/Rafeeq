@@ -100,7 +100,8 @@ final class PickupPointRequestController extends Controller
     {
         $requests = PickupPointRequest::query()
             ->whereIn('id', $this->onMyCommutes($request)->select('pickup_point_requests.id'))
-            ->with('seatRequest.commuteOffer.locations', 'groupMember.commuteGroup.commuteOffer.locations')
+            ->tap(fn (Builder $query) => $this->filter($query, $request))
+            ->with('seatRequest.commuteOffer.locations', 'groupMember.commuteGroup.commuteOffer.locations', 'requestedBy', 'alternativePlace')
             ->latest('created_at')
             ->orderByDesc('id')
             ->paginate(ApiResponse::perPage($request));
@@ -119,14 +120,14 @@ final class PickupPointRequestController extends Controller
             $offer = $this->offerOf($pickup);
 
             if ($offer === null) {
-                $cards[] = new PickupPointRequestResource($pickup);
+                $cards[] = (new PickupPointRequestResource($pickup))->forDriver();
 
                 continue;
             }
 
             $runTotals[$offer->id] ??= PickupDetour::runTotalFor($geo, $offer);
 
-            $cards[] = (new PickupPointRequestResource($pickup))->withDetourContext(
+            $cards[] = (new PickupPointRequestResource($pickup))->forDriver()->withDetourContext(
                 RouteSettings::maxTripDetourMinutes(),
                 // The request's own cost is included, because the driver is deciding
                 // whether to ADD it: screen 29 asks "does this keep me within my limit".
@@ -135,6 +136,43 @@ final class PickupPointRequestController extends Controller
         }
 
         return ApiResponse::paginated($requests, $cards);
+    }
+
+    /**
+     * @param  Builder<PickupPointRequest>  $query
+     */
+    private function filter(Builder $query, Request $request): void
+    {
+        $status = $request->query('status');
+
+        if (is_string($status) && $status !== '') {
+            $query->whereIn('status', array_map(
+                fn (string $value): string => strtolower(trim($value)),
+                explode(',', $status),
+            ));
+        }
+
+        $commuteId = $request->query('commuteId');
+
+        if (is_string($commuteId) && $commuteId !== '') {
+            $query->where(fn (Builder $either) => $either
+                ->whereIn('seat_request_id', SeatRequest::query()->where('commute_offer_id', $commuteId)->select('id'))
+                ->orWhereIn('group_member_id', GroupMember::query()
+                    ->whereIn('commute_group_id', CommuteGroup::query()->where('commute_offer_id', $commuteId)->select('id'))
+                    ->select('id')));
+        }
+
+        $groupId = $request->query('commuteGroupId');
+
+        if (is_string($groupId) && $groupId !== '') {
+            $query->whereIn('group_member_id', GroupMember::query()->where('commute_group_id', $groupId)->select('id'));
+        }
+
+        $seatRequestId = $request->query('seatRequestId');
+
+        if (is_string($seatRequestId) && $seatRequestId !== '') {
+            $query->where('seat_request_id', $seatRequestId);
+        }
     }
 
     /**
@@ -154,6 +192,8 @@ final class PickupPointRequestController extends Controller
     {
         $requests = PickupPointRequest::query()
             ->where('requested_by_user_id', $request->user()->id)
+            ->tap(fn (Builder $query) => $this->filter($query, $request))
+            ->with('seatRequest', 'groupMember.commuteGroup', 'alternativePlace')
             ->latest('created_at')
             ->orderByDesc('id')
             ->paginate(ApiResponse::perPage($request));
@@ -177,7 +217,7 @@ final class PickupPointRequestController extends Controller
     public function approve(Request $request, string $pickupRequest, RespondToPickupPointAction $action): JsonResponse
     {
         return ApiResponse::success(
-            new PickupPointRequestResource($action->approve($this->forMyCommute($request, $pickupRequest)))
+            (new PickupPointRequestResource($action->approve($this->forMyCommute($request, $pickupRequest))))->forDriver()
         );
     }
 
@@ -196,9 +236,9 @@ final class PickupPointRequestController extends Controller
             ?? throw DomainException::of(ErrorCode::NotFound);
 
         return ApiResponse::success(
-            new PickupPointRequestResource(
+            (new PickupPointRequestResource(
                 $action->suggestAlternative($this->forMyCommute($request, $pickupRequest), $place)
-            )
+            ))->forDriver()
         );
     }
 
@@ -209,7 +249,7 @@ final class PickupPointRequestController extends Controller
     public function reject(Request $request, string $pickupRequest, RespondToPickupPointAction $action): JsonResponse
     {
         return ApiResponse::success(
-            new PickupPointRequestResource($action->reject($this->forMyCommute($request, $pickupRequest)))
+            (new PickupPointRequestResource($action->reject($this->forMyCommute($request, $pickupRequest))))->forDriver()
         );
     }
 

@@ -440,6 +440,16 @@ enum NotificationType: string
 
     case WaitlistedCommuteEnded = 'waitlisted_commute_ended';
 
+    case PickupChangeRequested = 'pickup_change_requested';
+
+    case PickupChangeApproved = 'pickup_change_approved';
+
+    case PickupChangeAlternative = 'pickup_change_alternative';
+
+    case PickupChangeRejected = 'pickup_change_rejected';
+
+    case PickupChangeAlternativeAccepted = 'pickup_change_alternative_accepted';
+
     public function category(): NotificationCategory
     {
         return match ($this) {
@@ -495,6 +505,11 @@ enum NotificationType: string
             self::VehicleReinstated,
             self::CommuteArchived,
             self::WaitlistedCommuteEnded,
+            self::PickupChangeRequested,
+            self::PickupChangeApproved,
+            self::PickupChangeAlternative,
+            self::PickupChangeRejected,
+            self::PickupChangeAlternativeAccepted,
             self::MatchFound => NotificationCategory::Booking,
 
             self::TripStarted,

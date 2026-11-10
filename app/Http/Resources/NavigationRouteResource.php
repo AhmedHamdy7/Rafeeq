@@ -5,6 +5,7 @@ namespace App\Http\Resources;
 use App\Domains\Trip\Models\NavigationStop;
 use App\Domains\Trip\Support\DirectionsLink;
 use App\Domains\Trip\Support\ItineraryStop;
+use App\Domains\Trip\Support\LiveStopEtas;
 use App\Domains\Trip\Support\NavigationItinerary;
 use Illuminate\Support\Collection;
 
@@ -29,7 +30,7 @@ final class NavigationRouteResource
      * @param  Collection<int, NavigationStop>  $stops
      * @return array<string, mixed>
      */
-    public static function confirmed(Collection $stops, ?string $polyline, ?int $distanceMetres, ?int $durationSeconds): array
+    public static function confirmed(Collection $stops, ?string $polyline, ?int $distanceMetres, ?int $durationSeconds, ?LiveStopEtas $live = null): array
     {
         $link = DirectionsLink::forStops(
             $stops->map(fn (NavigationStop $stop) => $stop->point)->filter()->values()->all()
@@ -49,17 +50,21 @@ final class NavigationRouteResource
                     'lat' => (float) $stop->lat,
                     'lng' => (float) $stop->lng,
                     'label' => $stop->label,
-                    'etaAt' => $stop->eta_at?->toIso8601String(),
+                    'etaAt' => ($live?->etaFor($stop) ?? $stop->eta_at)?->toIso8601String(),
                     'legDurationSeconds' => $stop->leg_duration_seconds,
                     'legDistanceMeters' => $stop->leg_distance_meters,
                     // v5's "reached/completed flags". Null means still to come.
-                    'reachedAt' => $stop->reached_at?->toIso8601String(),
+                    'reachedAt' => ($live?->reachedAtFor($stop) ?? $stop->reached_at)?->toIso8601String(),
+                    'arrivedAt' => $live?->arrivedAtFor($stop)?->toIso8601String(),
                 ])->all(),
                 $polyline,
                 $distanceMetres,
                 $durationSeconds,
                 $link,
             ),
+            'nextStopIndex' => $live?->nextStopIndex,
+            'nextStopDistanceMeters' => $live?->nextStopDistanceMeters,
+            'etasAreLive' => $live?->isLive ?? false,
         ];
     }
 

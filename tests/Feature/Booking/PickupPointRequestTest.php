@@ -8,6 +8,7 @@ use App\Domains\Commute\Models\ScheduledTrip;
 use App\Domains\Driver\Models\Vehicle;
 use App\Domains\Geo\Models\Place;
 use App\Domains\Group\Models\GroupMember;
+use App\Domains\Notification\Models\Notification;
 use Illuminate\Support\Facades\Storage;
 
 /**
@@ -255,4 +256,92 @@ it('refuses a proposal once the seat request has been answered', function () {
     proposePickup($this->paxToken, $this->requestId)
         ->assertStatus(409)
         ->assertJsonPath('error.code', 'SEAT_REQUEST_NOT_PENDING');
+});
+
+it('tells the driver whose request it is, on which commute, and from where to where', function () {
+    approveSeat($this->driverToken, $this->requestId);
+
+    $member = GroupMember::query()->where('role', 'trial')->sole();
+
+    test()->withToken($this->paxToken)
+        ->postJson("/api/v1/groups/{$member->commute_group_id}/pickup-request", onTheWay())
+        ->assertStatus(201);
+
+    $row = test()->withToken($this->driverToken)
+        ->getJson("/api/v1/driver/pickup-requests?commuteId={$this->commuteId}&status=PENDING")
+        ->assertOk()
+        ->assertJsonCount(1, 'data')
+        ->json('data.0');
+
+    $booking = Booking::sole();
+
+    expect($row['commuteId'])->toBe($this->commuteId)
+        ->and($row['commuteGroupId'])->toBe($member->commute_group_id)
+        ->and($row['tripId'])->toBe($booking->scheduled_trip_id)
+        ->and($row['bookingId'])->toBe($booking->id)
+        ->and($row['passenger']['publicFirstName'])->not->toBeEmpty()
+        ->and($row['passenger'])->toHaveKeys(['id', 'avatarPath'])
+        ->and($row['currentPoint']['isExact'])->toBeTrue()
+        ->and(round($row['currentPoint']['lat'], 4))->toBe(round((float) $booking->pickup_lat, 4))
+        ->and($row['proposedPoint'])->toHaveKey('label')
+        ->and($row['proposedPoint']['isExact'])->toBeFalse();
+
+    test()->withToken($this->driverToken)
+        ->getJson('/api/v1/driver/pickup-requests?status=APPROVED')
+        ->assertOk()
+        ->assertJsonCount(0, 'data');
+
+    test()->withToken($this->driverToken)
+        ->getJson('/api/v1/driver/pickup-requests?commuteId=01JUNKJUNKJUNKJUNKJUNKJUNK')
+        ->assertOk()
+        ->assertJsonCount(0, 'data');
+});
+
+it('names the driver counter-offer on the passenger list and pushes each step', function () {
+    proposePickup($this->paxToken, $this->requestId)->assertStatus(201);
+
+    expect(Notification::query()->where('type', 'pickup_change_requested')->first()?->data)
+        ->toMatchArray(['pickupRequestId' => PickupPointRequest::sole()->id, 'commuteId' => $this->commuteId]);
+
+    $pickupId = PickupPointRequest::sole()->id;
+    $place = Place::factory()->create(['lat' => 30.0660, 'lng' => 31.2400]);
+
+    test()->withToken($this->driverToken)
+        ->postJson("/api/v1/driver/pickup-requests/{$pickupId}/suggest-alternative", ['placeId' => $place->id])
+        ->assertOk();
+
+    $mine = test()->withToken($this->paxToken)
+        ->getJson("/api/v1/pickup-requests?seatRequestId={$this->requestId}")
+        ->assertOk()
+        ->assertJsonCount(1, 'data')
+        ->json('data.0');
+
+    expect($mine['seatRequestId'])->toBe($this->requestId)
+        ->and($mine['commuteId'])->toBe($this->commuteId)
+        ->and($mine['alternativePlace']['id'])->toBe($place->id)
+        ->and($mine['alternativePlace']['lat'])->toBe(30.066)
+        ->and($mine['alternativePlace']['isExact'])->toBeTrue()
+        ->and($mine)->not->toHaveKey('passenger');
+
+    expect(Notification::query()->where('type', 'pickup_change_alternative')->first()?->data)
+        ->toMatchArray(['pickupRequestId' => $pickupId, 'seatRequestId' => $this->requestId]);
+
+    test()->withToken($this->paxToken)
+        ->postJson("/api/v1/pickup-requests/{$pickupId}/accept-alternative")
+        ->assertOk();
+
+    expect(Notification::query()->where('type', 'pickup_change_alternative_accepted')->exists())->toBeTrue();
+});
+
+it('pushes the driver answer to the passenger', function () {
+    proposePickup($this->paxToken, $this->requestId)->assertStatus(201);
+
+    $pickupId = PickupPointRequest::sole()->id;
+
+    test()->withToken($this->driverToken)
+        ->postJson("/api/v1/driver/pickup-requests/{$pickupId}/reject")
+        ->assertOk();
+
+    expect(Notification::query()->where('type', 'pickup_change_rejected')->first()?->data)
+        ->toMatchArray(['pickupRequestId' => $pickupId]);
 });

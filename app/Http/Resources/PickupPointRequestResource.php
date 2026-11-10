@@ -5,6 +5,8 @@ namespace App\Http\Resources;
 use App\Domains\Booking\Enums\PickupPointRequestStatus;
 use App\Domains\Booking\Models\PickupPointRequest;
 use App\Domains\Booking\Support\PickupDetour;
+use App\Domains\Booking\Support\PickupRequestContext;
+use App\Domains\Verification\Support\Avatar;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
 
@@ -41,6 +43,15 @@ final class PickupPointRequestResource extends JsonResource
 
     public ?float $runTotalMinutes = null;
 
+    public bool $forDriver = false;
+
+    public function forDriver(): static
+    {
+        $this->forDriver = true;
+
+        return $this;
+    }
+
     public function withDetourContext(int $maxDetourMinutes, float $runTotalMinutes): static
     {
         $this->maxDetourMinutes = $maxDetourMinutes;
@@ -51,10 +62,22 @@ final class PickupPointRequestResource extends JsonResource
 
     public function toArray(Request $request): array
     {
+        $next = PickupRequestContext::nextBooking($this->resource);
+
         return [
             'id' => $this->id,
             'seatRequestId' => $this->seat_request_id,
             'groupMemberId' => $this->group_member_id,
+            'commuteId' => PickupRequestContext::commuteId($this->resource),
+            'commuteGroupId' => PickupRequestContext::commuteGroupId($this->resource),
+            'tripId' => PickupRequestContext::tripId($this->resource, $next),
+            'bookingId' => $next?->id,
+            'passenger' => $this->when($this->forDriver, fn (): ?array => $this->requestedBy === null ? null : [
+                'id' => (string) $this->requestedBy->getKey(),
+                'publicFirstName' => $this->requestedBy->public_first_name,
+                'avatarPath' => Avatar::pathFor($this->requestedBy),
+            ]),
+            'currentPoint' => PickupRequestContext::currentPoint($this->resource, $next),
             'status' => strtoupper($this->status->value),
             'label' => $this->proposed_label,
             'proposedPoint' => $this->proposedPoint(),
@@ -78,6 +101,13 @@ final class PickupPointRequestResource extends JsonResource
             // Set when the driver countered with a place of their own. The passenger
             // has to accept it before anything moves.
             'alternativePlaceId' => $this->alternative_place_id,
+            'alternativePlace' => $this->alternativePlace === null ? null : [
+                'id' => $this->alternativePlace->id,
+                'label' => LocalisedLabel::place($this->alternativePlace, null),
+                'lat' => (float) $this->alternativePlace->lat,
+                'lng' => (float) $this->alternativePlace->lng,
+                'isExact' => true,
+            ],
 
             'createdAt' => $this->created_at->toIso8601String(),
         ];
@@ -97,6 +127,9 @@ final class PickupPointRequestResource extends JsonResource
         $agreed = $this->status === PickupPointRequestStatus::Approved;
 
         return [
+            'label' => $agreed
+                ? ($this->proposed_label ?? PickupRequestContext::areaLabel($point))
+                : PickupRequestContext::areaLabel($point),
             'lat' => $agreed ? $point->lat : round($point->lat, self::FUZZ_DECIMALS),
             'lng' => $agreed ? $point->lng : round($point->lng, self::FUZZ_DECIMALS),
             // Stated rather than inferred, so a map can say "approximate" honestly.
