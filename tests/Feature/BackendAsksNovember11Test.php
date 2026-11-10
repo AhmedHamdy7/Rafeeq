@@ -1,5 +1,7 @@
 <?php
 
+use App\Domains\Admin\Enums\AdminRole;
+use App\Domains\Admin\Models\AdminAction;
 use App\Domains\Admin\Models\AdminUser;
 use App\Domains\Booking\Models\SeatRequest;
 use App\Domains\Commute\Models\ScheduledTrip;
@@ -7,13 +9,13 @@ use App\Domains\Driver\Enums\DriverProfileStatus;
 use App\Domains\Driver\Enums\VehicleTier;
 use App\Domains\Driver\Models\DriverProfile;
 use App\Domains\Driver\Models\Vehicle;
-use App\Domains\Identity\Models\OtpChallenge;
 use App\Domains\Identity\Models\User;
 use App\Domains\Safety\Models\LiveShare;
 use App\Domains\Trip\Models\TripSession;
-use Illuminate\Support\Facades\Hash;
+use App\Livewire\Admin\Settings;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
+use Livewire\Livewire;
 
 beforeEach(function () {
     Storage::fake('documents');
@@ -92,16 +94,31 @@ it('returns the InstaPay payee on the debt screen', function () {
 
     expect(test()->withToken($token)->getJson('/api/v1/account/debt')->assertOk()->json('data.instapay'))->toBeNull();
 
-    config([
-        'rafeeq.debt.instapay.link' => 'https://ipn.eg/S/rafeeq/instapay/abc',
-        'rafeeq.debt.instapay.handle' => 'rafeeq@instapay',
-        'rafeeq.debt.instapay.display_name' => 'Rafeeq',
-    ]);
+    actingAsAdmin(adminWithRole(AdminRole::SuperAdmin));
+
+    foreach (['debt.instapay_link' => 'https://ipn.eg/S/rafeeq/instapay/abc', 'debt.instapay_handle' => 'rafeeq@instapay', 'debt.instapay_name' => 'Rafeeq'] as $key => $value) {
+        Livewire::test(Settings::class)
+            ->call('edit', $key)
+            ->set('value', $value)
+            ->set('reason', 'Finance opened the InstaPay account.')
+            ->call('save')
+            ->assertHasNoErrors();
+    }
+
+    Livewire::test(Settings::class)
+        ->call('edit', 'debt.instapay_link')
+        ->set('value', 'not a link')
+        ->set('reason', 'Finance opened the InstaPay account.')
+        ->call('save')
+        ->assertHasErrors('value');
 
     test()->withToken($token)->getJson('/api/v1/account/debt')
         ->assertOk()
         ->assertJsonPath('data.instapay.handle', 'rafeeq@instapay')
-        ->assertJsonPath('data.instapay.displayName', 'Rafeeq');
+        ->assertJsonPath('data.instapay.displayName', 'Rafeeq')
+        ->assertJsonPath('data.instapay.link', 'https://ipn.eg/S/rafeeq/instapay/abc');
+
+    expect(AdminAction::query()->where('entity_id', 'debt.instapay_handle')->sole()->new_value)->toBe(['value' => 'rafeeq@instapay']);
 });
 
 it('filters live shares by run', function () {
@@ -133,35 +150,19 @@ it('answers a car edit under review with a car-specific code', function () {
     ])->assertStatus(409)->assertJsonPath('error.code', 'VEHICLE_LOCKED');
 });
 
-it('keeps the fixed OTP to the test numbers once they are listed', function () {
-    config([
-        'rafeeq.auth.otp.dev_fixed_code' => '123456',
-        'rafeeq.testing.phones' => ['+20101111111?'],
-    ]);
-
-    foreach (['01011111111', '01112223344'] as $phone) {
-        test()->postJson('/api/v1/auth/otp/request', [
-            'phone' => $phone,
-            'device' => ['publicId' => 'dev-'.$phone, 'platform' => 'android'],
-        ])->assertStatus(202);
-    }
-
-    expect(Hash::check('123456', OtpChallenge::query()->where('phone_e164', '+201011111111')->sole()->code_hash))->toBeTrue()
-        ->and(Hash::check('123456', OtpChallenge::query()->where('phone_e164', '+201112223344')->sole()->code_hash))->toBeFalse();
-});
-
-it('hides the testing endpoints unless they are on and the caller is a test number', function () {
+it('hides the testing endpoints unless they are switched on, and always in production', function () {
     $token = readyDriverApplicant(phone: '01011111111');
 
     test()->withToken($token)->postJson('/api/v1/testing/driver/approve')->assertStatus(404);
 
-    config(['rafeeq.testing.api' => true, 'rafeeq.testing.phones' => ['+201099999999']]);
+    config(['rafeeq.testing.api' => true]);
+    app()->detectEnvironment(fn () => 'production');
 
     test()->withToken($token)->postJson('/api/v1/testing/driver/approve')->assertStatus(404);
 });
 
 it('approves a test driver in one call, with a Comfort car', function () {
-    config(['rafeeq.testing.api' => true, 'rafeeq.testing.phones' => ['+20101111111?']]);
+    config(['rafeeq.testing.api' => true]);
     AdminUser::factory()->create();
 
     $token = readyDriverApplicant(phone: '01011111111');
@@ -179,7 +180,7 @@ it('approves a test driver in one call, with a Comfort car', function () {
 });
 
 it('moves a test trip departure and deletes a test account', function () {
-    config(['rafeeq.testing.api' => true, 'rafeeq.testing.phones' => ['+20101234567?']]);
+    config(['rafeeq.testing.api' => true]);
 
     [$driverToken, , $tripId] = publishedCommute();
 

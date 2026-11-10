@@ -21,12 +21,12 @@ when they are live.
 | A5 | ✅ Confirmed | Nothing. |
 | A6 | ⏳ Later | Keep the static value for the beta. |
 | A7 | ✅ Confirmed | Straight line. Nothing to change. |
-| B1 | ✅ Done, one part not possible | Use the three `/testing` calls. Ask us to set the env vars on staging. |
+| B1 | ✅ Done, two parts not done | Use the three `/testing` calls once we switch them on for staging. |
 | B2 | ✅ Done (interim) | Call `GET /search/commutes/browse`. |
 | B3 | ✅ Done, and a fix | Call `POST /commutes/{commute}/dropoff-preview`. |
 | B4 | ❌ Not built: product rule | Keep "about 8:00 AM" until the 12-hour lock, then show the time as fixed. |
 | B5 | ✅ Done | Call `PATCH /seat-requests/{id}`. |
-| B6 | ✅ Done | Read `instapay` on `GET /account/debt`. Remove the hard-coded values. |
+| B6 | ✅ Done | Read `instapay` on `GET /account/debt`. Remove the hard-coded values. Staff set it on the dashboard. |
 | B7 | ✅ Confirmed (one difference on 5) | See the answers below. |
 | B8 | ✅ Filter done · ❌ auto-share not | Use `?tripSessionId=`. Don't promise auto-share. |
 | B9 | ✅ Answered | Nothing on logout. Stay on registration tokens. |
@@ -148,11 +148,9 @@ still refuse on minutes, so call `pickup-preview` / `dropoff-preview` before she
 
 ### B1 · Test environment
 
-Three test-only calls are done. They answer **`404`** unless all of these are true:
-
-- the server has `RAFEEQ_TESTING_API=true`;
-- the server is not `APP_ENV=production`;
-- the caller's number is in `RAFEEQ_TEST_PHONES`.
+Three test-only calls are done. They answer **`404`** unless the server has `RAFEEQ_TESTING_API=true` and
+is not `APP_ENV=production`. When they are on, **any signed-in account** on that server can call them. Each
+call acts only on the caller's own account and commutes.
 
 | Call | What it does |
 |---|---|
@@ -163,12 +161,9 @@ Three test-only calls are done. They answer **`404`** unless all of these are tr
 - **Clock for the Friday deadline: not possible.** The debt ledger is append-only, so we can't move a debt into
   an earlier week. For the overdue and blocked states, staff can record a debt from the dashboard, or we seed
   one for a test number. Tell us which numbers.
-- **OTP `123456` only for test numbers: done.** `RAFEEQ_TEST_PHONES` takes E.164 patterns (`?` = one digit,
-  `*` = any digits), for example `+201011111111,+20102000000?`. Once it is set, the development code works **only**
-  for those numbers, and every other number gets a random code.
-  - ⚠️ Set it only once a real SMS provider is live. Until then, other numbers could not sign in at all.
-- **We need from you:** the full list of test numbers. Then we set `RAFEEQ_TESTING_API` and `RAFEEQ_TEST_PHONES` on
-  staging.
+- **OTP `123456` only for test numbers: not done for now.** We don't have the final list of test numbers yet,
+  so `123456` still works for **every** number on staging, as today. We will limit it before launch.
+- **We will tell you** when `RAFEEQ_TESTING_API` is on for staging.
 
 ### B2 · Browse all commutes in Discover (interim)
 
@@ -245,10 +240,10 @@ exists:
 "instapay": { "link": "https://ipn.eg/S/…", "handle": "rafeeq@instapay", "displayName": "Rafeeq" }
 ```
 
-- It is set per server (`RAFEEQ_INSTAPAY_LINK`, `_HANDLE`, `_NAME`), so staging and production can differ, and it
-  changes without a release.
-- It is **`null`** while none is set. Hide the pay button then.
-- We will set the real values on staging and production. Send them to us if you have them.
+- Staff set the three values on the dashboard (**Settings → Debt**: link, handle, account name). It changes
+  without a release, and staging and production each have their own.
+- It is **`null`** while neither the link nor the handle is set. Hide the pay button then.
+- A value that isn't set is `null` inside the object, e.g. a handle with no link.
 
 ### B7 · Confirmations
 

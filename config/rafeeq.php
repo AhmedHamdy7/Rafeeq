@@ -280,12 +280,6 @@ return [
          * "overdue" after Friday, and the warning before suspension (Feature 03 backend file §8).
          */
         'reminder_hour' => 18,
-
-        'instapay' => [
-            'link' => env('RAFEEQ_INSTAPAY_LINK'),
-            'handle' => env('RAFEEQ_INSTAPAY_HANDLE'),
-            'display_name' => env('RAFEEQ_INSTAPAY_NAME'),
-        ],
     ],
 
     'booking' => [
@@ -1382,7 +1376,6 @@ return [
 
     'testing' => [
         'api' => (bool) env('RAFEEQ_TESTING_API', false),
-        'phones' => array_values(array_filter(array_map('trim', explode(',', (string) env('RAFEEQ_TEST_PHONES', ''))))),
     ],
 
 ];

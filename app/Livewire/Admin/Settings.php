@@ -44,9 +44,14 @@ class Settings extends Component
         $this->authorizeTo();
 
         $this->resetValidation();
-        $this->editing = SettingsCatalogue::entry($key) === null ? null : $key;
+        $isText = SettingsCatalogue::textEntry($key) !== null;
+        $this->editing = SettingsCatalogue::entry($key) === null && ! $isText ? null : $key;
         $this->mode = $mode === 'reset' ? 'reset' : 'update';
-        $this->value = $this->editing === null ? '' : (string) PlatformSetting::value($key, SettingsCatalogue::defaultFor($key));
+        $this->value = match (true) {
+            $this->editing === null => '',
+            $isText => (string) SettingsCatalogue::text($key),
+            default => (string) PlatformSetting::value($key, SettingsCatalogue::defaultFor($key)),
+        };
         $this->reason = '';
     }
 
@@ -60,12 +65,15 @@ class Settings extends Component
     {
         $this->authorizeTo();
 
-        $entry = SettingsCatalogue::entry((string) $this->editing) ?? abort(404);
+        $text = SettingsCatalogue::textEntry((string) $this->editing);
+        $entry = $text ?? SettingsCatalogue::entry((string) $this->editing) ?? abort(404);
 
         $rules = ['reason' => ['required', 'string', 'min:10', 'max:255']];
 
         if ($this->mode === 'update') {
-            $rules['value'] = ['required', 'integer', 'min:'.$entry['min'], 'max:'.$entry['max']];
+            $rules['value'] = $text === null
+                ? ['required', 'integer', 'min:'.$entry['min'], 'max:'.$entry['max']]
+                : array_values(array_filter(['required', 'string', 'max:'.$text['max'], ($text['format'] ?? null) === 'url' ? 'url:https' : null]));
         }
 
         $this->validate($rules, attributes: [
@@ -74,9 +82,11 @@ class Settings extends Component
         ]);
 
         try {
-            $this->mode === 'reset'
-                ? $action->reset($this->editing, $this->admin(), $this->reason)
-                : $action->update($this->editing, (int) $this->value, $this->admin(), $this->reason);
+            match (true) {
+                $this->mode === 'reset' => $action->reset($this->editing, $this->admin(), $this->reason),
+                $text !== null => $action->updateText($this->editing, trim($this->value), $this->admin(), $this->reason),
+                default => $action->update($this->editing, (int) $this->value, $this->admin(), $this->reason),
+            };
         } catch (DomainException $e) {
             $this->addError('value', $e->fields['value'][0] ?? __('errors.'.$e->errorCode->value));
 
@@ -101,7 +111,7 @@ class Settings extends Component
     public function render()
     {
         $overrides = PlatformSetting::query()
-            ->whereIn('setting_key', array_keys(SettingsCatalogue::ENTRIES))
+            ->whereIn('setting_key', [...array_keys(SettingsCatalogue::ENTRIES), ...array_keys(SettingsCatalogue::TEXT_ENTRIES)])
             ->with('updatedBy')
             ->get()
             ->keyBy('setting_key');
@@ -116,6 +126,19 @@ class Settings extends Component
                 'entry' => $entry,
                 'default' => SettingsCatalogue::defaultFor($key),
                 'current' => $override?->setting_value ?? SettingsCatalogue::defaultFor($key),
+                'override' => $override,
+            ];
+        }
+
+        foreach (SettingsCatalogue::TEXT_ENTRIES as $key => $entry) {
+            $override = $overrides->get($key);
+
+            $groups[$entry['group']][] = [
+                'key' => $key,
+                'entry' => $entry,
+                'text' => true,
+                'default' => null,
+                'current' => SettingsCatalogue::text($key),
                 'override' => $override,
             ];
         }

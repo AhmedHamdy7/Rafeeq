@@ -21,10 +21,21 @@
                             <span class="rq-note rq-mono">{{ $row['key'] }}</span>
                         </span>
                         <span style="text-align:end">
-                            <span style="font-weight:700">{{ number_format((int) $row['current']) }}</span>
-                            {{ __('admin.settings.units.'.$row['entry']['unit']) }}
+                            @if (! empty($row['text']))
+                                <span style="font-weight:700;word-break:break-all">{{ $row['current'] ?? __('admin.settings.not_set') }}</span>
+                            @else
+                                <span style="font-weight:700">{{ number_format((int) $row['current']) }}</span>
+                                {{ __('admin.settings.units.'.$row['entry']['unit']) }}
+                            @endif
                             <span class="rq-note" style="display:block">
-                                @if ($row['override'])
+                                @if (! empty($row['text']))
+                                    @if ($row['override'])
+                                        {{ __('admin.settings.text_changed', [
+                                            'name' => $row['override']->updatedBy?->name ?? '—',
+                                            'when' => $row['override']->updated_at?->diffForHumans() ?? '—',
+                                        ]) }}
+                                    @endif
+                                @elseif ($row['override'])
                                     {{ __('admin.settings.changed', [
                                         'default' => number_format((int) $row['default']),
                                         'name' => $row['override']->updatedBy?->name ?? '—',
@@ -48,14 +59,18 @@
 
                         @if ($editing === $row['key'])
                             <form wire:submit="save" style="flex-basis:100%;margin-top:8px">
-                                @if ($mode === 'update')
+                                @if ($mode === 'update' && ! empty($row['text']))
+                                    <label class="rq-label" for="value-{{ $row['key'] }}">{{ __(SettingsCatalogue::labelKey($row['key'])) }}</label>
+                                    <input id="value-{{ $row['key'] }}" type="{{ ($row['entry']['format'] ?? null) === 'url' ? 'url' : 'text' }}" class="rq-field" wire:model="value"
+                                           maxlength="{{ $row['entry']['max'] }}" required dir="ltr">
+                                @elseif ($mode === 'update')
                                     <label class="rq-label" for="value-{{ $row['key'] }}">
                                         {{ __('admin.settings.bounds', ['min' => number_format($row['entry']['min']), 'max' => number_format($row['entry']['max']), 'unit' => __('admin.settings.units.'.$row['entry']['unit'])]) }}
                                     </label>
                                     <input id="value-{{ $row['key'] }}" type="number" class="rq-field" wire:model="value"
                                            min="{{ $row['entry']['min'] }}" max="{{ $row['entry']['max'] }}" required>
                                 @else
-                                    <p class="rq-note" style="margin:0 0 6px">{{ __('admin.settings.reset_hint', ['default' => number_format((int) $row['default'])]) }}</p>
+                                    <p class="rq-note" style="margin:0 0 6px">{{ ! empty($row['text']) ? __('admin.settings.text_reset_hint') : __('admin.settings.reset_hint', ['default' => number_format((int) $row['default'])]) }}</p>
                                 @endif
                                 @error('value') <p class="rq-error">{{ $message }}</p> @enderror
 

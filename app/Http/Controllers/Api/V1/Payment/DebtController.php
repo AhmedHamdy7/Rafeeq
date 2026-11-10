@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Api\V1\Payment;
 
+use App\Domains\Admin\Support\SettingsCatalogue;
 use App\Domains\Driver\Models\DriverProfile;
 use App\Domains\Payment\Actions\AppealFeeAction;
 use App\Domains\Payment\Actions\SubmitDebtPaymentAction;
@@ -72,9 +73,9 @@ final class DebtController extends Controller
     private function instapayPayee(): ?array
     {
         $payee = [
-            'link' => config('rafeeq.debt.instapay.link') ?: null,
-            'handle' => config('rafeeq.debt.instapay.handle') ?: null,
-            'displayName' => config('rafeeq.debt.instapay.display_name') ?: null,
+            'link' => SettingsCatalogue::text('debt.instapay_link'),
+            'handle' => SettingsCatalogue::text('debt.instapay_handle'),
+            'displayName' => SettingsCatalogue::text('debt.instapay_name'),
         ];
 
         return $payee['link'] === null && $payee['handle'] === null ? null : $payee;
