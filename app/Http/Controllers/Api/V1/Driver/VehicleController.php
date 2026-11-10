@@ -43,7 +43,7 @@ final class VehicleController extends Controller
      * POST /v1/driver/vehicles — Chapter 3 §7.
      */
     #[ApiErrors(
-        ErrorCode::DriverApplicationLocked,
+        ErrorCode::VehicleLocked,
         ErrorCode::DriverDuplicateDetected,
         ErrorCode::VehicleLimitReached,
         ErrorCode::NotFound,
@@ -60,7 +60,7 @@ final class VehicleController extends Controller
      * PATCH /v1/driver/vehicles/{vehicle}.
      */
     #[ApiErrors(
-        ErrorCode::DriverApplicationLocked,
+        ErrorCode::VehicleLocked,
         ErrorCode::DriverDuplicateDetected,
         ErrorCode::NotFound,
     )]
@@ -101,7 +101,7 @@ final class VehicleController extends Controller
      * POST /v1/driver/vehicles/{vehicle}/documents — Chapter 3 §8.
      */
     #[ApiErrors(
-        ErrorCode::DriverApplicationLocked,
+        ErrorCode::VehicleLocked,
         ErrorCode::DocumentRejectedByScanner,
         ErrorCode::DocumentUnreadable,
         ErrorCode::DocumentDimensionsTooLarge,

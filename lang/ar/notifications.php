@@ -367,4 +367,8 @@ return [
         'title' => 'المكان المقترح اتقبل',
         'body' => 'من الرحلة الجاية، ركوب :name هيكون من :place.',
     ],
+    'pickup_change_alternative_declined' => [
+        'title' => 'مكان الركوب زي ما هو',
+        'body' => ':name فضّل مكان الركوب الحالي بدل :place. مفيش حاجة اتغيرت.',
+    ],
 ];

@@ -63,7 +63,14 @@ final class DriverApplicationState
     public static function assertMayAddVehicle(DriverProfileStatus $status): void
     {
         if (! self::mayAddVehicle($status)) {
-            throw DomainException::of(ErrorCode::DriverApplicationLocked);
+            throw DomainException::of(ErrorCode::VehicleLocked);
+        }
+    }
+
+    public static function assertVehicleEditable(DriverProfileStatus $status): void
+    {
+        if (! self::isEditable($status)) {
+            throw DomainException::of(ErrorCode::VehicleLocked);
         }
     }
 

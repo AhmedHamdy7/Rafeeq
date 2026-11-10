@@ -17,6 +17,7 @@ use App\Domains\Shared\Support\ErrorCode;
 use App\Domains\Shared\ValueObjects\Coordinate;
 use App\Http\Controllers\Controller;
 use App\Http\OpenApi\ApiErrors;
+use App\Http\Requests\Booking\DropoffPreviewRequest;
 use App\Http\Requests\Booking\PickupPreviewRequest;
 use App\Http\Responses\ApiResponse;
 use Illuminate\Http\JsonResponse;
@@ -111,6 +112,50 @@ final class PickupPreviewController extends Controller
             'tripId' => $trip?->id,
             'estimatedPickupAt' => $estimated?->toIso8601String(),
             'estimatedPickupLocal' => $trip === null ? null : PickupEta::local($trip, $estimated),
+        ]);
+    }
+
+    #[ApiErrors(ErrorCode::PickupNotOnCommute, ErrorCode::SeatRequestWomenOnly, ErrorCode::NotFound)]
+    public function dropoff(
+        DropoffPreviewRequest $request,
+        string $commute,
+        GeoQueryEngine $geo,
+    ): JsonResponse {
+        $offer = CommuteOffer::query()->whereKey($commute)->with('locations')->first()
+            ?? throw DomainException::of(ErrorCode::NotFound);
+
+        $this->assertMayAsk($request->user(), $offer);
+
+        $dropoff = new Coordinate((float) $request->validated('lat'), (float) $request->validated('lng'));
+
+        $points = $request->filled('pickup.lat')
+            ? [new Coordinate((float) $request->validated('pickup.lat'), (float) $request->validated('pickup.lng')), $dropoff]
+            : [$dropoff];
+
+        $detour = PickupDetour::measureAll($geo, $offer, $points);
+
+        $trip = ScheduledTrip::query()
+            ->where('commute_offer_id', $offer->id)
+            ->where('status', ScheduledTripStatus::Scheduled->value)
+            ->where('departure_at', '>', now())
+            ->when($request->filled('scheduledTripId'), fn ($query) => $query->whereKey($request->validated('scheduledTripId')))
+            ->orderBy('departure_at')
+            ->first();
+
+        $estimated = $trip === null ? null : PickupEta::alongRoute($geo, $offer, $trip, $dropoff);
+
+        return ApiResponse::success([
+            'addedMinutes' => $detour->addedMinutes,
+            'addedKm' => $detour->addedKm,
+            'runTotalMinutes' => $detour->runTotalMinutes,
+            'maxDetourMinutes' => RouteSettings::maxTripDetourMinutes(),
+            'pointMeters' => $detour->pointMeters,
+            'tier' => $detour->tier()?->value,
+            'extraMinutes' => $detour->extraMinutes(),
+            'withinLimit' => $detour->isWithin(),
+            'tripId' => $trip?->id,
+            'estimatedDropoffAt' => $estimated?->toIso8601String(),
+            'estimatedDropoffLocal' => $trip === null ? null : PickupEta::local($trip, $estimated),
         ]);
     }
 

@@ -13,6 +13,7 @@ use App\Domains\Identity\Support\SecurityLog;
 use App\Domains\Shared\Exceptions\DomainException;
 use App\Domains\Shared\Support\ErrorCode;
 use App\Domains\Shared\Support\RateLimits;
+use App\Domains\Shared\Support\TestAccounts;
 use App\Domains\Shared\ValueObjects\PhoneNumber;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Log;
@@ -65,7 +66,7 @@ final readonly class RequestOtpAction
 
         $review = $this->reviewCodeFor($phone);
 
-        $code = $review ?? $this->generateCode();
+        $code = $review ?? $this->generateCode($phone);
 
         $challenge = OtpChallenge::create([
             'phone_e164' => $phone->e164,
@@ -221,11 +222,11 @@ final readonly class RequestOtpAction
      * handful of observed codes. Zero-padded so every code has the full
      * length — "0" as a first digit must not shorten it.
      */
-    private function generateCode(): string
+    private function generateCode(PhoneNumber $phone): string
     {
         $length = AuthSettings::otpLength();
 
-        if (($fixed = $this->developmentFixedCode($length)) !== null) {
+        if (TestAccounts::fixedCodeAppliesTo($phone->e164) && ($fixed = $this->developmentFixedCode($length)) !== null) {
             return $fixed;
         }
 

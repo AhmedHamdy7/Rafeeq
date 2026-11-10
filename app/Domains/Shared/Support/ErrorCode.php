@@ -62,6 +62,7 @@ enum ErrorCode: string
      */
     case DriverCommissionOverdue = 'DRIVER_COMMISSION_OVERDUE';
     case DriverApplicationLocked = 'DRIVER_APPLICATION_LOCKED';
+    case VehicleLocked = 'VEHICLE_LOCKED';
     case DriverApplicationIncomplete = 'DRIVER_APPLICATION_INCOMPLETE';
     case LicenceExpired = 'DRIVER_LICENCE_EXPIRED';
     /*
@@ -266,6 +267,7 @@ enum ErrorCode: string
      * (TRIP-10). Carries `distanceMeters` so the driver's screen can say how far she still is.
      */
     case NotAtPickup = 'NOT_AT_PICKUP';
+    case NoRecentLocation = 'NO_RECENT_LOCATION';
 
     // ---- Ratings (Phase 10, Chapter 9) ---------------------------------
     case RatingWindowClosed = 'RATING_WINDOW_CLOSED';
@@ -407,6 +409,7 @@ enum ErrorCode: string
             self::AccountHasTripInFeeWindow => 409,
 
             self::DriverApplicationLocked,
+            self::VehicleLocked,
             self::DriverDuplicateDetected,
             self::VehicleLimitReached,
             self::CommuteNotEditable,
@@ -513,7 +516,8 @@ enum ErrorCode: string
             self::NoShowTooEarly,
             self::NoArrivalMarked,
             // 409: the request is fine; where the car is right now is not. Drive closer and tap again.
-            self::NotAtPickup => 409,
+            self::NotAtPickup,
+            self::NoRecentLocation => 409,
 
             /*
              * 422 for these two, because both are about WHEN: a run started the night

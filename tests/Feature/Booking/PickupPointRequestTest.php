@@ -345,3 +345,43 @@ it('pushes the driver answer to the passenger', function () {
     expect(Notification::query()->where('type', 'pickup_change_rejected')->first()?->data)
         ->toMatchArray(['pickupRequestId' => $pickupId]);
 });
+
+it('lets the passenger keep her pickup instead of the driver spot, and tells the driver', function () {
+    proposePickup($this->paxToken, $this->requestId)->assertStatus(201);
+    approveSeat($this->driverToken, $this->requestId);
+
+    $pickupId = PickupPointRequest::sole()->id;
+    $place = Place::factory()->create(['lat' => 30.0660, 'lng' => 31.2400]);
+
+    test()->withToken($this->driverToken)
+        ->postJson("/api/v1/driver/pickup-requests/{$pickupId}/suggest-alternative", ['placeId' => $place->id])
+        ->assertOk();
+
+    test()->withToken($this->paxToken)
+        ->postJson("/api/v1/pickup-requests/{$pickupId}/keep-current")
+        ->assertOk()
+        ->assertJsonPath('data.status', 'ALTERNATIVE_DECLINED');
+
+    expect(round((float) Booking::sole()->refresh()->pickup_lat, 4))->toBe(30.0624)
+        ->and(Notification::query()->where('type', 'pickup_change_alternative_declined')->first()?->data)
+        ->toMatchArray(['pickupRequestId' => $pickupId, 'commuteId' => $this->commuteId]);
+
+    test()->withToken($this->driverToken)
+        ->getJson('/api/v1/driver/pickup-requests?status=PENDING,SUGGESTED_ALTERNATIVE')
+        ->assertOk()
+        ->assertJsonCount(0, 'data');
+
+    test()->withToken($this->paxToken)
+        ->postJson("/api/v1/pickup-requests/{$pickupId}/keep-current")
+        ->assertStatus(409)
+        ->assertJsonPath('error.code', 'PICKUP_REQUEST_NOT_PENDING');
+});
+
+it('refuses keep-current on a request the driver has not countered', function () {
+    proposePickup($this->paxToken, $this->requestId)->assertStatus(201);
+
+    test()->withToken($this->paxToken)
+        ->postJson('/api/v1/pickup-requests/'.PickupPointRequest::sole()->id.'/keep-current')
+        ->assertStatus(409)
+        ->assertJsonPath('error.code', 'PICKUP_REQUEST_NOT_PENDING');
+});

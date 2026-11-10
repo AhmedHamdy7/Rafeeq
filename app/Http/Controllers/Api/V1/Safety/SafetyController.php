@@ -323,8 +323,11 @@ final class SafetyController extends Controller
      */
     public function liveShares(Request $request): JsonResponse
     {
+        $tripSessionId = $request->query('tripSessionId');
+
         $shares = LiveShare::query()
             ->where('user_id', $request->user()->id)
+            ->when(is_string($tripSessionId) && $tripSessionId !== '', fn ($query) => $query->where('trip_session_id', $tripSessionId))
             ->latest('created_at')
             ->orderByDesc('id')
             ->paginate(ApiResponse::perPage($request));

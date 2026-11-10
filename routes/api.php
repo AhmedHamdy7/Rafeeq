@@ -36,12 +36,14 @@ use App\Http\Controllers\Api\V1\Payment\MoneyController;
 use App\Http\Controllers\Api\V1\PlaceController;
 use App\Http\Controllers\Api\V1\Rating\RatingController;
 use App\Http\Controllers\Api\V1\Safety\SafetyController;
+use App\Http\Controllers\Api\V1\Search\BrowseCommutesController;
 use App\Http\Controllers\Api\V1\Search\CommuteDemandController;
 use App\Http\Controllers\Api\V1\Search\CommuteDetailController;
 use App\Http\Controllers\Api\V1\Search\MatchOpenedController;
 use App\Http\Controllers\Api\V1\Search\RecentSearchController;
 use App\Http\Controllers\Api\V1\Search\SavedSearchController;
 use App\Http\Controllers\Api\V1\Search\SearchController;
+use App\Http\Controllers\Api\V1\Testing\TestingController;
 use App\Http\Controllers\Api\V1\Trip\AttendanceController;
 use App\Http\Controllers\Api\V1\Trip\DriverTripController;
 use App\Http\Controllers\Api\V1\Trip\NavigationRouteController;
@@ -86,6 +88,12 @@ Route::prefix('v1')->group(function (): void {
             Route::get('me', [SessionController::class, 'me']);
             Route::post('logout', [SessionController::class, 'logout']);
         });
+    });
+
+    Route::prefix('testing')->middleware('auth:sanctum')->group(function (): void {
+        Route::post('driver/approve', [TestingController::class, 'approveDriver']);
+        Route::delete('account', [TestingController::class, 'destroyAccount']);
+        Route::post('trips/{trip}/departure', [TestingController::class, 'moveDeparture']);
     });
 
     Route::prefix('account')->middleware('auth:sanctum')->group(function (): void {
@@ -501,6 +509,7 @@ Route::prefix('v1')->group(function (): void {
         Route::get('users/{user}/avatar', [AvatarController::class, 'show']);
 
         Route::get('search/commutes', [SearchController::class, 'commutes']);
+        Route::get('search/commutes/browse', BrowseCommutesController::class);
 
         /*
          * A commute as a passenger reads it (DISCOVER-1). Not `GET /commutes/{commute}`, which is
@@ -577,6 +586,7 @@ Route::prefix('v1')->group(function (): void {
         Route::post('commutes/{commute}/seat-requests', [SeatRequestController::class, 'store']);
         Route::get('seat-requests', [SeatRequestController::class, 'index']);
         Route::get('seat-requests/{seatRequest}', [SeatRequestController::class, 'show']);
+        Route::patch('seat-requests/{seatRequest}', [SeatRequestController::class, 'updatePoints']);
 
         /*
          * Seats offered to her while she waits (Feature 03 v3).
@@ -766,11 +776,13 @@ Route::prefix('v1')->group(function (): void {
          * all.
          */
         Route::post('commutes/{commute}/pickup-preview', [PickupPreviewController::class, 'show']);
+        Route::post('commutes/{commute}/dropoff-preview', [PickupPreviewController::class, 'dropoff']);
 
         Route::post('seat-requests/{seatRequest}/pickup-request', [PickupPointRequestController::class, 'storeForSeatRequest']);
         Route::post('groups/{group}/pickup-request', [PickupPointRequestController::class, 'storeForMember']);
         Route::get('pickup-requests', [PickupPointRequestController::class, 'mine']);
         Route::post('pickup-requests/{pickupRequest}/accept-alternative', [PickupPointRequestController::class, 'acceptAlternative']);
+        Route::post('pickup-requests/{pickupRequest}/keep-current', [PickupPointRequestController::class, 'keepCurrent']);
 
         Route::get('driver/pickup-requests', [PickupPointRequestController::class, 'inbox']);
         Route::post('driver/pickup-requests/{pickupRequest}/approve', [PickupPointRequestController::class, 'approve']);

@@ -89,7 +89,7 @@ final class HomeJourney
             ->where('scheduled_trip_id', $trip->getKey())
             ->orderBy('sequence')
             ->orderBy('id')
-            ->get(['id', 'booking_id', 'kind', 'sequence', 'leg_duration_seconds', 'reached_at']);
+            ->get(['id', 'scheduled_trip_id', 'booking_id', 'kind', 'sequence', 'leg_duration_seconds', 'reached_at', 'eta_at', 'lat', 'lng']);
 
         $this->attendance = Attendance::query()->whereKey($booking->getKey())->first();
 
@@ -220,7 +220,7 @@ final class HomeJourney
     /**
      * F3P-04 → F3P-06. Null outside those three, which is what "before the driver starts" means.
      *
-     * @return array{pickupEtaAt: string|null, arrivalEtaAt: string|null, progressPercent: int|null, driverArrivedAt: string|null, boardedAt: string|null}|null
+     * @return array{pickupEtaAt: string|null, arrivalEtaAt: string|null, progressPercent: int|null, driverArrivedAt: string|null, boardedAt: string|null, stopsBeforeYou: int|null}|null
      */
     public function live(): ?array
     {
@@ -245,14 +245,17 @@ final class HomeJourney
         $pickupEta = null;
         $arrivalEta = null;
         $progress = null;
+        $stopsBefore = null;
 
         if ($phase === self::DRIVER_EN_ROUTE) {
+            $stopsBefore = $this->stopsBeforePickup();
             $pickupEta = $this->liveEtaTo(NavigationStopKind::PassengerPickup)
                 ?? $this->etaTo(NavigationStopKind::PassengerPickup, $startedAt, $now);
             $progress = $this->progress($startedAt, $pickupEta, $now);
         } elseif ($phase === self::DRIVER_ARRIVED) {
             // The car is at her kerb: the bar to her pickup is full, and that is recorded, not guessed.
             $progress = 100;
+            $stopsBefore = 0;
         } else {
             $arrivalEta = $this->etaTo(NavigationStopKind::PassengerDropoff, $boardedAt, $now);
             $progress = $this->progress($boardedAt, $arrivalEta, $now);
@@ -264,7 +267,20 @@ final class HomeJourney
             'progressPercent' => $progress,
             'driverArrivedAt' => $this->arrivedAt?->toIso8601String(),
             'boardedAt' => $phase === self::ON_BOARD ? $boardedAt?->toIso8601String() : null,
+            'stopsBeforeYou' => $stopsBefore,
         ];
+    }
+
+    private function stopsBeforePickup(): ?int
+    {
+        $hers = $this->stops->first(fn (NavigationStop $stop): bool => $stop->booking_id === $this->booking->getKey()
+            && $stop->kind === NavigationStopKind::PassengerPickup);
+
+        if ($hers === null || $hers->reached_at !== null) {
+            return null;
+        }
+
+        return LiveStopEtas::stopsBefore($this->stops, $hers);
     }
 
     /**

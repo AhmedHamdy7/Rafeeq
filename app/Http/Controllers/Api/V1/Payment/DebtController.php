@@ -62,7 +62,22 @@ final class DebtController extends Controller
             'coupons' => CouponResource::collection(
                 Coupon::query()->where('user_id', $user->id)->latest('created_at')->limit(10)->get(),
             ),
+            'instapay' => $this->instapayPayee(),
         ]);
+    }
+
+    /**
+     * @return array{link: string|null, handle: string|null, displayName: string|null}|null
+     */
+    private function instapayPayee(): ?array
+    {
+        $payee = [
+            'link' => config('rafeeq.debt.instapay.link') ?: null,
+            'handle' => config('rafeeq.debt.instapay.handle') ?: null,
+            'displayName' => config('rafeeq.debt.instapay.display_name') ?: null,
+        ];
+
+        return $payee['link'] === null && $payee['handle'] === null ? null : $payee;
     }
 
     /**

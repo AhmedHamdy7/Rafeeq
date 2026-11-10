@@ -9,6 +9,7 @@ use App\Domains\Commute\Models\ScheduledTrip;
 use App\Domains\Shared\Exceptions\DomainException;
 use App\Domains\Shared\Support\ErrorCode;
 use App\Domains\Trip\Actions\AdvanceTripAction;
+use App\Domains\Trip\Actions\BuildNavigationItineraryAction;
 use App\Domains\Trip\Actions\RecordTripLocationAction;
 use App\Domains\Trip\Enums\NavigationStopKind;
 use App\Domains\Trip\Models\NavigationStop;
@@ -108,15 +109,16 @@ final class TripLocationController extends Controller
             'isUnderway' => $session->current_status->isUnderway(),
             'pickupEtaAt' => $towards['pickupEtaAt'],
             'carToPickupPolyline' => $towards['carToPickupPolyline'],
+            'stopsBeforeYou' => $towards['stopsBeforeYou'],
         ]);
     }
 
     /**
-     * @return array{pickupEtaAt: string|null, carToPickupPolyline: string|null}
+     * @return array{pickupEtaAt: string|null, carToPickupPolyline: string|null, stopsBeforeYou: int|null}
      */
     private function towardsHer(Request $request, ScheduledTrip $occurrence): array
     {
-        $none = ['pickupEtaAt' => null, 'carToPickupPolyline' => null];
+        $none = ['pickupEtaAt' => null, 'carToPickupPolyline' => null, 'stopsBeforeYou' => null];
 
         $booking = Booking::query()
             ->where('scheduled_trip_id', $occurrence->id)
@@ -128,10 +130,7 @@ final class TripLocationController extends Controller
             return $none;
         }
 
-        $stops = NavigationStop::query()
-            ->where('scheduled_trip_id', $occurrence->id)
-            ->orderBy('sequence')
-            ->get();
+        $stops = app(BuildNavigationItineraryAction::class)->forTrip($occurrence);
 
         $hers = $stops->first(fn (NavigationStop $stop): bool => $stop->booking_id === $booking->id
             && $stop->kind === NavigationStopKind::PassengerPickup);
@@ -142,11 +141,16 @@ final class TripLocationController extends Controller
 
         $live = LiveStopEtas::for($occurrence, $stops);
 
-        if (! $live->isLive || $live->arrivedAtFor($hers) !== null) {
+        if (! $live->isLive) {
             return $none;
         }
 
+        if ($live->arrivedAtFor($hers) !== null) {
+            return [...$none, 'stopsBeforeYou' => 0];
+        }
+
         return [
+            'stopsBeforeYou' => LiveStopEtas::stopsBefore($stops, $hers),
             'pickupEtaAt' => $live->etaFor($hers)?->toIso8601String(),
             'carToPickupPolyline' => $live->nextStopId === (string) $hers->getKey() ? $live->carToNextStopPolyline : null,
         ];

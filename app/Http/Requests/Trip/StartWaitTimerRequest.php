@@ -29,8 +29,8 @@ final class StartWaitTimerRequest extends FormRequest
 
             // Where the car is now. Refused with 409 NOT_AT_PICKUP (with `distanceMeters`) unless
             // it is within 150 m of this passenger's pickup point.
-            'lat' => ['required', 'numeric', 'between:-90,90'],
-            'lng' => ['required', 'numeric', 'between:-180,180'],
+            'lat' => ['nullable', 'required_with:lng', 'numeric', 'between:-90,90'],
+            'lng' => ['nullable', 'required_with:lat', 'numeric', 'between:-180,180'],
         ];
     }
 }

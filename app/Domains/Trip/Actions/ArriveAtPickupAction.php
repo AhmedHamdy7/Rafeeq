@@ -48,7 +48,25 @@ final readonly class ArriveAtPickupAction
         private GeoQueryEngine $geo,
         private AdvanceTripAction $advance,
         private WaitTimerAction $timers,
+        private RecordTripLocationAction $locations,
     ) {}
+
+    public const int LATEST_POINT_MAX_AGE_SECONDS = 120;
+
+    public function driverAt(TripSession $session, mixed $lat, mixed $lng): Coordinate
+    {
+        if ($lat !== null && $lng !== null) {
+            return new Coordinate((float) $lat, (float) $lng);
+        }
+
+        $latest = $this->locations->current($session);
+
+        if ($latest === null || $latest->recordedAt->lessThan(CarbonImmutable::now()->subSeconds(self::LATEST_POINT_MAX_AGE_SECONDS))) {
+            throw DomainException::of(ErrorCode::NoRecentLocation);
+        }
+
+        return new Coordinate($latest->lat, $latest->lng);
+    }
 
     public function execute(TripSession $session, Booking $booking, Coordinate $driverAt): TripWaitTimer
     {

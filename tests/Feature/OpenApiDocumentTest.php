@@ -232,6 +232,9 @@ it('generates a document describing every /v1 route', function () {
          */
         'POST /v1/trips/{trip}/live-share',
         'GET /v1/safety/live-shares',
+        'POST /v1/testing/driver/approve',
+        'DELETE /v1/testing/account',
+        'POST /v1/testing/trips/{trip}/departure',
         'DELETE /v1/safety/live-shares/{share}',
         // Ratings (Phase 10). Nothing here returns somebody else's rating — see RatingController.
         'GET /v1/ratings/pending',
@@ -250,6 +253,7 @@ it('generates a document describing every /v1 route', function () {
         // HISTORY-10 — appealing the decision on a report.
         'POST /v1/incidents/{incident}/appeal',
         'GET /v1/search/commutes',
+        'GET /v1/search/commutes/browse',
         'GET /v1/commute-demands',
         'GET /v1/commute-demands/{demand}',
         'POST /v1/commute-demands',
@@ -272,6 +276,7 @@ it('generates a document describing every /v1 route', function () {
         'POST /v1/seat-offers/{offer}/decline',
         'GET /v1/seat-requests',
         'GET /v1/seat-requests/{seatRequest}',
+        'PATCH /v1/seat-requests/{seatRequest}',
         'PATCH /v1/seat-requests/{seatRequest}/availability',
         'DELETE /v1/seat-requests/{seatRequest}',
         'GET /v1/my-bookings',
@@ -308,6 +313,7 @@ it('generates a document describing every /v1 route', function () {
         'GET /v1/groups/{group}/statement',
 
         'POST /v1/commutes/{commute}/pickup-preview',
+        'POST /v1/commutes/{commute}/dropoff-preview',
         'POST /v1/driver/seat-requests/{seatRequest}/waitlist',
 
         /*
@@ -348,6 +354,7 @@ it('generates a document describing every /v1 route', function () {
         'POST /v1/groups/{group}/pickup-request',
         'GET /v1/pickup-requests',
         'POST /v1/pickup-requests/{pickupRequest}/accept-alternative',
+        'POST /v1/pickup-requests/{pickupRequest}/keep-current',
         'GET /v1/driver/pickup-requests',
         'POST /v1/driver/pickup-requests/{pickupRequest}/approve',
         'POST /v1/driver/pickup-requests/{pickupRequest}/suggest-alternative',

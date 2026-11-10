@@ -11,7 +11,6 @@ use App\Domains\Commute\Models\ScheduledTrip;
 use App\Domains\Payment\Support\DriverFees;
 use App\Domains\Shared\Exceptions\DomainException;
 use App\Domains\Shared\Support\ErrorCode;
-use App\Domains\Shared\ValueObjects\Coordinate;
 use App\Domains\Trip\Actions\AdvanceTripAction;
 use App\Domains\Trip\Actions\ArriveAtPickupAction;
 use App\Domains\Trip\Actions\AutoFinishTripsAction;
@@ -103,6 +102,7 @@ final class TripController extends Controller
         ErrorCode::TripNotStarted,
         ErrorCode::TripInvalidTransition,
         ErrorCode::NotAtPickup,
+        ErrorCode::NoRecentLocation,
         ErrorCode::WaitTimerAlreadyRunning,
         ErrorCode::NotFound,
     )]
@@ -133,10 +133,7 @@ final class TripController extends Controller
             ->first()
             ?? throw DomainException::of(ErrorCode::NotFound);
 
-        $arrive->execute($session, $booking, new Coordinate(
-            (float) $request->validated('lat'),
-            (float) $request->validated('lng'),
-        ));
+        $arrive->execute($session, $booking, $arrive->driverAt($session, $request->validated('lat'), $request->validated('lng')));
 
         return ApiResponse::success(new TripSessionResource($session->refresh()->load('scheduledTrip')));
     }

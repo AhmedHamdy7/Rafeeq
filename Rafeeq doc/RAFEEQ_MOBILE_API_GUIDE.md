@@ -14,7 +14,7 @@
 >
 > **Base URL:** `{host}/api/v1` · **Auth:** bearer token · **Format:** JSON only.
 
-**Last updated:** 2026-11-10 · **202 endpoints live** · Phases 0–7, 9 and 11 complete · 10, 12 and 13 all but a decision each
+**Last updated:** 2026-11-11 · **209 endpoints live** · Phases 0–7, 9 and 11 complete · 10, 12 and 13 all but a decision each
 
 ---
 
@@ -22,7 +22,7 @@
 
 ### What is ready
 
-**202 endpoints live** and tested, across the 47 designed screens:
+**209 endpoints live** and tested, across the 47 designed screens:
 
 | | Count | Covers |
 |---|---|---|
@@ -726,6 +726,7 @@ fails if this list and the running routes ever disagree in either direction.
 | `POST /commutes/{commute}/duplicate` | 4.5 Commutes (driver) |
 | `POST /commutes/{commute}/pause` | 4.5 Commutes (driver) |
 | `POST /commutes/{commute}/pickup-preview` | 4.5 Commutes (driver) |
+| `POST /commutes/{commute}/dropoff-preview` | 4.8 Pickup points |
 | `GET /commutes/options` | 4.5 Commutes (driver) |
 | `GET /commutes/{commute}/route-preview` | 4.5 Commutes (driver) |
 | `GET /commutes/{commute}/price` | 4.5 Commutes (driver) |
@@ -751,6 +752,7 @@ fails if this list and the running routes ever disagree in either direction.
 | `DELETE /me/recent-searches` | 4.6 Search, demands, saved searches |
 | `DELETE /me/recent-searches/{search}` | 4.6 Search, demands, saved searches |
 | `GET /search/commutes` | 4.6 Search, demands, saved searches |
+| `GET /search/commutes/browse` | 4.6 Search, demands, saved searches |
 | `GET /commutes/{commute}/public` | 4.6 Search, demands, saved searches |
 | `GET /bookings/{booking}` | 4.7 Seat requests and bookings |
 | `PATCH /bookings/{booking}/cancel` | 4.7 Seat requests and bookings |
@@ -793,6 +795,7 @@ fails if this list and the running routes ever disagree in either direction.
 | `POST /seat-offers/{offer}/decline` | 4.7 Seat requests and bookings |
 | `GET /seat-requests` | 4.7 Seat requests and bookings |
 | `GET /seat-requests/{seatRequest}` | 4.7 Seat requests and bookings |
+| `PATCH /seat-requests/{seatRequest}` | 4.7 Seat requests and bookings |
 | `PATCH /seat-requests/{seatRequest}/availability` | 4.7 Seat requests and bookings |
 | `DELETE /seat-requests/{seatRequest}` | 4.7 Seat requests and bookings |
 | `POST /seat-requests/{seatRequest}/pickup-request` | 4.7 Seat requests and bookings |
@@ -803,6 +806,7 @@ fails if this list and the running routes ever disagree in either direction.
 | `POST /groups/{group}/pickup-request` | 4.8 Pickup points |
 | `GET /pickup-requests` | 4.8 Pickup points |
 | `POST /pickup-requests/{pickupRequest}/accept-alternative` | 4.8 Pickup points |
+| `POST /pickup-requests/{pickupRequest}/keep-current` | 4.8 Pickup points |
 | `GET /trips/{trip}` | 4.9 Live trip |
 | `GET /trips/{trip}/attendance` | 4.9 Live trip |
 | `GET /trips/{trip}/cancel-preview` | 4.9 Live trip |
@@ -858,6 +862,9 @@ fails if this list and the running routes ever disagree in either direction.
 | `PATCH /safety/emergency-contacts/{contact}` | 4.12 Safety |
 | `DELETE /safety/emergency-contacts/{contact}` | 4.12 Safety |
 | `GET /safety/live-shares` | 4.12 Safety |
+| `POST /testing/driver/approve` | 4.17 Testing (staging only) |
+| `DELETE /testing/account` | 4.17 Testing (staging only) |
+| `POST /testing/trips/{trip}/departure` | 4.17 Testing (staging only) |
 | `DELETE /safety/live-shares/{share}` | 4.12 Safety |
 | `POST /trips/{trip}/live-share` | 4.12 Safety |
 | `POST /sos` | 4.12 Safety |
@@ -1998,6 +2005,15 @@ receive a result they cannot then request.
 
 Returns an array of match results — see 4.6, which explains the score breakdown.
 
+
+#### `GET /search/commutes/browse` — active, profile complete · paginated
+
+Discover before she types her places (interim: no product rule covers it). Every commute she may
+request, **soonest next day first**, one card per commute. No points, so the cards are the search
+card with `meetingPoint`, `dropOffPoint`, `score`, `tier`, `detourMinutes` and `extraMinutes` set
+to `null` and `otherDays: []`. Optional filters: `womenOnly`, `tier`, `daysMask`. Not saved to recent
+searches.
+
 #### `GET /commutes/{commute}/public` — active, profile complete
 
 **A commute as a passenger reads it** (DISCOVER-1): the detail screen (B01 → B07, F3P-21 → 23) and
@@ -2343,6 +2359,14 @@ otherwise), and `commute` — `originLabel`, `destinationLabel`, **`commuteGroup
 **`?status=`** (TRIPS-14): a comma-separated list, any case, e.g. `?status=PENDING,COUNTEROFFERED`
 for Requests and `?status=WAITLISTED` for the Waiting list. Paging and `meta` describe the filtered
 list. An unknown status → `422 VALIDATION_FAILED`. Left out: every request, as before.
+
+#### `PATCH /seat-requests/{seatRequest}` — active, profile complete
+
+Changes the points of **her own pending** request. **Request:** `pickup` and `dropoff`, the same
+shape as on `POST /commutes/{commute}/seat-requests`, and optional `introMessage`. Checked the same
+way (tiers, travel order): `422 PICKUP_DETOUR_TOO_LONG` beyond the red tier. Refused with
+`409 SEAT_REQUEST_NOT_PENDING` once it is answered, and for a request sent during a live ride.
+Answers the updated request.
 
 #### `GET /seat-requests/{seatRequest}` — active, profile complete
 
@@ -3176,6 +3200,24 @@ there is no cooldown.
 The passenger accepting the driver's counter-offer. Applied the same way as an approval, so it
 answers `409 COMMUTE_SCHEDULE_LOCKED` inside the 12-hour lock too.
 
+#### `POST /pickup-requests/{pickupRequest}/keep-current` — active, profile complete
+
+"Keep my pickup": the passenger says no to the driver's counter-offer (BOOK-37). No body. The row
+gets the final status `ALTERNATIVE_DECLINED`, leaves both open lists, nothing moves, and the driver
+gets the push `pickup_change_alternative_declined` (`pickupRequestId`, `commuteId`, plus
+`commuteGroupId` or `seatRequestId`). Answers the updated row. Refused with
+`409 PICKUP_REQUEST_NOT_PENDING` unless the row is `SUGGESTED_ALTERNATIVE`. The 12-hour lock does
+not apply, because nothing moves.
+
+#### `POST /commutes/{commute}/dropoff-preview` — active, profile complete
+
+The same as `pickup-preview`, for a drop-off. **Request:** `lat`, `lng` (the drop-off), optional
+`pickup {lat, lng}` (measured together, as the seat request will be) and `scheduledTripId`.
+**Response:** `addedMinutes`, `addedKm`, `runTotalMinutes`, `maxDetourMinutes`, `pointMeters`,
+`tier`, `extraMinutes`, `withinLimit`, `tripId`, `estimatedDropoffAt`, `estimatedDropoffLocal`.
+`addedMinutes` is by road when the server runs the Google engine; with the `straight_line` engine it
+is a straight-line estimate.
+
 ---
 
 ## 4.9 Live trip
@@ -3591,7 +3633,9 @@ nothing. A mistake is corrected by the passenger disputing and a reviewer overtu
 #### `POST /trips/{trip}/wait-timers` — active, profile complete, driver only
 
 **"I've arrived" for one passenger** (TRIP-10, TRIP-11). **Request:** `bookingId`, `lat`, `lng` —
-where the car is now. There is no `graceSeconds` field: how long the platform asks a driver to wait
+where the car is now. `lat` / `lng` can be left out together (the tap from the notification or the
+Live Activity): the server then uses the last point the phone sent to `POST /trips/{trip}/location`
+if it is under 2 minutes old, and checks it the same way. Without one: `409 NO_RECENT_LOCATION`. There is no `graceSeconds` field: how long the platform asks a driver to wait
 is policy, not something the app decides.
 
 - 🔴 **Refused with `409 NOT_AT_PICKUP`** unless the car is within 150 m of **this passenger's**
@@ -3652,6 +3696,7 @@ of six with one bad point delivers five.
 | `isUnderway` | Whether the run is out on the road. |
 | `pickupEtaAt` | **Passenger with a confirmed seat, before her pickup:** when the car should reach her. The same number the driver sees as `etaAt` on her stop in `navigation-route`, and as `nextJourney.live.pickupEtaAt` on `/home`. Null for the driver, before the start, once he marked arrival, and after she boarded. |
 | `carToPickupPolyline` | Encoded road from the car to her pickup, **only while her pickup is the next stop** and a position is current. Null otherwise: draw it yourself or not at all. |
+| `stopsBeforeYou` | **Passenger with a confirmed seat:** how many pickups and drop-offs the car still makes before hers. `0` when she is next and after the arrival tap. A count only. Null for the driver, before the start and after she boarded. Same value as `nextJourney.live.stopsBeforeYou`. |
 
 A late batch never moves the car back: when every point in a batch is older than the newest one
 already received, the points join the trail but `position` and `lastLocationAt` stay as they were.
@@ -3810,7 +3855,7 @@ they explain.
 | `nextJourney.daysMask` | The days she rides — her requested days, or the commute's days. Sat 1 … Fri 64. |
 | `nextJourney.pickup` | `{label, at, local, lat, lng, isExact}` — "Your agreed pickup · Rehab Gate 2 · 07:05". `label`/`lat`/`lng`/`isExact` are `meetingPoint`'s (fuzzed, label `null`, until confirmed). **`at` is her pickup time** — departure plus the drive to her stop — and is the same instant her arrival grace counts from. `meetingPoint` stays. |
 | `nextJourney.dropoff` | `{label, promisedArrivalAt, promisedArrivalLocal}`. The promise is the day's; `null` when the driver promised no arrival. |
-| `nextJourney.live` | `{pickupEtaAt, arrivalEtaAt, progressPercent, driverArrivedAt, boardedAt}`, **only** while `phase` is `driver_en_route` / `driver_arrived` / `on_board`, or `driver_delayed` on a run that has started (filled as en route); `null` otherwise. `pickupEtaAt` + `progressPercent` (to her pickup) on en-route; `driverArrivedAt` and `progressPercent: 100` on arrived; `arrivalEtaAt` + `progressPercent` (to her drop-off) + `boardedAt` on board. `pickupEtaAt` is the same live time as `navigation-route` (routed from the car's latest position, 4.9); otherwise ETAs are counted from the last stop the car reached plus the itinerary's measured leg times, never in the past; `null` when no itinerary was built. `progressPercent` stops at 99 until the car is recorded there. **Poll `/home` every 30 s while `live` is not null**, and not otherwise. |
+| `nextJourney.live` | `{pickupEtaAt, arrivalEtaAt, progressPercent, driverArrivedAt, boardedAt, stopsBeforeYou}` (`stopsBeforeYou`: stops before her pickup on en-route, `0` on arrived, `null` on board), **only** while `phase` is `driver_en_route` / `driver_arrived` / `on_board`, or `driver_delayed` on a run that has started (filled as en route); `null` otherwise. `pickupEtaAt` + `progressPercent` (to her pickup) on en-route; `driverArrivedAt` and `progressPercent: 100` on arrived; `arrivalEtaAt` + `progressPercent` (to her drop-off) + `boardedAt` on board. `pickupEtaAt` is the same live time as `navigation-route` (routed from the car's latest position, 4.9); otherwise ETAs are counted from the last stop the car reached plus the itinerary's measured leg times, never in the past; `null` when no itinerary was built. `progressPercent` stops at 99 until the car is recorded there. **Poll `/home` every 30 s while `live` is not null**, and not otherwise. |
 | `nextJourney.canLeaveWithoutFee` | Show **Leave Without Fee** only when `true`. It calls `POST /bookings/{booking}/exit-without-fee` (4.9) — the same server finding, so it is never refused when this is `true`. Also `true` mid-run when the driver has not arrived 5 min after her pickup time, or the car has passed her stop. |
 | `nextJourney.checkIn` | `{groupId, answer, cutoffAt, canAnswer}` (TRIP-26). `answer` is `coming` or `null` (no answer = coming; "I can't make it" cancels the day, so it never shows here). `cutoffAt` is 2 h before departure; show the two buttons only while `canAnswer`. Answer with `POST /groups/{group}/attendance` `{tripId, status: "coming" \| "away"}`. |
 | `nextJourney.endedAt` | When it was cancelled / expired / she exited; `null` otherwise. With `cancellationFeePiastres` (`0` → "no fee to you" / "no penalty"). |
@@ -4200,7 +4245,7 @@ this run: only the driver, or a passenger holding a live seat, may share it.
 
 #### `GET /safety/live-shares` — paginated · `DELETE /safety/live-shares/{share}`
 
-The caller's own links. 🔒 **Without tokens, and that is not an oversight** — being able to re-read
+The caller's own links, newest first. `?tripSessionId=` keeps one run's links. 🔒 **Without tokens, and that is not an oversight** — being able to re-read
 them would mean a stolen access token could harvest every link a person ever made. The list gives
 `isActive`, `expiresAt`, `viewCount` and `lastViewedAt`.
 
@@ -4733,6 +4778,7 @@ it is paid (driver: nothing overdue; passenger: nothing owed).
 | `passenger` | Her passenger side. Always there. |
 | `payments[]` | Her last ten "I paid"s, newest first: `id`, `side`, `amountPiastres`, `instapayReference`, `status` (`pending_confirmation` · `confirmed` · `rejected`), `hasReceipt`, `decisionNote` (why staff refused it), `createdAt`, `decidedAt`. 🔒 The receipt itself is never returned. |
 | `coupons[]` | Her last ten coupons (PAY-34): `id`, `side`, `valuePiastres`, `bookingId`, `createdAt`. Already taken off her debt. |
+| `instapay` | Where to send the money: `{link, handle, displayName}`, set per server. `null` while none is configured. |
 
 Each side:
 
@@ -4810,6 +4856,32 @@ and `driverKeepsPiastres`.
 Cancelled and expired bookings are **absent**, not zero-valued: they are not money, they are things
 that did not happen. `404` for a group the caller is not in — and for one that does not exist, so
 neither is distinguishable from the other.
+
+
+## 4.17 Testing (staging only)
+
+For the automated tests. **All three answer `404`** unless the server has `RAFEEQ_TESTING_API=true`,
+is not production, and the caller's number is in `RAFEEQ_TEST_PHONES`.
+
+#### `POST /testing/driver/approve`
+
+Approves the caller's driver application as a reviewer would: every pending verification item,
+each car (Comfort, AC, approved seats = its seats, up to the maximum) and the application.
+Answers `{driverStatus, vehicles[{id, approvedSeats, tier, verificationStatus}]}`. The application
+must have been sent to review first; otherwise `409 DRIVER_APPLICATION_LOCKED` or
+`422 DRIVER_APPLICATION_INCOMPLETE`.
+
+#### `DELETE /testing/account`
+
+Deletes the caller's account the way `DELETE /account` does (commutes archived, seats cancelled,
+requests withdrawn, demands cancelled, sessions ended, the number freed), **without** the checks that
+block a real deletion. End a live run first with `POST /trips/{trip}/cancel-active`.
+
+#### `POST /testing/trips/{trip}/departure`
+
+Moves one day of the caller's commute: `{"minutesFromNow": 5}` or `{"departureAt": "<ISO>"}`.
+The promised arrival and stop times move by the same amount. Use it for the 90-minute start window,
+the 12-hour lock and the late timers. Answers `{tripId, departureAt, promisedArrivalAt}`.
 
 ---
 
@@ -4998,6 +5070,7 @@ exist, and every live endpoint must be named here.
 
 | Date | Change |
 |---|---|
+| 2026-11-11 | 🧩 **Backend asks of 2026-11-11.** **7 new endpoints:** `POST /pickup-requests/{pickupRequest}/keep-current` (status `ALTERNATIVE_DECLINED`, push `pickup_change_alternative_declined`), `GET /search/commutes/browse`, `POST /commutes/{commute}/dropoff-preview`, `PATCH /seat-requests/{seatRequest}`, and the staging-only `POST /testing/driver/approve`, `DELETE /testing/account`, `POST /testing/trips/{trip}/departure` (4.17). **`stopsBeforeYou`** on `GET /trips/{trip}/location` and `nextJourney.live`. **"I've arrived" without `lat` / `lng`** uses the last point under 2 minutes old; new `409 NO_RECENT_LOCATION`. `GET /account/debt` gains `instapay`. `GET /safety/live-shares` takes `?tripSessionId=`. 🔴 A car edit under review answers **`409 VEHICLE_LOCKED`** instead of `DRIVER_APPLICATION_LOCKED`. `addedMinutes` is now measured against a route from the same engine, so a far point no longer reads +0. The development OTP works only for `RAFEEQ_TEST_PHONES` once that list is set. |
 | 2026-11-10 | 🗺️ **Maps redesign.** **Pickup requests** (4.8) carry `commuteId`, `commuteGroupId`, `tripId`, `bookingId`, `currentPoint`, `proposedPoint.label` (area until approved) and `alternativePlace`; the driver's list adds `passenger {id, publicFirstName, avatarPath}`; both lists filter by `status`, `commuteId`, `commuteGroupId`, `seatRequestId`. Five new pushes: `pickup_change_requested`, `_approved`, `_alternative`, `_rejected`, `_alternative_accepted`. **`navigation-route`**: live `etaAt` once the run starts, `arrivedAt` per pickup, `DRIVER_START` reached at the start, `nextStopIndex`, `nextStopDistanceMeters`, `etasAreLive`. **`GET /trips/{trip}/location`**: `pickupEtaAt` and `carToPickupPolyline` for the passenger; a late batch no longer moves the car back. `/home` → `nextJourney.live.pickupEtaAt` uses the same live time; `nextJourney.dropoff` gains `lat`, `lng`, `isExact`. **`GET /commutes/{commute}/public`** gains `detourTiers`. |
 | 2026-11-10 | 🧪 **Patrol run gaps (B1–B10).** **`GET /driver/home` → `unreadNotifications`**, same as on `/home`. 🔴 **`nextStep` is `ROLE_SELECTION`** on every launch call once the profile is saved and no role is chosen (AUTH-02); it used to answer `BASIC_PROFILE`. 🔴 **`POST /trips/{trip}/no-show` needs the arrival and the end of the grace:** `409 NO_ARRIVAL_MARKED` with no arrival marked, `409 NO_SHOW_TOO_EARLY` with `fields.expiresAt` during the grace. **Bookings** gain `tripDate` (every row, approve included) and, on `GET /bookings/{booking}`, `vehicle {make, model, colour, seats, plateNumber}` once `CONFIRMED`. 🔴 **`DELETE /commutes/{commute}` and `POST /commutes/{commute}/pause` refuse while a run is live:** `409 COMMUTE_TRIP_IN_PROGRESS` with `fields.tripId`; end it with Cancel Active Trip first. New **`GET /seat-requests/{seatRequest}`**. `GET /search/commutes` takes `true` / `false` for `womenOnly` and `wantsReturnTrip`. `PUT /commutes/{commute}/schedule` takes `HH:MM` or `HH:MM:SS`. The `kind` table (which driver answer fits which request) is in 4.7. |
 | 2026-11-09 | 💬 **Chat gaps.** **2 new endpoints:** `POST /bookings/{booking}/typing` and `POST /seat-requests/{seatRequest}/typing`, with the new `chat.typing` socket event (6.3). Both `GET .../messages` now return `meta.otherParty` (the other person's card and `role`) and `meta.commute` (route labels and `departureAt`). The booking thread also returns `meta.seatRequestId`. Both threads return `meta.events`, the system lines ("Booking confirmed", "Picked up · 07:06"…), and the new `chat.event` socket event sends the ride moments live. Chat is now kept 90 days instead of 12 months (TRIP-28). |

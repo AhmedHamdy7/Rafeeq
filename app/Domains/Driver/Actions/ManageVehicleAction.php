@@ -82,7 +82,7 @@ final readonly class ManageVehicleAction
      */
     public function update(DriverProfile $profile, Vehicle $vehicle, array $attributes): Vehicle
     {
-        DriverApplicationState::assertEditable($profile->status);
+        DriverApplicationState::assertVehicleEditable($profile->status);
 
         if (array_key_exists('plateNumber', $attributes)) {
             $this->assertPlateIsFree($attributes['plateNumber'], exceptVehicleId: $vehicle->id);

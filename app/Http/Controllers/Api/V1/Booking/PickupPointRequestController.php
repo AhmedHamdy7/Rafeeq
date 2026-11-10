@@ -281,6 +281,22 @@ final class PickupPointRequestController extends Controller
         return ApiResponse::success(new PickupPointRequestResource($action->acceptAlternative($mine)));
     }
 
+    #[ApiErrors(ErrorCode::PickupRequestNotPending, ErrorCode::NotFound)]
+    public function keepCurrent(
+        Request $request,
+        string $pickupRequest,
+        RespondToPickupPointAction $action,
+    ): JsonResponse {
+        $mine = PickupPointRequest::query()
+            ->where('requested_by_user_id', $request->user()->id)
+            ->whereKey($pickupRequest)
+            ->with('alternativePlace', 'seatRequest', 'groupMember.commuteGroup', 'requestedBy')
+            ->first()
+            ?? throw DomainException::of(ErrorCode::NotFound);
+
+        return ApiResponse::success(new PickupPointRequestResource($action->declineAlternative($mine)));
+    }
+
     /**
      * A pickup request on one of the caller's OWN commutes, reached through either of
      * the two keys the row can carry.

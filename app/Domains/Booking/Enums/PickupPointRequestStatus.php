@@ -8,4 +8,5 @@ enum PickupPointRequestStatus: string
     case Approved = 'approved';
     case SuggestedAlternative = 'suggested_alternative';
     case Rejected = 'rejected';
+    case AlternativeDeclined = 'alternative_declined';
 }

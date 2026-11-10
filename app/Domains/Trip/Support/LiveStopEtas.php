@@ -131,6 +131,18 @@ final readonly class LiveStopEtas
         );
     }
 
+    /**
+     * @param  Collection<int, NavigationStop>  $stops
+     */
+    public static function stopsBefore(Collection $stops, NavigationStop $target): int
+    {
+        return $stops
+            ->filter(fn (NavigationStop $stop): bool => $stop->sequence < $target->sequence
+                && $stop->reached_at === null
+                && $stop->kind !== NavigationStopKind::DriverStart)
+            ->count();
+    }
+
     public function etaFor(NavigationStop $stop): ?CarbonImmutable
     {
         return $this->etas[(string) $stop->getKey()] ?? null;

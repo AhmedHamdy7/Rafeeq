@@ -510,3 +510,52 @@ it('has no pickup time for the driver himself', function () {
     expect(test()->withToken($this->driverToken)->getJson("/api/v1/trips/{$this->tripId}/location")
         ->assertOk()->json('data.pickupEtaAt'))->toBeNull();
 });
+
+it('tells the passenger how many stops come before her pickup', function () {
+    underway($this->driverToken, $this->tripId);
+
+    reportPosition($this->driverToken, $this->tripId, [position(lat: 30.0500, lng: 31.2000, agoSeconds: 3)])->assertOk();
+
+    expect(test()->withToken($this->paxToken)->getJson("/api/v1/trips/{$this->tripId}/location")
+        ->assertOk()->json('data.stopsBeforeYou'))->toBe(0)
+        ->and(test()->withToken($this->paxToken)->getJson('/api/v1/home')
+            ->assertOk()->json('data.nextJourney.live.stopsBeforeYou'))->toBe(0)
+        ->and(test()->withToken($this->driverToken)->getJson("/api/v1/trips/{$this->tripId}/location")
+            ->assertOk()->json('data.stopsBeforeYou'))->toBeNull();
+});
+
+it('takes the arrival from the last streamed point when the tap carries no location', function () {
+    underway($this->driverToken, $this->tripId);
+
+    $at = atPickupOf($this->bookingId);
+
+    reportPosition($this->driverToken, $this->tripId, [position(lat: $at['lat'], lng: $at['lng'], agoSeconds: 20)])->assertOk();
+
+    test()->withToken($this->driverToken)
+        ->postJson("/api/v1/trips/{$this->tripId}/wait-timers", ['bookingId' => $this->bookingId])
+        ->assertStatus(201);
+});
+
+it('refuses an arrival with no location when the last point is too old', function () {
+    underway($this->driverToken, $this->tripId);
+
+    $at = atPickupOf($this->bookingId);
+
+    reportPosition($this->driverToken, $this->tripId, [position(lat: $at['lat'], lng: $at['lng'], agoSeconds: 200)])->assertOk();
+
+    test()->withToken($this->driverToken)
+        ->postJson("/api/v1/trips/{$this->tripId}/wait-timers", ['bookingId' => $this->bookingId])
+        ->assertStatus(409)
+        ->assertJsonPath('error.code', 'NO_RECENT_LOCATION');
+});
+
+it('still checks the distance when the last streamed point is away from her pickup', function () {
+    underway($this->driverToken, $this->tripId);
+
+    reportPosition($this->driverToken, $this->tripId, [position(lat: 30.0200, lng: 31.1000, agoSeconds: 10)])->assertOk();
+
+    test()->withToken($this->driverToken)
+        ->postJson("/api/v1/trips/{$this->tripId}/wait-timers", ['bookingId' => $this->bookingId])
+        ->assertStatus(409)
+        ->assertJsonPath('error.code', 'NOT_AT_PICKUP');
+});
