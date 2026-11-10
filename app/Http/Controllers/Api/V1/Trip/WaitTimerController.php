@@ -7,7 +7,6 @@ use App\Domains\Commute\Models\CommuteOffer;
 use App\Domains\Commute\Models\ScheduledTrip;
 use App\Domains\Shared\Exceptions\DomainException;
 use App\Domains\Shared\Support\ErrorCode;
-use App\Domains\Shared\ValueObjects\Coordinate;
 use App\Domains\Trip\Actions\AdvanceTripAction;
 use App\Domains\Trip\Actions\ArriveAtPickupAction;
 use App\Domains\Trip\Models\TripWaitTimer;
@@ -70,6 +69,7 @@ final class WaitTimerController extends Controller
         ErrorCode::WaitTimerAlreadyRunning,
         ErrorCode::AttendanceNotConfirmable,
         ErrorCode::NotAtPickup,
+        ErrorCode::NoRecentLocation,
         ErrorCode::TripInvalidTransition,
         ErrorCode::NotFound,
     )]
@@ -81,7 +81,7 @@ final class WaitTimerController extends Controller
         $timer = $action->execute(
             $session,
             $this->bookingOn($scheduled, $request->string('bookingId')->value()),
-            new Coordinate((float) $request->validated('lat'), (float) $request->validated('lng')),
+            $action->driverAt($session, $request->validated('lat'), $request->validated('lng')),
         );
 
         return ApiResponse::success(new WaitTimerResource($timer), status: 201);

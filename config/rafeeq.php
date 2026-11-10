@@ -1374,4 +1374,8 @@ return [
         'search_history_days' => 90,
     ],
 
+    'testing' => [
+        'api' => (bool) env('RAFEEQ_TESTING_API', false),
+    ],
+
 ];

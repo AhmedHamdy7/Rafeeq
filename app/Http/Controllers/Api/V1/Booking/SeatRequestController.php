@@ -7,6 +7,7 @@ use App\Domains\Booking\Actions\CounterofferAction;
 use App\Domains\Booking\Actions\RequestSeatAction;
 use App\Domains\Booking\Actions\RespondToSeatRequestAction;
 use App\Domains\Booking\Actions\SetStandbyAvailabilityAction;
+use App\Domains\Booking\Actions\UpdateSeatRequestPointsAction;
 use App\Domains\Booking\Enums\SeatRequestStatus;
 use App\Domains\Booking\Models\SeatRequest;
 use App\Domains\Booking\Support\CounterofferOptions;
@@ -21,6 +22,7 @@ use App\Http\Requests\Booking\CounterofferSeatRequestRequest;
 use App\Http\Requests\Booking\ListSeatRequestsRequest;
 use App\Http\Requests\Booking\RequestSeatRequest;
 use App\Http\Requests\Booking\SetStandbyAvailabilityRequest;
+use App\Http\Requests\Booking\UpdateSeatRequestPointsRequest;
 use App\Http\Resources\SeatApprovalResource;
 use App\Http\Resources\SeatRequestResource;
 use App\Http\Responses\ApiResponse;
@@ -330,6 +332,22 @@ final class SeatRequestController extends Controller
         );
 
         return ApiResponse::success(new SeatRequestResource($updated));
+    }
+
+    #[ApiErrors(
+        ErrorCode::SeatRequestNotPending,
+        ErrorCode::PickupDetourTooLong,
+        ErrorCode::PickupNotOnCommute,
+        ErrorCode::NotFound,
+    )]
+    public function updatePoints(
+        UpdateSeatRequestPointsRequest $request,
+        string $seatRequest,
+        UpdateSeatRequestPointsAction $action,
+    ): JsonResponse {
+        $updated = $action->execute($this->mine($request, $seatRequest), $request->validated());
+
+        return ApiResponse::success(new SeatRequestResource($updated->load(SeatRequestResource::passengerRelations())));
     }
 
     /**

@@ -136,6 +136,31 @@ final readonly class RespondToPickupPointAction
         });
     }
 
+    public function declineAlternative(PickupPointRequest $pickup): PickupPointRequest
+    {
+        if ($pickup->status !== PickupPointRequestStatus::SuggestedAlternative) {
+            throw DomainException::of(ErrorCode::PickupRequestNotPending);
+        }
+
+        $pickup->forceFill(['status' => PickupPointRequestStatus::AlternativeDeclined->value])->save();
+
+        $driver = $this->driverOf($pickup);
+
+        if ($driver !== null) {
+            Notifier::send($driver, NotificationType::PickupChangeAlternativeDeclined, params: [
+                'name' => $pickup->requestedBy?->public_first_name ?? '',
+                'place' => $pickup->alternativePlace === null ? '' : (LocalisedLabel::place($pickup->alternativePlace, null) ?? ''),
+            ], data: array_filter([
+                'pickupRequestId' => $pickup->id,
+                'commuteId' => PickupRequestContext::commuteId($pickup),
+                'commuteGroupId' => PickupRequestContext::commuteGroupId($pickup),
+                'seatRequestId' => $pickup->seat_request_id,
+            ]));
+        }
+
+        return $pickup;
+    }
+
     /**
      * Writes the agreed meeting point onto every booking the requester still has
      * ahead of them on this commute.

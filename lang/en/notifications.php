@@ -441,4 +441,8 @@ return [
         'title' => ':name accepted your spot',
         'body' => 'From the next trip, you pick :name up at :place.',
     ],
+    'pickup_change_alternative_declined' => [
+        'title' => ':name kept their pickup',
+        'body' => ':name prefers their current pickup to :place. Nothing changes.',
+    ],
 ];

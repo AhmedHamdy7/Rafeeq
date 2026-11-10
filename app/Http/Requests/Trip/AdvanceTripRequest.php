@@ -36,8 +36,8 @@ final class AdvanceTripRequest extends FormRequest
 
             // AT_PICKUP only: where the car is now. Refused with 409 NOT_AT_PICKUP (with
             // `distanceMeters`) unless it is within 150 m of her pickup point.
-            'lat' => ['required_if:status,at_pickup', 'nullable', 'numeric', 'between:-90,90'],
-            'lng' => ['required_if:status,at_pickup', 'nullable', 'numeric', 'between:-180,180'],
+            'lat' => ['nullable', 'required_with:lng', 'numeric', 'between:-90,90'],
+            'lng' => ['nullable', 'required_with:lat', 'numeric', 'between:-180,180'],
         ];
     }
 

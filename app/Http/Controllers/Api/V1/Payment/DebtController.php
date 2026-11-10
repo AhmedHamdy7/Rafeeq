@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Api\V1\Payment;
 
+use App\Domains\Admin\Support\SettingsCatalogue;
 use App\Domains\Driver\Models\DriverProfile;
 use App\Domains\Payment\Actions\AppealFeeAction;
 use App\Domains\Payment\Actions\SubmitDebtPaymentAction;
@@ -62,7 +63,22 @@ final class DebtController extends Controller
             'coupons' => CouponResource::collection(
                 Coupon::query()->where('user_id', $user->id)->latest('created_at')->limit(10)->get(),
             ),
+            'instapay' => $this->instapayPayee(),
         ]);
+    }
+
+    /**
+     * @return array{link: string|null, handle: string|null, displayName: string|null}|null
+     */
+    private function instapayPayee(): ?array
+    {
+        $payee = [
+            'link' => SettingsCatalogue::text('debt.instapay_link'),
+            'handle' => SettingsCatalogue::text('debt.instapay_handle'),
+            'displayName' => SettingsCatalogue::text('debt.instapay_name'),
+        ];
+
+        return $payee['link'] === null && $payee['handle'] === null ? null : $payee;
     }
 
     /**

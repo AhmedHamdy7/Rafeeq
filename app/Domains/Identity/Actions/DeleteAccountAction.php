@@ -52,9 +52,11 @@ final readonly class DeleteAccountAction
         private ChangeCommuteStatusAction $commutes,
     ) {}
 
-    public function execute(User $user): void
+    public function execute(User $user, bool $skipChecks = false): void
     {
-        AccountDeletionCheck::assertCanDelete($user);
+        if (! $skipChecks) {
+            AccountDeletionCheck::assertCanDelete($user);
+        }
 
         DB::transaction(function () use ($user): void {
             foreach (AccountDeletionCheck::upcomingPassengerSeats($user) as $booking) {

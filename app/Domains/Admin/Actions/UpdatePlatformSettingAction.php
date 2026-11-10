@@ -70,9 +70,34 @@ final readonly class UpdatePlatformSettingAction
      * again — and a later change to that default reaches this instance, which an override
      * that merely equals today's default would not.
      */
+    public function updateText(string $key, string $value, AdminUser $admin, string $reason): void
+    {
+        if (SettingsCatalogue::textEntry($key) === null) {
+            throw DomainException::of(ErrorCode::NotFound);
+        }
+
+        DB::transaction(function () use ($key, $value, $admin, $reason): void {
+            $before = PlatformSetting::value($key);
+
+            $setting = PlatformSetting::query()->find($key) ?? new PlatformSetting(['setting_key' => $key]);
+            $setting->setting_value = $value;
+            $setting->value_type = 'string';
+            $setting->updated_by = $admin->id;
+            $setting->save();
+
+            AdminActionLog::record($admin, 'settings.update', $setting,
+                before: ['value' => $before],
+                after: ['value' => $value],
+                reason: $reason,
+            );
+        });
+    }
+
     public function reset(string $key, AdminUser $admin, string $reason): void
     {
-        $this->editable($key);
+        if (SettingsCatalogue::textEntry($key) === null) {
+            $this->editable($key);
+        }
 
         $setting = PlatformSetting::query()->find($key);
 
@@ -80,7 +105,9 @@ final readonly class UpdatePlatformSettingAction
             return;
         }
 
-        $this->assertStaysInOrder($key, (int) SettingsCatalogue::defaultFor($key));
+        if (SettingsCatalogue::textEntry($key) === null) {
+            $this->assertStaysInOrder($key, (int) SettingsCatalogue::defaultFor($key));
+        }
 
         DB::transaction(function () use ($setting, $key, $admin, $reason): void {
             $before = $setting->setting_value;

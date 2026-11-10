@@ -92,9 +92,13 @@ final readonly class PickupDetour
          * its own drop-off, because the pair is checked for travel order before it ever reaches
          * here.
          */
-        $via = self::inRoadOrder($geo, $origin, $destination, array_merge(self::existingPickups($offer), $proposed));
+        $existing = self::existingPickups($offer);
+
+        $via = self::inRoadOrder($geo, $origin, $destination, array_merge($existing, $proposed));
 
         $withStop = $geo->routeBetween($origin, $destination, $via);
+
+        $baseline = $geo->routeBetween($origin, $destination, self::inRoadOrder($geo, $origin, $destination, $existing));
 
         /*
          * Never negative. A straight-line engine, and a real provider recomputing
@@ -104,9 +108,9 @@ final readonly class PickupDetour
          * is not a claim this system should ever make on the strength of an
          * estimate.
          */
-        $addedMinutes = round(max(0, $withStop->durationSeconds - $published->durationSeconds) / 60, 1);
+        $addedMinutes = round(max(0, $withStop->durationSeconds - $baseline->durationSeconds) / 60, 1);
 
-        $addedKm = round(max(0, $withStop->distance->metres - $published->distance->metres) / 1000, 2);
+        $addedKm = round(max(0, $withStop->distance->metres - $baseline->distance->metres) / 1000, 2);
 
         return new self(
             addedMinutes: $addedMinutes,

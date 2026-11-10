@@ -2,6 +2,8 @@
 
 namespace App\Domains\Admin\Support;
 
+use App\Domains\Admin\Models\PlatformSetting;
+
 /**
  * Every number the platform reads from `platform_settings`, and what it may be set to.
  *
@@ -181,9 +183,31 @@ final class SettingsCatalogue
     /**
      * @return array{group: string, min: int, max: int, unit: string, locked?: string}|null
      */
+    public const array TEXT_ENTRIES = [
+        'debt.instapay_link' => ['group' => 'debt', 'max' => 500, 'format' => 'url'],
+        'debt.instapay_handle' => ['group' => 'debt', 'max' => 100],
+        'debt.instapay_name' => ['group' => 'debt', 'max' => 100],
+    ];
+
     public static function entry(string $key): ?array
     {
         return self::ENTRIES[$key] ?? null;
+    }
+
+    public static function textEntry(string $key): ?array
+    {
+        return self::TEXT_ENTRIES[$key] ?? null;
+    }
+
+    public static function text(string $key): ?string
+    {
+        if (! isset(self::TEXT_ENTRIES[$key])) {
+            return null;
+        }
+
+        $value = PlatformSetting::value($key);
+
+        return is_string($value) && trim($value) !== '' ? $value : null;
     }
 
     /**

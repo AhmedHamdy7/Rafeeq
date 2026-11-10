@@ -450,6 +450,8 @@ enum NotificationType: string
 
     case PickupChangeAlternativeAccepted = 'pickup_change_alternative_accepted';
 
+    case PickupChangeAlternativeDeclined = 'pickup_change_alternative_declined';
+
     public function category(): NotificationCategory
     {
         return match ($this) {
@@ -510,6 +512,7 @@ enum NotificationType: string
             self::PickupChangeAlternative,
             self::PickupChangeRejected,
             self::PickupChangeAlternativeAccepted,
+            self::PickupChangeAlternativeDeclined,
             self::MatchFound => NotificationCategory::Booking,
 
             self::TripStarted,

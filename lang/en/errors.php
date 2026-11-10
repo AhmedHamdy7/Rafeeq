@@ -52,6 +52,7 @@ return [
     'DRIVER_CANNOT_APPLY' => 'You cannot apply to drive yet.',
     'DRIVER_SUSPENDED' => 'Your driving is suspended, so you can\'t do this right now.',
     'DRIVER_APPLICATION_LOCKED' => 'Your application is being reviewed and cannot be changed. Withdraw it first if you need to make a correction.',
+    'VEHICLE_LOCKED' => "Your car is being reviewed and can't be changed right now. You can change it once the review is done.",
     'DRIVER_APPLICATION_INCOMPLETE' => 'Some required details or documents are still missing.',
     'DRIVER_LICENCE_EXPIRED' => 'Your licence isn\'t valid. Renew it to continue.',
     'DRIVER_LICENCE_MINIMUM_VALIDITY' => 'Your licence must be valid for at least :days more days.',
@@ -136,6 +137,7 @@ return [
     'WAIT_TIMER_ALREADY_RUNNING' => 'A wait timer is already running for this passenger.',
     'WAIT_TIMER_NOT_RUNNING' => 'There is no wait timer running for this passenger.',
     'NOT_AT_PICKUP' => "You're not at this passenger's pickup point yet. Get closer and tap again.",
+    'NO_RECENT_LOCATION' => "We couldn't get your location. Open Rafeeq and tap I've arrived again.",
 
     /*
      * Ratings. Double-blind, so the wording must not hint at whether the other person has

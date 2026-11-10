@@ -218,13 +218,23 @@ it('records the arrival through AT_PICKUP too, and refuses it far from her picku
     expect(TripWaitTimer::sole()->arrived_at)->not->toBeNull();
 });
 
-it('needs the passenger and the position for AT_PICKUP', function () {
+it('needs the passenger for AT_PICKUP, and both coordinates or neither', function () {
     underway($this->driverToken, $this->tripId);
 
     test()->withToken($this->driverToken)
         ->postJson("/api/v1/trips/{$this->tripId}/status", ['status' => 'AT_PICKUP'])
         ->assertStatus(422)
-        ->assertJsonValidationErrors(['bookingId', 'lat', 'lng'], 'error.fields');
+        ->assertJsonValidationErrors(['bookingId'], 'error.fields');
+
+    test()->withToken($this->driverToken)
+        ->postJson("/api/v1/trips/{$this->tripId}/status", ['status' => 'AT_PICKUP', 'bookingId' => $this->bookingId, 'lat' => 30.06])
+        ->assertStatus(422)
+        ->assertJsonValidationErrors(['lng'], 'error.fields');
+
+    test()->withToken($this->driverToken)
+        ->postJson("/api/v1/trips/{$this->tripId}/status", ['status' => 'AT_PICKUP', 'bookingId' => $this->bookingId])
+        ->assertStatus(409)
+        ->assertJsonPath('error.code', 'NO_RECENT_LOCATION');
 });
 
 /**
