@@ -31,12 +31,14 @@ final readonly class SeatApproval
     /**
      * @param  array<int, Booking>  $bookings
      * @param  array<string, string>  $skipped  trip date (Y-m-d) => the reason it could not be seated
+     * @param  array<string, string>  $codes  trip date (Y-m-d) => the error code that refused it
      */
     public function __construct(
         public SeatRequest $request,
         public GroupMember $member,
         public array $bookings,
         public array $skipped = [],
+        public array $codes = [],
     ) {}
 
     /**

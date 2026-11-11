@@ -130,6 +130,7 @@ return [
     'TRIP_NOT_STARTED' => 'This run has not started yet.',
     'TRIP_INVALID_TRANSITION' => 'That step is not possible from where this run is now.',
     'TRIP_NOT_CANCELLABLE' => 'This run can no longer be cancelled.',
+    'TRIP_DAY_TAKEN' => 'Another run of this commute is underway on that day.',
     'TRIP_TOO_EARLY_TO_START' => 'It is too early to start this run. Start it closer to the departure time.',
     'NO_SHOW_TOO_EARLY' => 'It is too early to mark a no-show. Wait until the 5-minute grace ends.',
     'NO_ARRIVAL_MARKED' => 'Mark your arrival at the pickup before marking a no-show.',

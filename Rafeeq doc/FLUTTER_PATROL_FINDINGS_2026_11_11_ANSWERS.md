@@ -2,10 +2,9 @@
 
 **Date:** 2026-11-11 · **Answers:** `docs/blockers/backend-findings-2026-11-11.md` (mobile repo) · **Full contract:** `RAFEEQ_MOBILE_API_GUIDE.md`, change log entry "Fixes from the Patrol run (B-1 → B-11)"
 
-All 11 findings are **Fixed**. None is "works as designed" and none is "later".
-
-The fixes are on the backend branch `fix/patrol-findings-2026-11-11` and are **not deployed yet**. We will tell you
-when they are on Railway. Run the scenarios again after that.
+B-1 → B-11 are **Fixed** and merged (PR #56). **B-12** (added after the deploy) is **Fixed** on the backend branch
+`fix/testing-departure-b12` and is **not deployed yet**. We will tell you when it is on Railway; then re-run the
+chapters it blocked (B-1, B-3, B-6, B-7, B-8, B-10).
 
 | # | Status | What the app needs to do |
 |---|---|---|
@@ -20,6 +19,7 @@ when they are on Railway. Run the scenarios again after that.
 | B-9 | ✅ Fixed | Handle `422 COMMUTE_OVERLAPS` on publish. |
 | B-10 | ✅ Fixed | Read `nextJourney.sameCancellation` for the card wording. |
 | B-11 | ✅ Fixed | Nothing. `rating_due_riders` now also has `riderCount`. |
+| B-12 | ✅ Fixed | Nothing for the move. Read `skippedDays[].code` to see why a day was skipped. |
 | T3 | ⏳ Staff | Staff set the InstaPay payee on the staging dashboard. No code change. |
 
 ---
@@ -190,6 +190,48 @@ early), whether they were dropped off before or at completion.
 | `rating_due_riders` | Driver | `tripId`, `riderCount` (new) |
 
 A run where nobody rode (for example, everybody was a no-show) sends nothing to the driver.
+
+## B-12 · Moving a later run onto today
+
+**Cause:** a commute has one run per day (a unique index on the commute and the date). Moving the 18 Nov run onto
+today put it on the date today's run already held, and the database refused it. The call didn't catch that, so it
+answered `500`. It worked before only when the commute had no run today.
+
+**Now:** `POST /testing/trips/{trip}/departure` checks the target day first:
+
+| Run already on that day | What happens |
+|---|---|
+| none | As before. |
+| `SCHEDULED` | The two **swap days**. Today's run moves to the moved run's old day (18 Nov), at its own time, with its bookings. |
+| finished (`COMPLETED`, `CANCELLED`, `EXPIRED`) | It moves back to the nearest free earlier day. It stays finished. |
+| underway (`PREPARING`, `EN_ROUTE`, `IN_PROGRESS`) | **`409 TRIP_DAY_TAKEN`** with `fields.tripId`, `tripDate`, `status`. Finish or cancel it first. |
+
+The answer gains `swappedTrip`: `{ tripId, departureAt }` of the run that moved out of the way, or `null`.
+
+So your step 3 now answers `200` with the new `departureAt`, and her booking on the 18 Nov run comes with it.
+Documented in guide 4.17.
+
+### Why a recurring approval skipped today as `unavailable`
+
+It is **not** the 12-hour lock. A day is skipped as:
+
+| `reason` | Why |
+|---|---|
+| `full` | No seat left. Goes on her waiting list. |
+| `breaks_arrival` | Inside the 12-hour lock, her points would make the driver miss the arrival promised to riders already on that day (`BOOKING_BREAKS_FROZEN_PROMISE`). Goes on her waiting list. |
+| `unavailable` | She already holds a seat on that run, or she rides another commute at the same time (`BOOKING_ALREADY_BOOKED`), or the run has already left (`BOOKING_DEADLINE_PASSED`). |
+
+We can't tell which one it was from the report. The usual case in the tests is that she **already holds a seat that
+day**: a trial on today's run, or a seat on another commute at the same time. Her existing seat stands, so the
+recurring approval skips that day.
+
+To make this visible, each skipped day now has **`code`**, the exact refusal:
+
+```json
+"skippedDays": [{ "date": "2026-11-11", "tripDate": "2026-11-11", "reason": "unavailable", "code": "BOOKING_ALREADY_BOOKED" }]
+```
+
+If the next run shows a different `code`, send it to us with the trip id.
 
 ---
 
