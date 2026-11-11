@@ -95,6 +95,9 @@ Route::prefix('v1')->group(function (): void {
         Route::post('driver/approve', [TestingController::class, 'approveDriver']);
         Route::delete('account', [TestingController::class, 'destroyAccount']);
         Route::post('trips/{trip}/departure', [TestingController::class, 'moveDeparture']);
+        Route::post('trips/{trip}/position', [TestingController::class, 'placeCar']);
+        Route::post('driver/vehicles/{vehicle}/approve', [TestingController::class, 'approveVehicle']);
+        Route::post('driver/vehicles/{vehicle}/reject', [TestingController::class, 'rejectVehicle']);
         Route::post('debt/payments/{payment}/confirm', [TestingScenarioController::class, 'confirmPayment']);
         Route::post('debt/payments/{payment}/reject', [TestingScenarioController::class, 'rejectPayment']);
         Route::post('debt/deadline', [TestingScenarioController::class, 'debtDeadline']);

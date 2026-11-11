@@ -270,3 +270,19 @@ it('expires a counteroffer nobody answered', function () {
 
     expect(SeatRequest::findOrFail($this->requestId)->status)->toBe(SeatRequestStatus::Expired);
 });
+
+it('tells the driver once when she accepts the counteroffer', function () {
+    counteroffer($this->driverToken, $this->requestId, [
+        'pickup' => ['lat' => 30.0630, 'lng' => 31.3300, 'label' => 'Petrol station'],
+    ])->assertOk();
+
+    $bookingId = test()->flushHeaders()->withToken($this->paxToken)
+        ->postJson("/api/v1/seat-requests/{$this->requestId}/counteroffer/accept")
+        ->assertStatus(201)->json('data.bookings.0.id');
+
+    $notice = Notification::query()->where('type', 'seat_counteroffer_accepted')->where('channel', 'in_app')->sole();
+
+    expect($notice->user_id)->toBe(SeatRequest::findOrFail($this->requestId)->counteroffered_by)
+        ->and($notice->data['seatRequestId'])->toBe($this->requestId)
+        ->and($notice->data['bookingIds'])->toBe($bookingId);
+});

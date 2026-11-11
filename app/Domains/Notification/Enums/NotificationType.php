@@ -264,6 +264,9 @@ enum NotificationType: string
     /** The passenger refused the place the driver proposed, so the conversation is closed. */
     case SeatCounterofferDeclined = 'seat_counteroffer_declined';
 
+    /** The passenger accepted the place the driver proposed, and her seat is confirmed. */
+    case SeatCounterofferAccepted = 'seat_counteroffer_accepted';
+
     /*
      * The driver wants to change a commute people have already booked, and it cannot happen without
      * every affected passenger's yes (Feature 03 v5 §6). Four messages, because the four moments
@@ -492,6 +495,7 @@ enum NotificationType: string
             self::SeatReplacementDeclined,
             self::SeatCounteroffered,
             self::SeatCounterofferDeclined,
+            self::SeatCounterofferAccepted,
             self::ChangeProposalReceived,
             self::ChangeProposalRevised,
             self::ChangeProposalApplied,
