@@ -10,7 +10,7 @@ final class AgeDebtRequest extends FormRequest
     {
         return [
             'days' => ['required', 'integer', 'between:1,120'],
-            'side' => ['nullable', 'in:driver,passenger'],
+            'side' => ['nullable', 'string', 'in:driver,passenger'],
         ];
     }
 }

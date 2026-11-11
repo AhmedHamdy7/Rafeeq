@@ -9,6 +9,7 @@ use App\Domains\Commute\Models\CommuteWeekdaySchedule;
 use App\Domains\Commute\Models\ScheduledTrip;
 use App\Domains\Driver\Models\Vehicle;
 use App\Domains\Notification\Models\Notification;
+use App\Domains\Shared\ValueObjects\DaysMask;
 
 /**
  * Changing a commute people have already booked, with their agreement (Feature 03 v5 §6).
@@ -526,4 +527,24 @@ it('runs v5’s scenario D end to end', function () {
         ->assertJsonPath('data.status', 'APPLIED');
 
     expect(ScheduledTrip::findOrFail($this->tripId)->departure_local->format('H:i:s'))->toBe('07:45:00');
+});
+
+it('applies an all-future change when a recurring rider accepts once for all her days', function () {
+    $token = verifiedPassenger('01112223355', device: 'pax-9');
+    $requestId = requestSeat($token, $this->commuteId, [
+        'commitment' => 'recurring',
+        'requestedDaysMask' => DaysMask::weekdaysSunToThu()->value,
+    ])->assertStatus(201)->json('data.id');
+    test()->flushHeaders()->withToken($this->driverToken)
+        ->postJson("/api/v1/driver/seat-requests/{$requestId}/approve")->assertStatus(201);
+
+    $proposalId = proposeChange($this->driverToken, $this->commuteId, [
+        'scheduledTripId' => $this->tripId,
+        'scope' => 'all_future_on_this_weekday',
+        'departureTime' => '06:50:00',
+    ])->assertStatus(201)->json('data.id');
+
+    expect(ChangeProposal::findOrFail($proposalId)->affectedBookings()->count())->toBeGreaterThan(1);
+
+    answerProposal($token, $proposalId, 'accepted')->assertOk()->assertJsonPath('data.status', 'APPLIED');
 });

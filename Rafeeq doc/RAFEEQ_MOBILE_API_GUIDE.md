@@ -14,7 +14,7 @@
 >
 > **Base URL:** `{host}/api/v1` · **Auth:** bearer token · **Format:** JSON only.
 
-**Last updated:** 2026-11-11 · **220 endpoints live** · Phases 0–7, 9 and 11 complete · 10, 12 and 13 all but a decision each
+**Last updated:** 2026-11-12 · **223 endpoints live** · Phases 0–7, 9 and 11 complete · 10, 12 and 13 all but a decision each
 
 ---
 
@@ -22,7 +22,7 @@
 
 ### What is ready
 
-**220 endpoints live** and tested, across the 47 designed screens:
+**223 endpoints live** and tested, across the 47 designed screens:
 
 | | Count | Covers |
 |---|---|---|
@@ -865,6 +865,9 @@ fails if this list and the running routes ever disagree in either direction.
 | `POST /testing/driver/approve` | 4.17 Testing (staging only) |
 | `DELETE /testing/account` | 4.17 Testing (staging only) |
 | `POST /testing/trips/{trip}/departure` | 4.17 Testing (staging only) |
+| `POST /testing/trips/{trip}/position` | 4.17 Testing (staging only) |
+| `POST /testing/driver/vehicles/{vehicle}/approve` | 4.17 Testing (staging only) |
+| `POST /testing/driver/vehicles/{vehicle}/reject` | 4.17 Testing (staging only) |
 | `POST /testing/debt/payments/{payment}/confirm` | 4.17 Testing (staging only) |
 | `POST /testing/debt/payments/{payment}/reject` | 4.17 Testing (staging only) |
 | `POST /testing/debt/deadline` | 4.17 Testing (staging only) |
@@ -2506,7 +2509,8 @@ passenger must accept it (Feature 03 v5 §6).
 | **Silence changes nothing** | A passenger who never answers blocks it indefinitely, until the proposal expires. Do not imply a timeout approves it. |
 | **One refusal ends it** | The proposal goes to `REJECTED`. The driver can revise and ask again. |
 | **A revision resets every answer** | `version` increments. An answer counts only for the version it was given on — **warn the driver before she revises**, and re-read before letting a passenger answer. |
-| **The last yes applies it immediately** | There is no separate Apply step. The response that completes unanimity returns `status: APPLIED`. |
+| **The last yes applies it immediately** | There is no separate Apply step. The response that completes unanimity returns `status: APPLIED` (`PENDING` → `APPLIED`, or → `REJECTED` / `EXPIRED`). After that, `withdrawn` answers `409 CHANGE_PROPOSAL_NOT_LIVE`. |
+| **One answer per passenger** | A recurring rider holds one booking per affected weekday; her single answer counts for **all** of them. The driver's `passengers[]` still lists one row per day. |
 | **Expires at the affected morning's departure** | `expiresAt`. A proposal about this morning is meaningless once the car has gone. |
 
 **`POST /driver/commutes/{commute}/change-proposals`** — **Request:** `scheduledTripId`, `scope`
@@ -3103,7 +3107,7 @@ attendance decision acceptable, and it is the passenger's only move.
 | `commuteId` | The commute the booking belongs to — for "Ride again" and `GET /commutes/{commute}/reviews`. On `GET /my-bookings` and `GET /bookings/{booking}` (HISTORY-1). |
 | `originLabel` · `destinationLabel` | The commute's start and end, as on `nextJourney` (`Rehab Gate 2` → `Smart Village B6`) — the History card's title. Same two endpoints. |
 | `driver` | The driver as a `person` (5.1) — **`publicFirstName`**, badges, `rating`, `completedTrips`. 🔒 **Never a full name, phone or user id**; Block uses `otherPartyUserId`. `null` if the driver's account is gone. Same two endpoints. |
-| `status` | `PENDING` · `CONFIRMED` · `COMPLETED` · `CANCELLED_BY_PASSENGER` · `CANCELLED_BY_DRIVER` · `EXPIRED` · `NO_SHOW`. A booking is created **already `CONFIRMED`**: the driver has just approved a request she read, so leaving it pending would invent a second approval nobody performs. |
+| `status` | `CONFIRMED` · `COMPLETED` · `CANCELLED_BY_PASSENGER` · `CANCELLED_BY_DRIVER` · `NO_SHOW` · `ENDED_EARLY` · `EXITED_DUE_TO_DRIVER_DELAY`. `PENDING` and `EXPIRED` exist in the model but are **never sent today**. A run the driver never started (expired at +20 min) ends her booking as `EXITED_DUE_TO_DRIVER_DELAY` with `cancelledReason: "trip_expired"`: show that as "Expired, the driver never started". A booking is created **already `CONFIRMED`**: the driver has just approved a request she read, so leaving it pending would invent a second approval nobody performs. |
 | `seatsReserved` | |
 | `boardingCode` | 🔒 **Four digits, to check against the car at the kerb** — show it under the plate, as the design does. **Both the passenger and the driver see the same number**, so she can ask and the driver can confirm. One per journey, so it changes daily. `null` on bookings made before this shipped. 🔴 **It decides nothing**: `check-in` takes no code, attendance is the driver's tap (D18), and the Master Plan rejected a code for that job because "a PIN fails when somebody is running for the car". **Never block boarding, payment or a no-show on it** — a flat battery must not lock somebody out of a car she has verified by plate and sight. |
 | `price.seatPricePiastres` | One seat. |
@@ -4562,7 +4566,8 @@ hold must still be able to read the notice that says so.
 | `departure_time_changed` | driver | that day | `scheduledTripId`, `commuteId` |
 | `match_found` | passenger | the match | `commuteId`, `demandId` |
 | `trip_starts_in_hour` · `trip_starts_soon` | driver and each confirmed passenger | the trip | `tripId` + `bookingId` (passenger) or `commuteId` (driver) |
-| `trip_started` · `driver_heading_to_you` · `driver_arrived` | passenger | the live trip | `tripId` (+ `bookingId`) |
+| `trip_started` · `driver_heading_to_you` · `driver_arrived` | passenger | the live trip | `tripId` (+ `bookingId`). `trip_started` goes to everybody when the run starts. `driver_heading_to_you` goes once to the **next** passenger in route order when the driver finishes the pickup before hers (checks that passenger in, or marks her a no-show); the first passenger of the run never gets it. `driver_arrived` follows "I've arrived" at her pickup. |
+| `seat_counteroffer_accepted` | driver | the request | `seatRequestId`, `commuteId`, `bookingIds` (comma-separated). She accepted his counteroffer and her seat is confirmed. |
 | `commute_not_started_reminder` | driver, departure **+1 min** | Start | `tripId`, `commuteId` |
 | ⭐ `commute_not_started_warning` | each passenger, **+5 min** — "driver late" | her booking (`driverDelay`) | `bookingId`, `tripId` |
 | ⭐ `commute_still_not_started` | each passenger, **+10 min** | her booking | `bookingId` |
@@ -4921,6 +4926,23 @@ A commute has one run per day. When another run of the same commute is already o
 
 `swappedTrip` is `null` when the day was free.
 
+#### `POST /testing/trips/{trip}/position`
+
+Puts the car on the commute's **published route**, `metres` (default 1000) before a point, as one fresh location point
+from the driver. Body: `{"beforeBookingId": "…"}` (that booking's pickup on this run) **or** `{"lat": …, "lng": …}`,
+plus optional `metres`. The run must be started (`409 TRIP_NOT_STARTED`). Answers `{tripId, lat, lng,
+metresBeforeTarget}`. Use it for the live-request branch: a pickup the car hasn't reached is reachable; a car past it
+answers `already_passed`.
+
+#### `POST /testing/driver/vehicles/{vehicle}/approve` · `POST /testing/driver/vehicles/{vehicle}/reject`
+
+A reviewer's decision on the caller's own **replacement car** (an approved driver's added car, still `pending`).
+Approve sets it `APPROVED` with approved seats; then `POST /driver/vehicles/{vehicle}/activate` swaps it in as for a
+real approval. Reject takes optional `item` (`vehicle_details` · `vehicle_registration`) and `reason`; her driver
+status is unchanged. Both send `driver_item_approved` / `driver_item_rejected` with `vehicleId`. Answers `{id,
+verificationStatus, approvedSeats, isActive, rejectedItem, rejectionReason}`. `422 VEHICLE_NOT_ALLOWED` if the car
+isn't pending or the driver isn't approved.
+
 #### `POST /testing/debt/payments/{payment}/confirm` · `POST /testing/debt/payments/{payment}/reject`
 
 Staff's decision on the caller's own "I've paid", made the same way as on the dashboard (the debt goes down on
@@ -5162,6 +5184,7 @@ exist, and every live endpoint must be named here.
 
 | Date | Change |
 |---|---|
+| 2026-11-12 | 🧩 **Backend asks of 2026-11-12.** **Fixed:** a proposal for every future weekday stayed `PENDING` after a recurring rider accepted: her one answer now counts for all her affected days, so it applies at once. **New** push to the driver: `seat_counteroffer_accepted`. **Reachability** of a live request is now measured along the commute's **published** route. Three staging-only calls (4.17): `POST /testing/trips/{trip}/position`, `POST /testing/driver/vehicles/{vehicle}/approve` and `/reject`. Documented: what sends `driver_heading_to_you`, and that bookings are never `EXPIRED` or `PENDING` today. |
 | 2026-11-11 | 💳 **B-13, second part.** `GET /account/debt` sides gain **`openDisputes`** and **`suspensionOnHold`**: PAY-19 holds a debt suspension while a dispute is open, and the app can now see which one. **Fixed:** a dispute on a run somebody **drove** no longer holds their **passenger** debt suspension (and a passenger's own dispute doesn't hold their driver debt). |
 | 2026-11-11 | 🐞 **B-13 and a 500 on completion.** Confirmed the rule: a passenger's 14 days run from the day the fee was charged, also while it rides on an upcoming booking (PAY-17); `oldestUnpaidAt` can no longer be `null` while she owes money. **Fixed:** `POST /trips/{trip}/complete` answered `500` on staging when the run had two or more confirmed passengers. |
 | 2026-11-11 | 🧪 **B-12: moving a later run onto today.** `POST /testing/trips/{trip}/departure` no longer answers `500` when the commute already has a run that day: a scheduled one swaps days (`swappedTrip`), a finished one moves back a day, one underway answers the new **`409 TRIP_DAY_TAKEN`** (4.17). A recurring approval's `skippedDays[]` gains **`code`**, the exact refusal; `unavailable` means `BOOKING_ALREADY_BOOKED` or `BOOKING_DEADLINE_PASSED`, never the 12-hour lock (4.7). |

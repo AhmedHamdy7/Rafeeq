@@ -6,10 +6,12 @@ use App\Domains\Commute\Enums\CommuteLocationType;
 use App\Domains\Commute\Models\ScheduledTrip;
 use App\Domains\Commute\Support\RouteSettings;
 use App\Domains\Geo\Contracts\GeoQueryEngine;
+use App\Domains\Geo\Support\Polyline;
 use App\Domains\Geo\ValueObjects\Route;
 use App\Domains\Shared\Exceptions\DomainException;
 use App\Domains\Shared\Support\ErrorCode;
 use App\Domains\Shared\ValueObjects\Coordinate;
+use App\Domains\Shared\ValueObjects\Distance;
 use App\Domains\Trip\Actions\RecordTripLocationAction;
 use App\Domains\Trip\Models\TripSession;
 
@@ -153,11 +155,22 @@ final readonly class PickupReachability
     }
 
     /**
-     * The driver's advertised route, which is what both questions are measured along.
+     * The driver's advertised route, which is what both questions are measured along: the route as
+     * published, and the bare origin-to-destination line only when none is stored.
      */
     private function routeOf(ScheduledTrip $trip): ?Route
     {
         $trip->loadMissing('commuteOffer.locations');
+
+        $offer = $trip->commuteOffer;
+
+        if ($offer?->route_polyline !== null && Polyline::isReadable($offer->route_polyline)) {
+            return new Route(
+                polyline: $offer->route_polyline,
+                distance: Distance::fromMetres((int) $offer->route_distance_meters),
+                durationSeconds: (int) $offer->route_duration_seconds,
+            );
+        }
 
         $origin = $trip->commuteOffer?->locations
             ->firstWhere('type', CommuteLocationType::Origin);

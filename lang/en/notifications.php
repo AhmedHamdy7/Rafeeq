@@ -185,6 +185,10 @@ return [
         'title' => ':name suggested a different spot',
         'body' => ':name can take you, from a different meeting point. Open the request to see where and decide.',
     ],
+    'seat_counteroffer_accepted' => [
+        'title' => 'Your suggested spot was accepted',
+        'body' => ':name agreed to meet at the point you suggested. Her seat is confirmed.',
+    ],
     'seat_counteroffer_declined' => [
         'title' => 'Your suggested spot was declined',
         'body' => ':name would rather not meet at the point you suggested, so the request is closed.',

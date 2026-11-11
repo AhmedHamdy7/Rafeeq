@@ -211,3 +211,51 @@ it('refuses the whole swap when the replacement has too few seats for a live com
         ->and(Vehicle::findOrFail($vehicleId)->is_active)->toBeTrue()
         ->and($small->refresh()->is_active)->toBeFalse();
 });
+
+it('approves a replacement car through the testing call, after which it can be activated', function () {
+    config(['rafeeq.testing.api' => true]);
+    $driverToken = approvedDriver();
+    $replacement = secondVehicleFor($driverToken, approved: false);
+
+    test()->withToken($driverToken)
+        ->postJson("/api/v1/testing/driver/vehicles/{$replacement->getKey()}/approve")
+        ->assertOk()
+        ->assertJsonPath('data.verificationStatus', 'APPROVED')
+        ->assertJsonPath('data.isActive', false);
+
+    test()->withToken($driverToken)
+        ->postJson("/api/v1/driver/vehicles/{$replacement->getKey()}/activate")
+        ->assertOk();
+
+    expect($replacement->refresh()->is_active)->toBeTrue()
+        ->and(Notification::query()->where('type', 'driver_item_approved')->where('data->vehicleId', $replacement->getKey())->exists())->toBeTrue();
+});
+
+it('rejects a replacement car through the testing call, leaving the driver approved', function () {
+    config(['rafeeq.testing.api' => true]);
+    $driverToken = approvedDriver();
+    $replacement = secondVehicleFor($driverToken, approved: false);
+
+    test()->withToken($driverToken)
+        ->postJson("/api/v1/testing/driver/vehicles/{$replacement->getKey()}/reject", ['reason' => 'Plate does not match the registration.'])
+        ->assertOk()
+        ->assertJsonPath('data.verificationStatus', 'REJECTED')
+        ->assertJsonPath('data.rejectedItem', 'vehicle_details');
+
+    expect($replacement->refresh()->driverProfile->status->value)->toBe('approved');
+
+    test()->withToken($driverToken)
+        ->postJson("/api/v1/testing/driver/vehicles/{$replacement->getKey()}/approve")
+        ->assertStatus(422)
+        ->assertJsonPath('error.code', 'VEHICLE_NOT_ALLOWED');
+});
+
+it('refuses the vehicle testing calls when the testing API is off', function () {
+    config(['rafeeq.testing.api' => false]);
+    $driverToken = approvedDriver();
+    $replacement = secondVehicleFor($driverToken, approved: false);
+
+    test()->withToken($driverToken)
+        ->postJson("/api/v1/testing/driver/vehicles/{$replacement->getKey()}/approve")
+        ->assertNotFound();
+});

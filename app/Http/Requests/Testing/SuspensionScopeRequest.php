@@ -9,7 +9,7 @@ final class SuspensionScopeRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'scope' => ['required', 'in:account,vehicle'],
+            'scope' => ['required', 'string', 'in:account,vehicle'],
             'reason' => ['nullable', 'string', 'max:255'],
             'vehicleId' => ['nullable', 'string', 'size:26'],
         ];

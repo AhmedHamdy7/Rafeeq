@@ -11,7 +11,7 @@ final class BrowseCommutesRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'womenOnly' => ['nullable', 'in:true,false,1,0'],
+            'womenOnly' => ['nullable', 'string', 'in:true,false,1,0'],
             'tier' => ['nullable', 'string', Rule::enum(VehicleTier::class)],
             'daysMask' => ['nullable', 'integer', 'min:1', 'max:127'],
         ];
