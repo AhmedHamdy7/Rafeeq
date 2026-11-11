@@ -55,7 +55,7 @@ final readonly class SuspendForDebtAction
     {
         $standing = DebtStanding::of($userId, DebtSide::Driver);
 
-        if ($standing->suspendedAt !== null || $standing->severePiastres <= 0 || OpenDisputes::existFor($userId)) {
+        if ($standing->suspendedAt !== null || $standing->severePiastres <= 0 || OpenDisputes::existFor($userId, DebtSide::Driver)) {
             return false;
         }
 
@@ -89,7 +89,7 @@ final readonly class SuspendForDebtAction
     {
         $standing = DebtStanding::of($userId, DebtSide::Passenger);
 
-        if ($standing->suspendedAt !== null || ! self::passengerIsDue($standing) || OpenDisputes::existFor($userId)) {
+        if ($standing->suspendedAt !== null || ! self::passengerIsDue($standing) || OpenDisputes::existFor($userId, DebtSide::Passenger)) {
             return false;
         }
 
@@ -159,7 +159,7 @@ final readonly class SuspendForDebtAction
             ->exists();
     }
 
-    private static function passengerIsDue(DebtStanding $standing): bool
+    public static function passengerIsDue(DebtStanding $standing): bool
     {
         if ($standing->owedPiastres() <= 0) {
             return false;

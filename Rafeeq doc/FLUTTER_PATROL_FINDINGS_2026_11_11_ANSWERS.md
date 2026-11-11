@@ -2,8 +2,9 @@
 
 **Date:** 2026-11-11 · **Answers:** `docs/blockers/backend-findings-2026-11-11.md` (mobile repo) · **Full contract:** `RAFEEQ_MOBILE_API_GUIDE.md`, change log entry "Fixes from the Patrol run (B-1 → B-11)"
 
-B-1 → B-12 are **Fixed**, deployed and checked by you (PRs #56 and #57). **B-13** and a new `500` on completion are
-on the backend branch `fix/passenger-debt-ageing-b13` and are **not deployed yet**.
+B-1 → B-12 are **Fixed**, deployed and checked by you (PRs #56 and #57). B-13's first part and the `500` on
+completion are deployed (PR #58). **B-13's second part** is on the backend branch `fix/debt-suspension-held-b13` and
+is **not deployed yet**.
 
 | # | Status | What the app needs to do |
 |---|---|---|
@@ -19,7 +20,7 @@ on the backend branch `fix/passenger-debt-ageing-b13` and are **not deployed yet
 | B-10 | ✅ Fixed | Read `nextJourney.sameCancellation` for the card wording. |
 | B-11 | ✅ Fixed | Nothing. `rating_due_riders` now also has `riderCount`. |
 | B-12 | ✅ Fixed | Nothing for the move. Read `skippedDays[].code` to see why a day was skipped. |
-| B-13 | ✅ Rule confirmed, hardened · ❓ cause on staging not found | Re-run PM-4 after the deploy. If it fails, send us Karim's `GET /account/debt/statements`. |
+| B-13 | ✅ Fixed (second part) | Read `openDisputes` / `suspensionOnHold` on `GET /account/debt`. Resolve or avoid stale disputes on test accounts. |
 | — | 🐞 Found and fixed | `POST /trips/{trip}/complete` answered `500` on staging when the run had 2+ confirmed passengers. |
 | T3 | ⏳ Staff | Staff set the InstaPay payee on the staging dashboard. No code change. |
 
@@ -261,6 +262,34 @@ from here.
 
 **After the deploy:** re-run PM-4. If `oldestUnpaidAt` is still `null` or she isn't suspended, please send us Karim's
 `GET /account/debt/statements` (passenger side) and we'll check his lines.
+
+### B-13 · Re-check after PR #58: what still held the suspension
+
+Thanks for Karim's statements. They add up: 12500 owed from the fee of 20:29, so the ledger was fine, and
+`oldestUnpaidAt` aged as it should (PR #58 is live). The 14 days and the 200 EGP limit were both reached. What stopped
+the suspension is **PAY-19: no debt suspension while a dispute is open.**
+
+Two problems with how that worked:
+
+1. **It counted disputes that aren't about this debt.** It counted every open attendance dispute on a booking where
+   he was the passenger **or the driver**. So if a passenger contested a no-show on a run he drove, his own
+   **passenger** debt could never be suspended. Our new test shows exactly this. **Fixed:** each side now only counts
+   disputes about that side's debt.
+2. **Nothing told you.** **New** on both sides of `GET /account/debt`:
+
+   | Field | Meaning |
+   |---|---|
+   | `openDisputes` | `[{type, id, bookingId}]`: disputes still waiting for staff about this side's debt. `type` is `attendance` (a contested no-show, `id` = the booking), `warning` (a disputed warning) or `fee_appeal` (an appeal against a fee). |
+   | `suspensionOnHold` | `true` when she would be suspended now but an open dispute holds it. |
+
+Karim's test account has a long history of no-shows from earlier runs. If one of **his own** disputes is still open
+(for example from a "contest the no-show" or "report incorrect arrival" scenario), the suspension is held, and that
+is the rule working. After the deploy:
+
+- Re-run PM-3 and PM-4 and read `passenger.openDisputes`.
+- If it is empty, `suspended` should be `true`.
+- If it lists his own disputes, they are leftovers from earlier scenarios. Use an account with no open dispute for
+  PM-3/PM-4, or ask us to resolve them on staging (staff decide disputes on the dashboard).
 
 ---
 
