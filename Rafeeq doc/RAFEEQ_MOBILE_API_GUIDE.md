@@ -1880,6 +1880,7 @@ vehicle. An unverified driver stops here, not earlier (PROF-19).
 |---|---|---|---|
 | `VERIFICATION_REQUIRED` | 403 | `verification[]` | Show "Finish driver verification to publish". |
 | `COMMUTE_INCOMPLETE` | 422 | `missing[]` | Something isn't filled in. |
+| `COMMUTE_OVERLAPS` | 422 | `commuteId[]` (the clashing commute), `weekday[]` (`SUNDAY` …), `minGapMinutes[]` (`30`) | COM-36: another of his published or paused commutes runs on the same weekday, in overlapping dates, and the two don't leave **30 minutes** between the end (promised arrival) of one and the departure of the other. Show which commute and day clash. |
 | `COMMUTE_AC_NOT_AVAILABLE` | 422 | `rules.ac` | The reviewed car has no AC. Also on `PATCH`. Lock the chip with "Your car is registered without AC". |
 | `COMMUTE_WOMEN_ONLY_NOT_ALLOWED` | 422 | `audience` | The driver's profile gender isn't female. Also on `POST`, `PATCH` and resume. |
 | `COMMUTE_INVALID_TRANSITION` | 409 | `status[]` | It isn't a draft or can't be published from this status. |
@@ -3200,8 +3201,9 @@ accept-alternative).
 
 The three buttons on screen 29. `suggest-alternative` takes `placeId` and **moves nothing until
 the passenger accepts**. Approving writes the agreed point onto **every** upcoming confirmed
-booking at once (`meetingPoint` changes immediately), so the meeting point and the decision cannot
-disagree. `effectiveFrom` is always `next_trip`; there is no other value. All-or-nothing: if any of
+booking at once (`meetingPoint` changes immediately, `{lat, lng, label, isExact: true}`, with the
+`label` she sent), so the meeting point and the decision cannot disagree. Days created later for her
+recurring seat use the new point too. `effectiveFrom` is always `next_trip`; there is no other value. All-or-nothing: if any of
 those days is inside its 12-hour lock, the approval is refused with `409 COMMUTE_SCHEDULE_LOCKED`
 (`fields.lockedFrom`, `fields.lockHours`) and nothing moves. After a reject she can ask again at once;
 there is no cooldown.
@@ -3312,8 +3314,8 @@ has the count for today).
 `{ "reason": "breakdown" | "accident" | "emergency" | "other", "note"?: "..." }` — `reason` is a
 **required category** (TRIP-22, since 2026-10-31; it was free text before), because the fee that
 follows depends on it: breakdown, accident and emergency are treated differently from any other
-reason. `note` is optional, up to 255 characters, in her own words. Stops a run that has **already set off**
-(v5 §123–125). `200` with the day, plus a `meta` the confirmation screen needs:
+reason. `note` is optional, up to 255 characters, in her own words. Stops a run that has **been started**
+(v5 §123–125, TRIP-22): `PREPARING`, `EN_ROUTE`, `AT_PICKUP` or `IN_PROGRESS`. `200` with the day, plus a `meta` the confirmation screen needs:
 
 ```json
 { "data": { "status": "CANCELLED", "seatsTaken": 0 },
@@ -3339,9 +3341,11 @@ stopping the journey rather than cancelling a booking, and never behind the same
 - Nobody is charged a cancellation fee either way — the fee and the record fall on the driver.
 - Neither the reason nor the note is **ever** sent to passengers. Support reads them on the booking.
 - Freed seats are offered to **nobody**: a seat on a run that has stopped is not a seat.
+- A passenger the driver already marked as a no-show keeps `NO_SHOW` and is not counted in `meta`.
 - `TRIP_NOT_STARTED` (409) if the run never began — use `POST /trips/{trip}/cancel`.
-  `TRIP_NOT_CANCELLABLE` (409, with `error.fields.status`) if it is `PREPARING` (it has not left yet,
-  so "cancel today" is the cheaper and correct call) or already cancelled.
+  `TRIP_NOT_CANCELLABLE` (409, with `error.fields.status`) if it is already finished or cancelled.
+  Since 2026-11-11 a `PREPARING` run (Start tapped, nobody aboard) is accepted here, with the same
+  rules as `EN_ROUTE` with nobody aboard.
 - **There is no safe-stop picker and you should not build one** (v5 §129). The server reads where
   each passenger ended up from what the run already recorded. See
   `GET /bookings/{booking}/alternatives`.
@@ -3490,7 +3494,8 @@ and she gets an `early_drop_check` notification with the distance. Ask her, then
 never answers, nothing happens yet (that rule is still being decided).
 
 Every booking also carries `feeLinePiastres` / `feeLineReason` (PAY-16): her unpaid fees riding on
-this ride as a separate line the driver collects — or, negative, a credit she is discounted — and
+this ride as a separate line the driver collects. The whole balance sits on **her next confirmed ride
+that has not left**; it moves when a fee is added or paid, and when a booking is made or cancelled — or, negative, a credit she is discounted — and
 `earlyDrop { askedAt, distanceMeters, answer }`.
 
 #### `POST /bookings/{booking}/exit-without-fee` — active, profile complete, **passenger only**
@@ -3871,6 +3876,7 @@ they explain.
 | `nextJourney.checkIn` | `{groupId, answer, cutoffAt, canAnswer}` (TRIP-26). `answer` is `coming` or `null` (no answer = coming; "I can't make it" cancels the day, so it never shows here). `cutoffAt` is 2 h before departure; show the two buttons only while `canAnswer`. Answer with `POST /groups/{group}/attendance` `{tripId, status: "coming" \| "away"}`. |
 | `nextJourney.endedAt` | When it was cancelled / expired / she exited; `null` otherwise. With `cancellationFeePiastres` (`0` → "no fee to you" / "no penalty"). |
 | `nextJourney.alternatives[]` | Up to 2, **only** on `cancelled_by_driver` / `expired` / `exited`, else `[]`: `{commuteId, tripId, departureAt, departureLocal, originLabel, destinationLabel, seatsAvailable, driver{publicFirstName}}`. The first two of `GET /bookings/{booking}/alternatives` (refreshed every 5 min); suggestions, nothing booked. "Find Alternative" opens that endpoint for the full list. |
+| `nextJourney.sameCancellation` | `null`, or `{count, firstDate, lastDate}` when the driver cancelled **several of her days in one action** (for example, deleted the commute). The card is the **first** of those days and stands for all of them: show one notice ("Omar cancelled 12 days, 13 Nov – 2 Dec"); one `seen` clears them all. Dates are `YYYY-MM-DD`. |
 | `nextJourney.isSeen` | `false` until you call `POST /bookings/{booking}/seen`. **Call it once the ended or completed card has actually been on screen**, not when `/home` merely loads; the next `/home` then moves on. |
 | `nextJourney.completedAt` · `canRate` | F3P-11: when she was set down, and whether **Rate** shows (`false` once she rated or the window closed). Rating is `POST /bookings/{booking}/rating` (4.13). |
 | `nextJourney.attendance` | `{coming, away, awaiting, total}` — **four counts, not "2 of 3"**. Somebody who said they are away and somebody who has not answered are not the same person to a driver deciding whether to wait, so the server does not collapse them. `total` includes the driver. |
@@ -3883,6 +3889,9 @@ they explain.
 #### `POST /bookings/{booking}/seen` — signed-in, passenger only
 
 She has seen how this journey ended (HOME-1). No body. Stamps `outcomeSeenAt` on the booking the first time; repeat calls are harmless and keep the first time. Returns the booking (4.7).
+
+For a `CANCELLED_BY_DRIVER` card it also marks seen **every other day of the same cancellation** (the
+days in `nextJourney.sameCancellation`), so `/home` moves on to her next commute.
 
 - `409 BOOKING_NOT_ENDED` with `fields.status` unless the booking is `CANCELLED_BY_DRIVER`, `EXITED_DUE_TO_DRIVER_DELAY` or `COMPLETED`.
 - `404` if it isn't her booking.
@@ -4247,7 +4256,13 @@ Answers `201`.
 | `sharedWithContactId` | The contact, when one was named. |
 | `expiresAt` | When the link stops working. **Show it** — the person should know how long they have exposed. |
 | `isActive` | Whether it works right now. |
+| `endedAt` | When it stopped working (ended by the ride, revoked, or expired), else `null`. |
 | `viewCount` / `lastViewedAt` | Whether anybody opened it. See below. |
+
+🔒 **A link ends with the ride it describes.** A passenger's links end at **her drop-off**, and at any
+other end of her ride (end early, exit without fee, no-show, her cancellation, the run cancelled).
+The driver's links end when the **run** completes or is cancelled. After that `isActive` is `false`,
+`endedAt` is set, and the public page shows the "no longer available" page.
 
 Refuses with `TRIP_NOT_STARTED` (409) **until the car is actually out** — `error.fields.tripStatus`
 says where it is instead. A link made before the run starts would be a page saying nothing, and one
@@ -4567,7 +4582,7 @@ hold must still be able to read the notice that says so.
 | ⭐ `coupon_issued` | the harmed side, when staff give a coupon | the debt screen (coupons) | *no ids* |
 | `driving_suspended_for_debt` · `riding_suspended_for_debt` | the suspended person (**safety** — cannot be switched off) | the debt screen | *no ids* |
 | `chat_message` | the other side | the thread | as the thread (4.15) |
-| `rating_due` · `rating_due_riders` · `rating_reminder` | passenger / driver | rate (4.13) | `bookingId` or `tripId` |
+| `rating_due` · `rating_due_riders` · `rating_reminder` | passenger / driver | rate (4.13) | `bookingId` or `tripId` (+ `riderCount` on `rating_due_riders`). `rating_due` goes to each passenger at her drop-off (or at completion if still aboard), never on a `NO_SHOW`. `rating_due_riders` goes to the driver once when the run completes, if anybody rode. |
 | `sos_picked_up` · `report_resolved` · `report_closed` | the reporter | the SOS / report | `sosId` / `incidentId` |
 | `account_on_hold` · `account_reinstated` | the member (safety) | — | *no ids* |
 | `driver_item_approved` · `driver_item_rejected` | driver (safety), per verification item | that item on `GET /driver/verification` — replace only it | `itemKey` (`government_id` · `selfie` · `driving_licence`, and on a rejection also `vehicle_registration` · `vehicle_details`), + `rejectionReason` on a rejection |
@@ -4723,7 +4738,7 @@ Refused with **`409 CALL_NOT_AVAILABLE`** and `error.fields.reason`:
 |---|---|
 | `booking_not_live` | The seat is cancelled or expired. |
 | `trip_not_started` | The driver has not set off. (Driver side only.) |
-| `not_next_pickup` | She is not the passenger being approached — or no itinerary has been built yet. |
+| `not_next_pickup` | She is not the passenger being approached. The next pickup is known from `EN_ROUTE` onwards even if the driver hasn't opened navigation or sent a location (the server builds the day's itinerary). |
 
 Somebody who is neither of the two gets **`404`**.
 
@@ -4909,7 +4924,8 @@ confirm; nothing changes on reject; the same pushes). Reject takes an optional `
 #### `POST /testing/debt/deadline` · `POST /testing/debt/age`
 
 - **deadline** (`side`, default `driver`): moves the caller's debt lines on that side one week back, then runs the
-  weekly debt sweep. Once: the Friday passed (+10% late fee, overdue). Twice: the second Friday passed (driving
+  weekly debt sweep. Once: the Friday passed (+10% late fee on that week's unpaid commission, rounded down to the
+  piastre, overdue; this also works on an account that had a late fee in an earlier run). Twice: the second Friday passed (driving
   suspended, commutes paused with `commission_unpaid`).
 - **age** (`days`, `side` default `passenger`): moves the caller's debt lines `days` back, then runs the sweep. Use
   15 days for the passenger booking suspension (`RIDING_SUSPENDED_FOR_DEBT`).
@@ -5135,6 +5151,7 @@ exist, and every live endpoint must be named here.
 
 | Date | Change |
 |---|---|
+| 2026-11-11 | 🐞 **Fixes from the Patrol run (B-1 → B-11).** A no-showed booking now ends **`NO_SHOW`** (not `COMPLETED`) when the run completes or is called off. Approving a pickup change writes her `label` onto `meetingPoint`. "Ride Again Regularly" after a finished trial is accepted (the trial's request becomes `ENDED`). Live-share links end at her drop-off (and any other end of her ride) and the driver's when the run ends; new `endedAt`. The driver can call the next pickup from `EN_ROUTE` before opening navigation. **`POST /trips/{trip}/cancel-active` accepts `PREPARING`.** The fee line now follows bookings made or cancelled after the fee. The Friday test call adds the +10 % late fee on repeated runs. **New `422 COMMUTE_OVERLAPS`** on publish (COM-36, 30 minutes). Home shows **one** card per multi-day cancellation (`nextJourney.sameCancellation`) and `seen` clears all its days. `rating_due_riders` reaches the driver when everybody was dropped off before completion, with `riderCount`. |
 | 2026-11-11 | 🧪 **Test calls for the full-flow Patrol test.** **11 new staging-only endpoints** (4.17): confirm or reject a payment, end a wait now, run the Friday deadline and age debt, suspend and reinstate the account or the car, set a licence or registration expiry, age a booking, run a scheduled job, and seed past offences. **Fixed:** a location point stamped in the same second as the newest one moves the car again. |
 | 2026-11-11 | 🧩 **Backend asks of 2026-11-11.** **7 new endpoints:** `POST /pickup-requests/{pickupRequest}/keep-current` (status `ALTERNATIVE_DECLINED`, push `pickup_change_alternative_declined`), `GET /search/commutes/browse`, `POST /commutes/{commute}/dropoff-preview`, `PATCH /seat-requests/{seatRequest}`, and the staging-only `POST /testing/driver/approve`, `DELETE /testing/account`, `POST /testing/trips/{trip}/departure` (4.17). **`stopsBeforeYou`** on `GET /trips/{trip}/location` and `nextJourney.live`. **"I've arrived" without `lat` / `lng`** uses the last point under 2 minutes old; new `409 NO_RECENT_LOCATION`. `GET /account/debt` gains `instapay`, set by staff in the dashboard. `GET /safety/live-shares` takes `?tripSessionId=`. 🔴 A car edit under review answers **`409 VEHICLE_LOCKED`** instead of `DRIVER_APPLICATION_LOCKED`. `addedMinutes` is now measured against a route from the same engine, so a far point no longer reads +0. |
 | 2026-11-10 | 🗺️ **Maps redesign.** **Pickup requests** (4.8) carry `commuteId`, `commuteGroupId`, `tripId`, `bookingId`, `currentPoint`, `proposedPoint.label` (area until approved) and `alternativePlace`; the driver's list adds `passenger {id, publicFirstName, avatarPath}`; both lists filter by `status`, `commuteId`, `commuteGroupId`, `seatRequestId`. Five new pushes: `pickup_change_requested`, `_approved`, `_alternative`, `_rejected`, `_alternative_accepted`. **`navigation-route`**: live `etaAt` once the run starts, `arrivedAt` per pickup, `DRIVER_START` reached at the start, `nextStopIndex`, `nextStopDistanceMeters`, `etasAreLive`. **`GET /trips/{trip}/location`**: `pickupEtaAt` and `carToPickupPolyline` for the passenger; a late batch no longer moves the car back. `/home` → `nextJourney.live.pickupEtaAt` uses the same live time; `nextJourney.dropoff` gains `lat`, `lng`, `isExact`. **`GET /commutes/{commute}/public`** gains `detourTiers`. |

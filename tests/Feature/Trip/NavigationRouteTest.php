@@ -384,7 +384,7 @@ it('counts each stop’s ETA from the legs it routed', function () {
  * meeting places that nobody picked would otherwise send the driver on a tour of them.
  */
 it('leaves an advertised meeting point out of the route until somebody picks it', function () {
-    $commuteId = readyCommute($this->driverToken, Vehicle::sole()->id, ['seatsTotal' => 3]);
+    $commuteId = readyCommute($this->driverToken, Vehicle::sole()->id, ['seatsTotal' => 3], ['promisedArrivalTime' => '18:00:00']);
 
     saveRoute($this->driverToken, $commuteId, [
         'pickups' => [

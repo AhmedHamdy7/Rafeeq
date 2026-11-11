@@ -10,6 +10,7 @@ use App\Domains\Identity\Models\User;
 use App\Domains\Payment\Enums\DebtEntryType;
 use App\Domains\Payment\Enums\DebtSide;
 use App\Domains\Payment\Models\DebtEntry;
+use App\Domains\Payment\Support\DebtLedger;
 use App\Domains\Trip\Enums\WarningKind;
 use App\Domains\Trip\Models\MemberWarning;
 use Illuminate\Support\Facades\Storage;
@@ -191,4 +192,23 @@ it('seeds past offences so the next one lands on the right rung', function () {
         ->assertOk()->assertJsonPath('data.nextRung', 3);
 
     expect(MemberWarning::query()->where('user_id', $userId)->where('kind', WarningKind::NoShow->value)->count())->toBe(1);
+});
+
+it('adds the late fee again on a later run after an earlier one was paid', function () {
+    [$driverToken] = scenarioDriver();
+    owe(driverId(), 2_000);
+
+    test()->withToken($driverToken)->postJson('/api/v1/testing/debt/deadline')->assertOk();
+
+    DebtLedger::record(driverId(), DebtSide::Driver, DebtEntryType::Payment, -DebtLedger::balanceOf(driverId(), DebtSide::Driver), 'instapay');
+
+    owe(driverId(), 997);
+
+    $standing = test()->withToken($driverToken)->postJson('/api/v1/testing/debt/deadline')->assertOk()->json('data');
+
+    expect($standing['overduePiastres'])->toBe(997 + 99)
+        ->and($standing['lateFeePiastres'])->toBe(99);
+
+    test()->withToken($driverToken)->getJson('/api/v1/account/debt')->assertOk()
+        ->assertJsonPath('data.driver.lateFeePiastres', 99);
 });

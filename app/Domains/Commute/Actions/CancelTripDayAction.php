@@ -16,6 +16,7 @@ use App\Domains\Identity\Models\User;
 use App\Domains\Notification\Enums\NotificationType;
 use App\Domains\Notification\Support\Notifier;
 use App\Domains\Payment\Support\DriverFees;
+use App\Domains\Payment\Support\FeeLines;
 use App\Domains\Reliability\Enums\ReliabilityEventKind;
 use App\Domains\Reliability\Support\ReliabilityLedger;
 use App\Domains\Shared\Exceptions\DomainException;
@@ -85,6 +86,8 @@ final readonly class CancelTripDayAction
                     'cancelled_reason' => 'driver_cancelled_day',
                     'cancellation_fee_piastres' => 0,
                 ])->save();
+
+                FeeLines::refresh($booking->passenger_user_id);
 
                 BookingEventLog::record(
                     $booking,

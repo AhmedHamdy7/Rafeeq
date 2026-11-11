@@ -63,6 +63,7 @@ return [
     // Commutes.
     'COMMUTE_NOT_EDITABLE' => 'This commute cannot be changed in its current state.',
     'COMMUTE_INCOMPLETE' => 'Some required details are still missing.',
+    'COMMUTE_OVERLAPS' => 'This commute overlaps another of your commutes. Leave at least 30 minutes between them.',
     'COMMUTE_INVALID_TRANSITION' => 'That change is not possible from the commute’s current state.',
     'COMMUTE_TRIP_IN_PROGRESS' => 'A trip on this commute is in progress. End it with Cancel Active Trip first.',
     'COMMUTE_ROUTE_UNAVAILABLE' => "We couldn't calculate the road between your start and end. Try again.",

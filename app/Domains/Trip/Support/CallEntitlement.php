@@ -4,6 +4,8 @@ namespace App\Domains\Trip\Support;
 
 use App\Domains\Booking\Enums\BookingStatus;
 use App\Domains\Booking\Models\Booking;
+use App\Domains\Commute\Models\ScheduledTrip;
+use App\Domains\Trip\Actions\BuildNavigationItineraryAction;
 use App\Domains\Trip\Enums\NavigationStopKind;
 use App\Domains\Trip\Models\NavigationStop;
 use App\Domains\Trip\Models\TripSession;
@@ -81,8 +83,8 @@ final class CallEntitlement
      * same `reached_at` the navigation screen is drawn from — so the number becomes available at the
      * moment she is actually approaching somebody and stops the moment she has collected her.
      *
-     * ⚠️ With no itinerary built there is no "next", and the answer is no. That is the safe
-     * direction: a driver who has not opened her route has not started approaching anybody.
+     * The day's itinerary is built here if the driver has not opened navigation yet, so "next" is
+     * known from the moment the run is underway (change log 2026-10-27).
      */
     public static function driverMayCallPassenger(Booking $booking): bool
     {
@@ -97,6 +99,12 @@ final class CallEntitlement
         // v5: "after trip starts". Not before, however late she is.
         if ($session === null || ! $session->current_status->isUnderway()) {
             return false;
+        }
+
+        $trip = ScheduledTrip::query()->whereKey($booking->scheduled_trip_id)->first();
+
+        if ($trip !== null) {
+            app(BuildNavigationItineraryAction::class)->forTrip($trip);
         }
 
         $nextPickup = NavigationStop::query()

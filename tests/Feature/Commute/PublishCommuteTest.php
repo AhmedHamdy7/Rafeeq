@@ -381,3 +381,27 @@ it('requires a verified identity to publish or run a commute', function (string 
     ['POST', '/api/v1/commutes/01JABCDEFGHJKMNPQRSTVWXYZ0/publish'],
     ['POST', '/api/v1/commutes/01JABCDEFGHJKMNPQRSTVWXYZ0/duplicate'],
 ]);
+
+it('refuses a second commute on the same day that starts within 30 minutes of the first (COM-36)', function () {
+    $first = readyCommute($this->token, $this->vehicleId, schedule: ['promisedArrivalTime' => '15:00:00']);
+    test()->withToken($this->token)->postJson("/api/v1/commutes/{$first}/publish")->assertOk();
+
+    $second = readyCommute($this->token, $this->vehicleId, schedule: ['promisedArrivalTime' => '15:15:00']);
+
+    test()->withToken($this->token)->postJson("/api/v1/commutes/{$second}/publish")
+        ->assertStatus(422)
+        ->assertJsonPath('error.code', 'COMMUTE_OVERLAPS')
+        ->assertJsonPath('error.fields.commuteId.0', $first)
+        ->assertJsonPath('error.fields.minGapMinutes.0', '30');
+
+    expect(CommuteOffer::query()->whereKey($second)->value('status'))->toBe(CommuteOfferStatus::Draft);
+});
+
+it('publishes a second commute on the same day with enough time between them (COM-36)', function () {
+    $first = readyCommute($this->token, $this->vehicleId, schedule: ['promisedArrivalTime' => '09:00:00']);
+    test()->withToken($this->token)->postJson("/api/v1/commutes/{$first}/publish")->assertOk();
+
+    $second = readyCommute($this->token, $this->vehicleId, schedule: ['promisedArrivalTime' => '18:00:00']);
+
+    test()->withToken($this->token)->postJson("/api/v1/commutes/{$second}/publish")->assertOk();
+});

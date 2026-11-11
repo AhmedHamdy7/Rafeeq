@@ -14,6 +14,7 @@ use App\Domains\Geo\Models\Corridor;
 use App\Domains\Geo\Models\Place;
 use App\Domains\Shared\ValueObjects\Coordinate;
 use App\Domains\Shared\ValueObjects\DaysMask;
+use Carbon\CarbonImmutable;
 use Illuminate\Support\Facades\Storage;
 
 /**
@@ -189,7 +190,7 @@ it('attaches a published commute to a matching corridor', function () {
         'days_mask' => DaysMask::weekdaysSunToThu()->value,
     ]);
 
-    $second = readyCommute($this->token, $this->vehicleId);
+    $second = readyCommute($this->token, $this->vehicleId, schedule: ['startDate' => CarbonImmutable::today()->addMonths(4)->addDay()->toDateString(), 'endDate' => CarbonImmutable::today()->addMonths(6)->toDateString()]);
 
     $this->withToken($this->token)->postJson("/api/v1/commutes/{$second}/publish")
         ->assertOk()
@@ -209,7 +210,7 @@ it('leaves the corridor unset when the departure falls outside its window', func
         'days_mask' => DaysMask::weekdaysSunToThu()->value,
     ]);
 
-    $second = readyCommute($this->token, $this->vehicleId);
+    $second = readyCommute($this->token, $this->vehicleId, schedule: ['startDate' => CarbonImmutable::today()->addMonths(4)->addDay()->toDateString(), 'endDate' => CarbonImmutable::today()->addMonths(6)->toDateString()]);
 
     // A journey nobody has named a corridor for is still a perfectly good
     // commute, so a miss must never block publishing.

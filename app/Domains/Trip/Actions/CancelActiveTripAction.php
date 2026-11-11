@@ -22,7 +22,7 @@ use App\Domains\Payment\Support\DriverFees;
 use App\Domains\Payment\Support\FeeSettings;
 use App\Domains\Reliability\Enums\ReliabilityEventKind;
 use App\Domains\Reliability\Support\ReliabilityLedger;
-use App\Domains\Safety\Models\LiveShare;
+use App\Domains\Safety\Support\LiveShares;
 use App\Domains\Shared\Exceptions\DomainException;
 use App\Domains\Shared\Support\ErrorCode;
 use App\Domains\Shared\ValueObjects\Coordinate;
@@ -97,11 +97,11 @@ final readonly class CancelActiveTripAction
         $reason = $note === null || trim($note) === '' ? $category->value : $category->value.': '.trim($note);
 
         /*
-         * Only a run that is actually out on the road. A `preparing` run has not left, so calling
-         * it off is "cancel today" and costs less; a finished one is finished. Both would otherwise
-         * land here through a client retry and be charged as an abandonment.
+         * Only a run that has been started and not finished (TRIP-22: a started trip is called off
+         * only through Cancel Active Trip). A finished one is finished, and would otherwise land
+         * here through a client retry and be charged as an abandonment.
          */
-        if (! $session->current_status->isUnderway()) {
+        if (! $session->current_status->isUnderway() && $session->current_status !== TripSessionStatus::Preparing) {
             throw DomainException::of(ErrorCode::TripNotCancellable, fields: [
                 'status' => [strtoupper($session->current_status->value)],
             ]);
@@ -131,6 +131,10 @@ final readonly class CancelActiveTripAction
             $cancelled = 0;
 
             foreach ($bookings as $booking) {
+                if ($this->endAsNoShow($booking, $session, $driver)) {
+                    continue;
+                }
+
                 $aboard = $this->endJourney($booking, $session, $reason, $driver);
 
                 $aboard ? $endedEarly++ : $cancelled++;
@@ -193,6 +197,8 @@ final readonly class CancelActiveTripAction
 
             $this->advance->cancelled($session);
 
+            LiveShares::endForRun((string) $session->getKey());
+
             return ['trip' => $trip->refresh(), 'endedEarly' => $endedEarly, 'cancelled' => $cancelled];
         });
     }
@@ -252,6 +258,30 @@ final readonly class CancelActiveTripAction
         $carried = $this->geo->distanceMeters($pickup, new Coordinate((float) $position->lat, (float) $position->lng))->metres;
 
         return max(0.0, min(1.0, $carried / $route));
+    }
+
+    private function endAsNoShow(Booking $booking, TripSession $session, User $driver): bool
+    {
+        $attendance = Attendance::query()->whereKey($booking->getKey())->first();
+
+        if ($attendance === null || $attendance->status !== AttendanceStatus::PassengerNoShow) {
+            return false;
+        }
+
+        $booking->forceFill(['status' => BookingStatus::NoShow->value])->save();
+
+        BookingEventLog::record(
+            $booking,
+            BookingEventType::NoShow,
+            BookingActorType::Driver,
+            $driver->id,
+            from: BookingStatus::Confirmed,
+            metadata: ['active_trip_cancelled' => true],
+        );
+
+        LiveShares::endForPassenger((string) $session->getKey(), (string) $booking->passenger_user_id);
+
+        return true;
     }
 
     /**
@@ -323,11 +353,7 @@ final readonly class CancelActiveTripAction
          * gone — the live position is only readable on a live booking — but a share link hangs off
          * the run, so it is closed by hand. Same reasoning as the passenger's own safety exit.
          */
-        LiveShare::query()
-            ->where('trip_session_id', $session->getKey())
-            ->where('user_id', $booking->passenger_user_id)
-            ->whereNull('revoked_at')
-            ->update(['revoked_at' => now()]);
+        LiveShares::endForPassenger((string) $session->getKey(), (string) $booking->passenger_user_id);
 
         /*
          * 🔴 **The navigation stops are deliberately left alone**, and this is a correction rather

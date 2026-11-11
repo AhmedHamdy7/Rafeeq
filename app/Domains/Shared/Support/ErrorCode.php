@@ -79,6 +79,7 @@ enum ErrorCode: string
     // ---- Commutes (Phase 5, Chapter 4) ---------------------------------
     case CommuteNotEditable = 'COMMUTE_NOT_EDITABLE';
     case CommuteIncomplete = 'COMMUTE_INCOMPLETE';
+    case CommuteOverlaps = 'COMMUTE_OVERLAPS';
     case CommuteInvalidTransition = 'COMMUTE_INVALID_TRANSITION';
     case CommuteTripInProgress = 'COMMUTE_TRIP_IN_PROGRESS';
     case CommuteRouteInvalid = 'COMMUTE_ROUTE_INVALID';
@@ -429,6 +430,7 @@ enum ErrorCode: string
             self::PaymentTypeNotAvailable => 422,
 
             self::CommuteIncomplete,
+            self::CommuteOverlaps,
             self::CommuteRouteInvalid,
             self::CommuteVehicleUnavailable,
             self::RulesNotAgreed,
