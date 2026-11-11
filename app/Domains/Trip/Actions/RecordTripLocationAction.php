@@ -68,7 +68,7 @@ final readonly class RecordTripLocationAction
 
         $this->store->buffer($session->id, $accepted);
 
-        if ($session->last_location_at !== null && $latest->recordedAt->lte($session->last_location_at)) {
+        if ($session->last_location_at !== null && $latest->recordedAt->lt($session->last_location_at)) {
             return $accepted;
         }
 

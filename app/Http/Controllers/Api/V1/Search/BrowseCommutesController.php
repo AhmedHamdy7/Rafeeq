@@ -6,27 +6,21 @@ use App\Domains\Commute\Enums\CommuteAudience;
 use App\Domains\Commute\Enums\ScheduledTripStatus;
 use App\Domains\Commute\Models\CommuteOffer;
 use App\Domains\Commute\Models\ScheduledTrip;
-use App\Domains\Driver\Enums\VehicleTier;
 use App\Domains\Matching\Support\HardFilters;
 use App\Domains\Matching\Support\PassengerStanding;
 use App\Domains\Matching\Support\SearchRateLimit;
 use App\Http\Controllers\Controller;
+use App\Http\Requests\Matching\BrowseCommutesRequest;
 use App\Http\Resources\BrowseCommuteResource;
 use App\Http\Responses\ApiResponse;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\JsonResponse;
-use Illuminate\Http\Request;
-use Illuminate\Validation\Rule;
 
 final class BrowseCommutesController extends Controller
 {
-    public function __invoke(Request $request): JsonResponse
+    public function __invoke(BrowseCommutesRequest $request): JsonResponse
     {
-        $filters = $request->validate([
-            'womenOnly' => ['nullable', 'in:true,false,1,0'],
-            'tier' => ['nullable', 'string', Rule::enum(VehicleTier::class)],
-            'daysMask' => ['nullable', 'integer', 'min:1', 'max:127'],
-        ]);
+        $filters = $request->validated();
 
         $passenger = $request->user();
 

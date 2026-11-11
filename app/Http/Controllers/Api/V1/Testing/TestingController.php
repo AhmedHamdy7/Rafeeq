@@ -22,6 +22,7 @@ use App\Domains\Verification\Enums\VerificationType;
 use App\Domains\Verification\Models\UserVerification;
 use App\Http\Controllers\Controller;
 use App\Http\OpenApi\ApiErrors;
+use App\Http\Requests\Testing\MoveDepartureRequest;
 use App\Http\Responses\ApiResponse;
 use Carbon\CarbonImmutable;
 use Illuminate\Http\JsonResponse;
@@ -88,14 +89,11 @@ final class TestingController extends Controller
     }
 
     #[ApiErrors(ErrorCode::NotFound)]
-    public function moveDeparture(Request $request, string $trip): JsonResponse
+    public function moveDeparture(MoveDepartureRequest $request, string $trip): JsonResponse
     {
         $user = TestAccounts::assertAllowed($request->user());
 
-        $data = $request->validate([
-            'departureAt' => ['required_without:minutesFromNow', 'nullable', 'date'],
-            'minutesFromNow' => ['required_without:departureAt', 'nullable', 'integer', 'between:-1440,20160'],
-        ]);
+        $data = $request->validated();
 
         $occurrence = ScheduledTrip::query()
             ->whereKey($trip)
