@@ -4500,7 +4500,9 @@ What the platform tells a member on its own initiative. Every message lands in t
 
 > ⚠️ **Push: FCM is built (D-0023), and switched on per server.** With `RAFEEQ_PUSH_DRIVER=fcm` and
 > the Firebase service account installed, every push goes through FCM HTTP v1 — `notification`
-> (title/body) plus `data` (the ids below, all strings). Until a server is switched over it records
+> (title/body) plus `data`: the ids below **and `type` + `category`** (the same values the inbox
+> returns), all strings — route a tap on `data.type`, e.g. `{"type":"seat_requested","category":"booking","seatRequestId":"…"}`.
+> **The staging server is switched on (2026-11-11).** Until a server is switched over it records
 > each push as `no_push_provider` and nothing reaches the phone. **Send the device's FCM token** at
 > sign-in (`device.pushToken`) and refresh it through `PATCH /account/devices/current/security`
 > (`pushToken`); a token FCM reports as `UNREGISTERED` is forgotten, so send a fresh one whenever
@@ -5105,7 +5107,7 @@ Nothing below exists. Build the screen shells if you like, but there is no endpo
 | **Public trust tier** | badge on 12 and 21 | **10** | 🔴 **Ratings and reviews are both done** — section 4.13. Rating, the double-blind reveal, the anonymous review list on a commute, "what was said about me", reporting an abusive review and the `minRating` search filter are all live, and the `rating` in every public summary carries a number once a rating is revealed. The only piece left is the **public trust tier** (`new` / `trusted` / `highly_trusted`), which needs a product decision on its thresholds. The score behind it is deliberately internal and will never be returned. |
 | **Auto-share trips** | 26 | **12** | 🔴 **`autoShareTrips` on an emergency contact is stored and nothing acts on it yet.** See 4.12 — read that before you build the toggle. |
 | **Night escort mode** | none | **13** | Not a mobile feature at all, and this corrects an earlier line in this file. It is a **corridor-level night window armed by the ops team** (or automatically, 9pm–5am) with staff monitoring — a dashboard control, not something an app shows or calls. There will be no endpoint for it. |
-| **Push delivery** | all | **12** | The inbox (4.14) and trip chat (4.15) are live. Push is wired but **no provider has been chosen yet**, so nothing reaches a phone — poll `GET /notifications` (`meta.unreadCount`) and the open conversation in the meantime. |
+| **Push delivery** | all | **12** | ✅ **Live on staging (FCM, 2026-11-11).** Send the FCM token as `device.pushToken`; route taps on `data.type` (4.14). iPhone also needs the APNs key in Firebase. |
 
 ---
 
@@ -5135,6 +5137,7 @@ exist, and every live endpoint must be named here.
 
 | Date | Change |
 |---|---|
+| 2026-11-11 | **Push is live on staging (FCM).** Every push's `data` now also carries `type` and `category` (the inbox's values) next to the ids, so a tap can open the right screen. Send the FCM token as `device.pushToken` at sign-in and on refresh via `PATCH /account/devices/current/security` (4.14). |
 | 2026-11-11 | 🧪 **Test calls for the full-flow Patrol test.** **11 new staging-only endpoints** (4.17): confirm or reject a payment, end a wait now, run the Friday deadline and age debt, suspend and reinstate the account or the car, set a licence or registration expiry, age a booking, run a scheduled job, and seed past offences. **Fixed:** a location point stamped in the same second as the newest one moves the car again. |
 | 2026-11-11 | 🧩 **Backend asks of 2026-11-11.** **7 new endpoints:** `POST /pickup-requests/{pickupRequest}/keep-current` (status `ALTERNATIVE_DECLINED`, push `pickup_change_alternative_declined`), `GET /search/commutes/browse`, `POST /commutes/{commute}/dropoff-preview`, `PATCH /seat-requests/{seatRequest}`, and the staging-only `POST /testing/driver/approve`, `DELETE /testing/account`, `POST /testing/trips/{trip}/departure` (4.17). **`stopsBeforeYou`** on `GET /trips/{trip}/location` and `nextJourney.live`. **"I've arrived" without `lat` / `lng`** uses the last point under 2 minutes old; new `409 NO_RECENT_LOCATION`. `GET /account/debt` gains `instapay`, set by staff in the dashboard. `GET /safety/live-shares` takes `?tripSessionId=`. 🔴 A car edit under review answers **`409 VEHICLE_LOCKED`** instead of `DRIVER_APPLICATION_LOCKED`. `addedMinutes` is now measured against a route from the same engine, so a far point no longer reads +0. |
 | 2026-11-10 | 🗺️ **Maps redesign.** **Pickup requests** (4.8) carry `commuteId`, `commuteGroupId`, `tripId`, `bookingId`, `currentPoint`, `proposedPoint.label` (area until approved) and `alternativePlace`; the driver's list adds `passenger {id, publicFirstName, avatarPath}`; both lists filter by `status`, `commuteId`, `commuteGroupId`, `seatRequestId`. Five new pushes: `pickup_change_requested`, `_approved`, `_alternative`, `_rejected`, `_alternative_accepted`. **`navigation-route`**: live `etaAt` once the run starts, `arrivedAt` per pickup, `DRIVER_START` reached at the start, `nextStopIndex`, `nextStopDistanceMeters`, `etasAreLive`. **`GET /trips/{trip}/location`**: `pickupEtaAt` and `carToPickupPolyline` for the passenger; a late batch no longer moves the car back. `/home` → `nextJourney.live.pickupEtaAt` uses the same live time; `nextJourney.dropoff` gains `lat`, `lng`, `isExact`. **`GET /commutes/{commute}/public`** gains `detourTiers`. |
