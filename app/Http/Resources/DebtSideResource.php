@@ -2,8 +2,10 @@
 
 namespace App\Http\Resources;
 
+use App\Domains\Payment\Actions\SuspendForDebtAction;
 use App\Domains\Payment\Enums\DebtSide;
 use App\Domains\Payment\Support\DebtStanding;
+use App\Domains\Payment\Support\OpenDisputes;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
 
@@ -20,6 +22,8 @@ final class DebtSideResource extends JsonResource
     public function toArray(Request $request): array
     {
         $driver = $this->side === DebtSide::Driver;
+        $disputes = OpenDisputes::listFor($this->userId, $this->side);
+        $due = $driver ? $this->severePiastres > 0 : SuspendForDebtAction::passengerIsDue($this->resource);
 
         return [
             // What she owes now, never below zero.
@@ -42,6 +46,8 @@ final class DebtSideResource extends JsonResource
             'suspendedAt' => $this->suspendedAt?->utc()->toIso8601String(),
             // When the oldest money still unpaid was added — the passenger's 14 days run from here (PAY-17).
             'oldestUnpaidAt' => $this->oldestUnpaidAt?->utc()->toIso8601String(),
+            'openDisputes' => $disputes,
+            'suspensionOnHold' => $this->suspendedAt === null && $disputes !== [] && $due,
         ];
     }
 }

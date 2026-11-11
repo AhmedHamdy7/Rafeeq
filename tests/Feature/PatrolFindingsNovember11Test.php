@@ -10,6 +10,7 @@ use App\Domains\Identity\Models\User;
 use App\Domains\Notification\Models\Notification;
 use App\Domains\Payment\Enums\DebtEntryType;
 use App\Domains\Payment\Enums\DebtSide;
+use App\Domains\Payment\Models\DebtAccount;
 use App\Domains\Shared\ValueObjects\DaysMask;
 use App\Domains\Trip\Models\TripSession;
 use Illuminate\Support\Facades\Storage;
@@ -204,7 +205,7 @@ it('B-13: starts her 14 days at her oldest fee even when the ledger lines do not
     config(['rafeeq.testing.api' => true]);
 
     owe($this->pax->id, 12_500, side: DebtSide::Passenger, type: DebtEntryType::Fee);
-    \App\Domains\Payment\Models\DebtAccount::query()
+    DebtAccount::query()
         ->where('user_id', $this->pax->id)->where('side', 'passenger')
         ->update(['balance_piastres' => 15_000]);
 
@@ -214,4 +215,42 @@ it('B-13: starts her 14 days at her oldest fee even when the ledger lines do not
 
     expect($after['oldestUnpaidAt'])->not->toBeNull()
         ->and($after['suspended'])->toBeTrue();
+});
+
+function patrolDisputedNoShow(string $driverToken, string $paxToken, string $tripId, string $bookingId): void
+{
+    underway($driverToken, $tripId);
+    arrivedAndWaited($driverToken, $tripId, $bookingId);
+    patrolAs($driverToken)->postJson("/api/v1/trips/{$tripId}/no-show", ['bookingId' => $bookingId])->assertOk();
+    patrolAs($paxToken)->postJson("/api/v1/bookings/{$bookingId}/dispute", ['reason' => 'I was at the gate.'])->assertOk();
+}
+
+it('B-13: a dispute on a run he drove does not hold his passenger debt suspension', function () {
+    config(['rafeeq.testing.api' => true]);
+
+    patrolDisputedNoShow($this->driverToken, $this->paxToken, $this->tripId, $this->bookingId);
+
+    owe($this->driver->id, 12_500, side: DebtSide::Passenger, type: DebtEntryType::Fee);
+    patrolAs($this->driverToken)->postJson('/api/v1/testing/debt/age', ['days' => 15, 'side' => 'passenger'])->assertOk();
+
+    $passenger = patrolAs($this->driverToken)->getJson('/api/v1/account/debt')->assertOk()->json('data.passenger');
+
+    expect($passenger['suspended'])->toBeTrue()
+        ->and($passenger['openDisputes'])->toBe([])
+        ->and($passenger['suspensionOnHold'])->toBeFalse();
+});
+
+it('B-13: her own open dispute holds the suspension and says so', function () {
+    config(['rafeeq.testing.api' => true]);
+
+    patrolDisputedNoShow($this->driverToken, $this->paxToken, $this->tripId, $this->bookingId);
+
+    owe($this->pax->id, 25_000, side: DebtSide::Passenger, type: DebtEntryType::Fee);
+
+    $passenger = patrolAs($this->paxToken)->getJson('/api/v1/account/debt')->assertOk()->json('data.passenger');
+
+    expect($passenger['suspended'])->toBeFalse()
+        ->and($passenger['suspensionOnHold'])->toBeTrue()
+        ->and(collect($passenger['openDisputes'])->pluck('type')->all())->toContain('attendance')
+        ->and(collect($passenger['openDisputes'])->pluck('bookingId')->all())->toContain($this->bookingId);
 });
