@@ -4817,7 +4817,7 @@ Each side:
 | `dueAt` | Driver: the Friday 23:59 that matters now — the one she missed, or this week's. `null` for a passenger. |
 | `blocked` | Driver: unpaid past its Friday — no publishing, no new riders. Booked rides continue: **say so**. |
 | `suspended` · `suspendedAt` | Suspended for this debt. Show the banner with the amount, **Pay** and **Appeal**. |
-| `oldestUnpaidAt` | When the oldest unpaid money was added. A passenger's 14 days run from here. |
+| `oldestUnpaidAt` | When the oldest unpaid money was added. A passenger's 14 days run from here (PAY-17): from the day the fee was **charged**, even while it rides on an upcoming booking as a fee line. Riding pays the line at drop-off and clears it; a fee that waits on a ride she doesn't take still ages. |
 
 #### `GET /account/debt/statements` — optional `?side=driver|passenger` (default `driver`), `?weekOf=YYYY-MM-DD`
 
@@ -5160,6 +5160,7 @@ exist, and every live endpoint must be named here.
 
 | Date | Change |
 |---|---|
+| 2026-11-11 | 🐞 **B-13 and a 500 on completion.** Confirmed the rule: a passenger's 14 days run from the day the fee was charged, also while it rides on an upcoming booking (PAY-17); `oldestUnpaidAt` can no longer be `null` while she owes money. **Fixed:** `POST /trips/{trip}/complete` answered `500` on staging when the run had two or more confirmed passengers. |
 | 2026-11-11 | 🧪 **B-12: moving a later run onto today.** `POST /testing/trips/{trip}/departure` no longer answers `500` when the commute already has a run that day: a scheduled one swaps days (`swappedTrip`), a finished one moves back a day, one underway answers the new **`409 TRIP_DAY_TAKEN`** (4.17). A recurring approval's `skippedDays[]` gains **`code`**, the exact refusal; `unavailable` means `BOOKING_ALREADY_BOOKED` or `BOOKING_DEADLINE_PASSED`, never the 12-hour lock (4.7). |
 | 2026-11-11 | 🐞 **Fixes from the Patrol run (B-1 → B-11).** A no-showed booking now ends **`NO_SHOW`** (not `COMPLETED`) when the run completes or is called off. Approving a pickup change writes her `label` onto `meetingPoint`. "Ride Again Regularly" after a finished trial is accepted (the trial's request becomes `ENDED`). Live-share links end at her drop-off (and any other end of her ride) and the driver's when the run ends; new `endedAt`. The driver can call the next pickup from `EN_ROUTE` before opening navigation. **`POST /trips/{trip}/cancel-active` accepts `PREPARING`.** The fee line now follows bookings made or cancelled after the fee. The Friday test call adds the +10 % late fee on repeated runs. **New `422 COMMUTE_OVERLAPS`** on publish (COM-36, 30 minutes). Home shows **one** card per multi-day cancellation (`nextJourney.sameCancellation`) and `seen` clears all its days. `rating_due_riders` reaches the driver when everybody was dropped off before completion, with `riderCount`. |
 | 2026-11-11 | 🧪 **Test calls for the full-flow Patrol test.** **11 new staging-only endpoints** (4.17): confirm or reject a payment, end a wait now, run the Friday deadline and age debt, suspend and reinstate the account or the car, set a licence or registration expiry, age a booking, run a scheduled job, and seed past offences. **Fixed:** a location point stamped in the same second as the newest one moves the car again. |

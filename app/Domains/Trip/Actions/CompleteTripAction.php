@@ -133,6 +133,7 @@ final readonly class CompleteTripAction
         $bookings = Booking::query()
             ->where('scheduled_trip_id', $tripId)
             ->where('status', BookingStatus::Confirmed)
+            ->with('passenger')
             ->get();
 
         $checkedOut = Attendance::query()

@@ -134,7 +134,10 @@ final readonly class DebtStanding
             ->orderByDesc('id')
             ->cursor();
 
+        $last = null;
+
         foreach ($additions as $line) {
+            $last = $line;
             $part = min($line->amount_piastres, $balance - $covered);
             $covered += $part;
 
@@ -147,6 +150,6 @@ final readonly class DebtStanding
             }
         }
 
-        return [null, $lateFees];
+        return [$last, $lateFees];
     }
 }
