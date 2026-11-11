@@ -161,6 +161,18 @@
                             <span class="rq-pill rq-pill--count">{{ $pendingDrivers }}</span>
                         @endif
                     </a>
+                    <a
+                        href="{{ route('admin.replacement-cars') }}"
+                        wire:navigate
+                        class="rq-nav"
+                        @if (request()->routeIs('admin.replacement-cars')) aria-current="page" @endif
+                    >
+                        <span class="rq-nav__tile" aria-hidden="true">⇄</span>
+                        <span class="rq-nav__label">{{ __('admin.nav.replacement_cars') }}</span>
+                        @if ($pendingReplacementCars ?? 0)
+                            <span class="rq-pill rq-pill--count">{{ $pendingReplacementCars }}</span>
+                        @endif
+                    </a>
                 @endcan
 
                 @can(AdminPermission::MemberView->value)
