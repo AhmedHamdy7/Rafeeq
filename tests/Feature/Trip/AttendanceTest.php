@@ -475,7 +475,7 @@ it('leaves a no-show without a checkout, because they were never aboard', functi
  * The booking is completed either way — a booking's status is about the booking's life
  * ending, and attendance is the record of who travelled. That is why they are two tables.
  */
-it('completes the booking of somebody who did not travel', function () {
+it('ends the booking of somebody who did not travel as a no-show', function () {
     underway($this->driverToken, $this->tripId);
     arrivedAndWaited($this->driverToken, $this->tripId, $this->bookingId);
 
@@ -486,7 +486,7 @@ it('completes the booking of somebody who did not travel', function () {
         ->postJson("/api/v1/trips/{$this->tripId}/status", ['status' => 'IN_PROGRESS'])->assertOk();
     test()->withToken($this->driverToken)->postJson("/api/v1/trips/{$this->tripId}/complete")->assertOk();
 
-    expect(Booking::query()->whereKey($this->bookingId)->sole()->status->value)->toBe('completed')
+    expect(Booking::query()->whereKey($this->bookingId)->sole()->status->value)->toBe('no_show')
         ->and(Attendance::sole()->status)->toBe(AttendanceStatus::PassengerNoShow);
 });
 

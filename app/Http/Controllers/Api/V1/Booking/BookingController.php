@@ -6,6 +6,7 @@ use App\Domains\Booking\Actions\CancelBookingAction;
 use App\Domains\Booking\Actions\OfferReplacementAction;
 use App\Domains\Booking\Enums\BookingStatus;
 use App\Domains\Booking\Models\Booking;
+use App\Domains\Booking\Support\CancellationBatch;
 use App\Domains\Booking\Support\PassengerBookingScope;
 use App\Domains\Commute\Models\ScheduledTrip;
 use App\Domains\Identity\Enums\SecurityEventType;
@@ -499,6 +500,8 @@ final class BookingController extends Controller
         if ($target->outcome_seen_at === null) {
             $target->forceFill(['outcome_seen_at' => now()])->save();
         }
+
+        CancellationBatch::markSeen($target);
 
         return ApiResponse::success(new BookingResource($target));
     }

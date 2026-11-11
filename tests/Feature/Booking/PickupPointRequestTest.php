@@ -385,3 +385,29 @@ it('refuses keep-current on a request the driver has not countered', function ()
         ->assertStatus(409)
         ->assertJsonPath('error.code', 'PICKUP_REQUEST_NOT_PENDING');
 });
+
+it('shows the approved point and her label as the meeting point on her booking', function () {
+    approveSeat($this->driverToken, $this->requestId);
+
+    $member = GroupMember::query()->where('role', 'trial')->sole();
+
+    test()->withToken($this->paxToken)
+        ->postJson("/api/v1/groups/{$member->commute_group_id}/pickup-request", onTheWay())
+        ->assertStatus(201);
+
+    test()->withToken($this->driverToken)
+        ->postJson('/api/v1/driver/pickup-requests/'.PickupPointRequest::sole()->id.'/approve')
+        ->assertOk();
+
+    $booking = Booking::sole();
+
+    $meetingPoint = test()->withToken($this->paxToken)
+        ->getJson("/api/v1/bookings/{$booking->id}")
+        ->assertOk()
+        ->json('data.meetingPoint');
+
+    expect($meetingPoint)->not->toBeNull()
+        ->and($meetingPoint['label'])->toBe(onTheWay()['label'])
+        ->and($meetingPoint['isExact'])->toBeTrue()
+        ->and(round($meetingPoint['lat'], 4))->toBe(30.0654);
+});

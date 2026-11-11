@@ -285,6 +285,7 @@ final class CommuteController extends Controller
      */
     #[ApiErrors(
         ErrorCode::CommuteIncomplete,
+        ErrorCode::CommuteOverlaps,
         ErrorCode::CommuteAcNotAvailable,
         ErrorCode::CommuteWomenOnlyNotAllowed,
         ErrorCode::CommuteInvalidTransition,

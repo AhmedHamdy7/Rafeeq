@@ -11,6 +11,7 @@ use App\Domains\Matching\Models\CommuteDemand;
 use App\Domains\Matching\Models\MatchNotification;
 use App\Domains\Notification\Enums\NotificationType;
 use App\Domains\Notification\Support\Notifier;
+use App\Domains\Shared\ValueObjects\DaysMask;
 use Illuminate\Support\Facades\Storage;
 
 /**
@@ -574,4 +575,36 @@ it('suggests when the driver should leave, close to departure only', function ()
     runLeavingIn($this->tripId, 600);
 
     expect(test()->flushHeaders()->withToken($this->driverToken)->getJson('/api/v1/driver/home')->json('data.nextRun.leaveBy'))->toBeNull();
+});
+
+it('shows one card for a commute the driver deleted, and seeing it clears every day of it', function () {
+    $recurringToken = verifiedPassenger('01223338888', device: 'pax-9');
+
+    $requestId = requestSeat($recurringToken, $this->commuteId, ['commitment' => 'recurring', 'requestedDaysMask' => DaysMask::weekdaysSunToThu()->value])
+        ->assertStatus(201)->json('data.id');
+
+    asHomeDriver($this->driverToken, 'POST', "/api/v1/driver/seat-requests/{$requestId}/approve")->assertStatus(201);
+
+    $userId = User::query()->where('phone_e164', '+201223338888')->sole()->id;
+    $days = Booking::query()->where('passenger_user_id', $userId)->count();
+
+    expect($days)->toBeGreaterThan(2);
+
+    asHomeDriver($this->driverToken, 'DELETE', "/api/v1/commutes/{$this->commuteId}")->assertOk();
+
+    $card = homeCard($recurringToken);
+    $first = Booking::query()
+        ->where('passenger_user_id', $userId)
+        ->join('scheduled_trips', 'scheduled_trips.id', '=', 'bookings.scheduled_trip_id')
+        ->orderBy('scheduled_trips.departure_at')
+        ->value('bookings.id');
+
+    expect($card['phase'])->toBe('cancelled_by_driver')
+        ->and($card['id'])->toBe($first)
+        ->and($card['sameCancellation']['count'])->toBe($days);
+
+    asHomeDriver($recurringToken, 'POST', "/api/v1/bookings/{$card['id']}/seen")->assertOk();
+
+    expect(Booking::query()->where('passenger_user_id', $userId)->whereNull('outcome_seen_at')->count())->toBe(0)
+        ->and(homeCard($recurringToken))->toBeNull();
 });

@@ -7,6 +7,7 @@ use App\Domains\Geo\Contracts\GeoQueryEngine;
 use App\Domains\Notification\Support\ChatThreadEvents;
 use App\Domains\Reliability\Enums\ReliabilityEventKind;
 use App\Domains\Reliability\Support\ReliabilityLedger;
+use App\Domains\Safety\Support\LiveShares;
 use App\Domains\Shared\Exceptions\DomainException;
 use App\Domains\Shared\Support\ErrorCode;
 use App\Domains\Shared\ValueObjects\Coordinate;
@@ -164,6 +165,10 @@ final readonly class ConfirmAttendanceAction
 
             if ($status->travelled()) {
                 ChatThreadEvents::announce($booking, ChatThreadEvents::PickedUp, $attendance->checked_in_at);
+            }
+
+            if ($status === AttendanceStatus::PassengerNoShow) {
+                LiveShares::endForPassenger((string) $session->getKey(), (string) $booking->passenger_user_id);
             }
 
             /*

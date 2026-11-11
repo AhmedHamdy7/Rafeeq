@@ -59,6 +59,7 @@ final readonly class PublishCommuteOfferAction
 
         CommuteGuards::assertDriverMayUseAudience((string) $offer->driver_profile_id, $offer->audience);
         CommuteGuards::assertOfferFitsCarAc($offer, $offer->vehicle);
+        CommuteGuards::assertNoOverlap($offer);
 
         // Re-checked at publish, not only at creation: a draft can sit for weeks,
         // and a licence or a vehicle approval can lapse in between.

@@ -17,6 +17,7 @@ use App\Domains\Identity\Enums\SuspensionReason;
 use App\Domains\Identity\Models\User;
 use App\Domains\Payment\Actions\SuspendForDebtAction;
 use App\Domains\Payment\Actions\SweepDebtsAction;
+use App\Domains\Payment\Enums\DebtEntryType;
 use App\Domains\Payment\Enums\DebtSide;
 use App\Domains\Payment\Models\DebtPayment;
 use App\Domains\Payment\Support\DebtStanding;
@@ -356,6 +357,14 @@ final class TestingScenarioController extends Controller
         $columns = $weeks ? ['week_of', 'created_at'] : ['created_at'];
 
         $this->shift('debt_entries', $columns, fn ($q) => $q->where('user_id', $user->id)->where('side', $side->value), $days);
+
+        if ($weeks) {
+            DB::table('debt_entries')
+                ->where('user_id', $user->id)
+                ->where('side', $side->value)
+                ->where('type', DebtEntryType::LateFee->value)
+                ->update(['idempotency_key' => DB::raw("CONCAT('late_fee:', `user_id`, ':', `week_of`)")]);
+        }
     }
 
     /**

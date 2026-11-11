@@ -166,7 +166,7 @@ it('filters the inbox by status and counts the filtered list', function () {
 });
 
 it('lists the waiting list across commutes with the new row fields and day chips', function () {
-    $second = readyCommute($this->driverToken, Vehicle::sole()->id, ['seatsTotal' => 2], ['departureTime' => '17:30:00']);
+    $second = readyCommute($this->driverToken, Vehicle::sole()->id, ['seatsTotal' => 2], ['departureTime' => '17:30:00', 'promisedArrivalTime' => '18:30:00']);
     test()->withToken($this->driverToken)->postJson("/api/v1/commutes/{$second}/publish")->assertOk();
     $secondTrip = ScheduledTrip::query()->where('commute_offer_id', $second)->orderBy('trip_date')->firstOrFail();
 

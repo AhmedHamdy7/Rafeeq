@@ -17,6 +17,7 @@ use App\Domains\Notification\Enums\NotificationType;
 use App\Domains\Notification\Support\ChatThreadEvents;
 use App\Domains\Notification\Support\Notifier;
 use App\Domains\Payment\Actions\SettleBookingAction;
+use App\Domains\Safety\Support\LiveShares;
 use App\Domains\Shared\Exceptions\DomainException;
 use App\Domains\Shared\Support\ErrorCode;
 use App\Domains\Trip\Enums\AttendanceStatus;
@@ -103,6 +104,8 @@ final readonly class CompleteTripAction
              */
             $this->locations->clearCurrent($session);
 
+            LiveShares::endForRun((string) $session->getKey());
+
             return $session;
         });
     }
@@ -169,6 +172,12 @@ final readonly class CompleteTripAction
      */
     private function completeBookings(Collection $bookings): void
     {
+        $noShows = Attendance::query()
+            ->whereIn('booking_id', $bookings->pluck('id'))
+            ->where('status', AttendanceStatus::PassengerNoShow)
+            ->pluck('booking_id')
+            ->all();
+
         foreach ($bookings as $booking) {
             /*
              * Every confirmed booking is completed, including ones whose attendance was
@@ -178,11 +187,14 @@ final readonly class CompleteTripAction
              * them would leave a day in the past with bookings still saying "confirmed"
              * forever.
              */
-            $booking->forceFill(['status' => BookingStatus::Completed->value])->save();
+            $noShow = in_array($booking->id, $noShows, true);
+            $to = $noShow ? BookingStatus::NoShow : BookingStatus::Completed;
+
+            $booking->forceFill(['status' => $to->value])->save();
 
             BookingEventLog::record(
                 $booking,
-                BookingEventType::Completed,
+                $noShow ? BookingEventType::NoShow : BookingEventType::Completed,
                 BookingActorType::Driver,
                 $booking->driver_profile_id,
                 from: BookingStatus::Confirmed,
@@ -221,20 +233,32 @@ final readonly class CompleteTripAction
      */
     private function askForRatings(ScheduledTrip $trip, Collection $bookings): void
     {
-        if ($bookings->isEmpty()) {
-            return;
-        }
-
         $driver = $trip->commuteOffer->driverProfile->user;
 
         foreach ($bookings as $booking) {
+            if ($booking->status !== BookingStatus::Completed) {
+                continue;
+            }
+
             Notifier::send($booking->passenger, NotificationType::RatingDue,
                 ['name' => $driver->public_first_name],
                 ['bookingId' => $booking->id],
             );
         }
 
-        Notifier::send($driver, NotificationType::RatingDueRiders, data: ['tripId' => $trip->id]);
+        $riders = Booking::query()
+            ->where('scheduled_trip_id', $trip->id)
+            ->whereIn('status', [BookingStatus::Completed->value, BookingStatus::EndedEarly->value])
+            ->count();
+
+        if ($riders === 0) {
+            return;
+        }
+
+        Notifier::send($driver, NotificationType::RatingDueRiders, data: [
+            'tripId' => $trip->id,
+            'riderCount' => $riders,
+        ]);
     }
 
     /**
@@ -260,7 +284,9 @@ final readonly class CompleteTripAction
         }
 
         foreach ($bookings as $booking) {
-            $this->bumpUserStat($booking->passenger_user_id, 'completed_trips_as_passenger');
+            if ($booking->status === BookingStatus::Completed) {
+                $this->bumpUserStat($booking->passenger_user_id, 'completed_trips_as_passenger');
+            }
         }
 
         $group = CommuteGroup::query()->where('commute_offer_id', $offerId)->first();

@@ -3,14 +3,17 @@
 namespace App\Domains\Commute\Support;
 
 use App\Domains\Commute\Enums\CommuteAudience;
+use App\Domains\Commute\Enums\CommuteOfferStatus;
 use App\Domains\Commute\Enums\CommuteRuleKey;
 use App\Domains\Commute\Models\CommuteOffer;
 use App\Domains\Commute\Models\CommuteRule;
+use App\Domains\Commute\Models\CommuteWeekdaySchedule;
 use App\Domains\Driver\Models\Vehicle;
 use App\Domains\Identity\Enums\Gender;
 use App\Domains\Identity\Models\User;
 use App\Domains\Shared\Exceptions\DomainException;
 use App\Domains\Shared\Support\ErrorCode;
+use App\Domains\Shared\ValueObjects\DaysMask;
 
 final class CommuteGuards
 {
@@ -68,5 +71,75 @@ final class CommuteGuards
     private static function carHasNoAc(?Vehicle $vehicle): bool
     {
         return $vehicle !== null && $vehicle->approved_seats !== null && ! $vehicle->has_ac;
+    }
+
+    public static function assertNoOverlap(CommuteOffer $offer): void
+    {
+        $gap = (int) config('rafeeq.commute.min_gap_between_commutes_minutes', 30);
+        $offer->loadMissing(['schedule', 'weekdaySchedules']);
+
+        if ($offer->schedule === null) {
+            return;
+        }
+
+        $others = CommuteOffer::query()
+            ->where('driver_profile_id', $offer->driver_profile_id)
+            ->whereKeyNot($offer->getKey())
+            ->whereIn('status', [CommuteOfferStatus::Published->value, CommuteOfferStatus::Paused->value])
+            ->whereHas('schedule', fn ($query) => $query
+                ->where('start_date', '<=', $offer->schedule->end_date)
+                ->where('end_date', '>=', $offer->schedule->start_date))
+            ->with('weekdaySchedules')
+            ->get();
+
+        foreach ($offer->weekdaySchedules as $day) {
+            [$start, $end] = self::window($day);
+
+            foreach ($others as $other) {
+                $clash = $other->weekdaySchedules->firstWhere('weekday_bit', $day->weekday_bit);
+
+                if ($clash === null) {
+                    continue;
+                }
+
+                [$otherStart, $otherEnd] = self::window($clash);
+
+                if ($start < $otherEnd + $gap && $otherStart < $end + $gap) {
+                    throw DomainException::of(ErrorCode::CommuteOverlaps, fields: [
+                        'commuteId' => [(string) $other->getKey()],
+                        'weekday' => [self::WEEKDAYS[(int) $day->weekday_bit] ?? (string) $day->weekday_bit],
+                        'minGapMinutes' => [(string) $gap],
+                    ]);
+                }
+            }
+        }
+    }
+
+    private const array WEEKDAYS = [
+        DaysMask::SATURDAY => 'SATURDAY',
+        DaysMask::SUNDAY => 'SUNDAY',
+        DaysMask::MONDAY => 'MONDAY',
+        DaysMask::TUESDAY => 'TUESDAY',
+        DaysMask::WEDNESDAY => 'WEDNESDAY',
+        DaysMask::THURSDAY => 'THURSDAY',
+        DaysMask::FRIDAY => 'FRIDAY',
+    ];
+
+    /**
+     * @return array{0: int, 1: int}
+     */
+    private static function window(CommuteWeekdaySchedule $day): array
+    {
+        $start = self::minutes((string) $day->departure_time);
+        $end = $day->promised_arrival_time !== null ? self::minutes((string) $day->promised_arrival_time) : $start;
+
+        return [$start, max($start, $end)];
+    }
+
+    private static function minutes(string $time): int
+    {
+        [$hours, $minutes] = array_map('intval', array_slice(explode(':', $time), 0, 2));
+
+        return $hours * 60 + $minutes;
     }
 }

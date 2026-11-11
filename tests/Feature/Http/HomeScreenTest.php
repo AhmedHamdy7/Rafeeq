@@ -169,7 +169,7 @@ it('gives the plate number on a confirmed seat, and no card for a pending one', 
  * rule exists for. A pickup point is often somebody's front door.
  */
 it('shows the agreed meeting point once confirmed, and no card while pending', function () {
-    $commuteId = readyCommute($this->driverToken, Vehicle::sole()->id, ['allowsCustomPickup' => true]);
+    $commuteId = readyCommute($this->driverToken, Vehicle::sole()->id, ['allowsCustomPickup' => true], ['promisedArrivalTime' => '18:00:00']);
     test()->withToken($this->driverToken)->postJson("/api/v1/commutes/{$commuteId}/publish")->assertOk();
 
     $tripId = ScheduledTrip::query()->where('commute_offer_id', $commuteId)
@@ -464,7 +464,7 @@ it('puts the whole run on one card', function () {
  * it, and they are the one who approved it.
  */
 it('gives the driver the exact point of a pickup they approved', function () {
-    $commuteId = readyCommute($this->driverToken, Vehicle::sole()->id, ['allowsCustomPickup' => true]);
+    $commuteId = readyCommute($this->driverToken, Vehicle::sole()->id, ['allowsCustomPickup' => true], ['promisedArrivalTime' => '18:00:00']);
     test()->withToken($this->driverToken)->postJson("/api/v1/commutes/{$commuteId}/publish")->assertOk();
 
     $tripId = ScheduledTrip::query()->where('commute_offer_id', $commuteId)
@@ -617,7 +617,7 @@ it('gives a driver with no history no on-time rate rather than a zero', function
 it('averages the detour over the pickups people actually got approved', function () {
     // `allows_custom_pickup` is FALSE by default in the product, so a commute that
     // accepts proposals has to say so.
-    $commuteId = readyCommute($this->driverToken, Vehicle::sole()->id, ['allowsCustomPickup' => true]);
+    $commuteId = readyCommute($this->driverToken, Vehicle::sole()->id, ['allowsCustomPickup' => true], ['promisedArrivalTime' => '18:00:00']);
     test()->withToken($this->driverToken)->postJson("/api/v1/commutes/{$commuteId}/publish")->assertOk();
 
     $tripId = ScheduledTrip::query()->where('commute_offer_id', $commuteId)

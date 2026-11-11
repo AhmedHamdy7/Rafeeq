@@ -532,6 +532,8 @@ return [
          */
         'schedule_lock_hours' => 12,
 
+        'min_gap_between_commutes_minutes' => 30,
+
         /*
          * How far ahead scheduled trips are generated. NOT to the schedule's
          * end date: 5,000 offers × ~110 workdays would be 550,000 rows on day

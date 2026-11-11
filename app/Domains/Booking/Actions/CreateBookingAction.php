@@ -13,6 +13,7 @@ use App\Domains\Booking\Support\BookingEventLog;
 use App\Domains\Booking\Support\FreeCancel;
 use App\Domains\Commute\Models\ScheduledTrip;
 use App\Domains\Group\Models\CommuteGroup;
+use App\Domains\Payment\Support\FeeLines;
 
 /**
  * Turns an approved seat request into a booking for one day.
@@ -117,6 +118,8 @@ final readonly class CreateBookingAction
         $booking->save();
 
         FreeCancel::rememberAgreedPickup($booking);
+
+        FeeLines::refresh($booking->passenger_user_id);
 
         BookingEventLog::record(
             $booking,
