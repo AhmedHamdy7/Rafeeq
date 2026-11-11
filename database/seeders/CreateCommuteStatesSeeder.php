@@ -50,6 +50,8 @@ final class CreateCommuteStatesSeeder extends DriverHomeStatesSeeder
 
     private const array SCHEDULE = ['daysMask' => 62, 'promisedArrivalTime' => '09:00:00'];
 
+    private const array DRAFT_SCHEDULE = ['daysMask' => 62, 'promisedArrivalTime' => '18:00:00'];
+
     public function applyCreateStates(?string $only = null): array
     {
         $report = [];
@@ -100,7 +102,7 @@ final class CreateCommuteStatesSeeder extends DriverHomeStatesSeeder
 
         $draft = app(CreateCommuteOfferAction::class)->execute($profile, ['vehicleId' => $vehicle->id]);
         app(SaveCommuteRouteAction::class)->execute($draft, self::ROUTE);
-        app(SaveCommuteScheduleAction::class)->execute($draft->refresh(), self::SCHEDULE);
+        app(SaveCommuteScheduleAction::class)->execute($draft->refresh(), self::DRAFT_SCHEDULE);
 
         match ($state) {
             'CC-CAR-NOT-REVIEWED' => $vehicle->forceFill(['approved_seats' => null])->save(),
