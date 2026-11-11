@@ -2435,7 +2435,7 @@ One call handles both a trial and a recurring membership.
 | `membership` | The group member row created or upgraded. |
 | `bookings[]` | **A trial produces one; a recurring membership produces one per committed day.** Do not assume a single booking. |
 | `seatedDays` | How many days were successfully booked. |
-| `skippedDays` | `[{tripDate, reason}]`: days that could not be booked, and the error code that refused each. **Show these** — a member who thinks they have five days and has four will find out on the wrong morning. |
+| `skippedDays` | `[{tripDate, reason, code}]`: days that could not be booked. `reason` is `full` · `breaks_arrival` · `unavailable`; `code` is the exact refusal. `unavailable` is **not** the 12-hour lock: it is `BOOKING_ALREADY_BOOKED` (she already holds a seat on that run, or rides another commute at the same time, e.g. her trial day) or `BOOKING_DEADLINE_PASSED` (the run has left). **Show these** — a member who thinks they have five days and has four will find out on the wrong morning. |
 
 Refusals to handle: `SEAT_UNAVAILABLE` (the day filled — reload, and a trial row now reads `kind: waitlist_application`),
 `SEAT_REQUEST_NOT_PENDING`, **`BOOKING_ALREADY_BOOKED`** (409 — she already holds a seat at an
@@ -4908,7 +4908,16 @@ block a real deletion. End a live run first with `POST /trips/{trip}/cancel-acti
 
 Moves one day of the caller's commute: `{"minutesFromNow": 5}` or `{"departureAt": "<ISO>"}`.
 The promised arrival and stop times move by the same amount. Use it for the 90-minute start window,
-the 12-hour lock and the late timers. Answers `{tripId, departureAt, promisedArrivalAt}`.
+the 12-hour lock and the late timers. Answers `{tripId, departureAt, promisedArrivalAt, swappedTrip}`.
+
+A commute has one run per day. When another run of the same commute is already on the target day:
+- a **scheduled** run there swaps places: it moves to the moved run's old day, at its own time, with its
+  bookings; `swappedTrip {tripId, departureAt}` says where it went;
+- a **finished** run there (completed, cancelled, expired) moves back to the nearest free earlier day;
+- a run there that is **underway** refuses with **`409 TRIP_DAY_TAKEN`** (`fields.tripId`, `tripDate`, `status`).
+  Finish or cancel it first.
+
+`swappedTrip` is `null` when the day was free.
 
 #### `POST /testing/debt/payments/{payment}/confirm` · `POST /testing/debt/payments/{payment}/reject`
 
@@ -5151,6 +5160,7 @@ exist, and every live endpoint must be named here.
 
 | Date | Change |
 |---|---|
+| 2026-11-11 | 🧪 **B-12: moving a later run onto today.** `POST /testing/trips/{trip}/departure` no longer answers `500` when the commute already has a run that day: a scheduled one swaps days (`swappedTrip`), a finished one moves back a day, one underway answers the new **`409 TRIP_DAY_TAKEN`** (4.17). A recurring approval's `skippedDays[]` gains **`code`**, the exact refusal; `unavailable` means `BOOKING_ALREADY_BOOKED` or `BOOKING_DEADLINE_PASSED`, never the 12-hour lock (4.7). |
 | 2026-11-11 | 🐞 **Fixes from the Patrol run (B-1 → B-11).** A no-showed booking now ends **`NO_SHOW`** (not `COMPLETED`) when the run completes or is called off. Approving a pickup change writes her `label` onto `meetingPoint`. "Ride Again Regularly" after a finished trial is accepted (the trial's request becomes `ENDED`). Live-share links end at her drop-off (and any other end of her ride) and the driver's when the run ends; new `endedAt`. The driver can call the next pickup from `EN_ROUTE` before opening navigation. **`POST /trips/{trip}/cancel-active` accepts `PREPARING`.** The fee line now follows bookings made or cancelled after the fee. The Friday test call adds the +10 % late fee on repeated runs. **New `422 COMMUTE_OVERLAPS`** on publish (COM-36, 30 minutes). Home shows **one** card per multi-day cancellation (`nextJourney.sameCancellation`) and `seen` clears all its days. `rating_due_riders` reaches the driver when everybody was dropped off before completion, with `riderCount`. |
 | 2026-11-11 | 🧪 **Test calls for the full-flow Patrol test.** **11 new staging-only endpoints** (4.17): confirm or reject a payment, end a wait now, run the Friday deadline and age debt, suspend and reinstate the account or the car, set a licence or registration expiry, age a booking, run a scheduled job, and seed past offences. **Fixed:** a location point stamped in the same second as the newest one moves the car again. |
 | 2026-11-11 | 🧩 **Backend asks of 2026-11-11.** **7 new endpoints:** `POST /pickup-requests/{pickupRequest}/keep-current` (status `ALTERNATIVE_DECLINED`, push `pickup_change_alternative_declined`), `GET /search/commutes/browse`, `POST /commutes/{commute}/dropoff-preview`, `PATCH /seat-requests/{seatRequest}`, and the staging-only `POST /testing/driver/approve`, `DELETE /testing/account`, `POST /testing/trips/{trip}/departure` (4.17). **`stopsBeforeYou`** on `GET /trips/{trip}/location` and `nextJourney.live`. **"I've arrived" without `lat` / `lng`** uses the last point under 2 minutes old; new `409 NO_RECENT_LOCATION`. `GET /account/debt` gains `instapay`, set by staff in the dashboard. `GET /safety/live-shares` takes `?tripSessionId=`. 🔴 A car edit under review answers **`409 VEHICLE_LOCKED`** instead of `DRIVER_APPLICATION_LOCKED`. `addedMinutes` is now measured against a route from the same engine, so a far point no longer reads +0. |

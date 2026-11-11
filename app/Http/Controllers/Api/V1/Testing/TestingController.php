@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Api\V1\Testing;
 
 use App\Domains\Admin\Models\AdminUser;
+use App\Domains\Commute\Enums\ScheduledTripStatus;
 use App\Domains\Commute\Models\CommuteOffer;
 use App\Domains\Commute\Models\ScheduledTrip;
 use App\Domains\Driver\Actions\ReviewDriverApplicationAction;
@@ -88,7 +89,7 @@ final class TestingController extends Controller
         return ApiResponse::success(['deleted' => true]);
     }
 
-    #[ApiErrors(ErrorCode::NotFound)]
+    #[ApiErrors(ErrorCode::TripDayTaken, ErrorCode::NotFound)]
     public function moveDeparture(MoveDepartureRequest $request, string $trip): JsonResponse
     {
         $user = TestAccounts::assertAllowed($request->user());
@@ -106,29 +107,35 @@ final class TestingController extends Controller
             : CarbonImmutable::now()->addMinutes((int) $data['minutesFromNow'])->startOfMinute();
 
         $shift = (int) CarbonImmutable::instance($occurrence->departure_at)->diffInSeconds($target, false);
+        $targetDate = $target->setTimezone(self::TIMEZONE)->toDateString();
+        $oldDate = $occurrence->trip_date->toDateString();
 
-        DB::transaction(function () use ($occurrence, $shift): void {
-            $departure = CarbonImmutable::instance($occurrence->departure_at)->addSeconds($shift);
-            $local = $departure->setTimezone('Africa/Cairo');
+        $blocker = $targetDate === $oldDate ? null : ScheduledTrip::query()
+            ->where('commute_offer_id', $occurrence->commute_offer_id)
+            ->whereDate('trip_date', $targetDate)
+            ->whereKeyNot($occurrence->getKey())
+            ->first();
 
-            $occurrence->forceFill([
-                'departure_at' => $departure,
-                'departure_local' => $local->format('Y-m-d H:i:s'),
-                'trip_date' => $local->toDateString(),
-                'promised_arrival_at' => $occurrence->promised_arrival_at === null
-                    ? null
-                    : CarbonImmutable::instance($occurrence->promised_arrival_at)->addSeconds($shift),
-            ])->save();
+        if ($blocker !== null && ! in_array($blocker->status, self::MOVABLE, true)) {
+            throw DomainException::of(ErrorCode::TripDayTaken, fields: [
+                'tripId' => [(string) $blocker->getKey()],
+                'tripDate' => [$targetDate],
+                'status' => [strtoupper($blocker->status->value)],
+            ]);
+        }
 
-            NavigationStop::query()
-                ->where('scheduled_trip_id', $occurrence->id)
-                ->whereNotNull('eta_at')
-                ->get()
-                ->each(fn (NavigationStop $stop) => $stop->forceFill([
-                    'eta_at' => CarbonImmutable::instance($stop->eta_at)->addSeconds($shift),
-                ])->save());
+        DB::transaction(function () use ($occurrence, $shift, $blocker, $oldDate, $targetDate): void {
+            if ($blocker !== null) {
+                $occurrence->forceFill(['trip_date' => self::PARKING_DATE])->save();
 
-            ScheduledTrip::query()->whereKey($occurrence->id)->increment('itinerary_version');
+                $days = $blocker->status === ScheduledTripStatus::Scheduled
+                    ? (int) CarbonImmutable::parse($targetDate)->diffInDays(CarbonImmutable::parse($oldDate), false)
+                    : -$this->daysBackToAFreeDate($blocker);
+
+                $this->shiftTrip($blocker, $days * 86400);
+            }
+
+            $this->shiftTrip($occurrence, $shift);
         });
 
         $occurrence->refresh();
@@ -137,6 +144,63 @@ final class TestingController extends Controller
             'tripId' => $occurrence->id,
             'departureAt' => $occurrence->departure_at->toIso8601String(),
             'promisedArrivalAt' => $occurrence->promised_arrival_at?->toIso8601String(),
+            'swappedTrip' => $blocker === null ? null : [
+                'tripId' => $blocker->id,
+                'departureAt' => $blocker->refresh()->departure_at->toIso8601String(),
+            ],
         ]);
+    }
+
+    private const string TIMEZONE = 'Africa/Cairo';
+
+    private const string PARKING_DATE = '1970-01-01';
+
+    private const array MOVABLE = [
+        ScheduledTripStatus::Scheduled,
+        ScheduledTripStatus::Completed,
+        ScheduledTripStatus::Cancelled,
+        ScheduledTripStatus::Expired,
+    ];
+
+    private function daysBackToAFreeDate(ScheduledTrip $trip): int
+    {
+        $taken = ScheduledTrip::query()
+            ->where('commute_offer_id', $trip->commute_offer_id)
+            ->pluck('trip_date')
+            ->map(fn ($date) => CarbonImmutable::parse($date)->toDateString())
+            ->all();
+
+        $days = 1;
+
+        while (in_array($trip->trip_date->copy()->subDays($days)->toDateString(), $taken, true)) {
+            $days++;
+        }
+
+        return $days;
+    }
+
+    private function shiftTrip(ScheduledTrip $trip, int $seconds): void
+    {
+        $departure = CarbonImmutable::instance($trip->departure_at)->addSeconds($seconds);
+        $local = $departure->setTimezone(self::TIMEZONE);
+
+        $trip->forceFill([
+            'departure_at' => $departure,
+            'departure_local' => $local->format('Y-m-d H:i:s'),
+            'trip_date' => $local->toDateString(),
+            'promised_arrival_at' => $trip->promised_arrival_at === null
+                ? null
+                : CarbonImmutable::instance($trip->promised_arrival_at)->addSeconds($seconds),
+        ])->save();
+
+        NavigationStop::query()
+            ->where('scheduled_trip_id', $trip->id)
+            ->whereNotNull('eta_at')
+            ->get()
+            ->each(fn (NavigationStop $stop) => $stop->forceFill([
+                'eta_at' => CarbonImmutable::instance($stop->eta_at)->addSeconds($seconds),
+            ])->save());
+
+        ScheduledTrip::query()->whereKey($trip->id)->increment('itinerary_version');
     }
 }

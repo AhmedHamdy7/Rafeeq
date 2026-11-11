@@ -255,6 +255,7 @@ enum ErrorCode: string
     case TripNotStarted = 'TRIP_NOT_STARTED';
     case TripInvalidTransition = 'TRIP_INVALID_TRANSITION';
     case TripNotCancellable = 'TRIP_NOT_CANCELLABLE';
+    case TripDayTaken = 'TRIP_DAY_TAKEN';
     case TripTooEarlyToStart = 'TRIP_TOO_EARLY_TO_START';
     case AttendanceNotConfirmable = 'ATTENDANCE_NOT_CONFIRMABLE';
     case AttendanceDisputeWindowClosed = 'ATTENDANCE_DISPUTE_WINDOW_CLOSED';
@@ -512,6 +513,7 @@ enum ErrorCode: string
             self::TripNotStarted,
             self::TripInvalidTransition,
             self::TripNotCancellable,
+            self::TripDayTaken,
             self::AttendanceNotConfirmable,
             self::WaitTimerAlreadyRunning,
             self::WaitTimerNotRunning,
