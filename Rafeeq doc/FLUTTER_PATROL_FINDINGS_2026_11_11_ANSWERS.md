@@ -2,9 +2,8 @@
 
 **Date:** 2026-11-11 · **Answers:** `docs/blockers/backend-findings-2026-11-11.md` (mobile repo) · **Full contract:** `RAFEEQ_MOBILE_API_GUIDE.md`, change log entry "Fixes from the Patrol run (B-1 → B-11)"
 
-B-1 → B-11 are **Fixed** and merged (PR #56). **B-12** (added after the deploy) is **Fixed** on the backend branch
-`fix/testing-departure-b12` and is **not deployed yet**. We will tell you when it is on Railway; then re-run the
-chapters it blocked (B-1, B-3, B-6, B-7, B-8, B-10).
+B-1 → B-12 are **Fixed**, deployed and checked by you (PRs #56 and #57). **B-13** and a new `500` on completion are
+on the backend branch `fix/passenger-debt-ageing-b13` and are **not deployed yet**.
 
 | # | Status | What the app needs to do |
 |---|---|---|
@@ -20,6 +19,8 @@ chapters it blocked (B-1, B-3, B-6, B-7, B-8, B-10).
 | B-10 | ✅ Fixed | Read `nextJourney.sameCancellation` for the card wording. |
 | B-11 | ✅ Fixed | Nothing. `rating_due_riders` now also has `riderCount`. |
 | B-12 | ✅ Fixed | Nothing for the move. Read `skippedDays[].code` to see why a day was skipped. |
+| B-13 | ✅ Rule confirmed, hardened · ❓ cause on staging not found | Re-run PM-4 after the deploy. If it fails, send us Karim's `GET /account/debt/statements`. |
+| — | 🐞 Found and fixed | `POST /trips/{trip}/complete` answered `500` on staging when the run had 2+ confirmed passengers. |
 | T3 | ⏳ Staff | Staff set the InstaPay payee on the staging dashboard. No code change. |
 
 ---
@@ -232,6 +233,34 @@ To make this visible, each skipped day now has **`code`**, the exact refusal:
 ```
 
 If the next run shows a different `code`, send it to us with the trip id.
+
+## B-13 · A passenger's unpaid fee and the 14-day suspension
+
+**The rule (PAY-17):** she is suspended when a fee stays unpaid for **14 days without riding**, or when she owes
+**over 200 EGP**. The 14 days run from **the day the fee was charged**, also while it rides on an upcoming booking as
+a fee line. Riding is how it gets paid: the line is settled at her drop-off and the debt clears. If she doesn't ride
+in those 14 days, the fee ages. Suspension then cancels every upcoming seat, and new requests answer
+`RIDING_SUSPENDED_FOR_DEBT`. A fee line on a booking doesn't stop the clock.
+
+**What we checked:** PM-4 passes on our side, including after B-7. A passenger with a no-show fee riding on her next
+booking, aged 15 days with `POST /testing/debt/age {"days": 15, "side": "passenger"}`, is `suspended: true`, her
+booking is cancelled, and a new request answers `RIDING_SUSPENDED_FOR_DEBT`. We tried the real no-show flow, a
+recurring rider and a plain fee: all suspend. B-7 doesn't change the ledger, only which booking shows the line, so
+your guess isn't the cause.
+
+**What we couldn't explain:** your step 3 showed `owedPiastres: 12500` with `oldestUnpaidAt: null`. That can only
+happen when the ledger lines on Karim's account add up to less than his balance. We can't see the staging data
+from here.
+
+**What we changed:**
+- `oldestUnpaidAt` can no longer be `null` while she owes money. If the lines don't add up to the balance, the
+  clock starts at her oldest unpaid fee. So the ageing works even on an account like Karim's.
+- 🐞 **A separate bug we found while testing this:** `POST /trips/{trip}/complete` answered **`500`** on staging when
+  the run had **two or more** confirmed passengers (the server ran in strict mode and refused to load each passenger
+  one by one). Runs with one passenger were not affected, which is why your chapters passed. Fixed.
+
+**After the deploy:** re-run PM-4. If `oldestUnpaidAt` is still `null` or she isn't suspended, please send us Karim's
+`GET /account/debt/statements` (passenger side) and we'll check his lines.
 
 ---
 

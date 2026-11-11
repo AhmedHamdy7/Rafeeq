@@ -157,3 +157,61 @@ it('B-11: asks the driver to rate the riders when the run completes after everyb
     expect($notice->data['tripId'])->toBe($this->tripId)
         ->and($notice->data['riderCount'])->toBe('1');
 });
+
+it('B-13: suspends her once a fee riding on her next booking stays unpaid for 14 days', function () {
+    config(['rafeeq.testing.api' => true]);
+    $nextBooking = $this->bookingId;
+
+    owe($this->pax->id, 12_500, side: DebtSide::Passenger, type: DebtEntryType::Fee);
+
+    expect(Booking::query()->findOrFail($nextBooking)->fee_line_piastres)->toBeGreaterThan(0);
+
+    $before = patrolAs($this->paxToken)->getJson('/api/v1/account/debt')->assertOk()->json('data.passenger');
+    expect($before['oldestUnpaidAt'])->not->toBeNull();
+
+    patrolAs($this->paxToken)->postJson('/api/v1/testing/debt/age', ['days' => 15, 'side' => 'passenger'])->assertOk();
+
+    $after = patrolAs($this->paxToken)->getJson('/api/v1/account/debt')->assertOk()->json('data.passenger');
+
+    expect($after['suspended'])->toBeTrue()
+        ->and(Booking::query()->findOrFail($nextBooking)->status)->not->toBe(BookingStatus::Confirmed);
+
+    requestSeat($this->paxToken, $this->commuteId, [
+        'commitment' => 'recurring',
+        'requestedDaysMask' => DaysMask::weekdaysSunToThu()->value,
+    ])->assertJsonPath('error.code', 'RIDING_SUSPENDED_FOR_DEBT');
+});
+
+it('completes a run with two passengers aboard and a no-show (no lazy loading in strict mode)', function () {
+    $otherToken = verifiedPassenger('01223338888', device: 'pax-9');
+    $otherBooking = approveSeat(
+        $this->driverToken,
+        requestSeat($otherToken, $this->commuteId, ['scheduledTripId' => $this->tripId])->assertStatus(201)->json('data.id'),
+    );
+
+    underway($this->driverToken, $this->tripId);
+    arrivedAndWaited($this->driverToken, $this->tripId, $this->bookingId);
+    patrolAs($this->driverToken)->postJson("/api/v1/trips/{$this->tripId}/no-show", ['bookingId' => $this->bookingId])->assertOk();
+    checkIn($this->driverToken, $this->tripId, ['bookingId' => $otherBooking])->assertOk();
+    patrolAs($this->driverToken)->postJson("/api/v1/trips/{$this->tripId}/status", ['status' => 'IN_PROGRESS'])->assertOk();
+    patrolAs($this->driverToken)->postJson("/api/v1/trips/{$this->tripId}/complete")->assertOk();
+
+    expect(Booking::query()->findOrFail($this->bookingId)->status)->toBe(BookingStatus::NoShow)
+        ->and(Booking::query()->findOrFail($otherBooking)->status)->toBe(BookingStatus::Completed);
+});
+
+it('B-13: starts her 14 days at her oldest fee even when the ledger lines do not cover the balance', function () {
+    config(['rafeeq.testing.api' => true]);
+
+    owe($this->pax->id, 12_500, side: DebtSide::Passenger, type: DebtEntryType::Fee);
+    \App\Domains\Payment\Models\DebtAccount::query()
+        ->where('user_id', $this->pax->id)->where('side', 'passenger')
+        ->update(['balance_piastres' => 15_000]);
+
+    patrolAs($this->paxToken)->postJson('/api/v1/testing/debt/age', ['days' => 15, 'side' => 'passenger'])->assertOk();
+
+    $after = patrolAs($this->paxToken)->getJson('/api/v1/account/debt')->assertOk()->json('data.passenger');
+
+    expect($after['oldestUnpaidAt'])->not->toBeNull()
+        ->and($after['suspended'])->toBeTrue();
+});
