@@ -44,6 +44,7 @@ use App\Http\Controllers\Api\V1\Search\RecentSearchController;
 use App\Http\Controllers\Api\V1\Search\SavedSearchController;
 use App\Http\Controllers\Api\V1\Search\SearchController;
 use App\Http\Controllers\Api\V1\Testing\TestingController;
+use App\Http\Controllers\Api\V1\Testing\TestingScenarioController;
 use App\Http\Controllers\Api\V1\Trip\AttendanceController;
 use App\Http\Controllers\Api\V1\Trip\DriverTripController;
 use App\Http\Controllers\Api\V1\Trip\NavigationRouteController;
@@ -94,6 +95,17 @@ Route::prefix('v1')->group(function (): void {
         Route::post('driver/approve', [TestingController::class, 'approveDriver']);
         Route::delete('account', [TestingController::class, 'destroyAccount']);
         Route::post('trips/{trip}/departure', [TestingController::class, 'moveDeparture']);
+        Route::post('debt/payments/{payment}/confirm', [TestingScenarioController::class, 'confirmPayment']);
+        Route::post('debt/payments/{payment}/reject', [TestingScenarioController::class, 'rejectPayment']);
+        Route::post('debt/deadline', [TestingScenarioController::class, 'debtDeadline']);
+        Route::post('debt/age', [TestingScenarioController::class, 'ageDebt']);
+        Route::post('trips/{trip}/wait-timers/expire', [TestingScenarioController::class, 'expireWait']);
+        Route::post('driver/suspend', [TestingScenarioController::class, 'suspend']);
+        Route::post('driver/reinstate', [TestingScenarioController::class, 'reinstate']);
+        Route::post('driver/documents/{key}/expiry', [TestingScenarioController::class, 'documentExpiry']);
+        Route::post('bookings/{booking}/age', [TestingScenarioController::class, 'ageBooking']);
+        Route::post('jobs/{name}/run', [TestingScenarioController::class, 'runJob']);
+        Route::post('attendance', [TestingScenarioController::class, 'seedHistory']);
     });
 
     Route::prefix('account')->middleware('auth:sanctum')->group(function (): void {

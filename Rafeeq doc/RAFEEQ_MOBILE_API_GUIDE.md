@@ -14,7 +14,7 @@
 >
 > **Base URL:** `{host}/api/v1` · **Auth:** bearer token · **Format:** JSON only.
 
-**Last updated:** 2026-11-11 · **209 endpoints live** · Phases 0–7, 9 and 11 complete · 10, 12 and 13 all but a decision each
+**Last updated:** 2026-11-11 · **220 endpoints live** · Phases 0–7, 9 and 11 complete · 10, 12 and 13 all but a decision each
 
 ---
 
@@ -22,7 +22,7 @@
 
 ### What is ready
 
-**209 endpoints live** and tested, across the 47 designed screens:
+**220 endpoints live** and tested, across the 47 designed screens:
 
 | | Count | Covers |
 |---|---|---|
@@ -865,6 +865,17 @@ fails if this list and the running routes ever disagree in either direction.
 | `POST /testing/driver/approve` | 4.17 Testing (staging only) |
 | `DELETE /testing/account` | 4.17 Testing (staging only) |
 | `POST /testing/trips/{trip}/departure` | 4.17 Testing (staging only) |
+| `POST /testing/debt/payments/{payment}/confirm` | 4.17 Testing (staging only) |
+| `POST /testing/debt/payments/{payment}/reject` | 4.17 Testing (staging only) |
+| `POST /testing/debt/deadline` | 4.17 Testing (staging only) |
+| `POST /testing/debt/age` | 4.17 Testing (staging only) |
+| `POST /testing/trips/{trip}/wait-timers/expire` | 4.17 Testing (staging only) |
+| `POST /testing/driver/suspend` | 4.17 Testing (staging only) |
+| `POST /testing/driver/reinstate` | 4.17 Testing (staging only) |
+| `POST /testing/driver/documents/{key}/expiry` | 4.17 Testing (staging only) |
+| `POST /testing/bookings/{booking}/age` | 4.17 Testing (staging only) |
+| `POST /testing/jobs/{name}/run` | 4.17 Testing (staging only) |
+| `POST /testing/attendance` | 4.17 Testing (staging only) |
 | `DELETE /safety/live-shares/{share}` | 4.12 Safety |
 | `POST /trips/{trip}/live-share` | 4.12 Safety |
 | `POST /sos` | 4.12 Safety |
@@ -4884,6 +4895,59 @@ Moves one day of the caller's commute: `{"minutesFromNow": 5}` or `{"departureAt
 The promised arrival and stop times move by the same amount. Use it for the 90-minute start window,
 the 12-hour lock and the late timers. Answers `{tripId, departureAt, promisedArrivalAt}`.
 
+#### `POST /testing/debt/payments/{payment}/confirm` · `POST /testing/debt/payments/{payment}/reject`
+
+Staff's decision on the caller's own "I've paid", made the same way as on the dashboard (the debt goes down on
+confirm; nothing changes on reject; the same pushes). Reject takes an optional `note`. Answers the payment as in
+`GET /account/debt` → `payments[]`. `409 DEBT_PAYMENT_NOT_PENDING` once it is decided.
+
+#### `POST /testing/trips/{trip}/wait-timers/expire`
+
+`{bookingId}`. Ends her running grace now (the driver of the run only). Answers the timer as
+`GET /trips/{trip}/wait-timers` does, with `expiresAt` just past. `404` when there is no running timer.
+
+#### `POST /testing/debt/deadline` · `POST /testing/debt/age`
+
+- **deadline** (`side`, default `driver`): moves the caller's debt lines on that side one week back, then runs the
+  weekly debt sweep. Once: the Friday passed (+10% late fee, overdue). Twice: the second Friday passed (driving
+  suspended, commutes paused with `commission_unpaid`).
+- **age** (`days`, `side` default `passenger`): moves the caller's debt lines `days` back, then runs the sweep. Use
+  15 days for the passenger booking suspension (`RIDING_SUSPENDED_FOR_DEBT`).
+
+Both answer the side as in `GET /account/debt` (`driver` / `passenger` object).
+
+#### `POST /testing/driver/suspend` · `POST /testing/driver/reinstate`
+
+`{scope: "account" | "vehicle", reason?, vehicleId?}`. As staff would: `account` suspends or reinstates the
+caller's account (commutes paused with `account_suspended`); `vehicle` the given car, or the active one
+(`vehicle_suspended` / `vehicle_reinstated`). Answers `{accountStatus, vehicle {id, verificationStatus}}`.
+`409 MEMBER_NOT_ACTIVE` / `MEMBER_NOT_SUSPENDED` when the account is already in that state.
+
+#### `POST /testing/driver/documents/{key}/expiry`
+
+`key` is `licence` or `vehicle_registration`; body `{expiresAt: "YYYY-MM-DD", vehicleId?}`. Sets the date, then
+runs that document's "expiring soon" and "expired" checks. A past date stops the licence (`EXPIRED_DOCUMENTS`)
+or suspends the car; a date within the warning window sends the warning. Answers `{key, expiresAt}`.
+
+#### `POST /testing/bookings/{booking}/age`
+
+`{days}` (1–60). For a booking the caller rides or drives, on a run that is not under way: moves that day's
+departure, the run's start and end, the cancellation and the attendance times `days` back, then reveals due
+ratings. Use it for the 7-day rating window and reveal, and the report and dispute windows.
+
+#### `POST /testing/jobs/{name}/run`
+
+Runs one scheduled job now and answers `{job, command, exitCode, output}`. It runs for the whole server, as the
+schedule does. `name`: `generate-trips`, `roll-memberships`, `match-demands`, `expire-demands`, `expire-requests`,
+`reveal-ratings`, `rating-reminders`, `trip-reminders`, `auto-finish-trips`, `sweep-delays`, `settle-cash`,
+`sweep-debts`, `warn-licences`, `stop-licences`, `warn-registrations`, `stop-registrations`. Anything else: `404`.
+
+#### `POST /testing/attendance`
+
+`{kind: "no_show" | "late_boarding" | "late_cancel", count}` (1–10). Adds that many past offences to the
+caller's history, one per day before today, so the next real one lands on the next rung of the fee ladder.
+Answers `{kind, standing, nextRung}`.
+
 ---
 
 ## 5. The one shape every feature shares
@@ -5071,6 +5135,7 @@ exist, and every live endpoint must be named here.
 
 | Date | Change |
 |---|---|
+| 2026-11-11 | 🧪 **Test calls for the full-flow Patrol test.** **11 new staging-only endpoints** (4.17): confirm or reject a payment, end a wait now, run the Friday deadline and age debt, suspend and reinstate the account or the car, set a licence or registration expiry, age a booking, run a scheduled job, and seed past offences. **Fixed:** a location point stamped in the same second as the newest one moves the car again. |
 | 2026-11-11 | 🧩 **Backend asks of 2026-11-11.** **7 new endpoints:** `POST /pickup-requests/{pickupRequest}/keep-current` (status `ALTERNATIVE_DECLINED`, push `pickup_change_alternative_declined`), `GET /search/commutes/browse`, `POST /commutes/{commute}/dropoff-preview`, `PATCH /seat-requests/{seatRequest}`, and the staging-only `POST /testing/driver/approve`, `DELETE /testing/account`, `POST /testing/trips/{trip}/departure` (4.17). **`stopsBeforeYou`** on `GET /trips/{trip}/location` and `nextJourney.live`. **"I've arrived" without `lat` / `lng`** uses the last point under 2 minutes old; new `409 NO_RECENT_LOCATION`. `GET /account/debt` gains `instapay`, set by staff in the dashboard. `GET /safety/live-shares` takes `?tripSessionId=`. 🔴 A car edit under review answers **`409 VEHICLE_LOCKED`** instead of `DRIVER_APPLICATION_LOCKED`. `addedMinutes` is now measured against a route from the same engine, so a far point no longer reads +0. |
 | 2026-11-10 | 🗺️ **Maps redesign.** **Pickup requests** (4.8) carry `commuteId`, `commuteGroupId`, `tripId`, `bookingId`, `currentPoint`, `proposedPoint.label` (area until approved) and `alternativePlace`; the driver's list adds `passenger {id, publicFirstName, avatarPath}`; both lists filter by `status`, `commuteId`, `commuteGroupId`, `seatRequestId`. Five new pushes: `pickup_change_requested`, `_approved`, `_alternative`, `_rejected`, `_alternative_accepted`. **`navigation-route`**: live `etaAt` once the run starts, `arrivedAt` per pickup, `DRIVER_START` reached at the start, `nextStopIndex`, `nextStopDistanceMeters`, `etasAreLive`. **`GET /trips/{trip}/location`**: `pickupEtaAt` and `carToPickupPolyline` for the passenger; a late batch no longer moves the car back. `/home` → `nextJourney.live.pickupEtaAt` uses the same live time; `nextJourney.dropoff` gains `lat`, `lng`, `isExact`. **`GET /commutes/{commute}/public`** gains `detourTiers`. |
 | 2026-11-10 | 🧪 **Patrol run gaps (B1–B10).** **`GET /driver/home` → `unreadNotifications`**, same as on `/home`. 🔴 **`nextStep` is `ROLE_SELECTION`** on every launch call once the profile is saved and no role is chosen (AUTH-02); it used to answer `BASIC_PROFILE`. 🔴 **`POST /trips/{trip}/no-show` needs the arrival and the end of the grace:** `409 NO_ARRIVAL_MARKED` with no arrival marked, `409 NO_SHOW_TOO_EARLY` with `fields.expiresAt` during the grace. **Bookings** gain `tripDate` (every row, approve included) and, on `GET /bookings/{booking}`, `vehicle {make, model, colour, seats, plateNumber}` once `CONFIRMED`. 🔴 **`DELETE /commutes/{commute}` and `POST /commutes/{commute}/pause` refuse while a run is live:** `409 COMMUTE_TRIP_IN_PROGRESS` with `fields.tripId`; end it with Cancel Active Trip first. New **`GET /seat-requests/{seatRequest}`**. `GET /search/commutes` takes `true` / `false` for `womenOnly` and `wantsReturnTrip`. `PUT /commutes/{commute}/schedule` takes `HH:MM` or `HH:MM:SS`. The `kind` table (which driver answer fits which request) is in 4.7. |
