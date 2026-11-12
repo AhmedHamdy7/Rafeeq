@@ -1196,3 +1196,22 @@ a.ad-stat:hover {
     justify-content: flex-start;
   }
 }
+
+/* ---------- Paging under a list ---------- */
+
+.ad-pager {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-block-start: 14px;
+  flex-wrap: wrap;
+}
+
+/* "Previous" points back: left in English, right in Arabic. */
+.ad-pager__back {
+  transform: scaleX(-1);
+}
+
+[dir='rtl'] .ad-pager__back {
+  transform: none;
+}
