@@ -107,7 +107,7 @@ it('lets a driver owe any amount this week and still publish', function () {
 
     $draft = createCommute($this->driverToken, Vehicle::sole()->id)->json('data.id');
     saveRoute($this->driverToken, $draft);
-    saveSchedule($this->driverToken, $draft);
+    saveSchedule($this->driverToken, $draft, ['promisedArrivalTime' => '18:00:00']);
 
     $this->withToken($this->driverToken)->postJson("/api/v1/commutes/{$draft}/publish")->assertOk();
 });
@@ -117,7 +117,7 @@ it('stops a driver with last week unpaid from publishing, and lets her once staf
 
     $draft = createCommute($this->driverToken, Vehicle::sole()->id)->json('data.id');
     saveRoute($this->driverToken, $draft);
-    saveSchedule($this->driverToken, $draft);
+    saveSchedule($this->driverToken, $draft, ['promisedArrivalTime' => '18:00:00']);
 
     $this->withToken($this->driverToken)->postJson("/api/v1/commutes/{$draft}/publish")
         ->assertForbidden()

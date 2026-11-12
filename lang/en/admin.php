@@ -9,6 +9,7 @@ return [
         'escort' => 'Night escort',
         'verifications' => 'Verification',
         'drivers' => 'Drivers',
+        'replacement_cars' => 'Replacement cars',
         'safety' => 'Safety cases',
         'trips' => 'Live trips',
         'members' => 'Members',
@@ -77,6 +78,18 @@ return [
         'approved' => 'Approved :name.',
         'info_requested' => 'Asked :name for more.',
         'view_only' => 'You can see this queue but not decide on it.',
+    ],
+
+    'replacement_cars' => [
+        'title' => 'Replacement cars',
+        'waiting' => '{0} No replacement cars waiting.|{1} :count replacement car waiting.|[2,*] :count replacement cars waiting.',
+        'empty' => 'No replacement cars waiting.',
+        'current_car' => 'Driving now: :car (:plate)',
+        'no_current_car' => 'No active car right now',
+        'approve' => 'Approve car',
+        'seats_required' => 'Set the approved seats before approving.',
+        'approved' => 'Approved the :car of :name. They can switch to it now.',
+        'rejected' => 'Rejected :item for :name.',
     ],
 
     'drivers' => [

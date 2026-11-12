@@ -410,3 +410,56 @@ it('never closes an offer on a run that has not started', function () {
     expect(SeatOffer::query()->where('seat_request_id', $requestId)->sole()->status)
         ->toBe(SeatOfferStatus::Open);
 });
+
+it('places the car a kilometre before her pickup with the testing call, and she may still ask (TD-14)', function () {
+    config(['rafeeq.testing.api' => true]);
+
+    $placed = test()->flushHeaders()->withToken($this->driverToken)
+        ->postJson("/api/v1/testing/trips/{$this->trip->id}/position", ['lat' => 30.0684, 'lng' => 31.1015, 'metres' => 1000])
+        ->assertOk()->json('data');
+
+    expect($placed['metresBeforeTarget'])->toBeGreaterThan(900)->toBeLessThan(1100);
+
+    askDuringRide($this->paxToken, $this->commuteId, $this->trip->id, [
+        'pickup' => ['lat' => 30.0684, 'lng' => 31.1015, 'label' => 'Mehwar, Sheikh Zayed'],
+        'dropoff' => ['lat' => 30.0710, 'lng' => 30.9750, 'label' => 'Smart Village gate'],
+    ])->assertStatus(201);
+});
+
+it('refuses her once the testing call has placed the car past her pickup', function () {
+    config(['rafeeq.testing.api' => true]);
+
+    test()->flushHeaders()->withToken($this->driverToken)
+        ->postJson("/api/v1/testing/trips/{$this->trip->id}/position", ['lat' => 30.0710, 'lng' => 30.9750, 'metres' => 500])
+        ->assertOk();
+
+    askDuringRide($this->paxToken, $this->commuteId, $this->trip->id, [
+        'pickup' => ['lat' => 30.0684, 'lng' => 31.1015, 'label' => 'Mehwar, Sheikh Zayed'],
+        'dropoff' => ['lat' => 30.0710, 'lng' => 30.9750, 'label' => 'Smart Village gate'],
+    ])->assertStatus(409)->assertJsonPath('error.fields.reachability.0', 'already_passed');
+});
+
+it('names when it expired, before and after the sweep (A-9)', function () {
+    carAt($this->driverToken, $this->trip->id, 30.0594, 31.4800);
+
+    $requestId = askDuringRide($this->paxToken, $this->commuteId, $this->trip->id)
+        ->assertStatus(201)->json('data.id');
+
+    $expiresAt = SeatRequest::query()->whereKey($requestId)->sole()->expires_at->toIso8601String();
+
+    $this->travel(4)->minutes();
+
+    test()->flushHeaders()->withToken($this->driverToken)
+        ->postJson("/api/v1/driver/seat-requests/{$requestId}/approve")
+        ->assertStatus(409)
+        ->assertJsonPath('error.fields.expiredAt.0', $expiresAt);
+
+    test()->artisan('requests:expire')->assertExitCode(0);
+
+    test()->flushHeaders()->withToken($this->driverToken)
+        ->postJson("/api/v1/driver/seat-requests/{$requestId}/approve")
+        ->assertStatus(409)
+        ->assertJsonPath('error.code', 'SEAT_REQUEST_NOT_PENDING')
+        ->assertJsonPath('error.fields.status.0', 'EXPIRED')
+        ->assertJsonPath('error.fields.expiredAt.0', $expiresAt);
+});

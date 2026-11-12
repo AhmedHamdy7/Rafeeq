@@ -67,6 +67,7 @@ final readonly class PublishCommuteOfferAction
         CreateCommuteOfferAction::usableVehicle($offer->driverProfile, $offer->vehicle_id);
         // C-3: a car without approved seats cannot publish, and no day may offer more than them.
         CreateCommuteOfferAction::assertCommuteFitsVehicle($offer, $offer->vehicle);
+        CommuteGuards::assertNoOverlap($offer);
 
         $route = $this->computeRoute($offer);
 

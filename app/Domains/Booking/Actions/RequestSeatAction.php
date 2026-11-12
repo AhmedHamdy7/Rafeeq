@@ -279,6 +279,8 @@ final readonly class RequestSeatAction
      */
     private function assertNoOpenRequest(User $passenger, CommuteOffer $offer): void
     {
+        RequestEligibility::endFinishedTrials($passenger, $offer);
+
         $exists = RequestEligibility::hasOpenRequest($passenger, $offer);
 
         if ($exists) {

@@ -98,7 +98,7 @@ it('stores two custom map pins with their labels and sources', function () {
  */
 it('records a driver suggestion and a custom pin as different sources on one request', function () {
     // A fresh commute, because a route is replaced as a whole and this one advertises a pickup.
-    $commuteId = readyCommute($this->driverToken, Vehicle::sole()->id);
+    $commuteId = readyCommute($this->driverToken, Vehicle::sole()->id, schedule: ['promisedArrivalTime' => '18:00:00']);
 
     saveRoute($this->driverToken, $commuteId, [
         'pickups' => [['lat' => 30.0624, 'lng' => 31.3614, 'address' => 'Ring Road, Rehab exit']],
@@ -137,7 +137,7 @@ it('records a driver suggestion and a custom pin as different sources on one req
  * owner never offered.
  */
 it('refuses a suggestion that belongs to another commute', function () {
-    $otherCommute = readyCommute($this->driverToken, Vehicle::sole()->id);
+    $otherCommute = readyCommute($this->driverToken, Vehicle::sole()->id, schedule: ['promisedArrivalTime' => '18:00:00']);
 
     saveRoute($this->driverToken, $otherCommute, [
         'pickups' => [['lat' => 30.0624, 'lng' => 31.3614, 'address' => 'Somewhere else']],

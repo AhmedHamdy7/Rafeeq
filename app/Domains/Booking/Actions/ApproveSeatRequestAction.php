@@ -95,7 +95,12 @@ final readonly class ApproveSeatRequestAction
     {
         if ($request->status !== SeatRequestStatus::Pending
             && $request->status !== SeatRequestStatus::Waitlisted) {
-            throw DomainException::of(ErrorCode::SeatRequestNotPending);
+            throw DomainException::of(ErrorCode::SeatRequestNotPending, fields: array_filter([
+                'status' => [strtoupper($request->status->value)],
+                'expiredAt' => $request->status === SeatRequestStatus::Expired && $request->expires_at !== null
+                    ? [$request->expires_at->toIso8601String()]
+                    : null,
+            ]));
         }
 
         /*
@@ -184,12 +189,14 @@ final readonly class ApproveSeatRequestAction
             /** @var array<int, Booking> $bookings */
             $bookings = [];
             $skipped = [];
+            $codes = [];
 
             $waiting = [];
 
             foreach ($trips as $trip) {
                 if (isset($breaking[$trip->getKey()])) {
                     $skipped[$trip->trip_date->toDateString()] = SeatApproval::BREAKS_ARRIVAL;
+                    $codes[$trip->trip_date->toDateString()] = ErrorCode::BookingBreaksFrozenPromise->value;
                     $waiting[] = $trip;
 
                     continue;
@@ -201,6 +208,7 @@ final readonly class ApproveSeatRequestAction
                     $isFull = $refusal === ErrorCode::SeatUnavailable;
 
                     $skipped[$trip->trip_date->toDateString()] = $isFull ? SeatApproval::FULL : SeatApproval::UNAVAILABLE;
+                    $codes[$trip->trip_date->toDateString()] = $refusal->value;
 
                     if ($isFull) {
                         $waiting[] = $trip;
@@ -271,7 +279,7 @@ final readonly class ApproveSeatRequestAction
                 ]);
             }
 
-            return new SeatApproval($request, $member, $bookings, $skipped);
+            return new SeatApproval($request, $member, $bookings, $skipped, $codes);
         });
     }
 

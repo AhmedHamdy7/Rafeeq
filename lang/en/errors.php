@@ -63,6 +63,7 @@ return [
     // Commutes.
     'COMMUTE_NOT_EDITABLE' => 'This commute cannot be changed in its current state.',
     'COMMUTE_INCOMPLETE' => 'Some required details are still missing.',
+    'COMMUTE_OVERLAPS' => 'This commute overlaps another of your commutes. Leave at least 30 minutes between them.',
     'COMMUTE_INVALID_TRANSITION' => 'That change is not possible from the commute’s current state.',
     'COMMUTE_TRIP_IN_PROGRESS' => 'A trip on this commute is in progress. End it with Cancel Active Trip first.',
     'COMMUTE_ROUTE_UNAVAILABLE' => "We couldn't calculate the road between your start and end. Try again.",
@@ -129,6 +130,7 @@ return [
     'TRIP_NOT_STARTED' => 'This run has not started yet.',
     'TRIP_INVALID_TRANSITION' => 'That step is not possible from where this run is now.',
     'TRIP_NOT_CANCELLABLE' => 'This run can no longer be cancelled.',
+    'TRIP_DAY_TAKEN' => 'Another run of this commute is underway on that day.',
     'TRIP_TOO_EARLY_TO_START' => 'It is too early to start this run. Start it closer to the departure time.',
     'NO_SHOW_TOO_EARLY' => 'It is too early to mark a no-show. Wait until the 5-minute grace ends.',
     'NO_ARRIVAL_MARKED' => 'Mark your arrival at the pickup before marking a no-show.',

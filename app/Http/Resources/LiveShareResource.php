@@ -39,6 +39,7 @@ final class LiveShareResource extends JsonResource
 
             // Stated rather than left to be worked out from two timestamps and the current clock.
             'isActive' => $this->isActive(),
+            'endedAt' => ($this->revoked_at ?? ($this->expires_at->isPast() ? $this->expires_at : null))?->toIso8601String(),
 
             /*
              * 🔴 Not analytics. This is how the person who shared the link can tell whether their

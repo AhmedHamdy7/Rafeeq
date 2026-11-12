@@ -226,7 +226,17 @@ final readonly class CounterofferAction
              * the last one while this conversation was open, and the honest answer then is
              * `SEAT_UNAVAILABLE` rather than an eleventh booking in a ten-seat car.
              */
-            return $this->approve->execute($request->refresh(), $driver, driverDecides: false);
+            $approval = $this->approve->execute($request->refresh(), $driver, driverDecides: false);
+
+            Notifier::send($driver, NotificationType::SeatCounterofferAccepted, params: [
+                'name' => $request->passenger?->public_first_name ?? '',
+            ], data: [
+                'seatRequestId' => $request->id,
+                'commuteId' => $request->commute_offer_id,
+                'bookingIds' => implode(',', array_map(fn ($booking) => (string) $booking->getKey(), $approval->bookings)),
+            ]);
+
+            return $approval;
         });
     }
 

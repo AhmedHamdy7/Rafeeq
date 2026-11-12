@@ -251,28 +251,18 @@ it('refuses a reason that is not one of the four', function () {
     expect(Booking::query()->findOrFail($this->bookingId)->status)->toBe(BookingStatus::Confirmed);
 });
 
-/**
- * 🔴 The run has to have left. A `preparing` run is "cancel today", which costs her less — routing
- * it here through a client retry would charge her an abandonment for a morning nobody had left home
- * for.
- */
-it('refuses a run that has not set off, and names where it is', function () {
-    $other = ScheduledTrip::query()->where('id', '!=', $this->trip->id)->orderBy('trip_date')->firstOrFail();
+it('calls off a started run that is still preparing, as with nobody aboard (TRIP-22)', function () {
+    runLeavingIn($this->trip->id, 10);
 
-    /*
-     * Only `departure_at` moves. `runLeavingIn` also moves `trip_date`, and every generated day of
-     * one commute already holds a date — `(commute_offer_id, trip_date)` is unique — so shifting
-     * this one onto another day's date is a duplicate-key error rather than a test. The start
-     * window is measured against `departure_at` and nothing else.
-     */
-    ScheduledTrip::query()->whereKey($other->id)->update(['departure_at' => now()->addMinutes(10)]);
+    test()->withToken($this->driverToken)->postJson("/api/v1/trips/{$this->trip->id}/start")->assertStatus(201);
 
-    test()->withToken($this->driverToken)->postJson("/api/v1/trips/{$other->id}/start")->assertStatus(201);
+    cancelActive($this->driverToken, $this->trip->id)
+        ->assertOk()
+        ->assertJsonPath('meta.cancelled', 1)
+        ->assertJsonPath('meta.endedEarly', 0);
 
-    cancelActive($this->driverToken, $other->id)
-        ->assertStatus(409)
-        ->assertJsonPath('error.code', 'TRIP_NOT_CANCELLABLE')
-        ->assertJsonPath('error.fields.status.0', 'PREPARING');
+    expect(Booking::query()->findOrFail($this->bookingId)->status)->toBe(BookingStatus::CancelledByDriver)
+        ->and(ScheduledTrip::query()->findOrFail($this->trip->id)->status->value)->toBe('cancelled');
 });
 
 it('refuses a run that never started at all', function () {

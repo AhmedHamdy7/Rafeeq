@@ -4,8 +4,11 @@ namespace App\Domains\Booking\Actions;
 
 use App\Domains\Booking\Enums\BookingStatus;
 use App\Domains\Booking\Enums\PickupPointRequestStatus;
+use App\Domains\Booking\Enums\PointSource;
+use App\Domains\Booking\Enums\SeatRequestStatus;
 use App\Domains\Booking\Models\Booking;
 use App\Domains\Booking\Models\PickupPointRequest;
+use App\Domains\Booking\Models\SeatRequest;
 use App\Domains\Booking\Support\FreeCancel;
 use App\Domains\Booking\Support\PickupRequestContext;
 use App\Domains\Commute\Models\CommuteOffer;
@@ -56,7 +59,7 @@ final readonly class RespondToPickupPointAction
         return DB::transaction(function () use ($pickup): PickupPointRequest {
             $pickup->forceFill(['status' => PickupPointRequestStatus::Approved->value])->save();
 
-            $this->applyToUpcomingBookings($pickup, $pickup->proposed_point, placeId: null);
+            $this->applyToUpcomingBookings($pickup, $pickup->proposed_point, placeId: null, label: $pickup->proposed_label);
 
             $this->tellPassenger($pickup, NotificationType::PickupChangeApproved);
 
@@ -172,6 +175,7 @@ final readonly class RespondToPickupPointAction
         PickupPointRequest $pickup,
         ?Coordinate $point,
         ?string $placeId,
+        ?string $label = null,
     ): void {
         $bookings = Booking::query()
             ->where('passenger_user_id', $pickup->requested_by_user_id)
@@ -209,12 +213,12 @@ final readonly class RespondToPickupPointAction
                  * mean a meeting point that two people just agreed on, recorded in one column and
                  * contradicted by the three beside it.
                  *
-                 * The label is the place's name when a known place was agreed, and null for a bare
-                 * pin — honest either way, rather than inventing a description for coordinates.
+                 * The label is the place's name when a known place was agreed, and the passenger's
+                 * own label for her pin.
                  */
                 'pickup_lat' => $point?->lat,
                 'pickup_lng' => $point?->lng,
-                'pickup_label' => $this->labelFor($placeId),
+                'pickup_label' => $label ?? $this->labelFor($placeId),
             ])->save();
 
             /*
@@ -227,6 +231,24 @@ final readonly class RespondToPickupPointAction
 
             FreeCancel::rememberAgreedPickup($booking);
         }
+
+        if ($point === null) {
+            return;
+        }
+
+        SeatRequest::query()
+            ->where('passenger_user_id', $pickup->requested_by_user_id)
+            ->where('commute_offer_id', $this->commuteOfferIdOf($pickup))
+            ->where('status', SeatRequestStatus::Approved->value)
+            ->get()
+            ->each(fn (SeatRequest $request) => $request->forceFill([
+                'requested_pickup_point' => $point,
+                'requested_pickup_lat' => $point->lat,
+                'requested_pickup_lng' => $point->lng,
+                'requested_pickup_label' => $label ?? $this->labelFor($placeId),
+                'requested_pickup_source' => ($placeId === null ? PointSource::CustomMap : PointSource::DriverCounteroffer)->value,
+                'requested_pickup_suggestion_id' => null,
+            ])->save());
     }
 
     /**

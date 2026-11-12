@@ -32,7 +32,7 @@ final class SeatApprovalResource extends JsonResource
         // Built with an explicit loop rather than a map, so the published contract
         // describes a list of typed objects instead of an untyped associative blob.
         foreach ($approval->skipped as $date => $reason) {
-            $skipped[] = ['date' => $date, 'tripDate' => $date, 'reason' => $reason];
+            $skipped[] = ['date' => $date, 'tripDate' => $date, 'reason' => $reason, 'code' => $approval->codes[$date] ?? null];
         }
 
         return [

@@ -163,18 +163,14 @@ it('gives her one number at a time, in the order she reaches them', function () 
         ->assertJsonPath('error.fields.reason.0', 'not_next_pickup');
 });
 
-/**
- * ⚠️ No itinerary means no "next", and the answer is no. The safe direction: a driver who has not
- * opened her route has not started approaching anybody.
- */
-it('refuses her when no itinerary has been built', function () {
+it('gives her the next pickup before she has opened navigation or sent a position', function () {
     underway($this->driverToken, $this->tripId);
 
     expect(NavigationStop::query()->count())->toBe(0);
 
     askForNumber($this->driverToken, $this->bookingId)
-        ->assertStatus(409)
-        ->assertJsonPath('error.fields.reason.0', 'not_next_pickup');
+        ->assertOk()
+        ->assertJsonPath('data.phone', '+201223339999');
 });
 
 /*

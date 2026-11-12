@@ -19,9 +19,11 @@ use App\Domains\Notification\Support\Notifier;
 use App\Domains\Outbox\Enums\OutboxEventType;
 use App\Domains\Outbox\Support\Outbox;
 use App\Domains\Payment\Support\DriverFees;
+use App\Domains\Payment\Support\FeeLines;
 use App\Domains\Payment\Support\FeeSettings;
 use App\Domains\Reliability\Enums\ReliabilityEventKind;
 use App\Domains\Reliability\Support\ReliabilityLedger;
+use App\Domains\Safety\Support\LiveShares;
 use App\Domains\Shared\Exceptions\DomainException;
 use App\Domains\Shared\Support\ErrorCode;
 use App\Domains\Trip\Actions\BuildNavigationItineraryAction;
@@ -393,6 +395,10 @@ final readonly class CancelBookingAction
              * {@see recordAgainstReliability()}.
              */
             $this->recordAgainstReliability($booking, $trip, $to, $reason, $actorType);
+
+            LiveShares::endForBooking($booking);
+
+            FeeLines::refresh($booking->passenger_user_id);
 
             /*
              * 🔴 Announced on the day's channel, in this transaction.

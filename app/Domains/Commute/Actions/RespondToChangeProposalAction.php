@@ -60,7 +60,9 @@ final readonly class RespondToChangeProposalAction
 
         return DB::transaction(function () use ($proposal, $booking, $response): ChangeProposal {
             /*
-             * Her standing answer for this version, replaced rather than added to.
+             * Her standing answer for this version, replaced rather than added to — on every affected
+             * day of hers at once: she is one person answering once, and a recurring rider holds one
+             * booking per weekday the proposal moves.
              *
              * v5 lets her withdraw an acceptance until the change is applied, so changing her mind
              * has to be an update — two contradictory rows would make "did she agree?" a question
@@ -73,20 +75,28 @@ final readonly class RespondToChangeProposalAction
              * `response` here would let a client post somebody else's agreement as a field in an
              * unrelated payload, and the field in question is consent to change her morning.
              */
-            $answer = ChangeApproval::query()
-                ->where('change_proposal_id', $proposal->getKey())
-                ->where('booking_id', $booking->getKey())
-                ->where('proposal_version', $proposal->version)
-                ->first() ?? new ChangeApproval;
+            $hers = $proposal->affectedBookings()
+                ->where('passenger_user_id', $booking->passenger_user_id)
+                ->pluck('id')
+                ->push($booking->getKey())
+                ->unique();
 
-            $answer->forceFill([
-                'id' => $answer->getKey() ?? (string) Str::ulid(),
-                'change_proposal_id' => $proposal->getKey(),
-                'booking_id' => $booking->getKey(),
-                'proposal_version' => $proposal->version,
-                'response' => $response->value,
-                'responded_at' => now(),
-            ])->save();
+            foreach ($hers as $bookingId) {
+                $answer = ChangeApproval::query()
+                    ->where('change_proposal_id', $proposal->getKey())
+                    ->where('booking_id', $bookingId)
+                    ->where('proposal_version', $proposal->version)
+                    ->first() ?? new ChangeApproval;
+
+                $answer->forceFill([
+                    'id' => $answer->getKey() ?? (string) Str::ulid(),
+                    'change_proposal_id' => $proposal->getKey(),
+                    'booking_id' => $bookingId,
+                    'proposal_version' => $proposal->version,
+                    'response' => $response->value,
+                    'responded_at' => now(),
+                ])->save();
+            }
 
             if ($response === ChangeApprovalResponse::Rejected) {
                 $proposal->forceFill(['status' => ChangeProposalStatus::Rejected->value])->save();

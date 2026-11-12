@@ -10,6 +10,7 @@ use App\Domains\Booking\Enums\SwitchReason;
 use App\Domains\Booking\Models\Booking;
 use App\Domains\Booking\Models\PickupPointRequest;
 use App\Domains\Booking\Models\SeatRequest;
+use App\Domains\Booking\Support\CancellationBatch;
 use App\Domains\Booking\Support\WaitlistEligibility;
 use App\Domains\Commute\Enums\CommuteOfferStatus;
 use App\Domains\Commute\Enums\ScheduledTripStatus;
@@ -337,7 +338,7 @@ final class HomeController extends Controller
 
     private function unseenOutcome(string $userId, SubmitRatingAction $ratings): ?Booking
     {
-        return $this->journeyQuery()
+        $outcome = $this->journeyQuery()
             ->where('bookings.passenger_user_id', $userId)
             ->whereIn('bookings.status', BookingStatus::OUTCOMES_TO_SEE)
             ->whereNull('bookings.outcome_seen_at')
@@ -348,6 +349,17 @@ final class HomeController extends Controller
             ->get()
             ->first(fn (Booking $candidate): bool => $candidate->status !== BookingStatus::Completed
                 || HomeJourney::for($candidate, $ratings, $userId)->canRate());
+
+        if ($outcome === null || $outcome->status !== BookingStatus::CancelledByDriver) {
+            return $outcome;
+        }
+
+        return $this->journeyQuery()
+            ->whereIn('bookings.id', CancellationBatch::of($outcome)->select('bookings.id'))
+            ->whereNull('bookings.outcome_seen_at')
+            ->orderBy('scheduled_trips.departure_at')
+            ->orderBy('bookings.id')
+            ->first() ?? $outcome;
     }
 
     /**
@@ -466,6 +478,7 @@ final class HomeController extends Controller
             'canRate' => $state->canRate(),
 
             'isSeen' => $booking->outcome_seen_at !== null,
+            'sameCancellation' => CancellationBatch::summary($booking),
 
             /*
              * "Trial tomorrow" on the card. Read from the request that produced the

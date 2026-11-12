@@ -7,7 +7,9 @@ use App\Domains\Admin\Support\LiveTripBoard;
 use App\Domains\Admin\Support\MemberDirectory;
 use App\Domains\Admin\Support\SafetyCaseQueue;
 use App\Domains\Driver\Enums\DriverProfileStatus;
+use App\Domains\Driver\Enums\VehicleVerificationStatus;
 use App\Domains\Driver\Models\DriverProfile;
+use App\Domains\Driver\Models\Vehicle;
 use App\Domains\Geo\Contracts\GeoQueryEngine;
 use App\Domains\Geo\Support\CachingGeoEngine;
 use App\Domains\Geo\Support\GoogleRoutesGeoEngine;
@@ -224,7 +226,14 @@ class AppServiceProvider extends ServiceProvider
                     : 0,
 
                 'pendingDrivers' => $admin?->can(AdminPermission::DriverView->value)
-                    ? DriverProfile::query()->where('status', DriverProfileStatus::PendingReview->value)->count()
+                    ? DriverProfile::query()->where('status', DriverProfileStatus::PendingReview->value)->whereHas('user')->count()
+                    : 0,
+
+                'pendingReplacementCars' => $admin?->can(AdminPermission::DriverView->value)
+                    ? Vehicle::query()
+                        ->where('verification_status', VehicleVerificationStatus::Pending->value)
+                        ->whereHas('driverProfile', fn ($query) => $query->where('status', DriverProfileStatus::Approved->value)->whereHas('user'))
+                        ->count()
                     : 0,
 
                 // Holds whose promised review time has passed — a member told "within 24h"

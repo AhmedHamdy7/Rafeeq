@@ -6,6 +6,7 @@ use App\Domains\Commute\Models\ScheduledTrip;
 use App\Domains\Driver\Models\Vehicle;
 use App\Domains\Group\Enums\GroupMemberRole;
 use App\Domains\Group\Models\GroupMember;
+use App\Domains\Identity\Models\User;
 use App\Domains\Shared\ValueObjects\DaysMask;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\Storage;
@@ -265,4 +266,35 @@ it('stops extending a member whose account is on hold, and keeps the days alread
     Artisan::call('memberships:roll-forward');
 
     expect(Booking::count())->toBe($atJoining);
+});
+
+it('skips a day she already has a seat on and names the refusal code', function () {
+    $mask = DaysMask::fromBits($this->daysMask);
+
+    $taken = ScheduledTrip::query()
+        ->where('commute_offer_id', $this->commuteId)
+        ->where('departure_at', '>', now())
+        ->get()
+        ->first(fn (ScheduledTrip $trip) => $mask->includesDate($trip->trip_date));
+
+    Booking::factory()->create([
+        'scheduled_trip_id' => $taken->id,
+        'driver_profile_id' => $taken->load('commuteOffer')->commuteOffer->driver_profile_id,
+        'passenger_user_id' => User::query()->where('phone_e164', '+201112223344')->sole()->id,
+        'price_snapshot_piastres' => $taken->seat_price_piastres,
+        'platform_fee_snapshot_piastres' => $taken->commission_piastres,
+        'driver_amount_snapshot_piastres' => $taken->driver_share_piastres,
+    ]);
+
+    $requestId = requestRecurringSeat($this->paxToken, $this->commuteId, $this->daysMask)
+        ->assertStatus(201)->json('data.id');
+
+    $approval = test()->withToken($this->driverToken)
+        ->postJson("/api/v1/driver/seat-requests/{$requestId}/approve")
+        ->assertStatus(201)->json('data');
+
+    $skipped = collect($approval['skippedDays'])->firstWhere('tripDate', $taken->trip_date->toDateString());
+
+    expect($skipped['reason'])->toBe('unavailable')
+        ->and($skipped['code'])->toBe('BOOKING_ALREADY_BOOKED');
 });

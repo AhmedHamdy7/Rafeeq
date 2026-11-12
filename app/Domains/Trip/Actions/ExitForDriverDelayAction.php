@@ -14,6 +14,7 @@ use App\Domains\Payment\Support\DriverFees;
 use App\Domains\Payment\Support\FeeSettings;
 use App\Domains\Reliability\Enums\ReliabilityEventKind;
 use App\Domains\Reliability\Support\ReliabilityLedger;
+use App\Domains\Safety\Support\LiveShares;
 use App\Domains\Shared\Exceptions\DomainException;
 use App\Domains\Shared\Support\ErrorCode;
 use App\Domains\Trip\Enums\AttendanceStatus;
@@ -104,6 +105,8 @@ final readonly class ExitForDriverDelayAction
                 ->whereKey($booking->getKey())
                 ->where('status', AttendanceStatus::Pending->value)
                 ->update(['status' => AttendanceStatus::Cancelled->value]);
+
+            LiveShares::endForBooking($booking);
 
             $this->itinerary->bump($trip->getKey());
 
