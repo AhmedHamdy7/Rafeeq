@@ -81,7 +81,7 @@ final class Navigation
                 ['key' => 'reports', 'route' => 'admin.reports', 'icon' => 'flag', 'can' => AdminPermission::SafetyView],
                 ['key' => 'appeals', 'route' => 'admin.appeals', 'icon' => 'inbox', 'can' => fn (?AdminUser $admin): bool => Appeals::isAvailableTo($admin)],
                 ['key' => 'payments', 'route' => 'admin.payments', 'icon' => 'receipt', 'can' => AdminPermission::PaymentView],
-                ['key' => 'coupons', 'route' => 'admin.coupons', 'icon' => 'gift', 'can' => AdminPermission::DebtManage],
+                ['key' => 'coupons', 'route' => 'admin.coupons', 'icon' => 'gift', 'can' => AdminPermission::PaymentView],
             ],
             'directory' => [
                 ['key' => 'users', 'route' => 'admin.members', 'icon' => 'users', 'can' => AdminPermission::MemberView, 'badge' => 'overdueHolds', 'tone' => 'bad'],

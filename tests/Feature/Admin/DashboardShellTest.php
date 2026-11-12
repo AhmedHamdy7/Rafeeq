@@ -40,7 +40,7 @@ it('shows an Admin every page that exists, and only pages that exist', function 
 
     expect($keys)->toContain('home', 'sos', 'live_trips', 'driver_verification', 'users', 'payments', 'settings', 'audit')
         // Sections of the design that are not built yet are not in the menu at all.
-        ->not->toContain('statistics', 'ledger', 'announcements');
+        ->not->toContain('statistics', 'announcements');
 });
 
 it('hides from a role the pages it may not open', function () {

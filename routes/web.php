@@ -11,9 +11,11 @@ use App\Http\Middleware\SetAdminLocale;
 use App\Livewire\Admin\Account;
 use App\Livewire\Admin\Appeals;
 use App\Livewire\Admin\AuditLog;
+use App\Livewire\Admin\Coupons;
 use App\Livewire\Admin\Dashboard;
 use App\Livewire\Admin\DriverApplications;
 use App\Livewire\Admin\Escort;
+use App\Livewire\Admin\Ledger;
 use App\Livewire\Admin\LiveTrips;
 use App\Livewire\Admin\Login;
 use App\Livewire\Admin\Members;
@@ -22,6 +24,7 @@ use App\Livewire\Admin\ReplacementCars;
 use App\Livewire\Admin\Reports;
 use App\Livewire\Admin\SafetyCases;
 use App\Livewire\Admin\Settings;
+use App\Livewire\Admin\Settlements;
 use App\Livewire\Admin\VerificationQueue;
 use Illuminate\Support\Facades\Route;
 
@@ -110,6 +113,9 @@ Route::prefix('admin')->name('admin.')->middleware(SetAdminLocale::class)->group
         Route::get('replacement-cars', ReplacementCars::class)->name('replacement-cars');
         Route::get('members', Members::class)->name('members');
         Route::get('payments', Payments::class)->name('payments');
+        Route::get('settlements', Settlements::class)->name('settlements');
+        Route::get('ledger', Ledger::class)->name('ledger');
+        Route::get('coupons', Coupons::class)->name('coupons');
         Route::get('audit', AuditLog::class)->name('audit');
         Route::get('settings', Settings::class)->name('settings');
 
