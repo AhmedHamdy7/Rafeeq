@@ -23,6 +23,7 @@ use App\Livewire\Admin\Escort;
 use App\Livewire\Admin\Ledger;
 use App\Livewire\Admin\LiveTrips;
 use App\Livewire\Admin\Login;
+use App\Livewire\Admin\MemberProfile;
 use App\Livewire\Admin\Members;
 use App\Livewire\Admin\Payments;
 use App\Livewire\Admin\ReplacementCars;
@@ -129,6 +130,7 @@ Route::prefix('admin')->name('admin.')->middleware(SetAdminLocale::class)->group
         Route::get('drivers', DriverApplications::class)->name('drivers');
         Route::get('replacement-cars', ReplacementCars::class)->name('replacement-cars');
         Route::get('members', Members::class)->name('members');
+        Route::get('members/{user}', MemberProfile::class)->name('members.show');
         Route::get('commutes', Commutes::class)->name('commutes');
         Route::get('trip-days', TripDays::class)->name('trip-days');
         Route::get('bookings', Bookings::class)->name('bookings');

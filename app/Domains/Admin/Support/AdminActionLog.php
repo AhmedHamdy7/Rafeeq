@@ -43,6 +43,8 @@ final class AdminActionLog
         'driver.reject',
         'driver.reject_car',
         'account.suspend',
+        // Why somebody's full phone number was shown (D15).
+        'member.reveal_phone',
         'account.suspension_appeal_decide',
         'account.reactivate',
         'commute.unpublish',

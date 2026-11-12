@@ -420,6 +420,7 @@ return [
             'admin__suspend' => 'أوقف عضو في الفريق',
             'admin__reactivate' => 'فعّل عضو في الفريق تاني',
             'admin__invitation_accepted' => 'خلّص أول دخول',
+            'member__reveal_phone' => 'كشف رقم موبايل عضو',
             'admin__password_changed' => 'غيّر كلمة المرور بتاعته',
             'verification__approve' => 'وافق على توثيق',
             'verification__request_info' => 'طلب معلومات إضافية',

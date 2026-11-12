@@ -423,6 +423,7 @@ return [
             'admin__suspend' => 'Suspended a team member',
             'admin__reactivate' => 'Reactivated a team member',
             'admin__invitation_accepted' => 'Finished the first sign-in',
+            'member__reveal_phone' => 'Revealed a member’s phone number',
             'admin__password_changed' => 'Changed own password',
             'verification__approve' => 'Approved a verification',
             'verification__request_info' => 'Asked for more information',

@@ -1,0 +1,164 @@
+<?php
+
+namespace App\Livewire\Admin;
+
+use App\Domains\Admin\Enums\AdminPermission;
+use App\Domains\Admin\Models\AdminAction;
+use App\Domains\Admin\Models\AdminUser;
+use App\Domains\Admin\Models\MemberNote;
+use App\Domains\Admin\Support\AdminActionLog;
+use App\Domains\Booking\Models\Booking;
+use App\Domains\Commute\Models\CommuteOffer;
+use App\Domains\Identity\Models\Device;
+use App\Domains\Identity\Models\User;
+use App\Domains\Notification\Models\Notification;
+use App\Domains\Payment\Enums\DebtSide;
+use App\Domains\Payment\Models\DebtEntry;
+use App\Domains\Payment\Support\DebtStanding;
+use App\Domains\Rating\Models\Rating;
+use App\Domains\Reliability\Models\ReliabilityEvent;
+use App\Domains\Safety\Models\Incident;
+use App\Livewire\Admin\Concerns\ShowsMemberDetails;
+use Illuminate\Support\Facades\Auth;
+use Livewire\Attributes\Layout;
+use Livewire\Attributes\Locked;
+use Livewire\Attributes\Url;
+use Livewire\Component;
+
+/**
+ * USER DETAIL (D01–D10, D15): one member on a page of their own — header, the money and
+ * dispute banners, and a tab per side of them: overview, as passenger, as driver, money,
+ * reliability and ratings, reports, notifications, devices, notes and activity.
+ *
+ * Decisions (suspend, reinstate, suspend the driver role, decide an appeal) stay where
+ * their rules already live — the Users page's panel — and are one click away. This page
+ * adds what reading a member needs: team notes, and revealing the phone number with a
+ * reason that goes to the audit log (D15).
+ */
+#[Layout('components.layouts.admin')]
+class MemberProfile extends Component
+{
+    use ShowsMemberDetails;
+
+    public const array TABS = ['overview', 'passenger', 'driver', 'money', 'reliability', 'reports', 'notifications', 'devices', 'notes'];
+
+    #[Locked]
+    public string $userId = '';
+
+    #[Url(as: 'tab')]
+    public string $tab = 'overview';
+
+    public string $note = '';
+
+    public bool $revealing = false;
+
+    public string $revealReason = '';
+
+    /** The full phone number, only for the render right after a reasoned reveal. */
+    public ?string $revealedPhone = null;
+
+    public function mount(User $user): void
+    {
+        $this->authorizeTo(AdminPermission::MemberView);
+
+        $this->userId = $user->id;
+        $this->tab = in_array($this->tab, $this->tabs(), true) ? $this->tab : 'overview';
+    }
+
+    public function pick(string $tab): void
+    {
+        $this->tab = in_array($tab, $this->tabs(), true) ? $tab : 'overview';
+    }
+
+    public function addNote(): void
+    {
+        $this->authorizeTo(AdminPermission::MemberView);
+
+        $this->validate(['note' => ['required', 'string', 'min:3', 'max:2000']], attributes: ['note' => __('admin/profile.note')]);
+
+        MemberNote::query()->create(['user_id' => $this->userId, 'admin_id' => $this->admin()->id, 'body' => trim($this->note)]);
+
+        $this->reset('note');
+    }
+
+    public function reveal(): void
+    {
+        $this->authorizeTo(AdminPermission::MemberView);
+
+        $this->validate(['revealReason' => ['required', 'string', 'min:5', 'max:255']], attributes: ['revealReason' => __('admin/profile.reveal_reason')]);
+
+        $user = $this->member();
+
+        AdminActionLog::record($this->admin(), 'member.reveal_phone', $user, reason: trim($this->revealReason));
+
+        $this->revealedPhone = $user->phone_e164;
+        $this->reset('revealing', 'revealReason');
+    }
+
+    /** @return list<string> the tabs this staff member may open */
+    private function tabs(): array
+    {
+        return array_values(array_filter(self::TABS, fn (string $tab) => $tab !== 'money' || $this->may(AdminPermission::PaymentView)));
+    }
+
+    private function member(): User
+    {
+        return User::query()->whereKey($this->userId)->firstOrFail();
+    }
+
+    private function admin(): AdminUser
+    {
+        $admin = Auth::guard('admin')->user();
+        abort_unless($admin instanceof AdminUser, 403);
+
+        return $admin;
+    }
+
+    private function may(AdminPermission $permission): bool
+    {
+        return Auth::guard('admin')->user()?->can($permission->value) === true;
+    }
+
+    private function authorizeTo(AdminPermission $permission): void
+    {
+        abort_unless($this->may($permission), 403);
+    }
+
+    public function render()
+    {
+        $user = User::query()
+            ->whereKey($this->userId)
+            ->with([...self::detailRelations(), 'activeSuspension', 'driverProfile.vehicles'])
+            ->firstOrFail();
+
+        $standings = $this->may(AdminPermission::PaymentView) || $this->tab === 'overview'
+            ? ['driver' => DebtStanding::of($user, DebtSide::Driver), 'passenger' => DebtStanding::of($user, DebtSide::Passenger)]
+            : [];
+
+        $data = match ($this->tab) {
+            'passenger' => ['bookings' => Booking::query()->where('passenger_user_id', $user->id)->with(['scheduledTrip', 'driverProfile.user'])->latest('created_at')->limit(30)->get()],
+            'driver' => ['commutes' => $user->driverProfile === null ? collect() : CommuteOffer::query()->where('driver_profile_id', $user->driverProfile->user_id)->with(['vehicle', 'locations'])->latest('created_at')->limit(20)->get()],
+            'money' => ['entries' => DebtEntry::query()->where('user_id', $user->id)->latest('created_at')->latest('id')->limit(40)->get()],
+            'reliability' => [
+                'events' => ReliabilityEvent::query()->where('user_id', $user->id)->latest('occurred_at')->limit(30)->get(),
+                'ratings' => Rating::query()->where('reviewed_user_id', $user->id)->latest('created_at')->limit(20)->get(),
+            ],
+            'reports' => ['incidents' => Incident::query()->where(fn ($q) => $q->where('reported_user_id', $user->id)->orWhere('reporter_user_id', $user->id))->with(['reporter', 'reportedUser'])->latest('created_at')->limit(30)->get()],
+            'notifications' => ['notifications' => Notification::query()->where('user_id', $user->id)->latest('created_at')->limit(40)->get()],
+            'devices' => ['devices' => Device::query()->where('user_id', $user->id)->latest('last_seen_at')->get()],
+            'notes' => ['activity' => AdminAction::query()->where('entity_id', $user->id)->orWhere('entity_id', $user->driverProfile?->user_id ?? '-')->with('admin')->latest('created_at')->limit(40)->get()],
+            default => [],
+        };
+
+        return view('livewire.admin.member-profile', [
+            'user' => $user,
+            'tabs' => $this->tabs(),
+            'standings' => $standings,
+            'openDisputes' => Incident::query()->where('reporter_user_id', $user->id)->where('category', 'payment')->whereIn('status', \App\Domains\Safety\Enums\IncidentStatus::openValues())->count(),
+            'notes' => MemberNote::query()->where('user_id', $user->id)->with('admin')->latest('created_at')->latest('id')->limit($this->tab === 'notes' ? 100 : 3)->get(),
+            'maySeeDocuments' => $this->maySeeDocuments(),
+            'mayDecide' => $this->may(AdminPermission::MemberSuspend),
+            ...$data,
+        ])->title((string) $user->full_name);
+    }
+}

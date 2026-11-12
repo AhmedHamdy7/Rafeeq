@@ -129,6 +129,7 @@
                             @endif
                         </div>
                     </div>
+                    <a class="ad-btn ad-btn--sm" href="{{ route('admin.members.show', $opened->id) }}" wire:navigate>{{ __('admin/profile.full_profile') }}</a>
                     <button type="button" class="ad-icon-btn" wire:click="open(null)">
                         <x-admin.icon name="x" size="18" />
                         <span class="ad-sr">{{ __('admin/members.close') }}</span>
