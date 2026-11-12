@@ -85,6 +85,14 @@ return Application::configure(basePath: dirname(__DIR__))
             fn (Request $request) => $request->is('admin', 'admin/*') ? route('admin.login') : null,
         );
 
+        /*
+         * Where a SIGNED-IN visitor is sent when they open a guest-only page (the sign-in
+         * page). Laravel's default is `/`, the bare root — which linked back to the sign-in
+         * page, so a signed-in admin pressing "Dashboard" went round in a circle and never
+         * arrived anywhere. Staff go to their home page instead.
+         */
+        $middleware->redirectUsersTo(fn () => route('admin.home'));
+
         // Opt-in, never global: the routes a suspended or half-registered
         // person still needs (see their own status, sign out, revoke a
         // stolen device) must stay reachable, so these are applied per
