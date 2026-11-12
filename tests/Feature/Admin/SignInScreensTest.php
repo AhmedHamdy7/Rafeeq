@@ -94,7 +94,9 @@ it('says why after an idle sign-out (S08)', function () {
         ->assertRedirect(route('admin.login'))
         ->assertSessionHas('admin_signed_out', 'idle');
 
-    $this->get(route('admin.login'))->assertSee(__('admin/auth.signed_out.title'));
+    // The next page is the sign-in page, drawn with the flash the redirect left.
+    // (A second HTTP request would still carry actingAs() and bounce off guest:admin.)
+    Livewire::test(Login::class)->assertSee(__('admin/auth.signed_out.title'));
 });
 
 it('says nothing extra after an ordinary sign-out', function () {
