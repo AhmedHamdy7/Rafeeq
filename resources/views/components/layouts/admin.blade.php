@@ -1,24 +1,41 @@
 {{--
-    The dashboard shell. Everything inside it is behind auth + MFA + a fresh session.
+    The dashboard shell (RAFEEQ_Admin_Dashboard.html): sidebar · top bar · SOS bar · page.
+    Everything inside it is behind auth + MFA + a fresh session.
 
-    Layout follows `rafiq-super-admin-standalone.html`: a desk, a rounded surface card,
-    a 224px rail of sections, and the content beside it. On a phone the rail becomes a
-    drawer — see the responsive block in public/css/admin.css.
+    - The sidebar comes from App\Domains\Admin\Support\Navigation: groups, order, icons,
+      permissions. Its count badges come from the view composer in AppServiceProvider.
+    - Arabic / English: the globe in the top bar posts to admin.locale; `dir` follows.
+    - Light / dark: set before first paint (no white flash), remembered per browser.
+    - Responsive: see public/css/admin/layout.css — open sidebar ≥ 1280px, icons only
+      below that, a drawer under 768px.
 
-    Navigation uses `wire:navigate`, so moving between pages swaps the content over AJAX
-    and keeps the rail, the scroll position and the theme. Nothing here does a full page
-    load, and neither does any action: Livewire posts and re-renders in place.
+    Pages not yet redrawn in the new design keep their own markup (the `rq-*` classes in
+    public/css/admin.css) inside this shell, and are replaced one phase at a time.
 --}}
 @php
     use App\Domains\Admin\Enums\AdminPermission;
+    use App\Domains\Admin\Support\Navigation;
+    use Illuminate\Support\Facades\Route;
 
     $admin = auth('admin')->user();
+    $locale = app()->getLocale();
+    $navigation = Navigation::for($admin);
+    $badges = [
+        'openSafetyCases' => $openSafetyCases ?? 0,
+        'liveTrips' => $liveTrips ?? 0,
+        'pendingDrivers' => $pendingDrivers ?? 0,
+        'pendingVerifications' => $pendingVerifications ?? 0,
+        'pendingReplacementCars' => $pendingReplacementCars ?? 0,
+        'overdueHolds' => $overdueHolds ?? 0,
+    ];
+    $mayReadSafety = $admin?->can(AdminPermission::SafetyView->value) === true;
+    $maySearch = $admin?->can(AdminPermission::MemberView->value) === true;
+    $role = $admin?->getRoleNames()->first();
 @endphp
 <!DOCTYPE html>
 <html
-    lang="{{ str_replace('_', '-', app()->getLocale()) }}"
-    dir="{{ app()->getLocale() === 'ar' ? 'rtl' : 'ltr' }}"
-    {{-- Set before paint by the script below; the attribute here is the no-JS default. --}}
+    lang="{{ str_replace('_', '-', $locale) }}"
+    dir="{{ $locale === 'ar' ? 'rtl' : 'ltr' }}"
     data-theme="light"
 >
 <head>
@@ -26,270 +43,210 @@
     <meta name="viewport" content="width=device-width, initial-scale=1">
     {{-- 🔒 Staff pages must never be indexed. --}}
     <meta name="robots" content="noindex, nofollow">
-    <title>{{ __('admin.title') }}</title>
+    <title>{{ isset($title) ? $title.' · ' : '' }}{{ __('admin/shell.brand') }}</title>
+
+    {{-- Pages not yet redrawn still read the old sheet; the new ones come after and win. --}}
     <link rel="stylesheet" href="{{ asset('css/admin.css') }}">
+    <link rel="stylesheet" href="{{ asset('css/admin/tokens.css') }}">
+    <link rel="stylesheet" href="{{ asset('css/admin/base.css') }}">
+    <link rel="stylesheet" href="{{ asset('css/admin/layout.css') }}">
+    <link rel="stylesheet" href="{{ asset('css/admin/components.css') }}">
+    <link rel="preload" href="{{ asset($locale === 'ar' ? 'fonts/cairo-arabic-wght-normal.woff2' : 'fonts/inter-latin-wght-normal.woff2') }}" as="font" type="font/woff2" crossorigin>
 
     {{--
-        Applied before the first paint, in the head, on purpose: doing it after render
-        means a dark-mode user sees a white flash on every navigation. Remembered per
-        browser, falling back to the operating system's own setting.
-
-        Wrapped in try/catch because localStorage throws in a private window with site
-        data blocked, and a theme preference is not worth a blank page.
+        Theme and sidebar width, applied before first paint: doing it after render means a
+        dark-mode user sees a white flash on every navigation. try/catch because
+        localStorage throws in a private window, and a preference is not worth a blank page.
     --}}
     <script>
         (function () {
+            var root = document.documentElement;
             try {
                 var saved = localStorage.getItem('rq-theme');
                 var system = window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
-                document.documentElement.dataset.theme = saved || system;
+                root.dataset.theme = saved || system;
+                root.dataset.side = localStorage.getItem('rq-side') || 'open';
             } catch (e) {
-                document.documentElement.dataset.theme = 'light';
+                root.dataset.theme = 'light';
+                root.dataset.side = 'open';
             }
         })();
     </script>
     @livewireStyles
 </head>
-<body>
-<div class="rq-desk" x-data="{ rail: false }">
-    <div class="rq-shell">
+<body class="ad-body">
+<div
+    class="ad-app"
+    x-data="{
+        drawer: false,
+        collapsed: document.documentElement.dataset.side === 'collapsed',
+        theme: document.documentElement.dataset.theme,
+        toggleSide() {
+            this.collapsed = ! this.collapsed;
+            document.documentElement.dataset.side = this.collapsed ? 'collapsed' : 'open';
+            try { localStorage.setItem('rq-side', this.collapsed ? 'collapsed' : 'open'); } catch (e) {}
+        },
+        toggleTheme() {
+            this.theme = this.theme === 'dark' ? 'light' : 'dark';
+            document.documentElement.dataset.theme = this.theme;
+            try { localStorage.setItem('rq-theme', this.theme); } catch (e) {}
+        },
+    }"
+    x-bind:class="{ 'ad-drawer-open': drawer }"
+    x-on:keydown.escape.window="drawer = false"
+>
+    {{-- Tablet and phone: the open drawer dims the page; a tap outside closes it. --}}
+    <div class="ad-scrim" x-show="drawer" x-on:click="drawer = false" x-cloak></div>
 
-        {{-- The scrim only exists while the drawer is open, and closes it on tap. --}}
-        <div class="rq-scrim" x-show="rail" x-on:click="rail = false" x-cloak></div>
+    <aside class="ad-side" id="ad-side" aria-label="{{ __('admin/shell.nav.label') }}">
+        <div class="ad-brand">
+            <span class="ad-brand__mark" aria-hidden="true">R</span>
+            <span class="ad-brand__text">
+                <span class="ad-brand__name">{{ __('admin/shell.brand') }}</span>
+                <span class="ad-brand__sub">{{ __('admin/shell.brand_sub') }}</span>
+            </span>
+            <button type="button" class="ad-icon-btn ad-brand__toggle" x-on:click="toggleSide()"
+                    x-bind:aria-expanded="collapsed ? 'false' : 'true'" aria-controls="ad-side">
+                <x-admin.icon name="panel" />
+                <span class="ad-sr">{{ __('admin/shell.nav.collapse') }}</span>
+            </button>
+        </div>
 
-        <aside class="rq-rail" x-bind:data-open="rail ? 'true' : 'false'">
-            <div class="rq-brand">
-                <span class="rq-brand__mark" aria-hidden="true">ر</span>
-                <span class="rq-brand__name">{{ __('admin.title') }}</span>
-                <button
-                    type="button"
-                    class="rq-btn rq-btn--icon rq-rail__close"
-                    x-on:click="rail = false"
-                    style="margin-inline-start:auto"
-                >
-                    <span aria-hidden="true">&times;</span>
-                    <span class="rq-sr">{{ __('admin.nav.close') }}</span>
-                </button>
-            </div>
-
-            <div class="rq-rail__section">{{ __('admin.nav.operations') }}</div>
-            <nav style="display:flex;flex-direction:column;gap:3px">
-                @if (\App\Livewire\Admin\Dashboard::isAvailableTo($admin))
+        @foreach ($navigation as $group)
+            <div class="ad-navg">{{ __('admin/shell.groups.'.$group['key']) }}</div>
+            <nav aria-label="{{ __('admin/shell.groups.'.$group['key']) }}">
+                @foreach ($group['items'] as $item)
+                    @php($count = $item['badge'] ? ($badges[$item['badge']] ?? 0) : 0)
                     <a
-                        href="{{ route('admin.dashboard') }}"
+                        href="{{ route($item['route']) }}"
                         wire:navigate
-                        class="rq-nav"
-                        @if (request()->routeIs('admin.dashboard')) aria-current="page" @endif
+                        class="ad-nav"
+                        title="{{ __('admin/shell.nav.'.$item['key']) }}"
+                        x-on:click="drawer = false"
+                        @if (request()->routeIs($item['route'])) aria-current="page" @endif
                     >
-                        <span class="rq-nav__tile" aria-hidden="true">▦</span>
-                        <span class="rq-nav__label">{{ __('admin.nav.dashboard') }}</span>
-                    </a>
-                @endif
-
-                {{--
-                    Each link is rendered only if this admin may use the page. A hidden
-                    link is NOT the permission check — every component re-checks — but
-                    showing somebody a door that 403s is its own small cruelty.
-                --}}
-                @can(AdminPermission::SafetyView->value)
-                    <a
-                        href="{{ route('admin.safety') }}"
-                        wire:navigate
-                        class="rq-nav"
-                        @if (request()->routeIs('admin.safety')) aria-current="page" @endif
-                    >
-                        <span class="rq-nav__tile" aria-hidden="true">⚠</span>
-                        <span class="rq-nav__label">{{ __('admin.nav.safety') }}</span>
-                        @if ($openSafetyCases ?? 0)
-                            <span class="rq-pill rq-pill--bad">{{ $openSafetyCases }}</span>
+                        <x-admin.icon :name="$item['icon']" />
+                        <span class="ad-nav__label">{{ __('admin/shell.nav.'.$item['key']) }}</span>
+                        @if ($count > 0)
+                            <span class="ad-badge ad-badge--{{ $item['tone'] }}">{{ $count }}</span>
                         @endif
                     </a>
-                @endcan
-
-                @can(AdminPermission::TripView->value)
-                    <a
-                        href="{{ route('admin.trips') }}"
-                        wire:navigate
-                        class="rq-nav"
-                        @if (request()->routeIs('admin.trips')) aria-current="page" @endif
-                    >
-                        <span class="rq-nav__tile" aria-hidden="true">⛟</span>
-                        <span class="rq-nav__label">{{ __('admin.nav.trips') }}</span>
-                        @if ($liveTrips ?? 0)
-                            <span class="rq-pill rq-pill--ok">{{ $liveTrips }}</span>
-                        @endif
-                    </a>
-                @endcan
-
-                @can(AdminPermission::SafetyView->value)
-                    <a
-                        href="{{ route('admin.escort') }}"
-                        wire:navigate
-                        class="rq-nav"
-                        @if (request()->routeIs('admin.escort')) aria-current="page" @endif
-                    >
-                        <span class="rq-nav__tile" aria-hidden="true">☾</span>
-                        <span class="rq-nav__label">{{ __('admin.nav.escort') }}</span>
-                    </a>
-                @endcan
-
-                @can(AdminPermission::VerificationView->value)
-                    <a
-                        href="{{ route('admin.verifications') }}"
-                        wire:navigate
-                        class="rq-nav"
-                        @if (request()->routeIs('admin.verifications')) aria-current="page" @endif
-                    >
-                        <span class="rq-nav__tile" aria-hidden="true">✓</span>
-                        <span class="rq-nav__label">{{ __('admin.nav.verifications') }}</span>
-                        @if ($pendingVerifications ?? 0)
-                            <span class="rq-pill rq-pill--warn">{{ $pendingVerifications }}</span>
-                        @endif
-                    </a>
-                @endcan
-
-                @can(AdminPermission::DriverView->value)
-                    <a
-                        href="{{ route('admin.drivers') }}"
-                        wire:navigate
-                        class="rq-nav"
-                        @if (request()->routeIs('admin.drivers')) aria-current="page" @endif
-                    >
-                        <span class="rq-nav__tile" aria-hidden="true">⌘</span>
-                        <span class="rq-nav__label">{{ __('admin.nav.drivers') }}</span>
-                        @if ($pendingDrivers ?? 0)
-                            <span class="rq-pill rq-pill--count">{{ $pendingDrivers }}</span>
-                        @endif
-                    </a>
-                    <a
-                        href="{{ route('admin.replacement-cars') }}"
-                        wire:navigate
-                        class="rq-nav"
-                        @if (request()->routeIs('admin.replacement-cars')) aria-current="page" @endif
-                    >
-                        <span class="rq-nav__tile" aria-hidden="true">⇄</span>
-                        <span class="rq-nav__label">{{ __('admin.nav.replacement_cars') }}</span>
-                        @if ($pendingReplacementCars ?? 0)
-                            <span class="rq-pill rq-pill--count">{{ $pendingReplacementCars }}</span>
-                        @endif
-                    </a>
-                @endcan
-
-                @can(AdminPermission::MemberView->value)
-                    <a
-                        href="{{ route('admin.members') }}"
-                        wire:navigate
-                        class="rq-nav"
-                        @if (request()->routeIs('admin.members')) aria-current="page" @endif
-                    >
-                        <span class="rq-nav__tile" aria-hidden="true">☺</span>
-                        <span class="rq-nav__label">{{ __('admin.nav.members') }}</span>
-                        @if ($overdueHolds ?? 0)
-                            <span class="rq-pill rq-pill--bad">{{ $overdueHolds }}</span>
-                        @endif
-                    </a>
-                @endcan
-
-                @can(AdminPermission::PaymentView->value)
-                    <a href="{{ route('admin.payments') }}" wire:navigate class="rq-nav"
-                       @if (request()->routeIs('admin.payments')) aria-current="page" @endif>
-                        <span class="rq-nav__tile" aria-hidden="true">£</span>
-                        <span class="rq-nav__label">{{ __('admin.nav.payments') }}</span>
-                    </a>
-                @endcan
+                @endforeach
             </nav>
+        @endforeach
+    </aside>
 
-            @if ($admin?->can(AdminPermission::AuditLogView->value) || $admin?->can(AdminPermission::SettingsManage->value))
-                <div class="rq-rail__section" style="margin-top:18px">{{ __('admin.nav.general') }}</div>
-                <nav style="display:flex;flex-direction:column;gap:3px">
-                    @can(AdminPermission::AuditLogView->value)
-                        <a href="{{ route('admin.audit') }}" wire:navigate class="rq-nav"
-                           @if (request()->routeIs('admin.audit')) aria-current="page" @endif>
-                            <span class="rq-nav__tile" aria-hidden="true">≡</span>
-                            <span class="rq-nav__label">{{ __('admin.nav.audit') }}</span>
-                        </a>
-                    @endcan
-                    @can(AdminPermission::SettingsManage->value)
-                        <a href="{{ route('admin.settings') }}" wire:navigate class="rq-nav"
-                           @if (request()->routeIs('admin.settings')) aria-current="page" @endif>
-                            <span class="rq-nav__tile" aria-hidden="true">⚙</span>
-                            <span class="rq-nav__label">{{ __('admin.nav.settings') }}</span>
-                        </a>
-                    @endcan
-                </nav>
+    <div class="ad-main">
+        <header class="ad-top">
+            <button type="button" class="ad-icon-btn ad-menu-btn" x-on:click="drawer = true" aria-controls="ad-side">
+                <x-admin.icon name="menu" size="18" />
+                <span class="ad-sr">{{ __('admin/shell.nav.open') }}</span>
+            </button>
+
+            @if ($maySearch && Route::has('admin.members'))
+                {{-- Finds a person by phone, name or reference — the users directory does the search. --}}
+                <form class="ad-search" method="GET" action="{{ route('admin.members') }}" role="search">
+                    <x-admin.icon name="search" />
+                    <input type="search" name="q" value="{{ request()->routeIs('admin.members') ? request('q') : '' }}"
+                           placeholder="{{ __('admin/shell.search.placeholder') }}"
+                           aria-label="{{ __('admin/shell.search.label') }}"
+                           x-on:keydown.window.slash="if (! ['INPUT', 'TEXTAREA', 'SELECT'].includes(document.activeElement.tagName)) { $event.preventDefault(); $el.focus(); }">
+                    <kbd aria-hidden="true">/</kbd>
+                </form>
+                <a href="{{ route('admin.members') }}" wire:navigate class="ad-icon-btn ad-search-icon">
+                    <x-admin.icon name="search" size="18" />
+                    <span class="ad-sr">{{ __('admin/shell.search.label') }}</span>
+                </a>
             @endif
 
-            <div style="flex:1"></div>
+            <span class="ad-top__spacer"></span>
 
-            <div class="rq-rail__section">{{ __('admin.nav.signed_in_as') }}</div>
-            <div style="padding:0 9px 10px;font-size:13px">
-                <div style="font-weight:600">{{ $admin?->name }}</div>
-                <div class="rq-note">{{ $admin?->getRoleNames()->first() }}</div>
+            @if ($mayReadSafety && ($openSafetyCases ?? 0) > 0 && Route::has('admin.safety'))
+                <a href="{{ route('admin.safety') }}" wire:navigate class="ad-sosind">
+                    <x-admin.icon name="alert" size="14" />
+                    <span class="ad-sosind__label">{{ __('admin/shell.sos.indicator') }} ·</span>
+                    <span class="ad-num">{{ $openSafetyCases }}</span>
+                </a>
+            @endif
+
+            {{-- Language. A form, because switching changes the session (never a GET). --}}
+            <div class="ad-menu-anchor" x-data="{ open: false }" x-on:click.outside="open = false">
+                <button type="button" class="ad-icon-btn" x-on:click="open = ! open" x-bind:aria-expanded="open" aria-haspopup="menu">
+                    <x-admin.icon name="globe" size="18" />
+                    <span class="ad-sr">{{ __('admin/shell.language') }}</span>
+                </button>
+                <div class="ad-pop" role="menu" x-show="open" x-cloak style="inline-size:180px">
+                    @foreach (['ar' => 'العربية', 'en' => 'English'] as $code => $name)
+                        <form method="POST" action="{{ route('admin.locale', $code) }}">
+                            @csrf
+                            <button type="submit" class="ad-pop__item" role="menuitemradio" aria-checked="{{ $locale === $code ? 'true' : 'false' }}" lang="{{ $code }}">
+                                {{ $name }}
+                                @if ($locale === $code)
+                                    <x-admin.icon name="check" style="margin-inline-start:auto" />
+                                @endif
+                            </button>
+                        </form>
+                    @endforeach
+                </div>
             </div>
 
-            <form method="POST" action="{{ route('admin.logout') }}" style="margin:0;padding:0 9px">
-                @csrf
-                <button type="submit" class="rq-btn rq-btn--quiet" style="width:100%">
-                    {{ __('admin.nav.sign_out') }}
+            <button type="button" class="ad-icon-btn" x-on:click="toggleTheme()">
+                <span x-show="theme !== 'dark'"><x-admin.icon name="moon" size="18" /></span>
+                <span x-show="theme === 'dark'" x-cloak><x-admin.icon name="sun" size="18" /></span>
+                <span class="ad-sr">{{ __('admin/shell.theme') }}</span>
+            </button>
+
+            <div class="ad-menu-anchor" x-data="{ open: false }" x-on:click.outside="open = false">
+                <button type="button" class="ad-user" x-on:click="open = ! open" x-bind:aria-expanded="open" aria-haspopup="menu">
+                    <span class="ad-avatar" aria-hidden="true">{{ mb_substr((string) $admin?->name, 0, 1) }}</span>
+                    <span class="ad-user__text">
+                        <span class="ad-user__name">{{ $admin?->name }}</span>
+                        @if ($role)
+                            <span class="ad-chip ad-chip--brand ad-chip--plain" style="block-size:18px;font-size:11px">{{ __('admin/shell.roles.'.$role) }}</span>
+                        @endif
+                    </span>
+                    <x-admin.icon name="chevron-down" size="14" class="ad-subtle" />
                 </button>
-            </form>
-        </aside>
-
-        <div class="rq-main">
-            <header class="rq-topbar">
-                <button
-                    type="button"
-                    class="rq-btn rq-btn--icon rq-rail__open"
-                    x-on:click="rail = true"
-                >
-                    <span aria-hidden="true">☰</span>
-                    <span class="rq-sr">{{ __('admin.nav.menu') }}</span>
-                </button>
-
-                <span class="rq-topbar__title">{{ $title ?? __('admin.title') }}</span>
-
-                {{--
-                    Theme toggle. Writes the choice and flips the attribute in the same
-                    click, so nothing re-renders and nothing round-trips to the server —
-                    the whole page is already themed from CSS variables.
-                --}}
-                <button
-                    type="button"
-                    class="rq-btn rq-btn--icon"
-                    x-data="{
-                        theme: document.documentElement.dataset.theme,
-                        flip() {
-                            this.theme = this.theme === 'dark' ? 'light' : 'dark';
-                            document.documentElement.dataset.theme = this.theme;
-                            try { localStorage.setItem('rq-theme', this.theme); } catch (e) {}
-                        },
-                    }"
-                    x-on:click="flip()"
-                >
-                    <span x-text="theme === 'dark' ? '☀' : '☾'" aria-hidden="true"></span>
-                    <span class="rq-sr">{{ __('admin.nav.theme') }}</span>
-                </button>
-            </header>
-
-            <main class="rq-content">
-                @if ($unacknowledgedAlert ?? null)
-                    {{-- Same alert, same wording, on every page: see the composer in AppServiceProvider. --}}
-                    <div class="rq-banner" role="alert" wire:key="sos-banner-{{ $unacknowledgedAlert->id }}">
-                        <span style="flex:1">
-                            {{ __($unacknowledgedAlert->is_discreet ? 'admin.safety.banner_silent' : 'admin.safety.banner', ['ago' => $unacknowledgedAlert->created_at->diffForHumans()]) }}
-                        </span>
-                        <a class="rq-btn rq-btn--danger" href="{{ route('admin.safety') }}" wire:navigate>{{ __('admin.safety.open') }}</a>
+                <div class="ad-pop" role="menu" x-show="open" x-cloak>
+                    <div class="ad-pop__head">{{ __('admin/shell.signed_in_as') }}</div>
+                    <div style="padding:2px 10px 8px">
+                        <div style="font-weight:650">{{ $admin?->name }}</div>
+                        <div class="ad-muted" style="font-size:12px;overflow-wrap:anywhere">{{ $admin?->email }}</div>
                     </div>
-                @endif
+                    <hr class="ad-pop__sep">
+                    <form method="POST" action="{{ route('admin.logout') }}">
+                        @csrf
+                        <button type="submit" class="ad-pop__item" role="menuitem">
+                            <x-admin.icon name="logout" class="ad-flip" />
+                            {{ __('admin/shell.sign_out') }}
+                        </button>
+                    </form>
+                </div>
+            </div>
+        </header>
 
-                @if (session('status'))
-                    {{-- `wire:key` so a flash from one action is not reused by the next render. --}}
-                    <p class="rq-flash" wire:key="flash-{{ md5(session('status')) }}">{{ session('status') }}</p>
-                @endif
+        @if ($unacknowledgedAlert ?? null)
+            {{-- Same alert, same wording, on every page: see the composer in AppServiceProvider. --}}
+            <div class="ad-sosbar" role="alert" wire:key="sos-banner-{{ $unacknowledgedAlert->id }}">
+                <x-admin.icon name="alert" />
+                <span class="ad-sosbar__text">
+                    <strong>{{ __($unacknowledgedAlert->is_discreet ? 'admin.safety.banner_silent' : 'admin.safety.banner', ['ago' => $unacknowledgedAlert->created_at->diffForHumans()]) }}</strong>
+                </span>
+                <a class="ad-btn ad-btn--sm" href="{{ route('admin.safety') }}" wire:navigate>{{ __('admin.safety.open') }}</a>
+            </div>
+        @endif
 
-                {{ $slot }}
-            </main>
-        </div>
+        <main class="ad-content" id="ad-content">
+            @if (session('status'))
+                {{-- `wire:key` so a flash from one action is not reused by the next render. --}}
+                <p class="ad-flash" role="status" wire:key="flash-{{ md5(session('status')) }}">
+                    <x-admin.icon name="check" />
+                    {{ session('status') }}
+                </p>
+            @endif
+
+            {{ $slot }}
+        </main>
     </div>
 </div>
 @livewireScripts

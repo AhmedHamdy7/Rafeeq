@@ -1,0 +1,486 @@
+/*
+ * RAFEEQ dashboard — the shell: sidebar, top bar, SOS bar, content.
+ *
+ * Three widths, one markup:
+ *   ≥ 1280px   sidebar open (244px), full top bar.
+ *   768–1279   sidebar shrinks to icons (68px); the labels come back on hover-free tap
+ *              via the menu button, which opens it as a drawer over the page.
+ *   < 768      no sidebar at all — a drawer from the menu button; the search becomes an
+ *              icon; the content gets the whole width.
+ * A staff member can also shrink the sidebar on a wide screen (`<html data-side="collapsed">`); that
+ * choice is remembered per browser.
+ */
+
+.ad-app {
+  display: flex;
+  min-block-size: 100vh;
+  min-block-size: 100dvh;
+}
+
+/* ---------- Sidebar ---------- */
+
+.ad-side {
+  position: sticky;
+  inset-block-start: 0;
+  block-size: 100vh;
+  block-size: 100dvh;
+  inline-size: var(--side-w);
+  flex: none;
+  display: flex;
+  flex-direction: column;
+  background: var(--bg-surface);
+  border-inline-end: 1px solid var(--border-default);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding-block-end: 16px;
+  z-index: 40;
+}
+
+.ad-brand {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 14px 16px 10px;
+  min-block-size: var(--top-h);
+}
+
+.ad-brand__mark {
+  inline-size: 30px;
+  block-size: 30px;
+  border-radius: 8px;
+  background: var(--brand);
+  color: #fff;
+  display: grid;
+  place-items: center;
+  font-weight: 800;
+  font-size: 16px;
+  flex: none;
+}
+
+.ad-brand__text {
+  display: flex;
+  flex-direction: column;
+  line-height: 1.15;
+  min-inline-size: 0;
+}
+
+.ad-brand__name {
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  font-size: 14px;
+}
+
+.ad-brand__sub {
+  color: var(--fg-muted);
+  font-size: 11.5px;
+  font-weight: 550;
+}
+
+.ad-brand__toggle {
+  margin-inline-start: auto;
+}
+
+.ad-navg {
+  font-size: var(--fs-overline);
+  font-weight: 750;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  color: var(--fg-subtle);
+  padding: 14px 18px 5px;
+}
+
+[dir='rtl'] .ad-navg {
+  letter-spacing: 0;
+}
+
+.ad-nav {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 1px 10px;
+  padding: 7px 10px;
+  border-radius: 8px;
+  color: var(--fg-default);
+  text-decoration: none;
+  font-size: 13px;
+  font-weight: 550;
+}
+
+.ad-nav:hover {
+  background: var(--bg-sunken);
+}
+
+.ad-nav[aria-current='page'] {
+  background: var(--brand-soft-bg);
+  color: var(--brand-soft-fg);
+  font-weight: 700;
+}
+
+.ad-nav__label {
+  flex: 1;
+  min-inline-size: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* ---------- Main column ---------- */
+
+.ad-main {
+  flex: 1;
+  min-inline-size: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.ad-top {
+  position: sticky;
+  inset-block-start: 0;
+  z-index: 30;
+  block-size: var(--top-h);
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding-inline: 24px 20px;
+  background: var(--bg-surface);
+  border-block-end: 1px solid var(--border-default);
+}
+
+.ad-top__spacer {
+  flex: 1;
+}
+
+.ad-search {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  block-size: 36px;
+  padding: 0 10px;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-md);
+  background: var(--bg-surface);
+  color: var(--fg-subtle);
+  inline-size: min(420px, 100%);
+}
+
+.ad-search input {
+  flex: 1;
+  border: none;
+  background: none;
+  font-size: 13px;
+  color: var(--fg-default);
+  outline: none;
+  min-inline-size: 0;
+}
+
+.ad-search input::placeholder {
+  color: var(--fg-subtle);
+}
+
+.ad-search kbd {
+  font: 600 11px var(--font-mono);
+  color: var(--fg-subtle);
+  border: 1px solid var(--border-default);
+  border-radius: 5px;
+  padding: 1px 5px;
+}
+
+.ad-icon-btn.ad-search-icon {
+  display: none;
+}
+
+.ad-user {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  border: none;
+  background: none;
+  color: var(--fg-default);
+  cursor: pointer;
+  padding: 4px 6px;
+  border-radius: var(--radius-md);
+  text-align: start;
+}
+
+.ad-user:hover {
+  background: var(--bg-sunken);
+}
+
+.ad-avatar {
+  inline-size: 30px;
+  block-size: 30px;
+  border-radius: 50%;
+  background: var(--brand-soft-bg);
+  color: var(--brand-soft-fg);
+  display: grid;
+  place-items: center;
+  font-weight: 750;
+  font-size: 12.5px;
+  flex: none;
+  text-transform: uppercase;
+}
+
+.ad-user__text {
+  display: flex;
+  flex-direction: column;
+  line-height: 1.15;
+}
+
+.ad-user__name {
+  font-weight: 650;
+  font-size: 13px;
+}
+
+/* The pulsing red pill in the top bar while an SOS is open. */
+.ad-sosind {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  block-size: 32px;
+  padding: 0 12px;
+  border-radius: var(--radius-pill);
+  background: var(--sos);
+  color: #fff;
+  font-weight: 750;
+  font-size: 12.5px;
+  text-decoration: none;
+  animation: ad-pulse 1.6s ease-in-out infinite;
+  white-space: nowrap;
+}
+
+.ad-sosbar {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px 12px;
+  padding: 9px 24px;
+  background: var(--sos);
+  color: #fff;
+  font-size: 13px;
+}
+
+.ad-sosbar__text {
+  flex: 1;
+  min-inline-size: 0;
+}
+
+.ad-sosbar .ad-btn {
+  background: #fff;
+  color: var(--sos);
+  border-color: #fff;
+}
+
+.ad-content {
+  flex: 1;
+  padding: 24px 28px 48px;
+  inline-size: 100%;
+  max-inline-size: 1600px;
+}
+
+.ad-page-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-block-end: 20px;
+}
+
+.ad-page-title {
+  font-size: var(--fs-display);
+  font-weight: 750;
+  letter-spacing: -0.01em;
+  margin: 0;
+}
+
+.ad-page-sub {
+  color: var(--fg-muted);
+  margin: 4px 0 0;
+}
+
+.ad-section-label {
+  font-size: var(--fs-overline);
+  font-weight: 750;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  color: var(--fg-subtle);
+  margin: 20px 0 8px;
+}
+
+/* ---------- Drawer scrim (tablet & phone) ---------- */
+
+.ad-scrim {
+  position: fixed;
+  inset: 0;
+  background: rgba(15, 23, 42, 0.45);
+  z-index: 35;
+}
+
+/* ---------- Collapsed sidebar (chosen on desktop, automatic on tablet) ---------- */
+
+[data-side='collapsed'] .ad-side {
+  inline-size: var(--side-w-collapsed);
+}
+
+[data-side='collapsed'] .ad-side .ad-nav__label,
+[data-side='collapsed'] .ad-side .ad-badge,
+[data-side='collapsed'] .ad-side .ad-navg,
+[data-side='collapsed'] .ad-side .ad-brand__text {
+  display: none;
+}
+
+[data-side='collapsed'] .ad-side .ad-brand {
+  flex-direction: column;
+  padding-inline: 8px;
+}
+
+[data-side='collapsed'] .ad-side .ad-brand__toggle {
+  margin-inline-start: 0;
+}
+
+[data-side='collapsed'] .ad-side .ad-nav {
+  justify-content: center;
+  padding: 9px 0;
+}
+
+[data-side='collapsed'] .ad-side .ad-navg + .ad-nav,
+[data-side='collapsed'] .ad-side nav + nav {
+  margin-block-start: 10px;
+}
+
+/* Only the drawer button on narrow screens; the collapse button on wide ones. */
+.ad-icon-btn.ad-menu-btn {
+  display: none;
+}
+
+@media (max-width: 1279px) {
+  .ad-app:not(.ad-drawer-open) .ad-side {
+    inline-size: var(--side-w-collapsed);
+  }
+
+  .ad-app:not(.ad-drawer-open) .ad-side .ad-nav__label,
+  .ad-app:not(.ad-drawer-open) .ad-side .ad-badge,
+  .ad-app:not(.ad-drawer-open) .ad-side .ad-navg,
+  .ad-app:not(.ad-drawer-open) .ad-side .ad-brand__text,
+  .ad-app:not(.ad-drawer-open) .ad-side .ad-brand__toggle {
+    display: none;
+  }
+
+  .ad-app:not(.ad-drawer-open) .ad-side .ad-nav {
+    justify-content: center;
+    padding: 9px 0;
+  }
+
+  .ad-app:not(.ad-drawer-open) .ad-side .ad-brand {
+    justify-content: center;
+    padding-inline: 8px;
+  }
+
+  /* The open drawer floats over the page instead of pushing it. */
+  .ad-drawer-open .ad-side {
+    position: fixed;
+    inset-block: 0;
+    inset-inline-start: 0;
+    box-shadow: var(--shadow-xl);
+    animation: ad-drawer var(--dur-base) var(--ease-out);
+  }
+
+  .ad-icon-btn.ad-menu-btn {
+    display: inline-grid;
+  }
+
+  .ad-icon-btn.ad-brand__toggle {
+    display: none;
+  }
+
+  .ad-content {
+    padding: 20px 20px 40px;
+  }
+
+  .ad-user__text {
+    display: none;
+  }
+}
+
+@media (max-width: 767px) {
+  .ad-app:not(.ad-drawer-open) .ad-side {
+    display: none;
+  }
+
+  .ad-drawer-open .ad-side {
+    inline-size: min(var(--side-w), 86vw);
+  }
+
+  .ad-top {
+    padding-inline: 8px 10px;
+    gap: 2px;
+  }
+
+  .ad-search {
+    display: none;
+  }
+
+  .ad-icon-btn.ad-search-icon {
+    display: inline-grid;
+  }
+
+  .ad-sosind__label {
+    display: none;
+  }
+
+  .ad-sosind {
+    padding: 0 10px;
+  }
+
+  .ad-sosbar {
+    padding: 9px 16px;
+  }
+
+  .ad-content {
+    padding: 16px 16px 32px;
+  }
+
+  .ad-page-title {
+    font-size: 19px;
+  }
+}
+
+@keyframes ad-pulse {
+  0%,
+  100% {
+    box-shadow: 0 0 0 0 rgba(220, 38, 38, 0.5);
+  }
+
+  50% {
+    box-shadow: 0 0 0 6px rgba(220, 38, 38, 0);
+  }
+}
+
+@keyframes ad-drawer {
+  from {
+    transform: translateX(-24px);
+    opacity: 0;
+  }
+
+  to {
+    transform: none;
+    opacity: 1;
+  }
+}
+
+[dir='rtl'] .ad-drawer-open .ad-side {
+  animation-name: ad-drawer-rtl;
+}
+
+@keyframes ad-drawer-rtl {
+  from {
+    transform: translateX(24px);
+    opacity: 0;
+  }
+
+  to {
+    transform: none;
+    opacity: 1;
+  }
+}

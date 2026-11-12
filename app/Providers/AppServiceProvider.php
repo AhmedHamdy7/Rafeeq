@@ -27,6 +27,7 @@ use App\Domains\Verification\Contracts\VirusScanner;
 use App\Domains\Verification\Enums\VerificationStatus;
 use App\Domains\Verification\Models\UserVerification;
 use App\Domains\Verification\Support\SignatureVirusScanner;
+use App\Http\Middleware\SetAdminLocale;
 use App\Http\OpenApi\DescribeErrorResponses;
 use Carbon\CarbonImmutable;
 use Dedoc\Scramble\Scramble;
@@ -41,6 +42,7 @@ use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Support\Facades\View;
 use Illuminate\Support\ServiceProvider;
 use InvalidArgumentException;
+use Livewire\Livewire;
 
 class AppServiceProvider extends ServiceProvider
 {
@@ -114,6 +116,10 @@ class AppServiceProvider extends ServiceProvider
     public function boot(): void
     {
         $this->composeAdminQueueCounts();
+
+        // A Livewire click re-renders through /livewire/update, which skips the route's
+        // middleware: without this a dashboard set to Arabic answers its first click in English.
+        Livewire::addPersistentMiddleware([SetAdminLocale::class]);
 
         // Engineering Bible §3.8 — enforced everywhere except production, where
         // a lazy-load or mass-assignment bug should degrade rather than 500.

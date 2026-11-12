@@ -1,0 +1,172 @@
+/*
+ * RAFEEQ dashboard — design tokens (RAFEEQ_Admin_Dashboard.html).
+ *
+ * The names and values are the design's, copied rather than reinterpreted: `:root` is
+ * light, `[data-theme='dark']` overrides. Every other admin stylesheet reads from these
+ * and never hard-codes a colour, so a page is themed the moment it uses them.
+ *
+ * Fonts: the design is drawn in a typeface we hold no licence for. Inter (Latin) and
+ * Cairo (Arabic), both SIL Open Font License, are served from /fonts — never a CDN, so
+ * nothing outside this server is needed to draw a staff page.
+ */
+
+@font-face {
+  font-family: 'Inter';
+  font-style: normal;
+  font-display: swap;
+  font-weight: 100 900;
+  src: url('../../fonts/inter-latin-wght-normal.woff2') format('woff2-variations');
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+2074, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+
+@font-face {
+  font-family: 'Inter';
+  font-style: normal;
+  font-display: swap;
+  font-weight: 100 900;
+  src: url('../../fonts/inter-latin-ext-wght-normal.woff2') format('woff2-variations');
+  unicode-range: U+0100-02AF, U+0304, U+0308, U+0329, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF;
+}
+
+@font-face {
+  font-family: 'Cairo';
+  font-style: normal;
+  font-display: swap;
+  font-weight: 200 1000;
+  src: url('../../fonts/cairo-arabic-wght-normal.woff2') format('woff2-variations');
+  unicode-range: U+0600-06FF, U+0750-077F, U+0870-088E, U+0890-0891, U+0898-08E1, U+08E3-08FF, U+200C-200E, U+2010-2011, U+204F, U+2E41, U+FB50-FDFF, U+FE70-FE74, U+FE76-FEFC;
+}
+
+:root {
+  color-scheme: light;
+
+  /* Brand — teal. */
+  --brand-950: #042f2c;
+  --brand-900: #134e4a;
+  --brand-800: #115e59;
+  --brand-700: #0f766e;
+  --brand-600: #0d9488;
+  --brand-500: #14b8a6;
+  --brand-400: #2dd4bf;
+  --brand-300: #5eead4;
+  --brand-200: #99f6e4;
+  --brand-100: #ccfbf1;
+  --brand-50: #f0fdfa;
+
+  --brand: #0f766e;
+  --brand-hover: #115e59;
+  --brand-soft-bg: #ccfbf1;
+  --brand-soft-fg: #115e59;
+  --fg-on-brand: #ffffff;
+
+  /* Surfaces, outside in. */
+  --bg-page: #f8fafc;
+  --bg-surface: #ffffff;
+  --bg-sunken: #f1f5f9;
+  --bg-elevated: #ffffff;
+
+  --fg-default: #111827;
+  --fg-muted: #6b7280;
+  --fg-subtle: #9ca3af;
+
+  --border-default: #e2e8f0;
+  --border-strong: #cbd5e1;
+  --border-subtle: rgba(17, 24, 39, 0.06);
+  --border-focus: #0f766e;
+
+  /* Meaning. */
+  --success-600: #16a34a;
+  --success-500: #22c55e;
+  --success-100: #dcfce7;
+  --warning-600: #d97706;
+  --warning-500: #f59e0b;
+  --warning-100: #fef3c7;
+  --danger-600: #dc2626;
+  --danger-500: #ef4444;
+  --danger-100: #fee2e2;
+  --info-600: #0ea5e9;
+  --info-100: #f0f9ff;
+
+  /* The SOS bar and indicator are their own red so they read the same on any page. */
+  --sos: #dc2626;
+
+  --font-latin: 'Inter', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  --font-arabic: 'Cairo', 'Inter', ui-sans-serif, system-ui, 'Segoe UI', Tahoma, sans-serif;
+  --font-sans: var(--font-latin);
+  --font-mono: ui-monospace, 'SF Mono', Menlo, Consolas, monospace;
+
+  --fs-display: 22px;
+  --fs-heading: 16px;
+  --fs-body: 13px;
+  --fs-small: 12.5px;
+  --fs-caption: 11.5px;
+  --fs-overline: 10.5px;
+
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 20px;
+  --space-6: 24px;
+  --space-7: 32px;
+
+  --radius-sm: 6px;
+  --radius-md: 9px;
+  --radius-lg: 12px;
+  --radius-xl: 14px;
+  --radius-pill: 999px;
+
+  --shadow-sm: 0 1px 2px rgba(17, 24, 39, 0.06), 0 1px 1px rgba(17, 24, 39, 0.04);
+  --shadow-lg: 0 16px 40px rgba(0, 0, 0, 0.22);
+  --shadow-xl: 0 30px 60px rgba(0, 0, 0, 0.3);
+  --shadow-focus: 0 0 0 3px rgba(15, 118, 110, 0.22);
+
+  --ease-out: cubic-bezier(0.22, 0.61, 0.36, 1);
+  --dur-fast: 120ms;
+  --dur-base: 180ms;
+
+  /* Layout. */
+  --side-w: 244px;
+  --side-w-collapsed: 68px;
+  --top-h: 58px;
+}
+
+[data-theme='dark'] {
+  color-scheme: dark;
+
+  --brand: #14b8a6;
+  --brand-hover: #2dd4bf;
+  --brand-soft-bg: rgba(20, 184, 166, 0.14);
+  --brand-soft-fg: #5eead4;
+
+  --bg-page: #0f1113;
+  --bg-surface: #171a1d;
+  --bg-sunken: #0b0c0e;
+  --bg-elevated: #1f2327;
+
+  --fg-default: #eceef0;
+  --fg-muted: #a0a7af;
+  --fg-subtle: #6e767f;
+
+  --border-default: rgba(255, 255, 255, 0.08);
+  --border-strong: rgba(255, 255, 255, 0.15);
+  --border-subtle: rgba(255, 255, 255, 0.05);
+  --border-focus: #14b8a6;
+
+  --success-600: #4ade80;
+  --success-100: rgba(34, 197, 94, 0.16);
+  --warning-600: #fbbf24;
+  --warning-100: rgba(245, 158, 11, 0.16);
+  --danger-600: #e5534b;
+  --danger-100: rgba(229, 83, 75, 0.15);
+  --info-600: #7dd3fc;
+  --info-100: rgba(56, 189, 248, 0.1);
+
+  --sos: #b3261e;
+
+  --shadow-focus: 0 0 0 3px rgba(20, 184, 166, 0.3);
+}
+
+[dir='rtl'] {
+  --font-sans: var(--font-arabic);
+}

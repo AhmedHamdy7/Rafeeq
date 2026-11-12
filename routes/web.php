@@ -2,10 +2,12 @@
 
 use App\Http\Controllers\AccountDeletionPageController;
 use App\Http\Controllers\Admin\HomeController;
+use App\Http\Controllers\Admin\LocaleController;
 use App\Http\Controllers\Admin\LogoutController;
 use App\Http\Controllers\Admin\StaffFileController;
 use App\Http\Controllers\Docs\ApiDocsController;
 use App\Http\Controllers\LiveShareController;
+use App\Http\Middleware\SetAdminLocale;
 use App\Livewire\Admin\AuditLog;
 use App\Livewire\Admin\Dashboard;
 use App\Livewire\Admin\DriverApplications;
@@ -84,7 +86,10 @@ Route::prefix('delete-account')->middleware('throttle:20,1')->group(function ():
 | and route middleware does not see it.
 |
 */
-Route::prefix('admin')->name('admin.')->group(function (): void {
+Route::prefix('admin')->name('admin.')->middleware(SetAdminLocale::class)->group(function (): void {
+    // The language switch, for signed-in and signed-out staff alike (the sign-in page gets it in phase 1).
+    Route::post('locale/{locale}', LocaleController::class)->name('locale');
+
     Route::middleware('guest:admin')->group(function (): void {
         Route::get('login', Login::class)->name('login');
     });
@@ -102,6 +107,9 @@ Route::prefix('admin')->name('admin.')->group(function (): void {
         Route::get('payments', Payments::class)->name('payments');
         Route::get('audit', AuditLog::class)->name('audit');
         Route::get('settings', Settings::class)->name('settings');
+
+        // Every dashboard component on one page, for checking themes, languages and widths.
+        Route::view('_components', 'admin.components')->name('components');
 
         // Private files, opened through the session — never a link that works elsewhere.
         Route::get('files/documents/{document}', [StaffFileController::class, 'document'])->name('files.document');
