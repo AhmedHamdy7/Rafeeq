@@ -1047,3 +1047,28 @@ a.ad-stat:hover {
     box-shadow: none;
   }
 }
+
+/* A decision's form, set apart from the facts above it (D11–D13). */
+.ad-confirm {
+  margin-block-start: 12px;
+  padding: 14px;
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-lg);
+  background: var(--bg-sunken);
+}
+
+.ad-details {
+  margin-block-start: 12px;
+}
+
+.ad-details > summary {
+  list-style: none;
+}
+
+.ad-details > summary::-webkit-details-marker {
+  display: none;
+}
+
+.ad-details[open] > summary {
+  margin-block-end: 10px;
+}
