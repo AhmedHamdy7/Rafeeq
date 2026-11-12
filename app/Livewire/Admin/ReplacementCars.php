@@ -170,7 +170,7 @@ class ReplacementCars extends Component
     {
         return Vehicle::query()
             ->where('verification_status', VehicleVerificationStatus::Pending->value)
-            ->whereHas('driverProfile', fn (Builder $query) => $query->where('status', DriverProfileStatus::Approved->value))
+            ->whereHas('driverProfile', fn (Builder $query) => $query->where('status', DriverProfileStatus::Approved->value)->whereHas('user'))
             ->with(['driverProfile.user', 'driverProfile.vehicles', 'documents']);
     }
 

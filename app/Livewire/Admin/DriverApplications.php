@@ -430,6 +430,7 @@ class DriverApplications extends Component
     {
         return DriverProfile::query()
             ->where('status', DriverProfileStatus::PendingReview->value)
+            ->whereHas('user')
             ->with(['user', 'vehicles', ...self::detailRelations('user.')])
             ->orderBy('updated_at')
             ->orderBy('user_id')
@@ -440,8 +441,8 @@ class DriverApplications extends Component
     {
         return view('livewire.admin.driver-applications', [
             'applications' => $this->pendingPage(),
-            'renewals' => Vehicle::query()->whereNotNull('registration_renewal_submitted_at')->with('driverProfile.user')->orderBy('registration_renewal_submitted_at')->limit(50)->get(),
-            'reportedCars' => Vehicle::query()->where('suspension_reason', VehicleSuspensionReason::Report->value)->with('driverProfile.user')->limit(50)->get(),
+            'renewals' => Vehicle::query()->whereNotNull('registration_renewal_submitted_at')->whereHas('driverProfile.user')->with('driverProfile.user')->orderBy('registration_renewal_submitted_at')->limit(50)->get(),
+            'reportedCars' => Vehicle::query()->where('suspension_reason', VehicleSuspensionReason::Report->value)->whereHas('driverProfile.user')->with('driverProfile.user')->limit(50)->get(),
             'mayDecide' => Auth::guard('admin')->user()?->can(AdminPermission::DriverDecide->value) === true,
             'maySeeDocuments' => $this->maySeeDocuments(),
             'mayDecideIdentity' => Auth::guard('admin')->user()?->can(AdminPermission::VerificationDecide->value) === true,

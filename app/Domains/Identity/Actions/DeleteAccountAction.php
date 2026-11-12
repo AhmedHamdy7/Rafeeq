@@ -8,6 +8,8 @@ use App\Domains\Booking\Models\SeatRequest;
 use App\Domains\Commute\Actions\ChangeCommuteStatusAction;
 use App\Domains\Commute\Enums\CommuteOfferStatus;
 use App\Domains\Commute\Models\CommuteOffer;
+use App\Domains\Driver\Enums\DriverProfileStatus;
+use App\Domains\Driver\Models\DriverProfile;
 use App\Domains\Identity\Enums\AccountStatus;
 use App\Domains\Identity\Enums\SecurityEventType;
 use App\Domains\Identity\Enums\SessionRevocationReason;
@@ -111,6 +113,11 @@ final readonly class DeleteAccountAction
                 'date_of_birth' => null,
                 'account_status' => AccountStatus::Deleted->value,
             ])->save();
+
+            DriverProfile::query()
+                ->whereKey($user->id)
+                ->where('status', DriverProfileStatus::PendingReview->value)
+                ->update(['status' => DriverProfileStatus::Draft->value]);
 
             $user->delete();
         });
