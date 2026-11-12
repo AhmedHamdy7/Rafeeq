@@ -984,3 +984,66 @@ a.ad-stat:hover {
     gap: 8px 18px;
   }
 }
+
+/* ---------- SOS: emergency numbers (always on screen while handling an alert) ---------- */
+
+.ad-emergency {
+  gap: 8px;
+}
+
+.ad-emergency__item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  padding: 12px 6px;
+  border-radius: var(--radius-md);
+  background: var(--bg-sunken);
+  text-decoration: none;
+  font-size: 12px;
+}
+
+.ad-emergency__item:hover {
+  background: var(--brand-soft-bg);
+}
+
+.ad-emergency__number {
+  font-size: 22px;
+  font-weight: 800;
+  color: var(--fg-default);
+}
+
+@media (max-width: 767px) {
+  /* Three numbers stay side by side on a phone: they are short, and a tap dials. */
+  .ad-grid--3.ad-emergency {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
+/* A flagged row: red down its start edge, so it stands out without shouting. */
+.ad-table tr.ad-row--flagged td:first-child {
+  box-shadow: inset 3px 0 0 var(--danger-600);
+}
+
+[dir='rtl'] .ad-table tr.ad-row--flagged td:first-child {
+  box-shadow: inset -3px 0 0 var(--danger-600);
+}
+
+.ad-table tr.ad-row-detail td {
+  background: var(--bg-sunken);
+  padding: 12px 16px;
+}
+
+@media (max-width: 767px) {
+  .ad-table--cards tr.ad-row--flagged {
+    box-shadow: inset 3px 0 0 var(--danger-600);
+  }
+
+  [dir='rtl'] .ad-table--cards tr.ad-row--flagged {
+    box-shadow: inset -3px 0 0 var(--danger-600);
+  }
+
+  .ad-table--cards tr.ad-row--flagged td:first-child {
+    box-shadow: none;
+  }
+}
