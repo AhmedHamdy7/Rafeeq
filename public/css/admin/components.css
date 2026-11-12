@@ -1144,3 +1144,55 @@ a.ad-stat:hover {
   flex: 1 1 140px;
   min-inline-size: 0;
 }
+
+/* ---------- Settings: one row per number ---------- */
+
+.ad-settings {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.ad-settings > li {
+  padding: 12px 16px;
+  border-block-end: 1px solid var(--border-subtle);
+}
+
+.ad-settings > li:last-child {
+  border-block-end: none;
+}
+
+.ad-settings > li[aria-current='true'] {
+  background: var(--brand-soft-bg);
+}
+
+.ad-settings__row {
+  display: grid;
+  grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr) auto;
+  gap: 8px 16px;
+  align-items: center;
+}
+
+.ad-settings__name {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 3px;
+  min-inline-size: 0;
+}
+
+.ad-settings__actions {
+  display: flex;
+  gap: 6px;
+  justify-content: flex-end;
+}
+
+@media (max-width: 767px) {
+  .ad-settings__row {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .ad-settings__actions {
+    justify-content: flex-start;
+  }
+}
