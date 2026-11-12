@@ -12,6 +12,7 @@ use Illuminate\Support\Arr;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Validation\ValidationException;
 use Livewire\Livewire;
 
 /**
@@ -153,7 +154,7 @@ it('keeps the last active Admin', function () {
     $second = adminWithRole(AdminRole::SuperAdmin);
     $second->forceFill(['status' => AdminStatus::Suspended])->save();
 
-    expect(fn () => app(ManageTeamAction::class)->suspend($second, $this->boss))->toThrow(Illuminate\Validation\ValidationException::class);
+    expect(fn () => app(ManageTeamAction::class)->suspend($second, $this->boss))->toThrow(ValidationException::class);
 });
 
 it('refuses an email already on the team', function () {
