@@ -226,13 +226,13 @@ class AppServiceProvider extends ServiceProvider
                     : 0,
 
                 'pendingDrivers' => $admin?->can(AdminPermission::DriverView->value)
-                    ? DriverProfile::query()->where('status', DriverProfileStatus::PendingReview->value)->count()
+                    ? DriverProfile::query()->where('status', DriverProfileStatus::PendingReview->value)->whereHas('user')->count()
                     : 0,
 
                 'pendingReplacementCars' => $admin?->can(AdminPermission::DriverView->value)
                     ? Vehicle::query()
                         ->where('verification_status', VehicleVerificationStatus::Pending->value)
-                        ->whereHas('driverProfile', fn ($query) => $query->where('status', DriverProfileStatus::Approved->value))
+                        ->whereHas('driverProfile', fn ($query) => $query->where('status', DriverProfileStatus::Approved->value)->whereHas('user'))
                         ->count()
                     : 0,
 
