@@ -8,6 +8,7 @@ use App\Http\Controllers\Admin\StaffFileController;
 use App\Http\Controllers\Docs\ApiDocsController;
 use App\Http\Controllers\LiveShareController;
 use App\Http\Middleware\SetAdminLocale;
+use App\Livewire\Admin\AcceptInvitation;
 use App\Livewire\Admin\Account;
 use App\Livewire\Admin\Appeals;
 use App\Livewire\Admin\AuditLog;
@@ -31,6 +32,7 @@ use App\Livewire\Admin\Settings;
 use App\Livewire\Admin\Settlements;
 use App\Livewire\Admin\Statistics;
 use App\Livewire\Admin\Support;
+use App\Livewire\Admin\Team;
 use App\Livewire\Admin\VerificationQueue;
 use Illuminate\Support\Facades\Route;
 
@@ -102,6 +104,11 @@ Route::prefix('admin')->name('admin.')->middleware(SetAdminLocale::class)->group
     // The language switch, for signed-in and signed-out staff alike (the sign-in page gets it in phase 1).
     Route::post('locale/{locale}', LocaleController::class)->name('locale');
 
+    // The first sign-in from an invitation link (S05, S06). Not guest-only: an Admin testing
+    // a link in their own browser is signed out when the new person finishes. Throttled, so a
+    // link cannot be used to guess the six digits.
+    Route::get('invitation/{token}', AcceptInvitation::class)->middleware('throttle:30,1')->name('invitation');
+
     Route::middleware('guest:admin')->group(function (): void {
         Route::get('login', Login::class)->name('login');
     });
@@ -115,6 +122,7 @@ Route::prefix('admin')->name('admin.')->middleware(SetAdminLocale::class)->group
         Route::get('reports', Reports::class)->name('reports');
         Route::get('appeals', Appeals::class)->name('appeals');
         Route::get('support', Support::class)->name('support');
+        Route::get('team', Team::class)->name('team');
         Route::get('escort', Escort::class)->name('escort');
         Route::get('verifications', VerificationQueue::class)->name('verifications');
         Route::get('drivers', DriverApplications::class)->name('drivers');

@@ -1278,3 +1278,34 @@ a.ad-stat:hover {
   border-style: dashed;
   background: var(--bg-sunken);
 }
+
+/* ---------- A record's facts as a grid of small labelled values (member details) ---------- */
+
+.ad-facts {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(190px, 1fr));
+  gap: 8px 16px;
+  margin: 8px 0 0;
+  font-size: 13px;
+}
+
+.ad-facts dt {
+  color: var(--fg-muted);
+  font-size: 11.5px;
+  font-weight: 600;
+}
+
+.ad-facts dd {
+  margin: 1px 0 0;
+  overflow-wrap: anywhere;
+}
+
+.ad-member-details .ad-section-label {
+  margin-block: 16px 6px;
+}
+
+@media (max-width: 767px) {
+  .ad-facts {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}

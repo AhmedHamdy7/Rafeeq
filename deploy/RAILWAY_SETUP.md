@@ -39,7 +39,7 @@ Nixpacks بتشوف `package.json` فبتضيف مرحلة Node كاملة — i
 | | |
 |---|---|
 | الـ API | JSON، مفيش assets خالص |
-| لوحة التحكم | `public/css/admin.css` — ملف مكتوب بالإيد ومرفوع في الريبو، مش محتاج bundler |
+| لوحة التحكم | `public/css/admin/` (tokens, base, layout, components) و`public/fonts/` — ملفات مكتوبة بالإيد ومرفوعة في الريبو، مش محتاجة bundler |
 | الحاجة الوحيدة اللي كانت محتاجة Vite | صفحة Laravel الافتراضية على `/` — ومش جزء من المنتج |
 
 فاتضاف `nixpacks.toml` بـ `providers = ["php"]`، وصفحة `/` بقت من غير أي asset. **اعمل pull وجرّب تاني — البناء المفروض يعدّي.**
