@@ -122,6 +122,33 @@ it('forgets a token FCM says is no longer registered', function () {
         ->and($device->refresh()->push_token)->toBeNull();
 });
 
+/**
+ * The ids alone cannot tell the app which screen a tap opens: every push carries its type too.
+ */
+it('tells the phone what kind of notification it is, next to the ids', function () {
+    Http::fake([
+        'oauth2.googleapis.com/*' => Http::response(['access_token' => 'ya29.token']),
+        'fcm.googleapis.com/*' => Http::response(['name' => 'projects/rafeeq-test/messages/1']),
+    ]);
+
+    config([
+        'rafeeq.notifications.push_driver' => 'fcm',
+        'services.fcm.credentials' => $this->credentials,
+    ]);
+
+    $user = User::factory()->create();
+    Device::factory()->for($user)->create(['push_token' => 'live-token']);
+
+    Notifier::send($user, NotificationType::DriverArrived, params: ['name' => 'Omar'], data: ['tripId' => 't1']);
+
+    Http::assertSent(function (Request $request): bool {
+        $data = json_decode($request->body(), true)['message']['data'] ?? [];
+
+        return str_contains($request->url(), 'messages:send')
+            && $data === ['tripId' => 't1', 'type' => 'driver_arrived', 'category' => NotificationType::DriverArrived->category()->value];
+    });
+});
+
 it('reports any other refusal without the token in it', function () {
     Http::fake([
         'oauth2.googleapis.com/*' => Http::response(['access_token' => 'ya29.token']),

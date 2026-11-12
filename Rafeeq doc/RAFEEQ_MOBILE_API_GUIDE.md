@@ -4519,7 +4519,9 @@ What the platform tells a member on its own initiative. Every message lands in t
 
 > ⚠️ **Push: FCM is built (D-0023), and switched on per server.** With `RAFEEQ_PUSH_DRIVER=fcm` and
 > the Firebase service account installed, every push goes through FCM HTTP v1 — `notification`
-> (title/body) plus `data` (the ids below, all strings). Until a server is switched over it records
+> (title/body) plus `data`: the ids below **and `type` + `category`** (the same values the inbox
+> returns), all strings — route a tap on `data.type`, e.g. `{"type":"seat_requested","category":"booking","seatRequestId":"…"}`.
+> **The staging server is switched on (2026-11-11).** Until a server is switched over it records
 > each push as `no_push_provider` and nothing reaches the phone. **Send the device's FCM token** at
 > sign-in (`device.pushToken`) and refresh it through `PATCH /account/devices/current/security`
 > (`pushToken`); a token FCM reports as `UNREGISTERED` is forgotten, so send a fresh one whenever
@@ -5154,7 +5156,7 @@ Nothing below exists. Build the screen shells if you like, but there is no endpo
 | **Public trust tier** | badge on 12 and 21 | **10** | 🔴 **Ratings and reviews are both done** — section 4.13. Rating, the double-blind reveal, the anonymous review list on a commute, "what was said about me", reporting an abusive review and the `minRating` search filter are all live, and the `rating` in every public summary carries a number once a rating is revealed. The only piece left is the **public trust tier** (`new` / `trusted` / `highly_trusted`), which needs a product decision on its thresholds. The score behind it is deliberately internal and will never be returned. |
 | **Auto-share trips** | 26 | **12** | 🔴 **`autoShareTrips` on an emergency contact is stored and nothing acts on it yet.** See 4.12 — read that before you build the toggle. |
 | **Night escort mode** | none | **13** | Not a mobile feature at all, and this corrects an earlier line in this file. It is a **corridor-level night window armed by the ops team** (or automatically, 9pm–5am) with staff monitoring — a dashboard control, not something an app shows or calls. There will be no endpoint for it. |
-| **Push delivery** | all | **12** | The inbox (4.14) and trip chat (4.15) are live. Push is wired but **no provider has been chosen yet**, so nothing reaches a phone — poll `GET /notifications` (`meta.unreadCount`) and the open conversation in the meantime. |
+| **Push delivery** | all | **12** | ✅ **Live on staging (FCM, 2026-11-11).** Send the FCM token as `device.pushToken`; route taps on `data.type` (4.14). iPhone also needs the APNs key in Firebase. |
 
 ---
 
@@ -5186,6 +5188,7 @@ exist, and every live endpoint must be named here.
 |---|---|
 | 2026-11-12 | 🐞 **A-9.** A late approval of a moving-car request now always carries `error.fields.expiredAt`, also after the minute sweep marked it expired (then with `error.fields.status: ["EXPIRED"]`). Any other `SEAT_REQUEST_NOT_PENDING` now names the request's `status`. |
 | 2026-11-12 | 🧩 **Backend asks of 2026-11-12.** **Fixed:** a proposal for every future weekday stayed `PENDING` after a recurring rider accepted: her one answer now counts for all her affected days, so it applies at once. **New** push to the driver: `seat_counteroffer_accepted`. **Reachability** of a live request is now measured along the commute's **published** route. Three staging-only calls (4.17): `POST /testing/trips/{trip}/position`, `POST /testing/driver/vehicles/{vehicle}/approve` and `/reject`. Documented: what sends `driver_heading_to_you`, and that bookings are never `EXPIRED` or `PENDING` today. |
+| 2026-11-11 | **Push is live on staging (FCM).** Every push's `data` now also carries `type` and `category` (the inbox's values) next to the ids, so a tap can open the right screen. Send the FCM token as `device.pushToken` at sign-in and on refresh via `PATCH /account/devices/current/security` (4.14). |
 | 2026-11-11 | 💳 **B-13, second part.** `GET /account/debt` sides gain **`openDisputes`** and **`suspensionOnHold`**: PAY-19 holds a debt suspension while a dispute is open, and the app can now see which one. **Fixed:** a dispute on a run somebody **drove** no longer holds their **passenger** debt suspension (and a passenger's own dispute doesn't hold their driver debt). |
 | 2026-11-11 | 🐞 **B-13 and a 500 on completion.** Confirmed the rule: a passenger's 14 days run from the day the fee was charged, also while it rides on an upcoming booking (PAY-17); `oldestUnpaidAt` can no longer be `null` while she owes money. **Fixed:** `POST /trips/{trip}/complete` answered `500` on staging when the run had two or more confirmed passengers. |
 | 2026-11-11 | 🧪 **B-12: moving a later run onto today.** `POST /testing/trips/{trip}/departure` no longer answers `500` when the commute already has a run that day: a scheduled one swaps days (`swappedTrip`), a finished one moves back a day, one underway answers the new **`409 TRIP_DAY_TAKEN`** (4.17). A recurring approval's `skippedDays[]` gains **`code`**, the exact refusal; `unavailable` means `BOOKING_ALREADY_BOOKED` or `BOOKING_DEADLINE_PASSED`, never the 12-hour lock (4.7). |

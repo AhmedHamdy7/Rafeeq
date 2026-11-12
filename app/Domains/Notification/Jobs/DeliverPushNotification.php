@@ -52,7 +52,16 @@ final class DeliverPushNotification implements ShouldQueue
         }
 
         try {
-            $sender->send($device->push_token, $push->title, $push->body, $push->data ?? []);
+            /*
+             * The ids alone cannot tell the app which screen a tap should open — a `bookingId` is in
+             * a seat request, a cancellation and a chat message alike. So every push also carries
+             * the notification's `type` and `category`, the same values the inbox returns.
+             */
+            $sender->send($device->push_token, $push->title, $push->body, [
+                ...($push->data ?? []),
+                'type' => (string) $push->type,
+                'category' => (string) $push->category?->value,
+            ]);
         } catch (PushTokenRejected $e) {
             /*
              * The phone service says the token is dead (uninstalled, rotated). Retrying cannot

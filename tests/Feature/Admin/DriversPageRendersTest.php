@@ -2,6 +2,7 @@
 
 use App\Domains\Admin\Enums\AdminRole;
 use App\Domains\Driver\Enums\VehicleVerificationStatus;
+use App\Domains\Driver\Models\DriverProfile;
 use App\Domains\Driver\Models\Vehicle;
 use Illuminate\Support\Facades\Storage;
 
@@ -55,11 +56,11 @@ it('takes a deleted driver out of every review list, even if her profile was lef
     config(['rafeeq.testing.api' => true]);
     $token = approvedDriver();
     replacementCarFor($token, 'ق ن ر 7788');
-    $driverId = \App\Domains\Driver\Models\DriverProfile::query()->sole()->getKey();
+    $driverId = DriverProfile::query()->sole()->getKey();
 
     test()->withToken($token)->deleteJson('/api/v1/testing/account')->assertOk();
 
-    \App\Domains\Driver\Models\DriverProfile::query()->whereKey($driverId)->update(['status' => 'pending_review']);
+    DriverProfile::query()->whereKey($driverId)->update(['status' => 'pending_review']);
 
     actingAsAdmin(adminWithRole(AdminRole::SuperAdmin));
 
