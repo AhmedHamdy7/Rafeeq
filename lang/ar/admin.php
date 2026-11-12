@@ -411,6 +411,9 @@ return [
         ],
         'actions' => [
             'admin__login' => 'دخل الداشبورد',
+            'ticket__take' => 'استلم حالة دعم',
+            'ticket__resolve' => 'حل حالة دعم',
+            'ticket__close' => 'قفل حالة دعم',
             'admin__password_changed' => 'غيّر كلمة المرور بتاعته',
             'verification__approve' => 'وافق على توثيق',
             'verification__request_info' => 'طلب معلومات إضافية',
