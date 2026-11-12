@@ -1,0 +1,149 @@
+/*
+ * RAFEEQ dashboard — pages not yet redrawn.
+ *
+ * Pages still written with the old `rq-*` classes (public/css/admin.css) are drawn in the
+ * new design's colours, type and shapes by pointing the old tokens at the new ones, plus
+ * a few shape overrides. Each page is rewritten with the `ad-*` components in its own
+ * phase; when the last one is, this file and admin.css are deleted together.
+ */
+
+body.ad-body {
+  --desk: var(--bg-page);
+  --surface: var(--bg-surface);
+  --sunken: var(--bg-sunken);
+  --rail: var(--bg-surface);
+  --fg: var(--fg-default);
+  --fg-2: var(--fg-muted);
+  --fg-3: var(--fg-subtle);
+  --line: var(--border-default);
+  --line-2: var(--border-strong);
+  --ok-100: var(--success-100);
+  --ok-500: var(--success-500);
+  --ok-600: var(--success-600);
+  --warn-100: var(--warning-100);
+  --warn-500: var(--warning-500);
+  --warn-600: var(--warning-600);
+  --bad-100: var(--danger-100);
+  --bad-500: var(--danger-600);
+  --bad-600: var(--danger-600);
+  --rq-100: var(--brand-soft-bg);
+  --rq-500: var(--brand);
+  --rq-700: var(--brand);
+  --rq-800: var(--brand-soft-fg);
+  --sky-50: var(--info-100);
+  --sky-600: var(--info-600);
+}
+
+body.ad-body .rq-h1 {
+  font-size: var(--fs-display);
+  font-weight: 750;
+}
+
+body.ad-body .rq-sub {
+  color: var(--fg-muted);
+  font-size: 13px;
+}
+
+body.ad-body .rq-h2 {
+  font-size: var(--fs-overline);
+  font-weight: 750;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  color: var(--fg-subtle);
+}
+
+[dir='rtl'] body.ad-body .rq-h2 {
+  letter-spacing: 0;
+}
+
+body.ad-body .rq-card {
+  border-radius: var(--radius-lg);
+  box-shadow: none;
+  border: 1px solid var(--border-default);
+  background: var(--bg-surface);
+}
+
+body.ad-body .rq-card--alert {
+  border-color: var(--danger-600);
+  box-shadow: inset 3px 0 0 var(--danger-600);
+}
+
+[dir='rtl'] body.ad-body .rq-card--alert {
+  box-shadow: inset -3px 0 0 var(--danger-600);
+}
+
+body.ad-body .rq-btn {
+  block-size: 34px;
+  padding: 0 13px;
+  border-radius: var(--radius-md);
+  font-weight: 650;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+body.ad-body .rq-btn--primary {
+  background: var(--brand);
+  color: var(--fg-on-brand);
+}
+
+body.ad-body .rq-btn--approve {
+  background: var(--brand);
+  color: var(--fg-on-brand);
+}
+
+body.ad-body .rq-btn--quiet {
+  background: var(--bg-surface);
+  border: 1px solid var(--border-strong);
+  color: var(--fg-default);
+}
+
+body.ad-body .rq-btn--quiet:hover {
+  background: var(--bg-sunken);
+}
+
+body.ad-body .rq-field {
+  border: 1.5px solid var(--border-strong);
+  border-radius: var(--radius-md);
+  background: var(--bg-surface);
+  color: var(--fg-default);
+  font-size: 13px;
+}
+
+body.ad-body .rq-field:focus-visible {
+  outline: none;
+  border-color: var(--border-focus);
+  box-shadow: var(--shadow-focus);
+}
+
+body.ad-body .rq-pill {
+  border-radius: var(--radius-pill);
+  font-weight: 650;
+}
+
+body.ad-body .rq-empty {
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-lg);
+  background: var(--bg-surface);
+  color: var(--fg-muted);
+}
+
+body.ad-body .rq-avatar {
+  background: var(--brand-soft-bg);
+  color: var(--brand-soft-fg);
+}
+
+body.ad-body .rq-mono {
+  font-family: var(--font-mono);
+}
+
+@media (max-width: 767px) {
+  body.ad-body .rq-actions .rq-btn {
+    flex: 1 1 auto;
+    justify-content: center;
+  }
+
+  body.ad-body .rq-facts {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}

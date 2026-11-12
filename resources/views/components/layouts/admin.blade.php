@@ -51,6 +51,7 @@
     <link rel="stylesheet" href="{{ asset('css/admin/base.css') }}">
     <link rel="stylesheet" href="{{ asset('css/admin/layout.css') }}">
     <link rel="stylesheet" href="{{ asset('css/admin/components.css') }}">
+    <link rel="stylesheet" href="{{ asset('css/admin/legacy.css') }}">
     <link rel="preload" href="{{ asset($locale === 'ar' ? 'fonts/cairo-arabic-wght-normal.woff2' : 'fonts/inter-latin-wght-normal.woff2') }}" as="font" type="font/woff2" crossorigin>
 
     {{--
