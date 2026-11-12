@@ -1118,3 +1118,29 @@ a.ad-stat:hover {
   flex: 1;
   color: var(--fg-muted);
 }
+
+/* A block inside a card (a car inside a driver's application). */
+.ad-subcard {
+  margin-block-start: 12px;
+  padding: 12px 14px;
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-md);
+  background: var(--bg-sunken);
+}
+
+.ad-subcard .ad-table td {
+  background: transparent;
+}
+
+/* Short fields side by side; they stack on a phone. */
+.ad-fields-inline {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: 0 12px;
+}
+
+.ad-fields-inline > .ad-field {
+  flex: 1 1 140px;
+  min-inline-size: 0;
+}
