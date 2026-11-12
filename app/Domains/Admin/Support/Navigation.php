@@ -4,6 +4,7 @@ namespace App\Domains\Admin\Support;
 
 use App\Domains\Admin\Enums\AdminPermission;
 use App\Domains\Admin\Models\AdminUser;
+use App\Livewire\Admin\Appeals;
 use App\Livewire\Admin\Dashboard;
 use Illuminate\Support\Facades\Route;
 
@@ -78,7 +79,7 @@ final class Navigation
                 ['key' => 'identity', 'route' => 'admin.verifications', 'icon' => 'shield', 'can' => AdminPermission::VerificationView, 'badge' => 'pendingVerifications', 'tone' => 'warn'],
                 ['key' => 'replacement_cars', 'route' => 'admin.replacement-cars', 'icon' => 'swap', 'can' => AdminPermission::DriverView, 'badge' => 'pendingReplacementCars', 'tone' => 'warn'],
                 ['key' => 'reports', 'route' => 'admin.reports', 'icon' => 'flag', 'can' => AdminPermission::SafetyView],
-                ['key' => 'appeals', 'route' => 'admin.appeals', 'icon' => 'inbox', 'can' => AdminPermission::MemberView],
+                ['key' => 'appeals', 'route' => 'admin.appeals', 'icon' => 'inbox', 'can' => fn (?AdminUser $admin): bool => Appeals::isAvailableTo($admin)],
                 ['key' => 'payments', 'route' => 'admin.payments', 'icon' => 'receipt', 'can' => AdminPermission::PaymentView],
                 ['key' => 'coupons', 'route' => 'admin.coupons', 'icon' => 'gift', 'can' => AdminPermission::DebtManage],
             ],
