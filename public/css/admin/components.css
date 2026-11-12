@@ -1072,3 +1072,49 @@ a.ad-stat:hover {
 .ad-details[open] > summary {
   margin-block-end: 10px;
 }
+
+/* A list of checks with a mark each (identity, driver applications). */
+.ad-checklist {
+  list-style: none;
+  margin: 14px 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 13px;
+}
+
+.ad-checklist li {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.ad-checklist__mark {
+  inline-size: 20px;
+  block-size: 20px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  flex: none;
+}
+
+.ad-checklist__mark--ok {
+  background: var(--success-100);
+  color: var(--success-600);
+}
+
+.ad-checklist__mark--warn {
+  background: var(--warning-100);
+  color: var(--warning-600);
+}
+
+.ad-checklist__mark--bad {
+  background: var(--danger-100);
+  color: var(--danger-600);
+}
+
+.ad-checklist__label {
+  flex: 1;
+  color: var(--fg-muted);
+}
