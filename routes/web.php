@@ -30,6 +30,7 @@ use App\Livewire\Admin\SafetyCases;
 use App\Livewire\Admin\Settings;
 use App\Livewire\Admin\Settlements;
 use App\Livewire\Admin\Statistics;
+use App\Livewire\Admin\Support;
 use App\Livewire\Admin\VerificationQueue;
 use Illuminate\Support\Facades\Route;
 
@@ -113,6 +114,7 @@ Route::prefix('admin')->name('admin.')->middleware(SetAdminLocale::class)->group
         Route::get('trips', LiveTrips::class)->name('trips');
         Route::get('reports', Reports::class)->name('reports');
         Route::get('appeals', Appeals::class)->name('appeals');
+        Route::get('support', Support::class)->name('support');
         Route::get('escort', Escort::class)->name('escort');
         Route::get('verifications', VerificationQueue::class)->name('verifications');
         Route::get('drivers', DriverApplications::class)->name('drivers');

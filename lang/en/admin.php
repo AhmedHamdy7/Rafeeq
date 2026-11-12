@@ -414,6 +414,9 @@ return [
         ],
         'actions' => [
             'admin__login' => 'Signed in',
+            'ticket__take' => 'Took a support case',
+            'ticket__resolve' => 'Resolved a support case',
+            'ticket__close' => 'Closed a support case',
             'admin__password_changed' => 'Changed own password',
             'verification__approve' => 'Approved a verification',
             'verification__request_info' => 'Asked for more information',
