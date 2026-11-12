@@ -15,6 +15,7 @@ when they are on Railway.
 | A-6 | ✅ Yes | Nothing. It was already in the guide; the line is now clearer. |
 | A-7 | ✅ Rule, a fix, and a testing call | Use `POST /testing/trips/{trip}/position` in TD-14. |
 | A-8 | ✅ Done | Use `POST /testing/driver/vehicles/{vehicle}/approve` (or `/reject`) in MG-16. |
+| A-9 | ✅ Fixed | Nothing. `expiredAt` is now always there on a late approval. |
 
 ---
 
@@ -132,3 +133,14 @@ approvedSeats, isActive, rejectedItem, rejectionReason}`. `422 VEHICLE_NOT_ALLOW
 driver isn't approved.
 
 Activating before approval is unchanged: `422 VEHICLE_NOT_ALLOWED`.
+
+## A-9 · `expiredAt` on a late approval
+
+**Cause:** the field was only added while the request was still `PENDING` in the database. The minute sweep marks it
+`EXPIRED`, and from then on the approval was refused by the plain status check, without the field. Your test hit it
+after the sweep.
+
+**Now:** a late approval always answers `409 SEAT_REQUEST_NOT_PENDING` with `error.fields.expiredAt` (the request's
+`expiresAt`), before and after the sweep. After the sweep it also has `error.fields.status: ["EXPIRED"]`. Any other
+`SEAT_REQUEST_NOT_PENDING` now names the request's `status` too (for example `APPROVED` or `WITHDRAWN`).
+

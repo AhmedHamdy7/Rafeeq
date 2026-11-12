@@ -95,7 +95,12 @@ final readonly class ApproveSeatRequestAction
     {
         if ($request->status !== SeatRequestStatus::Pending
             && $request->status !== SeatRequestStatus::Waitlisted) {
-            throw DomainException::of(ErrorCode::SeatRequestNotPending);
+            throw DomainException::of(ErrorCode::SeatRequestNotPending, fields: array_filter([
+                'status' => [strtoupper($request->status->value)],
+                'expiredAt' => $request->status === SeatRequestStatus::Expired && $request->expires_at !== null
+                    ? [$request->expires_at->toIso8601String()]
+                    : null,
+            ]));
         }
 
         /*
