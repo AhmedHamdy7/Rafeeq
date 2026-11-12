@@ -1,7 +1,8 @@
 <?php
 
-test('the application returns a successful response', function () {
-    $response = $this->get('/');
+test('the bare domain opens the dashboard', function () {
+    $this->get('/')->assertRedirect('/admin');
 
-    $response->assertStatus(200);
+    // Signed out, the dashboard sends them to the sign-in page.
+    $this->get('/admin')->assertRedirect(route('admin.login'));
 });

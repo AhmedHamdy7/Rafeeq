@@ -36,8 +36,9 @@ use App\Livewire\Admin\Team;
 use App\Livewire\Admin\VerificationQueue;
 use Illuminate\Support\Facades\Route;
 
-// A view with no logic behind it, so `Route::view` says that in one line.
-Route::view('/', 'welcome');
+// The bare domain opens the dashboard: staff land on their home page, and anybody signed
+// out lands on the sign-in page (admin.home is behind auth:admin, which sends them there).
+Route::redirect('/', '/admin');
 
 /*
 |--------------------------------------------------------------------------
