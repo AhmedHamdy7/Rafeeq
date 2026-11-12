@@ -17,6 +17,7 @@ use App\Domains\Payment\Models\DebtEntry;
 use App\Domains\Payment\Support\DebtStanding;
 use App\Domains\Rating\Models\Rating;
 use App\Domains\Reliability\Models\ReliabilityEvent;
+use App\Domains\Safety\Enums\IncidentStatus;
 use App\Domains\Safety\Models\Incident;
 use App\Livewire\Admin\Concerns\ShowsMemberDetails;
 use Illuminate\Support\Facades\Auth;
@@ -154,7 +155,7 @@ class MemberProfile extends Component
             'user' => $user,
             'tabs' => $this->tabs(),
             'standings' => $standings,
-            'openDisputes' => Incident::query()->where('reporter_user_id', $user->id)->where('category', 'payment')->whereIn('status', \App\Domains\Safety\Enums\IncidentStatus::openValues())->count(),
+            'openDisputes' => Incident::query()->where('reporter_user_id', $user->id)->where('category', 'payment')->whereIn('status', IncidentStatus::openValues())->count(),
             'notes' => MemberNote::query()->where('user_id', $user->id)->with('admin')->latest('created_at')->latest('id')->limit($this->tab === 'notes' ? 100 : 3)->get(),
             'maySeeDocuments' => $this->maySeeDocuments(),
             'mayDecide' => $this->may(AdminPermission::MemberSuspend),
