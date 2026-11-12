@@ -1,0 +1,1217 @@
+/*
+ * RAFEEQ dashboard — components. Each one is drawn once here and used as a Blade
+ * component (resources/views/components/admin/*), and every one of them is on the
+ * gallery page /admin/_components in both themes and both directions.
+ */
+
+/* ---------- Buttons ---------- */
+
+.ad-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  block-size: 36px;
+  padding: 0 14px;
+  border-radius: var(--radius-md);
+  font-size: 13px;
+  font-weight: 650;
+  cursor: pointer;
+  white-space: nowrap;
+  text-decoration: none;
+  border: 1px solid var(--border-strong);
+  background: var(--bg-surface);
+  color: var(--fg-default);
+  transition: background var(--dur-fast) var(--ease-out), transform var(--dur-fast) var(--ease-out);
+}
+
+.ad-btn:hover {
+  background: var(--bg-sunken);
+}
+
+.ad-btn:active {
+  transform: scale(0.98);
+}
+
+.ad-btn[disabled],
+.ad-btn[aria-disabled='true'] {
+  opacity: 0.45;
+  cursor: not-allowed;
+  transform: none;
+}
+
+.ad-btn--sm {
+  block-size: 30px;
+  padding: 0 10px;
+  font-size: 12.5px;
+  border-radius: 8px;
+}
+
+.ad-btn--xs {
+  block-size: 24px;
+  padding: 0 8px;
+  font-size: 11.5px;
+  border-radius: 6px;
+  gap: 4px;
+}
+
+.ad-btn--primary {
+  background: var(--brand);
+  border-color: var(--brand);
+  color: var(--fg-on-brand);
+}
+
+.ad-btn--primary:hover {
+  background: var(--brand-hover);
+}
+
+.ad-btn--danger {
+  background: var(--danger-600);
+  border-color: var(--danger-600);
+  color: #fff;
+}
+
+.ad-btn--danger:hover {
+  background: var(--danger-600);
+  filter: brightness(0.95);
+}
+
+.ad-btn--dangerline {
+  color: var(--danger-600);
+}
+
+.ad-btn--quiet {
+  background: none;
+  border-color: transparent;
+  color: var(--brand-soft-fg);
+}
+
+.ad-btn--quiet:hover {
+  background: var(--brand-soft-bg);
+}
+
+.ad-btn--block {
+  inline-size: 100%;
+}
+
+.ad-icon-btn {
+  position: relative;
+  inline-size: 36px;
+  block-size: 36px;
+  border-radius: var(--radius-md);
+  border: none;
+  background: none;
+  color: var(--fg-muted);
+  display: inline-grid;
+  place-items: center;
+  cursor: pointer;
+  flex: none;
+  text-decoration: none;
+}
+
+.ad-icon-btn:hover {
+  background: var(--bg-sunken);
+  color: var(--fg-default);
+}
+
+/* The small red dot on the bell. */
+.ad-icon-btn__dot {
+  position: absolute;
+  inset-block-start: 8px;
+  inset-inline-end: 8px;
+  inline-size: 7px;
+  block-size: 7px;
+  border-radius: 50%;
+  background: var(--danger-600);
+  border: 1.5px solid var(--bg-surface);
+}
+
+.ad-link {
+  color: var(--brand-soft-fg);
+  text-decoration: none;
+  font-weight: 650;
+}
+
+.ad-link:hover {
+  text-decoration: underline;
+}
+
+/* ---------- Badges and chips ---------- */
+
+/* Round count in the sidebar. */
+.ad-badge {
+  min-inline-size: 20px;
+  block-size: 20px;
+  padding: 0 6px;
+  border-radius: var(--radius-pill);
+  display: inline-grid;
+  place-items: center;
+  font-size: 11px;
+  font-weight: 750;
+  font-variant-numeric: tabular-nums;
+  background: var(--bg-sunken);
+  color: var(--fg-muted);
+}
+
+.ad-badge--bad {
+  background: var(--danger-600);
+  color: #fff;
+}
+
+.ad-badge--warn {
+  background: var(--warning-600);
+  color: #fff;
+}
+
+[data-theme='dark'] .ad-badge--warn {
+  color: #1a1206;
+}
+
+/* Status chip with a dot: "● On time", "● 2 overdue". */
+.ad-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  block-size: 22px;
+  padding: 0 8px;
+  border-radius: var(--radius-pill);
+  font-size: 11.5px;
+  font-weight: 650;
+  white-space: nowrap;
+  background: var(--bg-sunken);
+  color: var(--fg-muted);
+}
+
+.ad-chip::before {
+  content: '';
+  inline-size: 6px;
+  block-size: 6px;
+  border-radius: 50%;
+  background: currentColor;
+}
+
+.ad-chip--plain::before {
+  display: none;
+}
+
+.ad-chip--ok {
+  background: var(--success-100);
+  color: var(--success-600);
+}
+
+.ad-chip--warn {
+  background: var(--warning-100);
+  color: var(--warning-600);
+}
+
+.ad-chip--bad {
+  background: var(--danger-100);
+  color: var(--danger-600);
+}
+
+.ad-chip--info {
+  background: var(--info-100);
+  color: var(--info-600);
+}
+
+.ad-chip--brand {
+  background: var(--brand-soft-bg);
+  color: var(--brand-soft-fg);
+}
+
+/* A rule reference like PAY-12: monospaced, boxed. */
+.ad-code {
+  display: inline-block;
+  font: 600 11px var(--font-mono);
+  color: var(--fg-muted);
+  background: var(--bg-sunken);
+  border: 1px solid var(--border-default);
+  border-radius: 5px;
+  padding: 1px 6px;
+  white-space: nowrap;
+}
+
+/* A role tag: "🔒 Admin" on a card a CS member cannot act on. */
+.ad-role-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 11.5px;
+  font-weight: 650;
+  color: var(--fg-muted);
+  background: var(--bg-sunken);
+  border-radius: 6px;
+  padding: 2px 8px;
+}
+
+/* ---------- Cards ---------- */
+
+.ad-card {
+  background: var(--bg-surface);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-lg);
+  min-inline-size: 0;
+}
+
+.ad-card__head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 14px 16px 0;
+  font-weight: 650;
+}
+
+.ad-card__head--bar {
+  padding: 12px 16px;
+  border-block-end: 1px solid var(--border-default);
+}
+
+.ad-card__title {
+  flex: 1;
+  min-inline-size: 0;
+  font-size: 13px;
+  font-weight: 650;
+  margin: 0;
+}
+
+.ad-card__body {
+  padding: 14px 16px 16px;
+}
+
+.ad-card--alert {
+  background: var(--danger-100);
+  border-color: var(--danger-600);
+}
+
+.ad-card--alert .ad-card__title,
+.ad-card--alert .ad-stat__value {
+  color: var(--danger-600);
+}
+
+.ad-card--topline-bad {
+  border-block-start: 3px solid var(--danger-600);
+}
+
+/* A queue / stat tile: label · big number · chip · footnote. */
+.ad-stat {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 16px;
+  text-decoration: none;
+  color: inherit;
+}
+
+a.ad-stat:hover {
+  background: var(--bg-sunken);
+  border-radius: inherit;
+}
+
+.ad-stat__label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--fg-muted);
+  font-weight: 600;
+  font-size: 13px;
+}
+
+.ad-stat__row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.ad-stat__value {
+  font-size: 22px;
+  font-weight: 750;
+  font-variant-numeric: tabular-nums;
+  line-height: 1.1;
+}
+
+.ad-stat__value--money {
+  font-size: 21px;
+}
+
+.ad-stat__foot {
+  color: var(--fg-muted);
+  font-size: 12.5px;
+}
+
+.ad-stat__foot strong {
+  color: var(--fg-default);
+}
+
+.ad-trend {
+  font-size: 11.5px;
+  font-weight: 700;
+}
+
+.ad-trend--up {
+  color: var(--success-600);
+}
+
+.ad-trend--down {
+  color: var(--danger-600);
+}
+
+/* ---------- Grids ---------- */
+
+.ad-grid {
+  display: grid;
+  gap: 12px;
+}
+
+.ad-grid--2 {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.ad-grid--3 {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.ad-grid--4 {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+/* Main column + side column (the home page's table and money snapshot). */
+.ad-split {
+  display: grid;
+  grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr);
+  gap: 12px;
+  align-items: start;
+}
+
+.ad-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.ad-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+@media (max-width: 1279px) {
+  .ad-grid--4 {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .ad-split {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+@media (max-width: 767px) {
+  .ad-grid--2,
+  .ad-grid--3 {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  /* Queue tiles stay two-up on a phone: they are short, and one-up is a long scroll. */
+  .ad-grid--4 {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 8px;
+  }
+
+  .ad-stat {
+    padding: 12px;
+  }
+}
+
+/* ---------- Tabs, segmented control, filter chips ---------- */
+
+.ad-tabs {
+  display: flex;
+  gap: 2px;
+  border-block-end: 1px solid var(--border-default);
+  margin-block-end: 16px;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.ad-tab {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  border: none;
+  background: none;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--fg-muted);
+  padding: 10px 12px;
+  border-block-end: 2px solid transparent;
+  margin-block-end: -1px;
+  cursor: pointer;
+  white-space: nowrap;
+  text-decoration: none;
+}
+
+.ad-tab[aria-selected='true'],
+.ad-tab[aria-current='page'] {
+  color: var(--fg-default);
+  border-block-end-color: var(--brand);
+}
+
+.ad-seg {
+  display: inline-flex;
+  border: 1px solid var(--border-strong);
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.ad-seg button {
+  border: none;
+  background: var(--bg-surface);
+  color: var(--fg-muted);
+  font-size: 12px;
+  font-weight: 650;
+  padding: 5px 10px;
+  cursor: pointer;
+}
+
+.ad-seg button[aria-pressed='true'] {
+  background: var(--fg-default);
+  color: var(--bg-surface);
+}
+
+.ad-fchip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  block-size: 30px;
+  padding: 0 10px;
+  border-radius: var(--radius-pill);
+  border: 1px dashed var(--border-strong);
+  background: var(--bg-surface);
+  color: var(--fg-muted);
+  font-size: 12.5px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.ad-fchip[aria-pressed='true'] {
+  border-style: solid;
+  border-color: var(--brand);
+  background: var(--brand-soft-bg);
+  color: var(--brand-soft-fg);
+}
+
+.ad-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-block-end: 12px;
+}
+
+/* ---------- Tables ---------- */
+
+.ad-table-wrap {
+  overflow-x: auto;
+  border-radius: inherit;
+}
+
+.ad-table {
+  inline-size: 100%;
+  border-collapse: collapse;
+  font-size: 12.5px;
+}
+
+.ad-table thead th {
+  position: sticky;
+  inset-block-start: 0;
+  background: var(--bg-sunken);
+  font-size: 11.5px;
+  font-weight: 700;
+  color: var(--fg-muted);
+  padding: 9px 12px;
+  border-block-end: 1px solid var(--border-default);
+  white-space: nowrap;
+  text-align: start;
+}
+
+.ad-table td {
+  padding: 9px 12px;
+  border-block-end: 1px solid var(--border-subtle);
+  vertical-align: middle;
+}
+
+.ad-table tbody tr:last-child td {
+  border-block-end: none;
+}
+
+.ad-table--dense td {
+  padding: 6px 12px;
+}
+
+.ad-table tr.ad-click {
+  cursor: pointer;
+}
+
+.ad-table tr.ad-click:hover td {
+  background: var(--bg-sunken);
+}
+
+.ad-table tr[aria-selected='true'] td {
+  background: var(--brand-soft-bg);
+}
+
+.ad-table .ad-end {
+  text-align: end;
+}
+
+/*
+ * On a phone a table becomes a stack of cards: each row a card, each cell a line with
+ * its column name (from data-label) in front. Opt-in per table with .ad-table--cards,
+ * because some tables (a short two-column list) read fine as they are.
+ */
+@media (max-width: 767px) {
+  .ad-table--cards thead {
+    display: none;
+  }
+
+  .ad-table--cards,
+  .ad-table--cards tbody,
+  .ad-table--cards tr,
+  .ad-table--cards td {
+    display: block;
+    inline-size: 100%;
+  }
+
+  .ad-table--cards tr {
+    padding: 10px 14px;
+    border-block-end: 1px solid var(--border-default);
+  }
+
+  .ad-table--cards td {
+    display: flex;
+    gap: 12px;
+    padding: 3px 0;
+    border: none;
+  }
+
+  .ad-table--cards td[data-label]::before {
+    content: attr(data-label);
+    flex: 0 0 38%;
+    color: var(--fg-muted);
+    font-size: 11.5px;
+    font-weight: 650;
+  }
+
+  .ad-table--cards .ad-end {
+    text-align: start;
+  }
+}
+
+/* ---------- Forms ---------- */
+
+.ad-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-block-end: 14px;
+}
+
+.ad-label {
+  font-size: 12.5px;
+  font-weight: 650;
+}
+
+.ad-hint {
+  font-size: 12px;
+  color: var(--fg-muted);
+}
+
+.ad-error {
+  font-size: 12px;
+  color: var(--danger-600);
+  font-weight: 600;
+}
+
+.ad-input,
+.ad-select,
+.ad-textarea {
+  inline-size: 100%;
+  min-block-size: 38px;
+  border: 1.5px solid var(--border-strong);
+  border-radius: var(--radius-md);
+  background: var(--bg-surface);
+  color: var(--fg-default);
+  font-size: 13px;
+  padding: 8px 11px;
+}
+
+.ad-textarea {
+  min-block-size: 88px;
+  resize: vertical;
+}
+
+.ad-input:focus,
+.ad-select:focus,
+.ad-textarea:focus {
+  outline: none;
+  border-color: var(--border-focus);
+  box-shadow: var(--shadow-focus);
+}
+
+.ad-input[aria-invalid='true'],
+.ad-textarea[aria-invalid='true'] {
+  border-color: var(--danger-600);
+}
+
+.ad-check {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  padding: 6px 0;
+  font-size: 13px;
+}
+
+.ad-check input {
+  accent-color: var(--brand);
+  inline-size: 16px;
+  block-size: 16px;
+}
+
+/* ---------- Menus, modals, drawers ---------- */
+
+.ad-menu-anchor {
+  position: relative;
+}
+
+.ad-pop {
+  position: absolute;
+  inset-block-start: calc(100% + 6px);
+  inset-inline-end: 0;
+  z-index: 60;
+  inline-size: 260px;
+  max-block-size: 420px;
+  overflow-y: auto;
+  background: var(--bg-elevated);
+  color: var(--fg-default);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-lg);
+  padding: 6px;
+}
+
+.ad-pop__head {
+  font-size: 11px;
+  font-weight: 750;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--fg-subtle);
+  padding: 8px 10px 4px;
+}
+
+.ad-pop__item {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  inline-size: 100%;
+  text-align: start;
+  border: none;
+  background: none;
+  color: inherit;
+  font-size: 13px;
+  padding: 8px 10px;
+  border-radius: 8px;
+  cursor: pointer;
+  text-decoration: none;
+}
+
+.ad-pop__item:hover {
+  background: var(--bg-sunken);
+}
+
+.ad-pop__item[aria-checked='true'] {
+  font-weight: 700;
+  color: var(--brand-soft-fg);
+}
+
+.ad-pop__sep {
+  border: none;
+  border-block-start: 1px solid var(--border-default);
+  margin: 6px 0;
+}
+
+.ad-dim {
+  position: fixed;
+  inset: 0;
+  z-index: 80;
+  background: rgba(15, 23, 42, 0.45);
+  display: grid;
+  place-items: center;
+  padding: 16px;
+}
+
+.ad-modal {
+  inline-size: min(460px, 100%);
+  max-block-size: 86vh;
+  overflow-y: auto;
+  background: var(--bg-surface);
+  color: var(--fg-default);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-xl);
+  padding: 22px;
+  box-shadow: var(--shadow-xl);
+}
+
+.ad-modal__title {
+  font-size: 16px;
+  font-weight: 750;
+  margin: 0 0 6px;
+}
+
+.ad-modal__actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-block-start: 18px;
+  flex-wrap: wrap;
+}
+
+/* Side panel for a record (a user, a case) opened over a list. */
+.ad-drawer {
+  position: fixed;
+  inset-block: 0;
+  inset-inline-end: 0;
+  z-index: 80;
+  inline-size: min(520px, 100%);
+  background: var(--bg-surface);
+  border-inline-start: 1px solid var(--border-default);
+  box-shadow: var(--shadow-xl);
+  overflow-y: auto;
+  padding: 20px;
+}
+
+@media (max-width: 767px) {
+  .ad-modal {
+    align-self: end;
+    inline-size: 100%;
+    border-end-start-radius: 0;
+    border-end-end-radius: 0;
+  }
+}
+
+/* ---------- Page states: empty, loading, error, no access ---------- */
+
+.ad-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  gap: 8px;
+  padding: 40px 20px;
+  color: var(--fg-muted);
+}
+
+.ad-state__icon {
+  inline-size: 44px;
+  block-size: 44px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  background: var(--bg-sunken);
+  color: var(--fg-muted);
+}
+
+.ad-state--error .ad-state__icon {
+  background: var(--danger-100);
+  color: var(--danger-600);
+}
+
+.ad-state--locked .ad-state__icon {
+  background: var(--warning-100);
+  color: var(--warning-600);
+}
+
+.ad-state__title {
+  color: var(--fg-default);
+  font-weight: 700;
+  font-size: 14px;
+  margin: 0;
+}
+
+.ad-state__text {
+  margin: 0;
+  max-inline-size: 42ch;
+}
+
+/* Loading placeholder: grey bars that shimmer. */
+.ad-skel {
+  display: block;
+  block-size: 12px;
+  border-radius: 6px;
+  background: linear-gradient(90deg, var(--bg-sunken) 25%, var(--border-default) 50%, var(--bg-sunken) 75%);
+  background-size: 200% 100%;
+  animation: ad-shimmer 1.2s linear infinite;
+}
+
+@keyframes ad-shimmer {
+  from {
+    background-position: 200% 0;
+  }
+
+  to {
+    background-position: -200% 0;
+  }
+}
+
+/* ---------- Messages ---------- */
+
+.ad-flash {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 14px;
+  border-radius: var(--radius-md);
+  background: var(--success-100);
+  color: var(--success-600);
+  font-weight: 600;
+  margin: 0 0 16px;
+}
+
+.ad-flash--error {
+  background: var(--danger-100);
+  color: var(--danger-600);
+}
+
+.ad-notice {
+  display: flex;
+  gap: 10px;
+  padding: 12px 14px;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border-default);
+  background: var(--bg-sunken);
+  font-size: 12.5px;
+}
+
+.ad-notice--warn {
+  background: var(--warning-100);
+  border-color: transparent;
+  color: var(--fg-default);
+}
+
+/* ---------- Key / value lists (record details) ---------- */
+
+.ad-kv {
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  gap: 8px 16px;
+  margin: 0;
+  font-size: 13px;
+}
+
+.ad-kv dt {
+  color: var(--fg-muted);
+}
+
+.ad-kv dd {
+  margin: 0;
+  font-weight: 550;
+  min-inline-size: 0;
+  overflow-wrap: anywhere;
+}
+
+@media (max-width: 767px) {
+  .ad-kv {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 2px;
+  }
+
+  .ad-kv dd {
+    margin-block-end: 8px;
+  }
+}
+
+/* ---------- Home: the live row and its small figures ---------- */
+
+.ad-home-live {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.6fr) minmax(0, 1fr);
+  gap: 12px;
+}
+
+.ad-figures {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 24px;
+}
+
+.ad-figure {
+  display: flex;
+  flex-direction: column;
+  min-inline-size: 64px;
+}
+
+.ad-figure__value {
+  font-size: 20px;
+  font-weight: 750;
+  line-height: 1.2;
+}
+
+.ad-figure__label {
+  color: var(--fg-muted);
+  font-size: 12px;
+}
+
+.ad-figure--bad .ad-figure__value {
+  color: var(--danger-600);
+}
+
+@media (max-width: 1279px) {
+  .ad-home-live {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  }
+
+  .ad-home-live > :first-child {
+    grid-column: 1 / -1;
+  }
+}
+
+@media (max-width: 767px) {
+  .ad-home-live {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .ad-figures {
+    gap: 8px 18px;
+  }
+}
+
+/* ---------- SOS: emergency numbers (always on screen while handling an alert) ---------- */
+
+.ad-emergency {
+  gap: 8px;
+}
+
+.ad-emergency__item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  padding: 12px 6px;
+  border-radius: var(--radius-md);
+  background: var(--bg-sunken);
+  text-decoration: none;
+  font-size: 12px;
+}
+
+.ad-emergency__item:hover {
+  background: var(--brand-soft-bg);
+}
+
+.ad-emergency__number {
+  font-size: 22px;
+  font-weight: 800;
+  color: var(--fg-default);
+}
+
+@media (max-width: 767px) {
+  /* Three numbers stay side by side on a phone: they are short, and a tap dials. */
+  .ad-grid--3.ad-emergency {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
+/* A flagged row: red down its start edge, so it stands out without shouting. */
+.ad-table tr.ad-row--flagged td:first-child {
+  box-shadow: inset 3px 0 0 var(--danger-600);
+}
+
+[dir='rtl'] .ad-table tr.ad-row--flagged td:first-child {
+  box-shadow: inset -3px 0 0 var(--danger-600);
+}
+
+.ad-table tr.ad-row-detail td {
+  background: var(--bg-sunken);
+  padding: 12px 16px;
+}
+
+@media (max-width: 767px) {
+  .ad-table--cards tr.ad-row--flagged {
+    box-shadow: inset 3px 0 0 var(--danger-600);
+  }
+
+  [dir='rtl'] .ad-table--cards tr.ad-row--flagged {
+    box-shadow: inset -3px 0 0 var(--danger-600);
+  }
+
+  .ad-table--cards tr.ad-row--flagged td:first-child {
+    box-shadow: none;
+  }
+}
+
+/* A decision's form, set apart from the facts above it (D11–D13). */
+.ad-confirm {
+  margin-block-start: 12px;
+  padding: 14px;
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-lg);
+  background: var(--bg-sunken);
+}
+
+.ad-details {
+  margin-block-start: 12px;
+}
+
+.ad-details > summary {
+  list-style: none;
+}
+
+.ad-details > summary::-webkit-details-marker {
+  display: none;
+}
+
+.ad-details[open] > summary {
+  margin-block-end: 10px;
+}
+
+/* A list of checks with a mark each (identity, driver applications). */
+.ad-checklist {
+  list-style: none;
+  margin: 14px 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 13px;
+}
+
+.ad-checklist li {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.ad-checklist__mark {
+  inline-size: 20px;
+  block-size: 20px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  flex: none;
+}
+
+.ad-checklist__mark--ok {
+  background: var(--success-100);
+  color: var(--success-600);
+}
+
+.ad-checklist__mark--warn {
+  background: var(--warning-100);
+  color: var(--warning-600);
+}
+
+.ad-checklist__mark--bad {
+  background: var(--danger-100);
+  color: var(--danger-600);
+}
+
+.ad-checklist__label {
+  flex: 1;
+  color: var(--fg-muted);
+}
+
+/* A block inside a card (a car inside a driver's application). */
+.ad-subcard {
+  margin-block-start: 12px;
+  padding: 12px 14px;
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-md);
+  background: var(--bg-sunken);
+}
+
+.ad-subcard .ad-table td {
+  background: transparent;
+}
+
+/* Short fields side by side; they stack on a phone. */
+.ad-fields-inline {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: 0 12px;
+}
+
+.ad-fields-inline > .ad-field {
+  flex: 1 1 140px;
+  min-inline-size: 0;
+}
+
+/* ---------- Settings: one row per number ---------- */
+
+.ad-settings {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.ad-settings > li {
+  padding: 12px 16px;
+  border-block-end: 1px solid var(--border-subtle);
+}
+
+.ad-settings > li:last-child {
+  border-block-end: none;
+}
+
+.ad-settings > li[aria-current='true'] {
+  background: var(--brand-soft-bg);
+}
+
+.ad-settings__row {
+  display: grid;
+  grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr) auto;
+  gap: 8px 16px;
+  align-items: center;
+}
+
+.ad-settings__name {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 3px;
+  min-inline-size: 0;
+}
+
+.ad-settings__actions {
+  display: flex;
+  gap: 6px;
+  justify-content: flex-end;
+}
+
+@media (max-width: 767px) {
+  .ad-settings__row {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .ad-settings__actions {
+    justify-content: flex-start;
+  }
+}
+
+/* ---------- Paging under a list ---------- */
+
+.ad-pager {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-block-start: 14px;
+  flex-wrap: wrap;
+}
+
+/* "Previous" points back: left in English, right in Arabic. */
+.ad-pager__back {
+  transform: scaleX(-1);
+}
+
+[dir='rtl'] .ad-pager__back {
+  transform: none;
+}

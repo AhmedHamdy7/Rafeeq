@@ -414,6 +414,7 @@ return [
         ],
         'actions' => [
             'admin__login' => 'Signed in',
+            'admin__password_changed' => 'Changed own password',
             'verification__approve' => 'Approved a verification',
             'verification__request_info' => 'Asked for more information',
             'driver__approve' => 'Approved a driver',

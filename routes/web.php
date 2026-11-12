@@ -2,21 +2,33 @@
 
 use App\Http\Controllers\AccountDeletionPageController;
 use App\Http\Controllers\Admin\HomeController;
+use App\Http\Controllers\Admin\LocaleController;
 use App\Http\Controllers\Admin\LogoutController;
 use App\Http\Controllers\Admin\StaffFileController;
 use App\Http\Controllers\Docs\ApiDocsController;
 use App\Http\Controllers\LiveShareController;
+use App\Http\Middleware\SetAdminLocale;
+use App\Livewire\Admin\Account;
+use App\Livewire\Admin\Appeals;
 use App\Livewire\Admin\AuditLog;
+use App\Livewire\Admin\Coupons;
 use App\Livewire\Admin\Dashboard;
+use App\Livewire\Admin\Directory\Bookings;
+use App\Livewire\Admin\Directory\Commutes;
+use App\Livewire\Admin\Directory\Demands;
+use App\Livewire\Admin\Directory\TripDays;
 use App\Livewire\Admin\DriverApplications;
 use App\Livewire\Admin\Escort;
+use App\Livewire\Admin\Ledger;
 use App\Livewire\Admin\LiveTrips;
 use App\Livewire\Admin\Login;
 use App\Livewire\Admin\Members;
 use App\Livewire\Admin\Payments;
 use App\Livewire\Admin\ReplacementCars;
+use App\Livewire\Admin\Reports;
 use App\Livewire\Admin\SafetyCases;
 use App\Livewire\Admin\Settings;
+use App\Livewire\Admin\Settlements;
 use App\Livewire\Admin\VerificationQueue;
 use Illuminate\Support\Facades\Route;
 
@@ -84,7 +96,10 @@ Route::prefix('delete-account')->middleware('throttle:20,1')->group(function ():
 | and route middleware does not see it.
 |
 */
-Route::prefix('admin')->name('admin.')->group(function (): void {
+Route::prefix('admin')->name('admin.')->middleware(SetAdminLocale::class)->group(function (): void {
+    // The language switch, for signed-in and signed-out staff alike (the sign-in page gets it in phase 1).
+    Route::post('locale/{locale}', LocaleController::class)->name('locale');
+
     Route::middleware('guest:admin')->group(function (): void {
         Route::get('login', Login::class)->name('login');
     });
@@ -94,14 +109,31 @@ Route::prefix('admin')->name('admin.')->group(function (): void {
         Route::get('dashboard', Dashboard::class)->name('dashboard');
         Route::get('safety', SafetyCases::class)->name('safety');
         Route::get('trips', LiveTrips::class)->name('trips');
+        Route::get('reports', Reports::class)->name('reports');
+        Route::get('appeals', Appeals::class)->name('appeals');
         Route::get('escort', Escort::class)->name('escort');
         Route::get('verifications', VerificationQueue::class)->name('verifications');
         Route::get('drivers', DriverApplications::class)->name('drivers');
         Route::get('replacement-cars', ReplacementCars::class)->name('replacement-cars');
         Route::get('members', Members::class)->name('members');
+        Route::get('commutes', Commutes::class)->name('commutes');
+        Route::get('trip-days', TripDays::class)->name('trip-days');
+        Route::get('bookings', Bookings::class)->name('bookings');
+        Route::get('demands', Demands::class)->name('demands');
         Route::get('payments', Payments::class)->name('payments');
+        Route::get('settlements', Settlements::class)->name('settlements');
+        Route::get('ledger', Ledger::class)->name('ledger');
+        Route::get('coupons', Coupons::class)->name('coupons');
         Route::get('audit', AuditLog::class)->name('audit');
         Route::get('settings', Settings::class)->name('settings');
+
+        Route::get('account', Account::class)->name('account');
+
+        // "Stay signed in" on the idle warning (S07): any request through admin.fresh resets the clock.
+        Route::get('ping', fn () => response()->noContent())->name('ping');
+
+        // Every dashboard component on one page, for checking themes, languages and widths.
+        Route::view('_components', 'admin.components')->name('components');
 
         // Private files, opened through the session — never a link that works elsewhere.
         Route::get('files/documents/{document}', [StaffFileController::class, 'document'])->name('files.document');

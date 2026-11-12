@@ -6,6 +6,9 @@ use App\Domains\Admin\Enums\AdminPermission;
 use App\Domains\Admin\Models\AdminAction;
 use App\Domains\Admin\Models\AdminUser;
 use App\Domains\Admin\Support\DashboardSummary;
+use App\Domains\Driver\Enums\DriverProfileStatus;
+use App\Domains\Driver\Enums\VehicleVerificationStatus;
+use App\Domains\Driver\Models\Vehicle;
 use Illuminate\Support\Facades\Auth;
 use Livewire\Attributes\Layout;
 use Livewire\Component;
@@ -52,6 +55,15 @@ class Dashboard extends Component
         return false;
     }
 
+    /** Same count as the sidebar badge and the Replacement cars page. */
+    private function replacementCars(): int
+    {
+        return Vehicle::query()
+            ->where('verification_status', VehicleVerificationStatus::Pending->value)
+            ->whereHas('driverProfile', fn ($query) => $query->where('status', DriverProfileStatus::Approved->value)->whereHas('user'))
+            ->count();
+    }
+
     public function render()
     {
         $admin = Auth::guard('admin')->user();
@@ -65,6 +77,13 @@ class Dashboard extends Component
             'verifications' => $may(AdminPermission::VerificationView) ? DashboardSummary::verifications() : null,
             'driverApplications' => $may(AdminPermission::DriverView) ? DashboardSummary::driverApplications() : null,
             'overdueHolds' => $may(AdminPermission::MemberView) ? DashboardSummary::overdueHolds() : null,
+            'tripDays' => $may(AdminPermission::TripView) ? DashboardSummary::tripDays() : null,
+            'replacementCars' => $may(AdminPermission::DriverView) ? $this->replacementCars() : null,
+            'payments' => $may(AdminPermission::PaymentView) ? DashboardSummary::paymentsToConfirm() : null,
+            'appeals' => $may(AdminPermission::PaymentView) || $may(AdminPermission::MemberView)
+                ? DashboardSummary::appeals($may(AdminPermission::PaymentView), $may(AdminPermission::MemberView))
+                : null,
+            'admin' => $admin,
             'recent' => $may(AdminPermission::AuditLogView)
                 ? AdminAction::query()->with('admin')->orderByDesc('created_at')->orderByDesc('id')->limit(6)->get()
                 : null,

@@ -16,21 +16,21 @@
 --}}
 @if ($page->hasPages())
     <nav
-        style="display:flex;align-items:center;gap:10px;margin-top:18px;flex-wrap:wrap"
+        class="ad-pager"
         role="navigation"
         aria-label="{{ __('admin.pager.label') }}"
     >
         <button
             type="button"
-            class="rq-btn rq-btn--quiet"
+            class="ad-btn ad-btn--sm"
             wire:click="previousPage"
             wire:loading.attr="disabled"
             @disabled($page->onFirstPage())
         >
-            {{ __('admin.pager.previous') }}
+            <x-admin.icon name="chevron" size="14" class="ad-pager__back" />{{ __('admin.pager.previous') }}
         </button>
 
-        <span class="rq-note" style="flex:1;text-align:center">
+        <span class="ad-muted ad-num" style="flex:1;text-align:center;font-size:12.5px">
             {{ __($position, [
                 'page' => $page->currentPage(),
                 'last' => $page->lastPage(),
@@ -40,12 +40,12 @@
 
         <button
             type="button"
-            class="rq-btn rq-btn--quiet"
+            class="ad-btn ad-btn--sm"
             wire:click="nextPage"
             wire:loading.attr="disabled"
             @disabled(! $page->hasMorePages())
         >
-            {{ __('admin.pager.next') }}
+            {{ __('admin.pager.next') }}<x-admin.icon name="chevron" size="14" class="ad-flip" />
         </button>
     </nav>
 @endif

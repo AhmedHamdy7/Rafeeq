@@ -1,94 +1,101 @@
 {{--
-    SETTINGS. One card per group; one row per number, with its default and bounds visible
-    before anybody types, so a refusal is never a surprise.
+    SETTINGS (F). One card per group; one row per number, with its default and bounds visible
+    before anybody types, so a refusal is never a surprise. Every change asks for a reason and
+    lands in the audit log.
 --}}
 @php
     use App\Domains\Admin\Support\SettingsCatalogue;
 @endphp
 <div>
-    <h1 class="rq-h1">{{ __('admin.settings.title') }}</h1>
-    <p class="rq-sub">{{ __('admin.settings.sub') }}</p>
+    <x-admin.page-head :title="__('admin.settings.title')" :sub="__('admin.settings.sub')" />
 
     @foreach (SettingsCatalogue::GROUPS as $group)
         @continue(! isset($groups[$group]))
-        <h2 class="rq-h2">{{ __('admin.settings.groups.'.$group) }}</h2>
-        <article class="rq-card">
-            <ul class="rq-checks" style="margin:0">
+        <div class="ad-section-label">{{ __('admin.settings.groups.'.$group) }}</div>
+        <x-admin.card flush>
+            <ul class="ad-settings">
                 @foreach ($groups[$group] as $row)
-                    <li class="rq-check" wire:key="setting-{{ $row['key'] }}" style="flex-wrap:wrap;align-items:flex-start">
-                        <span class="rq-check__label" style="flex:1;min-width:220px">
-                            <span style="font-weight:600;display:block">{{ __(SettingsCatalogue::labelKey($row['key'])) }}</span>
-                            <span class="rq-note rq-mono">{{ $row['key'] }}</span>
-                        </span>
-                        <span style="text-align:end">
-                            @if (! empty($row['text']))
-                                <span style="font-weight:700;word-break:break-all">{{ $row['current'] ?? __('admin.settings.not_set') }}</span>
-                            @else
-                                <span style="font-weight:700">{{ number_format((int) $row['current']) }}</span>
-                                {{ __('admin.settings.units.'.$row['entry']['unit']) }}
-                            @endif
-                            <span class="rq-note" style="display:block">
+                    <li wire:key="setting-{{ $row['key'] }}" @if ($editing === $row['key']) aria-current="true" @endif>
+                        <div class="ad-settings__row">
+                            <div class="ad-settings__name">
+                                <span style="font-weight:650">{{ __(SettingsCatalogue::labelKey($row['key'])) }}</span>
+                                <span class="ad-code">{{ $row['key'] }}</span>
+                            </div>
+                            <div class="ad-settings__value">
                                 @if (! empty($row['text']))
-                                    @if ($row['override'])
-                                        {{ __('admin.settings.text_changed', [
+                                    <strong style="overflow-wrap:anywhere" dir="ltr">{{ $row['current'] ?? __('admin.settings.not_set') }}</strong>
+                                @else
+                                    <strong class="ad-num">{{ number_format((int) $row['current']) }}</strong>
+                                    {{ __('admin.settings.units.'.$row['entry']['unit']) }}
+                                @endif
+                                <span class="ad-hint" style="display:block">
+                                    @if (! empty($row['text']))
+                                        @if ($row['override'])
+                                            {{ __('admin.settings.text_changed', [
+                                                'name' => $row['override']->updatedBy?->name ?? '—',
+                                                'when' => $row['override']->updated_at?->diffForHumans() ?? '—',
+                                            ]) }}
+                                        @endif
+                                    @elseif ($row['override'])
+                                        {{ __('admin.settings.changed', [
+                                            'default' => number_format((int) $row['default']),
                                             'name' => $row['override']->updatedBy?->name ?? '—',
                                             'when' => $row['override']->updated_at?->diffForHumans() ?? '—',
                                         ]) }}
+                                    @else
+                                        {{ __('admin.settings.is_default') }}
                                     @endif
-                                @elseif ($row['override'])
-                                    {{ __('admin.settings.changed', [
-                                        'default' => number_format((int) $row['default']),
-                                        'name' => $row['override']->updatedBy?->name ?? '—',
-                                        'when' => $row['override']->updated_at?->diffForHumans() ?? '—',
-                                    ]) }}
-                                @else
-                                    {{ __('admin.settings.is_default') }}
+                                </span>
+                            </div>
+                            <div class="ad-settings__actions">
+                                @if (isset($row['entry']['locked']))
+                                    <span class="ad-chip ad-chip--warn">{{ __('admin.settings.locked.'.$row['entry']['locked']) }}</span>
+                                @elseif ($editing !== $row['key'])
+                                    <button type="button" class="ad-btn ad-btn--sm" wire:click="edit('{{ $row['key'] }}')">{{ __('admin.settings.change') }}</button>
+                                    @if ($row['override'])
+                                        <button type="button" class="ad-btn ad-btn--sm ad-btn--quiet" wire:click="edit('{{ $row['key'] }}', 'reset')">{{ __('admin.settings.reset') }}</button>
+                                    @endif
                                 @endif
-                            </span>
-                        </span>
-                        <span style="display:flex;gap:6px;flex-basis:100%;justify-content:flex-end">
-                            @if (isset($row['entry']['locked']))
-                                <span class="rq-pill rq-pill--warn">{{ __('admin.settings.locked.'.$row['entry']['locked']) }}</span>
-                            @elseif ($editing !== $row['key'])
-                                <button type="button" class="rq-btn rq-btn--quiet" wire:click="edit('{{ $row['key'] }}')">{{ __('admin.settings.change') }}</button>
-                                @if ($row['override'])
-                                    <button type="button" class="rq-btn rq-btn--quiet" wire:click="edit('{{ $row['key'] }}', 'reset')">{{ __('admin.settings.reset') }}</button>
-                                @endif
-                            @endif
-                        </span>
+                            </div>
+                        </div>
 
                         @if ($editing === $row['key'])
-                            <form wire:submit="save" style="flex-basis:100%;margin-top:8px">
-                                @if ($mode === 'update' && ! empty($row['text']))
-                                    <label class="rq-label" for="value-{{ $row['key'] }}">{{ __(SettingsCatalogue::labelKey($row['key'])) }}</label>
-                                    <input id="value-{{ $row['key'] }}" type="{{ ($row['entry']['format'] ?? null) === 'url' ? 'url' : 'text' }}" class="rq-field" wire:model="value"
-                                           maxlength="{{ $row['entry']['max'] }}" required dir="ltr">
-                                @elseif ($mode === 'update')
-                                    <label class="rq-label" for="value-{{ $row['key'] }}">
-                                        {{ __('admin.settings.bounds', ['min' => number_format($row['entry']['min']), 'max' => number_format($row['entry']['max']), 'unit' => __('admin.settings.units.'.$row['entry']['unit'])]) }}
-                                    </label>
-                                    <input id="value-{{ $row['key'] }}" type="number" class="rq-field" wire:model="value"
-                                           min="{{ $row['entry']['min'] }}" max="{{ $row['entry']['max'] }}" required>
-                                @else
-                                    <p class="rq-note" style="margin:0 0 6px">{{ ! empty($row['text']) ? __('admin.settings.text_reset_hint') : __('admin.settings.reset_hint', ['default' => number_format((int) $row['default'])]) }}</p>
-                                @endif
-                                @error('value') <p class="rq-error">{{ $message }}</p> @enderror
+                            <form wire:submit="save" class="ad-confirm">
+                                <div class="ad-field">
+                                    @if ($mode === 'update' && ! empty($row['text']))
+                                        <label class="ad-label" for="value-{{ $row['key'] }}">{{ __(SettingsCatalogue::labelKey($row['key'])) }}</label>
+                                        <input id="value-{{ $row['key'] }}" type="{{ ($row['entry']['format'] ?? null) === 'url' ? 'url' : 'text' }}" class="ad-input" wire:model="value"
+                                               maxlength="{{ $row['entry']['max'] }}" required dir="ltr">
+                                    @elseif ($mode === 'update')
+                                        <label class="ad-label" for="value-{{ $row['key'] }}">
+                                            {{ __('admin.settings.bounds', ['min' => number_format($row['entry']['min']), 'max' => number_format($row['entry']['max']), 'unit' => __('admin.settings.units.'.$row['entry']['unit'])]) }}
+                                        </label>
+                                        <input id="value-{{ $row['key'] }}" type="number" class="ad-input" style="max-inline-size:200px" wire:model="value"
+                                               min="{{ $row['entry']['min'] }}" max="{{ $row['entry']['max'] }}" required>
+                                    @else
+                                        <span class="ad-hint">{{ ! empty($row['text']) ? __('admin.settings.text_reset_hint') : __('admin.settings.reset_hint', ['default' => number_format((int) $row['default'])]) }}</span>
+                                    @endif
+                                    @error('value') <span class="ad-error">{{ $message }}</span> @enderror
+                                </div>
 
-                                <textarea class="rq-field" wire:model="reason" rows="2" required style="margin-top:8px"
-                                          placeholder="{{ __('admin.settings.reason_placeholder') }}"></textarea>
-                                @error('reason') <p class="rq-error">{{ $message }}</p> @enderror
+                                <div class="ad-field">
+                                    <textarea class="ad-textarea" wire:model="reason" rows="2" required
+                                              aria-label="{{ __('admin.settings.reason_placeholder') }}"
+                                              placeholder="{{ __('admin.settings.reason_placeholder') }}"></textarea>
+                                    @error('reason') <span class="ad-error">{{ $message }}</span> @enderror
+                                </div>
 
-                                <div class="rq-actions">
-                                    <button type="submit" class="rq-btn rq-btn--primary" wire:loading.attr="disabled">
+                                <div class="ad-row">
+                                    <button type="submit" class="ad-btn ad-btn--primary" wire:loading.attr="disabled">
                                         {{ $mode === 'reset' ? __('admin.settings.confirm_reset') : __('admin.settings.save') }}
                                     </button>
-                                    <button type="button" class="rq-btn rq-btn--quiet" wire:click="cancel">{{ __('admin.queue.cancel') }}</button>
+                                    <button type="button" class="ad-btn" wire:click="cancel">{{ __('admin.queue.cancel') }}</button>
                                 </div>
                             </form>
                         @endif
                     </li>
                 @endforeach
             </ul>
-        </article>
+        </x-admin.card>
     @endforeach
 </div>
