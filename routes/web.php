@@ -29,6 +29,7 @@ use App\Livewire\Admin\Reports;
 use App\Livewire\Admin\SafetyCases;
 use App\Livewire\Admin\Settings;
 use App\Livewire\Admin\Settlements;
+use App\Livewire\Admin\Statistics;
 use App\Livewire\Admin\VerificationQueue;
 use Illuminate\Support\Facades\Route;
 
@@ -107,6 +108,7 @@ Route::prefix('admin')->name('admin.')->middleware(SetAdminLocale::class)->group
     Route::middleware(['auth:admin', 'admin.mfa', 'admin.fresh'])->group(function (): void {
         Route::get('/', HomeController::class)->name('home');
         Route::get('dashboard', Dashboard::class)->name('dashboard');
+        Route::get('statistics', Statistics::class)->name('statistics');
         Route::get('safety', SafetyCases::class)->name('safety');
         Route::get('trips', LiveTrips::class)->name('trips');
         Route::get('reports', Reports::class)->name('reports');
