@@ -3,91 +3,99 @@
     switch to change it, with a reason, for those who may.
 --}}
 <div>
-    <h1 class="rq-h1">{{ __('admin.escort.title') }}</h1>
-    <p class="rq-sub">
-        {{ trans_choice('admin.escort.armed_count', $armedCount, ['count' => $armedCount]) }}
-        &middot;
-        {{ trans_choice('admin.escort.trips_covered', $tripsCovered, ['count' => $tripsCovered]) }}
-    </p>
+    <x-admin.page-head
+        :title="__('admin.escort.title')"
+        :sub="trans_choice('admin.escort.armed_count', $armedCount, ['count' => $armedCount]).' · '.trans_choice('admin.escort.trips_covered', $tripsCovered, ['count' => $tripsCovered])"
+    />
 
-    <p class="rq-note" style="margin-bottom:16px">
-        @if ($autoEnabled)
-            {{ __('admin.escort.auto_on', [
-                'from' => $tonightStarts->timezone('Africa/Cairo')->format('H:i'),
-                'to' => $tonightEnds->timezone('Africa/Cairo')->format('H:i'),
-            ]) }}
-        @else
-            {{ __('admin.escort.auto_off') }}
-        @endif
-    </p>
+    <div class="ad-notice" style="margin-block-end:16px">
+        <x-admin.icon name="moon" />
+        <span>
+            @if ($autoEnabled)
+                {{ __('admin.escort.auto_on', [
+                    'from' => $tonightStarts->timezone('Africa/Cairo')->format('H:i'),
+                    'to' => $tonightEnds->timezone('Africa/Cairo')->format('H:i'),
+                ]) }}
+            @else
+                {{ __('admin.escort.auto_off') }}
+            @endif
+        </span>
+    </div>
 
     @php($mayAct = auth('admin')->user()?->can('safety.resolve'))
 
-    @forelse ($corridors as $corridor)
-        @php($window = $windows->get($corridor->id))
-        <article class="rq-card" wire:key="corridor-{{ $corridor->id }}">
-            <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap">
-                <div style="flex:1;min-width:200px">
-                    <div style="font-weight:600"><bdi>{{ app()->getLocale() === 'ar' ? ($corridor->name_ar ?? $corridor->name) : $corridor->name }}</bdi></div>
-                    <div class="rq-note">
-                        @if ($window !== null)
-                            {{ __('admin.escort.until', ['time' => $window->ends_at->timezone('Africa/Cairo')->format('H:i')]) }}
-                            &middot;
-                            @if ($window->is_auto)
-                                {{ __('admin.escort.by_schedule') }}
-                            @else
-                                {{ __('admin.escort.by_admin', ['name' => $window->armedBy?->name ?? '—']) }}
-                            @endif
-                            &middot;
-                            {{ trans_choice('admin.escort.trips_covered', $window->trips_covered, ['count' => $window->trips_covered]) }}
-                        @else
-                            {{ __('admin.escort.not_watched') }}
-                        @endif
-                    </div>
-                </div>
-                @if ($window !== null)
-                    <span class="rq-pill rq-pill--warn">{{ __('admin.escort.on') }}</span>
-                @else
-                    <span class="rq-pill rq-pill--count">{{ __('admin.escort.off') }}</span>
-                @endif
-            </div>
-
-            @if ($mayAct)
-                @if ($openCorridor === $corridor->id)
-                    <form wire:submit="{{ $mode === 'disarm' ? 'disarm' : 'arm' }}('{{ $corridor->id }}')" style="margin-top:13px">
-                        @if ($mode === 'arm')
-                            <label class="rq-label" for="hours-{{ $corridor->id }}">{{ __('admin.escort.hours') }}</label>
-                            <input id="hours-{{ $corridor->id }}" type="number" class="rq-field" wire:model="hours" min="1" max="{{ $maxHours }}" required>
-                            @error('hours') <p class="rq-error">{{ $message }}</p> @enderror
-                        @endif
-
-                        <textarea class="rq-field" wire:model="reason" rows="2" required style="margin-top:10px"
-                                  placeholder="{{ __('admin.escort.reason_placeholder') }}"></textarea>
-                        @error('reason') <p class="rq-error">{{ $message }}</p> @enderror
-
-                        <div class="rq-actions">
-                            <button type="submit" class="rq-btn {{ $mode === 'disarm' ? 'rq-btn--danger' : 'rq-btn--primary' }}" wire:loading.attr="disabled">
-                                {{ $mode === 'disarm' ? __('admin.escort.disarm') : __('admin.escort.arm') }}
-                            </button>
-                            <button type="button" class="rq-btn rq-btn--quiet" wire:click="$set('openCorridor', null)">
-                                {{ __('admin.queue.cancel') }}
-                            </button>
+    <x-admin.card flush>
+        @if ($corridors->isEmpty())
+            <x-admin.state kind="empty" :title="__('admin.escort.no_corridors')" />
+        @else
+            <ul class="ad-settings">
+                @foreach ($corridors as $corridor)
+                    @php($window = $windows->get($corridor->id))
+                    <li wire:key="corridor-{{ $corridor->id }}" @if ($openCorridor === $corridor->id) aria-current="true" @endif>
+                        <div class="ad-settings__row">
+                            <div class="ad-settings__name">
+                                <span style="font-weight:650"><bdi>{{ app()->getLocale() === 'ar' ? ($corridor->name_ar ?? $corridor->name) : $corridor->name }}</bdi></span>
+                                <span class="ad-hint">
+                                    @if ($window !== null)
+                                        {{ __('admin.escort.until', ['time' => $window->ends_at->timezone('Africa/Cairo')->format('H:i')]) }}
+                                        ·
+                                        @if ($window->is_auto)
+                                            {{ __('admin.escort.by_schedule') }}
+                                        @else
+                                            {{ __('admin.escort.by_admin', ['name' => $window->armedBy?->name ?? '—']) }}
+                                        @endif
+                                        · {{ trans_choice('admin.escort.trips_covered', $window->trips_covered, ['count' => $window->trips_covered]) }}
+                                    @else
+                                        {{ __('admin.escort.not_watched') }}
+                                    @endif
+                                </span>
+                            </div>
+                            <div>
+                                @if ($window !== null)
+                                    <span class="ad-chip ad-chip--warn">{{ __('admin.escort.on') }}</span>
+                                @else
+                                    <span class="ad-chip">{{ __('admin.escort.off') }}</span>
+                                @endif
+                            </div>
+                            <div class="ad-settings__actions">
+                                @if ($mayAct && $openCorridor !== $corridor->id)
+                                    @if ($window !== null)
+                                        <button type="button" class="ad-btn ad-btn--sm ad-btn--dangerline" wire:click="open('{{ $corridor->id }}', 'disarm')">{{ __('admin.escort.disarm') }}</button>
+                                    @else
+                                        <button type="button" class="ad-btn ad-btn--sm ad-btn--primary" wire:click="open('{{ $corridor->id }}', 'arm')">{{ __('admin.escort.arm') }}</button>
+                                    @endif
+                                @endif
+                            </div>
                         </div>
-                    </form>
-                @else
-                    <div class="rq-actions">
-                        @if ($window !== null)
-                            <button type="button" class="rq-btn rq-btn--quiet" wire:click="open('{{ $corridor->id }}', 'disarm')">{{ __('admin.escort.disarm') }}</button>
-                        @else
-                            <button type="button" class="rq-btn rq-btn--primary" wire:click="open('{{ $corridor->id }}', 'arm')">{{ __('admin.escort.arm') }}</button>
+
+                        @if ($mayAct && $openCorridor === $corridor->id)
+                            <form wire:submit="{{ $mode === 'disarm' ? 'disarm' : 'arm' }}('{{ $corridor->id }}')" class="ad-confirm">
+                                @if ($mode === 'arm')
+                                    <div class="ad-field">
+                                        <label class="ad-label" for="hours-{{ $corridor->id }}">{{ __('admin.escort.hours') }}</label>
+                                        <input id="hours-{{ $corridor->id }}" type="number" class="ad-input" style="max-inline-size:160px" wire:model="hours" min="1" max="{{ $maxHours }}" required>
+                                        @error('hours') <span class="ad-error">{{ $message }}</span> @enderror
+                                    </div>
+                                @endif
+                                <div class="ad-field">
+                                    <textarea class="ad-textarea" wire:model="reason" rows="2" required
+                                              aria-label="{{ __('admin.escort.reason_placeholder') }}"
+                                              placeholder="{{ __('admin.escort.reason_placeholder') }}"></textarea>
+                                    @error('reason') <span class="ad-error">{{ $message }}</span> @enderror
+                                </div>
+                                <div class="ad-row">
+                                    <button type="submit" class="ad-btn {{ $mode === 'disarm' ? 'ad-btn--danger' : 'ad-btn--primary' }}" wire:loading.attr="disabled">
+                                        {{ $mode === 'disarm' ? __('admin.escort.disarm') : __('admin.escort.arm') }}
+                                    </button>
+                                    <button type="button" class="ad-btn" wire:click="$set('openCorridor', null)">{{ __('admin.queue.cancel') }}</button>
+                                </div>
+                            </form>
                         @endif
-                    </div>
-                @endif
-            @endif
-        </article>
-    @empty
-        <p class="rq-note">{{ __('admin.escort.no_corridors') }}</p>
-    @endforelse
+                    </li>
+                @endforeach
+            </ul>
+        @endif
+    </x-admin.card>
 
     <x-rq-pager :page="$corridors" />
 </div>
