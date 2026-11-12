@@ -8,6 +8,7 @@ use App\Http\Controllers\Admin\StaffFileController;
 use App\Http\Controllers\Docs\ApiDocsController;
 use App\Http\Controllers\LiveShareController;
 use App\Http\Middleware\SetAdminLocale;
+use App\Livewire\Admin\Account;
 use App\Livewire\Admin\AuditLog;
 use App\Livewire\Admin\Dashboard;
 use App\Livewire\Admin\DriverApplications;
@@ -107,6 +108,11 @@ Route::prefix('admin')->name('admin.')->middleware(SetAdminLocale::class)->group
         Route::get('payments', Payments::class)->name('payments');
         Route::get('audit', AuditLog::class)->name('audit');
         Route::get('settings', Settings::class)->name('settings');
+
+        Route::get('account', Account::class)->name('account');
+
+        // "Stay signed in" on the idle warning (S07): any request through admin.fresh resets the clock.
+        Route::get('ping', fn () => response()->noContent())->name('ping');
 
         // Every dashboard component on one page, for checking themes, languages and widths.
         Route::view('_components', 'admin.components')->name('components');

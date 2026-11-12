@@ -52,7 +52,9 @@ final class EnsureAdminSessionIsFresh
 
             return redirect()
                 ->route('admin.login')
-                ->with('status', __('admin.session.expired'));
+                ->with('status', __('admin.session.expired'))
+                // Draws the "You were signed out" card (S08) instead of a bare form.
+                ->with('admin_signed_out', 'idle');
         }
 
         $request->session()->put(self::LAST_SEEN, now()->timestamp);

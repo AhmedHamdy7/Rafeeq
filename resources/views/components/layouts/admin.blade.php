@@ -214,6 +214,9 @@
                         <div class="ad-muted" style="font-size:12px;overflow-wrap:anywhere">{{ $admin?->email }}</div>
                     </div>
                     <hr class="ad-pop__sep">
+                    <a href="{{ route('admin.account') }}" wire:navigate class="ad-pop__item" role="menuitem">
+                        <x-admin.icon name="settings" />{{ __('admin/account.title') }}
+                    </a>
                     <form method="POST" action="{{ route('admin.logout') }}">
                         @csrf
                         <button type="submit" class="ad-pop__item" role="menuitem">
@@ -247,6 +250,54 @@
 
             {{ $slot }}
         </main>
+    </div>
+
+    {{--
+        S07 · "Still there?" A minute before the idle sign-out. Counts the staff member's
+        own activity (keys, clicks, touch, scroll), not the page's: a board that polls every
+        few seconds must not keep an unattended browser signed in. At zero it signs out with
+        reason=idle, and the sign-in page says why (S08). The server keeps its own limit
+        (EnsureAdminSessionIsFresh) whatever this script does.
+    --}}
+    <div
+        x-data="{
+            limit: {{ (int) config('rafeeq.admin.session_idle_minutes') * 60 }},
+            idle: 0,
+            warn: false,
+            get left() { return Math.max(0, this.limit - this.idle) },
+            get clock() { return Math.floor(this.left / 60) + ':' + String(this.left % 60).padStart(2, '0') },
+            init() {
+                const seen = () => { if (! this.warn) this.idle = 0 };
+                ['keydown', 'pointerdown', 'scroll', 'touchstart'].forEach(e => window.addEventListener(e, seen, { passive: true, capture: true }));
+                setInterval(() => {
+                    this.idle++;
+                    this.warn = this.left <= 60;
+                    if (this.left === 0) this.$refs.idleOut.submit();
+                }, 1000);
+            },
+            stay() {
+                fetch('{{ route('admin.ping') }}', { credentials: 'same-origin', headers: { 'X-Requested-With': 'XMLHttpRequest' } });
+                this.idle = 0;
+                this.warn = false;
+            },
+        }"
+    >
+        <form x-ref="idleOut" method="POST" action="{{ route('admin.logout') }}" hidden>
+            @csrf
+            <input type="hidden" name="reason" value="idle">
+        </form>
+        <div class="ad-dim" x-show="warn" x-cloak>
+            <div class="ad-modal" role="alertdialog" aria-modal="true" aria-labelledby="idle-title" aria-describedby="idle-text">
+                <h2 class="ad-modal__title" id="idle-title">{{ __('admin/auth.idle.title') }}</h2>
+                <p class="ad-muted" id="idle-text" style="margin:0">
+                    {!! __('admin/auth.idle.text', ['clock' => '<strong class="ad-num" x-text="clock"></strong>', 'minutes' => (int) config('rafeeq.admin.session_idle_minutes') - 1]) !!}
+                </p>
+                <div class="ad-modal__actions">
+                    <button type="button" class="ad-btn" x-on:click="$refs.idleOut.submit()">{{ __('admin/shell.sign_out') }}</button>
+                    <button type="button" class="ad-btn ad-btn--primary" x-on:click="stay()">{{ __('admin/auth.idle.stay') }}</button>
+                </div>
+            </div>
+        </div>
     </div>
 </div>
 @livewireScripts

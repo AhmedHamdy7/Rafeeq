@@ -28,11 +28,11 @@ body.ad-body {
   -webkit-text-size-adjust: 100%;
 }
 
-/* Font only: a colour here would outrank every button variant's own colour. */
-body.ad-body button,
-body.ad-body input,
-body.ad-body select,
-body.ad-body textarea {
+/*
+ * Font only, and at zero specificity (:where): anything stronger here would outrank every
+ * component's own weight, size and colour.
+ */
+:where(body.ad-body) :where(button, input, select, textarea) {
   font: inherit;
 }
 

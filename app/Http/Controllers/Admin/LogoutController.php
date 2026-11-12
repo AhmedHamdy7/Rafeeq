@@ -30,6 +30,12 @@ final class LogoutController extends Controller
         $request->session()->invalidate();
         $request->session()->regenerateToken();
 
-        return redirect()->route('admin.login');
+        $redirect = redirect()->route('admin.login');
+
+        // The idle warning (S07) signs out with reason=idle when nobody answered it: the
+        // sign-in page then says why (S08) rather than looking like nothing happened.
+        return $request->input('reason') === 'idle'
+            ? $redirect->with('admin_signed_out', 'idle')
+            : $redirect;
     }
 }

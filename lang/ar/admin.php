@@ -411,6 +411,7 @@ return [
         ],
         'actions' => [
             'admin__login' => 'دخل الداشبورد',
+            'admin__password_changed' => 'غيّر كلمة المرور بتاعته',
             'verification__approve' => 'وافق على توثيق',
             'verification__request_info' => 'طلب معلومات إضافية',
             'driver__approve' => 'اعتمد سائق',

@@ -6,6 +6,7 @@ use App\Domains\Admin\Actions\AuthenticateAdminAction;
 use App\Domains\Admin\Models\AdminUser;
 use App\Domains\Admin\Support\AdminMfa;
 use App\Domains\Shared\Exceptions\DomainException;
+use App\Domains\Shared\Support\ErrorCode;
 use App\Http\Middleware\EnsureAdminMfaIsConfirmed;
 use Illuminate\Support\Facades\Auth;
 use Livewire\Attributes\Layout;
@@ -39,6 +40,13 @@ class Login extends Component
     /** Set once the password step has passed. Null means we are still on step one. */
     public ?string $pendingAdminId = null;
 
+    /**
+     * Seconds until sign-in opens again after too many wrong attempts (screen S03), or
+     * null when it is not locked. Display only: the lock itself is the rate limiter in
+     * AuthenticateAdminAction, and a tampered value here unlocks nothing.
+     */
+    public ?int $lockedFor = null;
+
     public function submitPassword(AuthenticateAdminAction $action): void
     {
         $this->validate([
@@ -49,7 +57,7 @@ class Login extends Component
         try {
             $admin = $action->verifyPassword($this->email, $this->password, request()->ip());
         } catch (DomainException $e) {
-            $this->addError('email', __('errors.'.$e->errorCode->value));
+            $this->refuse($e, 'email');
 
             return;
         }
@@ -87,12 +95,32 @@ class Login extends Component
             $action->verifyMfaCode($admin, $this->code, request()->ip());
         } catch (DomainException $e) {
             $this->code = '';
-            $this->addError('code', __('errors.'.$e->errorCode->value));
+            $this->refuse($e, 'code');
 
             return;
         }
 
         $this->signIn($admin);
+    }
+
+    /** Back to the email step once the lock has run out (the countdown calls this). */
+    public function unlock(): void
+    {
+        $this->reset('lockedFor', 'pendingAdminId', 'code', 'password');
+    }
+
+    /**
+     * One message for a wrong password and a wrong code alike (S02), so nobody learns
+     * which half was right — and the lock screen (S03) when the limiter has had enough.
+     */
+    private function refuse(DomainException $e, string $field): void
+    {
+        $this->password = '';
+        $this->addError($field, __('errors.'.$e->errorCode->value));
+
+        if ($e->errorCode === ErrorCode::TooManyRequests) {
+            $this->lockedFor = max(1, (int) ($e->headers['Retry-After'] ?? 60));
+        }
     }
 
     private function signIn(AdminUser $admin): void
@@ -113,6 +141,6 @@ class Login extends Component
 
     public function render()
     {
-        return view('livewire.admin.login');
+        return view('livewire.admin.login')->title(__('admin/auth.sign_in.title'));
     }
 }
