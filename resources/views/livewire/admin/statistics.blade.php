@@ -42,9 +42,9 @@
     @endphp
 
     @if ($tab === 'revenue')
-        @php($n = $data['now'])
-        @php($b = $data['before'])
         @php
+            $n = $data['now'];
+            $b = $data['before'];
             $tiles = [
             $tile(__('admin/stats.revenue.commission'), $egp($n['commission']), $n['commission'], $b['commission']),
             $tile(__('admin/stats.revenue.received'), $egp($n['received']), $n['received'], $b['received']),
@@ -79,9 +79,9 @@
         </x-admin.card>
 
     @elseif ($tab === 'trips')
-        @php($n = $data['now'])
-        @php($b = $data['before'])
         @php
+            $n = $data['now'];
+            $b = $data['before'];
             $tiles = [
             $tile(__('admin/stats.trips.gross'), $egp($n['grossValue']), $n['grossValue'], $b['grossValue']),
             $tile(__('admin/stats.trips.driver_earnings'), $egp($n['driverEarnings']), $n['driverEarnings'], $b['driverEarnings']),
@@ -107,9 +107,9 @@
         </x-admin.card>
 
     @elseif ($tab === 'growth')
-        @php($n = $data['now'])
-        @php($b = $data['before'])
         @php
+            $n = $data['now'];
+            $b = $data['before'];
             $tiles = [
             $tile(__('admin/stats.growth.new_members'), number_format($n['newMembers']), $n['newMembers'], $b['newMembers'], __('admin/stats.growth.total', ['count' => number_format($n['membersTotal'])])),
             $tile(__('admin/stats.growth.new_drivers'), number_format($n['newDrivers']), $n['newDrivers'], $b['newDrivers'], __('admin/stats.growth.total', ['count' => number_format($n['driversTotal'])])),

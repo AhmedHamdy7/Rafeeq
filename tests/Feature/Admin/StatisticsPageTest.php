@@ -48,7 +48,8 @@ it('splits the settlement week from Saturday, and compares with the week before'
 it('reads revenue from the ledger, inside the period only', function () {
     DebtEntry::factory()->create(['amount_piastres' => 2_000]);
     DebtEntry::factory()->create(['type' => DebtEntryType::Payment, 'amount_piastres' => -1_500, 'reason_code' => 'instapay']);
-    DebtEntry::factory()->create(['amount_piastres' => 9_999])->forceFill(['created_at' => now()->subWeeks(3)])->save();
+    // The ledger is append-only: an old line is created old, never edited.
+    DebtEntry::factory()->create(['amount_piastres' => 9_999, 'created_at' => now()->subWeeks(3)]);
 
     $revenue = Figures::revenue(StatisticsPeriod::of('this_week'));
 
