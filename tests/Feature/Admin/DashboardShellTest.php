@@ -38,9 +38,9 @@ it('draws the new shell around a dashboard page', function () {
 it('shows an Admin every page that exists, and only pages that exist', function () {
     $keys = sidebarKeys(AdminRole::SuperAdmin);
 
-    expect($keys)->toContain('home', 'sos', 'live_trips', 'driver_verification', 'users', 'payments', 'settings', 'audit')
+    expect($keys)->toContain('home', 'statistics', 'sos', 'live_trips', 'driver_verification', 'users', 'payments', 'settings', 'audit')
         // Sections of the design that are not built yet are not in the menu at all.
-        ->not->toContain('statistics', 'announcements');
+        ->not->toContain('announcements');
 });
 
 it('hides from a role the pages it may not open', function () {

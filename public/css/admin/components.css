@@ -1215,3 +1215,66 @@ a.ad-stat:hover {
 [dir='rtl'] .ad-pager__back {
   transform: none;
 }
+
+/* ---------- Charts (Statistics). Palette validated for both themes: teal, then amber. ---------- */
+
+:root {
+  --chart-1: #0d9488;
+  --chart-2: #d97706;
+}
+
+.ad-chart {
+  margin: 0;
+}
+
+.ad-chart svg {
+  display: block;
+  overflow: visible;
+}
+
+.ad-chart__grid {
+  stroke: var(--border-default);
+  stroke-width: 1;
+}
+
+.ad-chart__base {
+  stroke: var(--border-strong);
+  stroke-width: 1;
+}
+
+.ad-chart__tick {
+  fill: var(--fg-subtle);
+  font-size: 10.5px;
+  font-variant-numeric: tabular-nums;
+}
+
+.ad-chart__bar:hover path {
+  opacity: 0.8;
+}
+
+.ad-chart__legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 16px;
+  margin-block-start: 8px;
+  font-size: 12px;
+  color: var(--fg-muted);
+}
+
+.ad-chart__legend span {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.ad-chart__legend i {
+  inline-size: 10px;
+  block-size: 10px;
+  border-radius: 3px;
+}
+
+/* A number that is a deterrent, not income (fees): dashed, as the design draws it. */
+.ad-card--dashed {
+  border-style: dashed;
+  background: var(--bg-sunken);
+}
