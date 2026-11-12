@@ -8,9 +8,6 @@
     - Light / dark: set before first paint (no white flash), remembered per browser.
     - Responsive: see public/css/admin/layout.css — open sidebar ≥ 1280px, icons only
       below that, a drawer under 768px.
-
-    Pages not yet redrawn in the new design keep their own markup (the `rq-*` classes in
-    public/css/admin.css) inside this shell, and are replaced one phase at a time.
 --}}
 @php
     use App\Domains\Admin\Enums\AdminPermission;
@@ -45,13 +42,10 @@
     <meta name="robots" content="noindex, nofollow">
     <title>{{ isset($title) ? $title.' · ' : '' }}{{ __('admin/shell.brand') }}</title>
 
-    {{-- Pages not yet redrawn still read the old sheet; the new ones come after and win. --}}
-    <link rel="stylesheet" href="{{ asset('css/admin.css') }}">
     <link rel="stylesheet" href="{{ asset('css/admin/tokens.css') }}">
     <link rel="stylesheet" href="{{ asset('css/admin/base.css') }}">
     <link rel="stylesheet" href="{{ asset('css/admin/layout.css') }}">
     <link rel="stylesheet" href="{{ asset('css/admin/components.css') }}">
-    <link rel="stylesheet" href="{{ asset('css/admin/legacy.css') }}">
     <link rel="preload" href="{{ asset($locale === 'ar' ? 'fonts/cairo-arabic-wght-normal.woff2' : 'fonts/inter-latin-wght-normal.woff2') }}" as="font" type="font/woff2" crossorigin>
 
     {{--
