@@ -42,7 +42,7 @@
                                 @endcan
                                 <div class="ad-muted ad-num" style="font-size:12px">{{ $ticket->created_at?->timezone('Africa/Cairo')->format('j M H:i') }}</div>
                             </td>
-                            <td data-label="{{ __('admin/support.category') }}">{{ \Illuminate\Support\Facades\Lang::has('admin/support.categories.'.$ticket->category) ? __('admin/support.categories.'.$ticket->category) : \Illuminate\Support\Str::headline($ticket->category) }}</td>
+                            <td data-label="{{ __('admin/support.category') }}"><a class="ad-link" href="{{ route('admin.support.show', $ticket->id) }}" wire:navigate>{{ \Illuminate\Support\Facades\Lang::has('admin/support.categories.'.$ticket->category) ? __('admin/support.categories.'.$ticket->category) : \Illuminate\Support\Str::headline($ticket->category) }}</a></td>
                             <td data-label="{{ __('admin/support.priority') }}">
                                 <span class="ad-chip ad-chip--{{ ['urgent' => 'bad', 'high' => 'warn', 'medium' => 'info'][$priority] ?? 'plain' }}">{{ __('admin/support.priorities.'.$priority) }}</span>
                             </td>

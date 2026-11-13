@@ -123,7 +123,7 @@ class Appeals extends Component
                 ->each(fn (Incident $incident) => $rows->push([
                     'kind' => 'report', 'id' => $incident->id, 'who' => $incident->reporter?->full_name,
                     'since' => CarbonImmutable::instance($incident->updated_at), 'text' => __('admin.safety.categories.'.$incident->category->value),
-                    'url' => route('admin.reports'),
+                    'url' => route('admin.reports.show', $incident->id),
                 ]));
         }
 

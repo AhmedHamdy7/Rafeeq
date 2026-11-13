@@ -36,7 +36,7 @@
                     <tbody>
                     @foreach ($closed as $incident)
                         <tr wire:key="closed-{{ $incident->id }}">
-                            <td data-label="{{ __('admin/reports.category') }}">{{ \Illuminate\Support\Facades\Lang::has('admin.safety.categories.'.$incident->category->value) ? __('admin.safety.categories.'.$incident->category->value) : $incident->category->value }}</td>
+                            <td data-label="{{ __('admin/reports.category') }}"><a class="ad-link" href="{{ route('admin.reports.show', $incident->id) }}" wire:navigate>{{ \Illuminate\Support\Facades\Lang::has('admin.safety.categories.'.$incident->category->value) ? __('admin.safety.categories.'.$incident->category->value) : $incident->category->value }}</a></td>
                             <td data-label="{{ __('admin/reports.reporter') }}">@if ($incident->reporter)<a class="ad-link" href="{{ route('admin.members.show', $incident->reporter->id) }}" wire:navigate><bdi>{{ $incident->reporter->full_name }}</bdi></a>@else — @endif</td>
                             <td data-label="{{ __('admin/reports.about') }}">@if ($incident->reportedUser)<a class="ad-link" href="{{ route('admin.members.show', $incident->reportedUser->id) }}" wire:navigate><bdi>{{ $incident->reportedUser->full_name }}</bdi></a>@else — @endif</td>
                             <td data-label="{{ __('admin/reports.outcome') }}"><span class="ad-chip">{{ __('admin/directory.statuses.'.$incident->status->value) }}</span> <span class="ad-muted" style="font-size:12.5px" dir="auto">{{ \Illuminate\Support\Str::limit((string) $incident->resolution, 80) }}</span></td>

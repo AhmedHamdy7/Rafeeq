@@ -15,4 +15,13 @@ return [
     'about' => 'عن',
     'outcome' => 'النتيجة',
     'closed_at' => 'اتقفل',
+    'case_title' => 'البلاغ',
+    'evidence_title' => 'الأدلة',
+    'no_evidence' => 'مفيش ملفات مرفقة.',
+    'new_evidence' => 'جديد بعد القرار',
+    'new_evidence_hint' => 'المعلّم جديد: اتبعت بعد أول قرار (:at)، غالباً مع التظلّم.',
+    'people' => 'الحالة',
+    'severity' => 'الخطورة',
+    'opened' => 'اتفتح',
+    'filed' => 'البلاغ اتقدّم',
 ];

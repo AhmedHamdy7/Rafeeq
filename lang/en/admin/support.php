@@ -36,4 +36,10 @@ return [
         'escalation' => 'Escalation from CS',
         'payment_issue' => 'Payment issue',
     ],
+    'case_title' => 'Support case',
+    'steps_label' => 'Where the case is',
+    'case' => 'The case',
+    'notes' => 'Notes on the member since it opened',
+    'open_reports' => 'Their open reports',
+    'opened_event' => 'Case opened',
 ];

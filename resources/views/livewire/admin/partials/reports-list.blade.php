@@ -13,7 +13,7 @@
                     <div class="ad-row" style="gap:10px">
                         <div style="flex:1;min-inline-size:180px">
                             <div style="font-weight:700">
-                                {{ __('admin.safety.categories.'.$report->category->value) }}
+                                <a class="ad-link" href="{{ route('admin.reports.show', $report->id) }}" wire:navigate>{{ __('admin.safety.categories.'.$report->category->value) }}</a>
                                 <span class="ad-code">{{ \Illuminate\Support\Str::upper(\Illuminate\Support\Str::substr($report->id, -6)) }}</span>
                             </div>
                             <div class="ad-muted" style="font-size:12.5px">
