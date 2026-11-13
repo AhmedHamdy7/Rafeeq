@@ -36,8 +36,8 @@ it('ignores a car tier or area that does not exist', function () {
 
 it('counts each team member’s actions from the audit log', function () {
     $lead = adminWithRole(AdminRole::SafetyLead);
-    AdminActionLog::record($lead, 'sos.acknowledge', $lead);
-    AdminActionLog::record($lead, 'escort.arm', $lead);
+    AdminActionLog::record($lead, 'sos.acknowledge', $lead, reason: 'Called her back');
+    AdminActionLog::record($lead, 'escort.arm', $lead, reason: 'Tonight');
 
     $people = StatisticsInsights::team(StatisticsPeriod::of('this_week'))['people'];
 

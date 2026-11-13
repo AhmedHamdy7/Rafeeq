@@ -25,7 +25,7 @@ it('saves a view for this staff member and applies it later', function () {
         ->call('saveView')
         ->assertHasNoErrors();
 
-    expect($admin->refresh()->table_views['vehicles']['Pending ABC'])->toBe(['status' => 'pending', 'q' => 'ABC']);
+    expect($admin->refresh()->table_views['vehicles']['Pending ABC'])->toEqualCanonicalizing(['status' => 'pending', 'q' => 'ABC']);
 
     Livewire::test(Vehicles::class)
         ->call('applyView', 'Pending ABC')

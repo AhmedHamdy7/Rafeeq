@@ -32,7 +32,8 @@ final readonly class AnnounceAction
             'body_ar' => trim($text['body_ar']),
             'body_en' => trim($text['body_en']),
             'link' => in_array($text['link'] ?? null, Announcement::LINKS, true) ? $text['link'] : null,
-            'scheduled_for' => $at !== null && $at->isFuture() ? $at : null,
+            // Stored in the app's timezone: a Cairo time saved as-is would be read back two hours late.
+            'scheduled_for' => $at !== null && $at->isFuture() ? $at->setTimezone(config('app.timezone')) : null,
             'created_by' => $by->getKey(),
         ]);
 
