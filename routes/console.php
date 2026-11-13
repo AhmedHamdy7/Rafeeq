@@ -142,6 +142,14 @@ Schedule::command('escort:arm-tonight')
     ->timezone('Africa/Cairo')
     ->withoutOverlapping();
 
+/*
+ * Announcements staff scheduled for later (Z01). Every minute, so "Sat 18:00" means 18:00.
+ * Idempotent: each one is claimed before it is queued.
+ */
+Schedule::command('announcements:send-due')
+    ->everyMinute()
+    ->withoutOverlapping();
+
 Schedule::command('trips:flush-locations')
     ->everyThirtySeconds()
     ->withoutOverlapping();

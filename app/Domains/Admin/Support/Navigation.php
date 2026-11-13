@@ -96,7 +96,7 @@ final class Navigation
                 ['key' => 'ledger', 'route' => 'admin.ledger', 'icon' => 'book', 'can' => AdminPermission::PaymentView],
             ],
             'communication' => [
-                ['key' => 'announcements', 'route' => 'admin.announcements', 'icon' => 'megaphone', 'can' => AdminPermission::SettingsManage],
+                ['key' => 'announcements', 'route' => 'admin.announcements', 'icon' => 'megaphone', 'can' => [AdminPermission::SettingsManage, AdminPermission::TicketView]],
                 ['key' => 'support', 'route' => 'admin.support', 'icon' => 'headset', 'can' => AdminPermission::TicketView],
             ],
             'configuration' => [

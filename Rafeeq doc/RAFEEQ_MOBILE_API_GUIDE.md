@@ -4598,6 +4598,8 @@ hold must still be able to read the notice that says so.
 | ⭐ `coupon_issued` | the harmed side, when staff give a coupon | the debt screen (coupons) | *no ids* |
 | `driving_suspended_for_debt` · `riding_suspended_for_debt` | the suspended person (**safety** — cannot be switched off) | the debt screen | *no ids* |
 | `chat_message` | the other side | the thread | as the thread (4.15) |
+| `announcement` | everyone, passengers or drivers — written by staff, **inbox only, never a push** | the screen in `data.link` if present (`home`, `driver_home`, `trips`, `payments`, `profile`, `help`), else the inbox | `announcementId`, `link` (optional) |
+| `staff_message` | one member, written by staff (**safety** — cannot be switched off), **inbox only** | the inbox | *no ids* |
 | `rating_due` · `rating_due_riders` · `rating_reminder` | passenger / driver | rate (4.13) | `bookingId` or `tripId` (+ `riderCount` on `rating_due_riders`). `rating_due` goes to each passenger at her drop-off (or at completion if still aboard), never on a `NO_SHOW`. `rating_due_riders` goes to the driver once when the run completes, if anybody rode. |
 | `sos_picked_up` · `report_resolved` · `report_closed` | the reporter | the SOS / report | `sosId` / `incidentId` |
 | `account_on_hold` · `account_reinstated` | the member (safety) | — | *no ids* |
@@ -5195,6 +5197,7 @@ exist, and every live endpoint must be named here.
 
 | Date | Change |
 |---|---|
+| 2026-11-13 | 📣 **Two new inbox notification types, no new endpoint.** `announcement` (staff to everyone, passengers or drivers; may carry `data.link`) and `staff_message` (staff to one member). Both arrive through `GET /notifications` like any other row, already in the member's language, and are never pushed. Show them with the generic inbox card. |
 | 2026-11-13 | 🔎 **Place search.** `GET /places?q=` now finds a place wherever it is: with `lat`/`lng` it is ranked (name starts with `q` → contains `q` → area only, nearest first in each, then most used) instead of cut to 5 km. `radiusMetres` with `q` still limits by distance when you send it. New `limit` (1–20). `city` and `district` now follow `Accept-Language`. `q` also matches the city, English area names and Arabic spelling variants. |
 | 2026-11-12 | 🐞 **A-9.** A late approval of a moving-car request now always carries `error.fields.expiredAt`, also after the minute sweep marked it expired (then with `error.fields.status: ["EXPIRED"]`). Any other `SEAT_REQUEST_NOT_PENDING` now names the request's `status`. |
 | 2026-11-12 | 🧩 **Backend asks of 2026-11-12.** **Fixed:** a proposal for every future weekday stayed `PENDING` after a recurring rider accepted: her one answer now counts for all her affected days, so it applies at once. **New** push to the driver: `seat_counteroffer_accepted`. **Reachability** of a live request is now measured along the commute's **published** route. Three staging-only calls (4.17): `POST /testing/trips/{trip}/position`, `POST /testing/driver/vehicles/{vehicle}/approve` and `/reject`. Documented: what sends `driver_heading_to_you`, and that bookings are never `EXPIRED` or `PENDING` today. |

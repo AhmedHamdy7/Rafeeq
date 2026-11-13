@@ -455,6 +455,12 @@ enum NotificationType: string
 
     case PickupChangeAlternativeDeclined = 'pickup_change_alternative_declined';
 
+    /** Staff to everyone, or to passengers or drivers (Z01). Inbox only, never a push (NOTIF-02). */
+    case Announcement = 'announcement';
+
+    /** Staff to one member, from their profile (D19). Inbox only. */
+    case StaffMessage = 'staff_message';
+
     public function category(): NotificationCategory
     {
         return match ($this) {
@@ -471,7 +477,9 @@ enum NotificationType: string
             self::DriverDocumentsRejected,
             self::DriverItemExpiring,
             self::DriverLicenceExpired,
-            self::DriverSuspended => NotificationCategory::Safety,
+            self::DriverSuspended,
+            // About her account, from a person on the team: she cannot switch it off.
+            self::StaffMessage => NotificationCategory::Safety,
 
             self::DebtDueTomorrow,
             self::DebtOverdue,
@@ -549,7 +557,9 @@ enum NotificationType: string
             self::TripStartsSoon,
             self::DriverHeadingToYou,
             self::DriverArrived,
-            self::CommuteStillNotStarted => NotificationCategory::Trip,
+            self::CommuteStillNotStarted,
+            // Service news (road works, a new corridor). Follows her Trip switch.
+            self::Announcement => NotificationCategory::Trip,
         };
     }
 }

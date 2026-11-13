@@ -14,6 +14,8 @@ return [
     'ban_confirm' => 'Ban :name permanently? They will see the restricted screen and cannot appeal in the app.',
     'already_reversed' => 'This event was already reversed.',
     'no_open_appeal' => 'There is no open appeal on this event.',
+    'message_title' => 'Title',
+    'message_body' => 'Message',
     'titles' => [
         'correct' => 'Correct details',
         'write_off' => 'Write off debt',
@@ -25,6 +27,7 @@ return [
         'hide_rating' => 'Hide review',
         'restore_rating' => 'Show review again',
         'keep_rating' => 'Keep review',
+        'message' => 'Message',
     ],
     'hints' => [
         'correct' => 'Fix what the member entered. A woman changed to another gender has her women-only commutes paused for review (COM-45).',
@@ -36,6 +39,7 @@ return [
         'decline_appeal' => 'The event keeps counting and they are told the appeal was declined. Your reason is not sent to them.',
         'hide_rating' => 'The review stops showing and stops counting in their average. Open complaints about it are closed as upheld.',
         'restore_rating' => 'The review shows and counts again. Open complaints about it are closed as dismissed.',
+        'message' => 'Lands in their app inbox, in the language you write it in. Never a push. The full text is kept in the audit log.',
     ],
     'confirm' => [
         'correct' => 'Save the correction',
@@ -47,6 +51,7 @@ return [
         'decline_appeal' => 'Decline',
         'hide_rating' => 'Hide it',
         'restore_rating' => 'Show it',
+        'message' => 'Send',
     ],
     'done' => [
         'correct' => 'Details corrected.',
@@ -58,5 +63,6 @@ return [
         'decline_appeal' => 'Appeal declined.',
         'hide_rating' => 'Review hidden.',
         'restore_rating' => 'Review is showing.',
+        'message' => 'Message sent to their inbox.',
     ],
 ];

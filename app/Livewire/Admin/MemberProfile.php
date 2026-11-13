@@ -69,6 +69,9 @@ class MemberProfile extends Component
     /** The reliability event or rating a record action is about. */
     public string $target = '';
 
+    /** D19 · the message's title; its text goes in `reason`. */
+    public string $messageTitle = '';
+
     public string $reason = '';
 
     public string $fullName = '';
@@ -127,8 +130,8 @@ class MemberProfile extends Component
     public function startAction(string $action, string $target = ''): void
     {
         $this->resetValidation();
-        $this->reset('reason', 'amount', 'done');
-        $this->action = in_array($action, ['correct', 'write_off', 'credit', 'unlock', 'escalate', ...self::RECORD_ACTIONS], true) ? $action : '';
+        $this->reset('reason', 'amount', 'done', 'messageTitle');
+        $this->action = in_array($action, ['correct', 'write_off', 'credit', 'unlock', 'escalate', 'message', ...self::RECORD_ACTIONS], true) ? $action : '';
         $this->target = in_array($this->action, self::RECORD_ACTIONS, true) ? $target : '';
 
         if ($this->action === 'correct') {
@@ -143,16 +146,18 @@ class MemberProfile extends Component
     {
         $rules = ['reason' => ['required', 'string', 'min:5', 'max:255']];
 
-        $rules += match ($this->action) {
+        // The action's own rules win, so a message may be longer than a reason.
+        $rules = match ($this->action) {
             'correct' => [
                 'fullName' => ['required', 'string', 'min:2', 'max:150'],
                 'gender' => ['required', 'string', Rule::enum(Gender::class)],
                 'dateOfBirth' => ['nullable', 'date', 'before:-15 years'],
             ],
             'write_off' => ['side' => ['required', 'string', Rule::enum(DebtSide::class)]],
+            'message' => ['messageTitle' => ['required', 'string', 'min:2', 'max:120'], 'reason' => ['required', 'string', 'min:2', 'max:1000']],
             'credit' => ['side' => ['required', 'string', Rule::enum(DebtSide::class)], 'amount' => ['required', 'numeric', 'min:0.01', 'max:100000']],
             default => [],
-        };
+        } + $rules;
 
         $this->validate($rules, attributes: ['reason' => __('admin/actions.reason')]);
 
@@ -176,6 +181,11 @@ class MemberProfile extends Component
                 $members->unlockSignIn($admin, $user, $this->reason);
 
                 return __('admin/actions.done.unlock');
+            })(),
+            'message' => (function () use ($members, $admin, $user) {
+                $members->message($admin, $user, $this->messageTitle, $this->reason);
+
+                return __('admin/actions.done.message');
             })(),
             'escalate' => (function () use ($members, $admin, $user) {
                 $members->escalate($admin, $user, $this->reason);
@@ -201,7 +211,7 @@ class MemberProfile extends Component
             default => null,
         };
 
-        $this->reset('action', 'reason', 'amount', 'target');
+        $this->reset('action', 'reason', 'amount', 'target', 'messageTitle');
     }
 
     /** @return list<string> the tabs this staff member may open */

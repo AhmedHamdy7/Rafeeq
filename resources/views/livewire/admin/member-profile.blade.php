@@ -46,6 +46,7 @@
                 </div>
             </div>
             <div class="ad-row" style="gap:6px">
+                <button type="button" class="ad-btn" wire:click="startAction('message')"><x-admin.icon name="inbox" />{{ __('admin/actions.titles.message') }}</button>
                 <a class="ad-btn" href="#notes" wire:click="pick('notes')"><x-admin.icon name="file" />{{ __('admin/profile.add_note') }}</a>
                 @if ($mayDecide)
                     <a class="ad-btn ad-btn--dangerline" href="{{ route('admin.members', ['member' => $user->id]) }}" wire:navigate>{{ __('admin/profile.decisions') }}</a>
@@ -130,9 +131,16 @@
                     </div>
                 @endif
 
+                @if ($action === 'message')
+                    <div class="ad-field">
+                        <label class="ad-label" for="act-title">{{ __('admin/actions.message_title') }}</label>
+                        <input id="act-title" class="ad-input" dir="auto" wire:model="messageTitle" maxlength="120" required>
+                        @error('messageTitle') <span class="ad-error">{{ $message }}</span> @enderror
+                    </div>
+                @endif
                 <div class="ad-field">
-                    <label class="ad-label" for="act-reason">{{ $action === 'escalate' ? __('admin/actions.escalate_note') : __('admin/actions.reason') }}</label>
-                    <textarea id="act-reason" class="ad-textarea" rows="2" wire:model="reason" required></textarea>
+                    <label class="ad-label" for="act-reason">{{ match ($action) { 'escalate' => __('admin/actions.escalate_note'), 'message' => __('admin/actions.message_body'), default => __('admin/actions.reason') } }}</label>
+                    <textarea id="act-reason" class="ad-textarea" dir="auto" rows="{{ $action === 'message' ? 4 : 2 }}" wire:model="reason" required></textarea>
                     @error('reason') <span class="ad-error">{{ $message }}</span> @enderror
                 </div>
                 <div class="ad-row">

@@ -12,6 +12,8 @@ use App\Domains\Commute\Actions\ChangeCommuteStatusAction;
 use App\Domains\Identity\Enums\Gender;
 use App\Domains\Identity\Models\OtpChallenge;
 use App\Domains\Identity\Models\User;
+use App\Domains\Notification\Enums\NotificationType;
+use App\Domains\Notification\Support\Notifier;
 use App\Domains\Payment\Enums\DebtEntryType;
 use App\Domains\Payment\Enums\DebtSide;
 use App\Domains\Payment\Support\DebtLedger;
@@ -31,6 +33,7 @@ use Illuminate\Validation\ValidationException;
  * - writeOff()      D18 · forgive everything owed on one side, as a write_off ledger line.
  * - unlockSignIn()  D22 · lift the sign-in code lock on her number now, not at its expiry.
  * - escalate()      D16 · a support case for an Admin, with the note on the member.
+ * - message()       D19 · a message in her app inbox (never a push), kept in the audit log.
  */
 final class ManageMemberAction
 {
@@ -151,6 +154,24 @@ final class ManageMemberAction
     public static function isSignInLocked(User $user): bool
     {
         return OtpChallenge::query()->where('phone_e164', $user->phone_e164)->where('locked_until', '>', now())->exists();
+    }
+
+    /**
+     * D19 · staff write to one member. It lands in her inbox like any notification (type
+     * `staff_message`, which she cannot switch off) and never as a push: a person on the team
+     * should not be able to wake somebody up. The full text is kept in the audit log.
+     */
+    public function message(AdminUser $by, User $user, string $title, string $body): void
+    {
+        $this->authorize($by, AdminPermission::MemberView);
+
+        $title = trim($title);
+        $body = trim($body);
+
+        DB::transaction(function () use ($by, $user, $title, $body): void {
+            Notifier::send($user, NotificationType::StaffMessage, params: ['title' => $title, 'body' => $body], quiet: true);
+            AdminActionLog::record($by, 'member.message', $user, null, ['title' => $title, 'body' => $body]);
+        });
     }
 
     private function authorize(AdminUser $by, AdminPermission $permission): void
