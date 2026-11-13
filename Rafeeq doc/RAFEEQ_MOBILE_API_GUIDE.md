@@ -2171,11 +2171,20 @@ auto-save demand". If you want a demand, post one.
 
 #### `GET /places` — signed-in
 
-**Query:** `q`, `lat`, `lng`, `radiusMetres` (100–50,000).
+**Query:** `q`, `lat`, `lng`, `radiusMetres` (100–50,000), `limit` (1–20, default 20).
 
 The shared place catalogue. Only needs a signed-in account — a passenger looking for a meeting
 point has no reason to be verified first. Returns `id`, `name`, `nameAr`, `type`, `lat`, `lng`,
-`city`, `district`.
+`city`, `district`. `city` and `district` follow `Accept-Language` (`Rehab`, `Cairo` in English;
+`الرحاب`, `القاهرة` in Arabic). Pick `name` or `nameAr` yourself.
+
+🔎 **Search by name** (`q`): finds the place **wherever it is**. `lat` + `lng` only decide the
+order and add `distanceMetres`; they do not hide far places. Order: names that **start with** `q`,
+then names that **contain** it, then places that only match by **area** (district or city, also by
+the English area name, so `q=rehab` finds places in الرحاب); nearest first inside each group, then
+the most used. Arabic spelling variants match (`ا/أ/إ/آ`, `ه/ة`, `ي/ى`, tashkeel ignored). Send
+`radiusMetres` with `q` only if you want to limit by distance: the matches inside it then come
+nearest first.
 
 🔴 **Reverse lookup for a dropped pin** (DISCOVER-12): send `lat` + `lng` **without `q`** and you get
 the places nearest that point, **closest first**, each with `distanceMetres`. Use the first one's
@@ -5186,6 +5195,7 @@ exist, and every live endpoint must be named here.
 
 | Date | Change |
 |---|---|
+| 2026-11-13 | 🔎 **Place search.** `GET /places?q=` now finds a place wherever it is: with `lat`/`lng` it is ranked (name starts with `q` → contains `q` → area only, nearest first in each, then most used) instead of cut to 5 km. `radiusMetres` with `q` still limits by distance when you send it. New `limit` (1–20). `city` and `district` now follow `Accept-Language`. `q` also matches the city, English area names and Arabic spelling variants. |
 | 2026-11-12 | 🐞 **A-9.** A late approval of a moving-car request now always carries `error.fields.expiredAt`, also after the minute sweep marked it expired (then with `error.fields.status: ["EXPIRED"]`). Any other `SEAT_REQUEST_NOT_PENDING` now names the request's `status`. |
 | 2026-11-12 | 🧩 **Backend asks of 2026-11-12.** **Fixed:** a proposal for every future weekday stayed `PENDING` after a recurring rider accepted: her one answer now counts for all her affected days, so it applies at once. **New** push to the driver: `seat_counteroffer_accepted`. **Reachability** of a live request is now measured along the commute's **published** route. Three staging-only calls (4.17): `POST /testing/trips/{trip}/position`, `POST /testing/driver/vehicles/{vehicle}/approve` and `/reject`. Documented: what sends `driver_heading_to_you`, and that bookings are never `EXPIRED` or `PENDING` today. |
 | 2026-11-11 | **Push is live on staging (FCM).** Every push's `data` now also carries `type` and `category` (the inbox's values) next to the ids, so a tap can open the right screen. Send the FCM token as `device.pushToken` at sign-in and on refresh via `PATCH /account/devices/current/security` (4.14). |

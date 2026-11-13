@@ -4,6 +4,7 @@ namespace App\Domains\Geo\Actions;
 
 use App\Domains\Geo\Models\Place;
 use App\Domains\Geo\Support\Haversine;
+use App\Domains\Geo\Support\PlaceNameMatch;
 use App\Domains\Shared\ValueObjects\Coordinate;
 use App\Domains\Shared\ValueObjects\Distance;
 use Illuminate\Database\Eloquent\Collection;
@@ -23,7 +24,9 @@ use Illuminate\Database\Eloquent\Collection;
  */
 final readonly class SearchPlacesAction
 {
-    private const int DEFAULT_LIMIT = 20;
+    public const int DEFAULT_LIMIT = 20;
+
+    private const int MATCH_POOL = 200;
 
     /**
      * @return Collection<int, Place>
@@ -34,17 +37,13 @@ final readonly class SearchPlacesAction
         ?Distance $within = null,
         int $limit = self::DEFAULT_LIMIT,
     ): Collection {
-        $query = Place::query()->where('is_public', true);
+        $term = trim((string) $term);
 
-        if ($term !== null && trim($term) !== '') {
-            $query->where(function ($query) use ($term): void {
-                // Both scripts: the catalogue carries an Arabic and a Latin name
-                // for every place, and people search in whichever they type in.
-                $query->where('name', 'like', '%'.$term.'%')
-                    ->orWhere('name_ar', 'like', '%'.$term.'%')
-                    ->orWhere('district', 'like', '%'.$term.'%');
-            });
+        if ($term !== '') {
+            return $this->byName($term, $near, $within, $limit);
         }
+
+        $query = Place::query()->where('is_public', true);
 
         if ($near !== null) {
             $radius = $within ?? Distance::fromKilometres(5);
@@ -78,6 +77,56 @@ final readonly class SearchPlacesAction
             )->metres)
             ->take($limit)
             ->values();
+    }
+
+    /**
+     * @return Collection<int, Place>
+     */
+    private function byName(string $term, ?Coordinate $near, ?Distance $within, int $limit): Collection
+    {
+        $match = PlaceNameMatch::for($term);
+
+        $query = Place::query()->where('is_public', true);
+        $match->constrain($query);
+
+        if ($near !== null && $within !== null) {
+            $box = $this->boxAround($near, $within);
+
+            $query->whereBetween('lat', [$box['minLat'], $box['maxLat']])
+                ->whereBetween('lng', [$box['minLng'], $box['maxLng']]);
+        }
+
+        $candidates = [];
+
+        foreach ($query->orderByDesc('usage_count')->limit(self::MATCH_POOL)->get() as $place) {
+            $rank = $match->rank($place);
+
+            if ($rank === null) {
+                continue;
+            }
+
+            $metres = $near === null
+                ? 0
+                : Haversine::between($near, new Coordinate((float) $place->lat, (float) $place->lng))->metres;
+
+            if ($near !== null && $within !== null && $metres > $within->metres) {
+                continue;
+            }
+
+            $candidates[] = [
+                'place' => $place,
+                'key' => $within !== null && $near !== null
+                    ? [$metres, -$place->usage_count, $place->id]
+                    : [$rank, $metres, -$place->usage_count, $place->id],
+            ];
+        }
+
+        usort($candidates, fn (array $a, array $b): int => $a['key'] <=> $b['key']);
+
+        return new Collection(array_map(
+            fn (array $candidate): Place => $candidate['place'],
+            array_slice($candidates, 0, $limit),
+        ));
     }
 
     /**
