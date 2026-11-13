@@ -4,6 +4,7 @@ namespace App\Livewire\Admin;
 
 use App\Domains\Admin\Actions\ManageDebtAction;
 use App\Domains\Admin\Actions\ManageMemberAction;
+use App\Domains\Admin\Actions\ModerateMemberRecordAction;
 use App\Domains\Admin\Enums\AdminPermission;
 use App\Domains\Admin\Models\AdminAction;
 use App\Domains\Admin\Models\AdminUser;
@@ -65,6 +66,9 @@ class MemberProfile extends Component
     /** The open "More actions" form: correct, write_off, credit, unlock, escalate — or ''. */
     public string $action = '';
 
+    /** The reliability event or rating a record action is about. */
+    public string $target = '';
+
     public string $reason = '';
 
     public string $fullName = '';
@@ -118,11 +122,14 @@ class MemberProfile extends Component
         $this->reset('revealing', 'revealReason');
     }
 
-    public function startAction(string $action): void
+    public const array RECORD_ACTIONS = ['reverse_event', 'decline_appeal', 'hide_rating', 'restore_rating'];
+
+    public function startAction(string $action, string $target = ''): void
     {
         $this->resetValidation();
         $this->reset('reason', 'amount', 'done');
-        $this->action = in_array($action, ['correct', 'write_off', 'credit', 'unlock', 'escalate'], true) ? $action : '';
+        $this->action = in_array($action, ['correct', 'write_off', 'credit', 'unlock', 'escalate', ...self::RECORD_ACTIONS], true) ? $action : '';
+        $this->target = in_array($this->action, self::RECORD_ACTIONS, true) ? $target : '';
 
         if ($this->action === 'correct') {
             $user = $this->member();
@@ -132,7 +139,7 @@ class MemberProfile extends Component
         }
     }
 
-    public function runAction(ManageMemberAction $members, ManageDebtAction $debts): void
+    public function runAction(ManageMemberAction $members, ManageDebtAction $debts, ModerateMemberRecordAction $records): void
     {
         $rules = ['reason' => ['required', 'string', 'min:5', 'max:255']];
 
@@ -175,10 +182,26 @@ class MemberProfile extends Component
 
                 return __('admin/actions.done.escalate');
             })(),
+            'reverse_event', 'decline_appeal' => (function () use ($records, $admin, $user) {
+                $event = ReliabilityEvent::query()->whereKey($this->target)->where('user_id', $user->id)->firstOrFail();
+                $this->action === 'reverse_event'
+                    ? $records->reverseEvent($admin, $user, $event, $this->reason)
+                    : $records->declineAppeal($admin, $user, $event, $this->reason);
+
+                return __('admin/actions.done.'.$this->action);
+            })(),
+            'hide_rating', 'restore_rating' => (function () use ($records, $admin, $user) {
+                $rating = Rating::query()->whereKey($this->target)->where('reviewed_user_id', $user->id)->firstOrFail();
+                $this->action === 'hide_rating'
+                    ? $records->hideRating($admin, $user, $rating, $this->reason)
+                    : $records->restoreRating($admin, $user, $rating, $this->reason);
+
+                return __('admin/actions.done.'.$this->action);
+            })(),
             default => null,
         };
 
-        $this->reset('action', 'reason', 'amount');
+        $this->reset('action', 'reason', 'amount', 'target');
     }
 
     /** @return list<string> the tabs this staff member may open */
@@ -227,7 +250,7 @@ class MemberProfile extends Component
             'money' => ['entries' => DebtEntry::query()->where('user_id', $user->id)->latest('created_at')->latest('id')->limit(40)->get()],
             'reliability' => [
                 'events' => ReliabilityEvent::query()->where('user_id', $user->id)->latest('occurred_at')->limit(30)->get(),
-                'ratings' => Rating::query()->where('reviewed_user_id', $user->id)->latest('created_at')->limit(20)->get(),
+                'ratings' => Rating::query()->where('reviewed_user_id', $user->id)->withCount(['reports as open_reports_count' => fn ($q) => $q->whereIn('status', ['pending', 'under_review'])])->latest('created_at')->limit(20)->get(),
             ],
             'reports' => ['incidents' => Incident::query()->where(fn ($q) => $q->where('reported_user_id', $user->id)->orWhere('reporter_user_id', $user->id))->with(['reporter', 'reportedUser'])->latest('created_at')->limit(30)->get()],
             'notifications' => ['notifications' => Notification::query()->where('user_id', $user->id)->latest('created_at')->limit(40)->get()],

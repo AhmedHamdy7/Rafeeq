@@ -85,6 +85,7 @@
                 @error('correct') <p class="ad-flash ad-flash--error"><x-admin.icon name="alert" />{{ $message }}</p> @enderror
                 @error('debt') <p class="ad-flash ad-flash--error"><x-admin.icon name="alert" />{{ $message }}</p> @enderror
                 @error('unlock') <p class="ad-flash ad-flash--error"><x-admin.icon name="alert" />{{ $message }}</p> @enderror
+                @error('record') <p class="ad-flash ad-flash--error"><x-admin.icon name="alert" />{{ $message }}</p> @enderror
 
                 <p class="ad-hint" style="margin:0 0 12px">{{ __('admin/actions.hints.'.$action) }}</p>
 
@@ -135,7 +136,7 @@
                     @error('reason') <span class="ad-error">{{ $message }}</span> @enderror
                 </div>
                 <div class="ad-row">
-                    <button type="submit" @class(['ad-btn', 'ad-btn--danger' => $action === 'write_off', 'ad-btn--primary' => $action !== 'write_off']) wire:loading.attr="disabled">{{ __('admin/actions.confirm.'.$action) }}</button>
+                    <button type="submit" @class(['ad-btn', 'ad-btn--danger' => in_array($action, ['write_off', 'hide_rating'], true), 'ad-btn--primary' => ! in_array($action, ['write_off', 'hide_rating'], true)]) wire:loading.attr="disabled">{{ __('admin/actions.confirm.'.$action) }}</button>
                     <button type="button" class="ad-btn" wire:click="$set('action', '')">{{ __('admin.queue.cancel') }}</button>
                 </div>
             </form>
@@ -332,8 +333,29 @@
                             <td><span class="ad-code">{{ $event->kind->value }}</span></td>
                             <td class="ad-num">−{{ $event->weight }}</td>
                             <td class="ad-muted ad-num">{{ $event->occurred_at?->timezone('Africa/Cairo')->format('j M Y') }}</td>
-                            <td>@if ($event->reversed_at)<span class="ad-chip ad-chip--plain">{{ __('admin/profile.reversed') }}</span>@endif</td>
+                            <td>
+                                @if ($event->reversed_at)
+                                    <span class="ad-chip ad-chip--plain">{{ __('admin/profile.reversed') }}</span>
+                                @elseif ($event->appealed_at && ! $event->appeal_declined_at)
+                                    <span class="ad-chip ad-chip--warn" title="{{ $event->appeal_reason }}">{{ __('admin/profile.appealed') }}</span>
+                                @elseif ($event->appeal_declined_at)
+                                    <span class="ad-chip ad-chip--plain">{{ __('admin/profile.appeal_declined') }}</span>
+                                @endif
+                            </td>
+                            @can('member.suspend')
+                                <td style="text-align:end;white-space:nowrap">
+                                    @unless ($event->reversed_at)
+                                        <button type="button" class="ad-btn ad-btn--sm" wire:click="startAction('reverse_event', '{{ $event->id }}')">{{ __('admin/actions.titles.reverse_event') }}</button>
+                                        @if ($event->appealed_at && ! $event->appeal_declined_at)
+                                            <button type="button" class="ad-btn ad-btn--sm" wire:click="startAction('decline_appeal', '{{ $event->id }}')">{{ __('admin/actions.titles.decline_appeal') }}</button>
+                                        @endif
+                                    @endunless
+                                </td>
+                            @endcan
                         </tr>
+                        @if ($event->appealed_at && $event->appeal_reason)
+                            <tr wire:key="ra-{{ $event->id }}"><td colspan="5" class="ad-muted" style="font-size:12.5px" dir="auto">{{ __('admin/profile.appeal_says') }}: {{ $event->appeal_reason }}</td></tr>
+                        @endif
                     @endforeach
                     </tbody></table>
                 @endif
@@ -348,6 +370,25 @@
                             <td class="ad-num" style="white-space:nowrap">{{ str_repeat('★', (int) $rating->stars) }}</td>
                             <td dir="auto">{{ Str::limit((string) $rating->comment, 90) ?: '—' }}</td>
                             <td class="ad-muted ad-num">{{ $rating->created_at?->timezone('Africa/Cairo')->format('j M') }}</td>
+                            <td>
+                                @if ($rating->moderation_status === \App\Domains\Rating\Enums\ModerationStatus::Hidden)
+                                    <span class="ad-chip ad-chip--plain">{{ __('admin/profile.rating_hidden') }}</span>
+                                @elseif ($rating->open_reports_count > 0)
+                                    <span class="ad-chip ad-chip--warn">{{ trans_choice('admin/profile.rating_reported', $rating->open_reports_count, ['count' => $rating->open_reports_count]) }}</span>
+                                @endif
+                            </td>
+                            @can('member.suspend')
+                                <td style="text-align:end;white-space:nowrap">
+                                    @if ($rating->moderation_status === \App\Domains\Rating\Enums\ModerationStatus::Hidden)
+                                        <button type="button" class="ad-btn ad-btn--sm" wire:click="startAction('restore_rating', '{{ $rating->id }}')">{{ __('admin/actions.titles.restore_rating') }}</button>
+                                    @else
+                                        <button type="button" class="ad-btn ad-btn--sm" wire:click="startAction('hide_rating', '{{ $rating->id }}')">{{ __('admin/actions.titles.hide_rating') }}</button>
+                                        @if ($rating->open_reports_count > 0)
+                                            <button type="button" class="ad-btn ad-btn--sm" wire:click="startAction('restore_rating', '{{ $rating->id }}')">{{ __('admin/actions.titles.keep_rating') }}</button>
+                                        @endif
+                                    @endif
+                                </td>
+                            @endcan
                         </tr>
                     @endforeach
                     </tbody></table>
