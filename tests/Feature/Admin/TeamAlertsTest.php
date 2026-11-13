@@ -34,10 +34,10 @@ it('shows Finance late payments only, never the safety desk', function () {
 
 it('draws the bell in the top bar with the lines and an empty state', function () {
     actingAsAdmin(adminWithRole(AdminRole::Finance));
-    $this->get(route('admin.home'))->assertOk()->assertSee(__('admin/shell.alerts.none'));
+    $this->get(route('admin.payments'))->assertOk()->assertSee(__('admin/shell.alerts.none'));
 
     DebtPayment::factory()->create(['created_at' => now()->subHours(TeamAlerts::LATE_HOURS + 1)]);
-    $this->get(route('admin.home'))->assertOk()->assertSee(trans_choice('admin/shell.alerts.payments_late', 1, ['count' => 1, 'hours' => TeamAlerts::LATE_HOURS]))->assertDontSee(__('admin/shell.alerts.none'));
+    $this->get(route('admin.payments'))->assertOk()->assertSee(trans_choice('admin/shell.alerts.payments_late', 1, ['count' => 1, 'hours' => TeamAlerts::LATE_HOURS]))->assertDontSee(__('admin/shell.alerts.none'));
 });
 
 it('has every alert line in both languages', function () {
