@@ -42,6 +42,16 @@ return [
         'exited_due_to_driver_delay' => 'نزل: السواق اتأخر',
         'active' => 'شغّال',
         'matched' => 'اتطابق',
+        'waitlisted' => 'قائمة انتظار',
+        'counteroffered' => 'عرض مقابل',
+        'withdrawn' => 'اتسحب',
+        'open' => 'مفتوح',
+        'accepted' => 'اتقبل',
+        'taken_by_other' => 'حد تاني خده',
+        'ineligible' => 'مش مستحق',
+        'closed' => 'اتقفل',
+        'declined' => 'اترفض',
+        'applied' => 'اتطبق',
     ],
     'weekdays' => [
         'sat' => 'سبت',
@@ -71,5 +81,31 @@ return [
     'demands' => [
         'title' => 'الطلبات المفتوحة',
         'sub' => 'اللي الركاب طلبوه',
+    ],
+    'seat_requests' => [
+        'title' => 'طلبات المقاعد',
+    ],
+    'seat_offers' => [
+        'title' => 'قوايم الانتظار وعروض المقاعد',
+    ],
+    'change_proposals' => [
+        'title' => 'اقتراحات التغيير',
+    ],
+    'booking_nav' => [
+        'bookings' => 'الحجوزات',
+        'seat_requests' => 'طلبات المقاعد',
+        'seat_offers' => 'قوايم الانتظار',
+        'change_proposals' => 'اقتراحات التغيير',
+    ],
+    'commitment' => 'النوع',
+    'commitments' => [
+        'trial' => 'تجربة',
+        'recurring' => 'دايم',
+    ],
+    'change' => 'إيه اللي بيتغير',
+    'answers' => 'الردود',
+    'scopes' => [
+        'only_this_occurrence' => 'اليوم ده بس',
+        'all_future_on_this_weekday' => 'كل أسبوع',
     ],
 ];
