@@ -625,12 +625,13 @@ class DatabaseSeeder extends Seeder
     }
 
     /**
-     * "24 في طابور التوثيق" — 24 pending government-ID verifications for the
-     * admin dashboard's queue (Bible §Part 2 / Master Plan Phase 1 DoD).
+     * A few pending government-ID verifications, so the admin dashboard's queue is not empty
+     * (Bible §Part 2 / Master Plan Phase 1 DoD). Six rather than the 24 of the story: enough to
+     * page through and act on, without filling a small staging database with fake people.
      */
     private function seedVerificationQueue(AdminUser $admin): void
     {
-        User::factory()->count(24)->create()->each(function (User $user) {
+        User::factory()->count(6)->create()->each(function (User $user) {
             UserVerification::factory()->create([
                 'user_id' => $user->id,
                 'type' => VerificationType::GovernmentId,
