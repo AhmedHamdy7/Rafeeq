@@ -14,7 +14,7 @@
 >
 > **Base URL:** `{host}/api/v1` · **Auth:** bearer token · **Format:** JSON only.
 
-**Last updated:** 2026-11-12 · **223 endpoints live** · Phases 0–7, 9 and 11 complete · 10, 12 and 13 all but a decision each
+**Last updated:** 2026-11-13 · **224 endpoints live** · Phases 0–7, 9 and 11 complete · 10, 12 and 13 all but a decision each
 
 ---
 
@@ -22,7 +22,7 @@
 
 ### What is ready
 
-**223 endpoints live** and tested, across the 47 designed screens:
+**224 endpoints live** and tested, across the 47 designed screens:
 
 | | Count | Covers |
 |---|---|---|
@@ -883,6 +883,7 @@ fails if this list and the running routes ever disagree in either direction.
 | `POST /trips/{trip}/live-share` | 4.12 Safety |
 | `POST /sos` | 4.12 Safety |
 | `POST /sos/{sos}/cancel` | 4.12 Safety |
+| `GET /content/{key}` | 4.18 Content |
 | `GET /notifications` | 4.14 Notifications |
 | `PATCH /notifications/read` | 4.14 Notifications |
 | `GET /notifications/preferences` | 4.14 Notifications |
@@ -5012,6 +5013,29 @@ Answers `{kind, standing, nextRung}`.
 
 ---
 
+## 4.18 Content (Help & legal)
+
+The texts staff write on the dashboard's **Content** page. Signed in, and readable while the account is on hold.
+
+`GET /content/{key}` — `key` is one of `help`, `support_contact`, `terms`, `guidelines`.
+
+```json
+{
+  "success": true,
+  "data": {
+    "key": "support_contact",
+    "version": 3,
+    "ar": "واتساب من 6 الصبح لـ 10 بالليل.",
+    "en": "WhatsApp, 06:00–22:00.",
+    "updatedAt": "2026-11-13T14:02:11+00:00"
+  }
+}
+```
+
+- Both languages come back; show the one the app is in. Plain text with line breaks — render it as text, never as HTML.
+- `version` goes up by one on every save. Cache the text and refetch when you open the screen; if `version` changed, the text did.
+- `404 NOT_FOUND` until staff have written that text (and for any other `key`). Show your built-in fallback.
+
 ## 5. The one shape every feature shares
 
 Every other response shape is documented in the chapter that returns it. This one is not, because it
@@ -5197,6 +5221,7 @@ exist, and every live endpoint must be named here.
 
 | Date | Change |
 |---|---|
+| 2026-11-13 | 📄 **New: `GET /content/{key}` (4.18).** Help, support contact, terms and guidelines as staff write them on the dashboard, in Arabic and English, with a `version` that goes up on every save. |
 | 2026-11-13 | 📣 **Two new inbox notification types, no new endpoint.** `announcement` (staff to everyone, passengers or drivers; may carry `data.link`) and `staff_message` (staff to one member). Both arrive through `GET /notifications` like any other row, already in the member's language, and are never pushed. Show them with the generic inbox card. |
 | 2026-11-13 | 🔎 **Place search.** `GET /places?q=` now finds a place wherever it is: with `lat`/`lng` it is ranked (name starts with `q` → contains `q` → area only, nearest first in each, then most used) instead of cut to 5 km. `radiusMetres` with `q` still limits by distance when you send it. New `limit` (1–20). `city` and `district` now follow `Accept-Language`. `q` also matches the city, English area names and Arabic spelling variants. |
 | 2026-11-12 | 🐞 **A-9.** A late approval of a moving-car request now always carries `error.fields.expiredAt`, also after the minute sweep marked it expired (then with `error.fields.status: ["EXPIRED"]`). Any other `SEAT_REQUEST_NOT_PENDING` now names the request's `status`. |

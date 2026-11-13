@@ -22,6 +22,7 @@ use App\Http\Controllers\Api\V1\Booking\SeatOfferController;
 use App\Http\Controllers\Api\V1\Booking\SeatRequestController;
 use App\Http\Controllers\Api\V1\Booking\WaitlistController;
 use App\Http\Controllers\Api\V1\Commute\ChangeProposalController;
+use App\Http\Controllers\Api\V1\ContentController;
 use App\Http\Controllers\Api\V1\Driver\CommuteController;
 use App\Http\Controllers\Api\V1\Driver\DriverApplicationController;
 use App\Http\Controllers\Api\V1\Driver\VehicleController;
@@ -437,6 +438,9 @@ Route::prefix('v1')->group(function (): void {
          * In the signed-in tier rather than behind `account.active`: a suspended account still has
          * journeys it travelled on, and the other person is owed the rating as much as before.
          */
+        // Content staff write on the dashboard (help, support contact, terms, guidelines).
+        Route::get('content/{key}', [ContentController::class, 'show']);
+
         /*
          * Notifications (Phase 12, Chapter 11). Signed-in tier, not active: a member whose
          * account was just put on hold must still be able to read the notice saying so.
