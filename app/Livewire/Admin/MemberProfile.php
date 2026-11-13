@@ -2,6 +2,8 @@
 
 namespace App\Livewire\Admin;
 
+use App\Domains\Admin\Actions\ManageDebtAction;
+use App\Domains\Admin\Actions\ManageMemberAction;
 use App\Domains\Admin\Enums\AdminPermission;
 use App\Domains\Admin\Models\AdminAction;
 use App\Domains\Admin\Models\AdminUser;
@@ -9,6 +11,7 @@ use App\Domains\Admin\Models\MemberNote;
 use App\Domains\Admin\Support\AdminActionLog;
 use App\Domains\Booking\Models\Booking;
 use App\Domains\Commute\Models\CommuteOffer;
+use App\Domains\Identity\Enums\Gender;
 use App\Domains\Identity\Models\Device;
 use App\Domains\Identity\Models\User;
 use App\Domains\Notification\Models\Notification;
@@ -21,6 +24,7 @@ use App\Domains\Safety\Enums\IncidentStatus;
 use App\Domains\Safety\Models\Incident;
 use App\Livewire\Admin\Concerns\ShowsMemberDetails;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Validation\Rule;
 use Livewire\Attributes\Layout;
 use Livewire\Attributes\Locked;
 use Livewire\Attributes\Url;
@@ -58,6 +62,24 @@ class MemberProfile extends Component
     /** The full phone number, only for the render right after a reasoned reveal. */
     public ?string $revealedPhone = null;
 
+    /** The open "More actions" form: correct, write_off, credit, unlock, escalate — or ''. */
+    public string $action = '';
+
+    public string $reason = '';
+
+    public string $fullName = '';
+
+    public string $gender = '';
+
+    public string $dateOfBirth = '';
+
+    public string $side = 'driver';
+
+    public string $amount = '';
+
+    /** One line saying what the last action did, shown above the tabs. */
+    public ?string $done = null;
+
     public function mount(User $user): void
     {
         $this->authorizeTo(AdminPermission::MemberView);
@@ -94,6 +116,69 @@ class MemberProfile extends Component
 
         $this->revealedPhone = $user->phone_e164;
         $this->reset('revealing', 'revealReason');
+    }
+
+    public function startAction(string $action): void
+    {
+        $this->resetValidation();
+        $this->reset('reason', 'amount', 'done');
+        $this->action = in_array($action, ['correct', 'write_off', 'credit', 'unlock', 'escalate'], true) ? $action : '';
+
+        if ($this->action === 'correct') {
+            $user = $this->member();
+            $this->fullName = (string) $user->full_name;
+            $this->gender = $user->gender instanceof \BackedEnum ? $user->gender->value : (string) $user->gender;
+            $this->dateOfBirth = (string) $user->date_of_birth?->format('Y-m-d');
+        }
+    }
+
+    public function runAction(ManageMemberAction $members, ManageDebtAction $debts): void
+    {
+        $rules = ['reason' => ['required', 'string', 'min:5', 'max:255']];
+
+        $rules += match ($this->action) {
+            'correct' => [
+                'fullName' => ['required', 'string', 'min:2', 'max:150'],
+                'gender' => ['required', 'string', Rule::enum(Gender::class)],
+                'dateOfBirth' => ['nullable', 'date', 'before:-15 years'],
+            ],
+            'write_off' => ['side' => ['required', 'string', Rule::enum(DebtSide::class)]],
+            'credit' => ['side' => ['required', 'string', Rule::enum(DebtSide::class)], 'amount' => ['required', 'numeric', 'min:0.01', 'max:100000']],
+            default => [],
+        };
+
+        $this->validate($rules, attributes: ['reason' => __('admin/actions.reason')]);
+
+        $user = $this->member();
+        $admin = $this->admin();
+
+        $this->done = match ($this->action) {
+            'correct' => (function () use ($members, $admin, $user) {
+                $members->correct($admin, $user, ['full_name' => $this->fullName, 'gender' => $this->gender, 'date_of_birth' => $this->dateOfBirth], $this->reason);
+
+                return __('admin/actions.done.correct');
+            })(),
+            'write_off' => __('admin/actions.done.write_off', ['amount' => number_format($members->writeOff($admin, $user, DebtSide::from($this->side), $this->reason) / 100, 2)]),
+            'credit' => (function () use ($debts, $admin, $user) {
+                abort_unless($admin->can(AdminPermission::DebtManage->value), 403);
+                $debts->credit($user, DebtSide::from($this->side), (int) round(((float) $this->amount) * 100), $admin, $this->reason);
+
+                return __('admin/actions.done.credit');
+            })(),
+            'unlock' => (function () use ($members, $admin, $user) {
+                $members->unlockSignIn($admin, $user, $this->reason);
+
+                return __('admin/actions.done.unlock');
+            })(),
+            'escalate' => (function () use ($members, $admin, $user) {
+                $members->escalate($admin, $user, $this->reason);
+
+                return __('admin/actions.done.escalate');
+            })(),
+            default => null,
+        };
+
+        $this->reset('action', 'reason', 'amount');
     }
 
     /** @return list<string> the tabs this staff member may open */
@@ -159,6 +244,8 @@ class MemberProfile extends Component
             'notes' => MemberNote::query()->where('user_id', $user->id)->with('admin')->latest('created_at')->latest('id')->limit($this->tab === 'notes' ? 100 : 3)->get(),
             'maySeeDocuments' => $this->maySeeDocuments(),
             'mayDecide' => $this->may(AdminPermission::MemberSuspend),
+            'mayManageDebt' => $this->may(AdminPermission::DebtManage),
+            'signInLocked' => ManageMemberAction::isSignInLocked($user),
             ...$data,
         ])->title((string) $user->full_name);
     }

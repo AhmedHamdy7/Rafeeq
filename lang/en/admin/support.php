@@ -33,6 +33,7 @@ return [
         'urgent' => 'Urgent',
     ],
     'categories' => [
+        'escalation' => 'Escalation from CS',
         'payment_issue' => 'Payment issue',
     ],
 ];

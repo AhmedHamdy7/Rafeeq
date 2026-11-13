@@ -50,9 +50,97 @@
                 @if ($mayDecide)
                     <a class="ad-btn ad-btn--dangerline" href="{{ route('admin.members', ['member' => $user->id]) }}" wire:navigate>{{ __('admin/profile.decisions') }}</a>
                 @endif
+                {{-- D24 · More actions. Each opens its own form below the header and asks for a reason. --}}
+                <div class="ad-menu-anchor" x-data="{ open: false }" x-on:click.outside="open = false">
+                    <button type="button" class="ad-btn" x-on:click="open = ! open" x-bind:aria-expanded="open" aria-haspopup="menu">{{ __('admin/actions.more') }}<x-admin.icon name="chevron-down" size="14" /></button>
+                    <div class="ad-pop" role="menu" x-show="open" x-cloak>
+                        @if ($mayDecide)
+                            <button type="button" class="ad-pop__item" role="menuitem" x-on:click="open = false" wire:click="startAction('correct')">{{ __('admin/actions.titles.correct') }}</button>
+                            @if ($signInLocked)
+                                <button type="button" class="ad-pop__item" role="menuitem" x-on:click="open = false" wire:click="startAction('unlock')">{{ __('admin/actions.titles.unlock') }}</button>
+                            @endif
+                        @endif
+                        @if ($mayManageDebt)
+                            <button type="button" class="ad-pop__item" role="menuitem" x-on:click="open = false" wire:click="startAction('write_off')">{{ __('admin/actions.titles.write_off') }}</button>
+                            <button type="button" class="ad-pop__item" role="menuitem" x-on:click="open = false" wire:click="startAction('credit')">{{ __('admin/actions.titles.credit') }}</button>
+                        @endif
+                        <hr class="ad-pop__sep">
+                        <button type="button" class="ad-pop__item" role="menuitem" x-on:click="open = false" wire:click="startAction('escalate')">{{ __('admin/actions.titles.escalate') }}</button>
+                    </div>
+                </div>
             </div>
         </div>
     </x-admin.card>
+
+    @if ($done)
+        <p class="ad-flash" role="status"><x-admin.icon name="check" />{{ $done }}</p>
+    @endif
+    @if ($signInLocked)
+        <div class="ad-notice ad-notice--warn" style="margin-block-end:10px"><x-admin.icon name="lock" /><span>{{ __('admin/actions.locked_banner') }}</span></div>
+    @endif
+
+    @if ($action !== '')
+        <x-admin.card :title="__('admin/actions.titles.'.$action)" bar style="margin-block-end:12px">
+            <form wire:submit="runAction">
+                @error('correct') <p class="ad-flash ad-flash--error"><x-admin.icon name="alert" />{{ $message }}</p> @enderror
+                @error('debt') <p class="ad-flash ad-flash--error"><x-admin.icon name="alert" />{{ $message }}</p> @enderror
+                @error('unlock') <p class="ad-flash ad-flash--error"><x-admin.icon name="alert" />{{ $message }}</p> @enderror
+
+                <p class="ad-hint" style="margin:0 0 12px">{{ __('admin/actions.hints.'.$action) }}</p>
+
+                @if ($action === 'correct')
+                    <div class="ad-fields-inline">
+                        <div class="ad-field">
+                            <label class="ad-label" for="fix-name">{{ __('admin.details.full_name') }}</label>
+                            <input id="fix-name" class="ad-input" wire:model="fullName" required>
+                            @error('fullName') <span class="ad-error">{{ $message }}</span> @enderror
+                        </div>
+                        <div class="ad-field">
+                            <label class="ad-label" for="fix-gender">{{ __('admin.details.gender') }}</label>
+                            <select id="fix-gender" class="ad-select" wire:model="gender">
+                                @foreach (\App\Domains\Identity\Enums\Gender::cases() as $option)
+                                    <option value="{{ $option->value }}">{{ \Illuminate\Support\Facades\Lang::has('admin.details.values.'.$option->value) ? __('admin.details.values.'.$option->value) : Str::headline($option->value) }}</option>
+                                @endforeach
+                            </select>
+                            @error('gender') <span class="ad-error">{{ $message }}</span> @enderror
+                        </div>
+                        <div class="ad-field">
+                            <label class="ad-label" for="fix-dob">{{ __('admin.details.date_of_birth') }}</label>
+                            <input id="fix-dob" class="ad-input" type="date" wire:model="dateOfBirth">
+                            @error('dateOfBirth') <span class="ad-error">{{ $message }}</span> @enderror
+                        </div>
+                    </div>
+                @elseif (in_array($action, ['write_off', 'credit'], true))
+                    <div class="ad-fields-inline">
+                        <div class="ad-field">
+                            <label class="ad-label" for="act-side">{{ __('admin.payments.side') }}</label>
+                            <select id="act-side" class="ad-select" wire:model="side">
+                                <option value="driver">{{ __('admin.payments.side_driver') }}</option>
+                                <option value="passenger">{{ __('admin.payments.side_passenger') }}</option>
+                            </select>
+                        </div>
+                        @if ($action === 'credit')
+                            <div class="ad-field">
+                                <label class="ad-label" for="act-amount">{{ __('admin/actions.amount_egp') }}</label>
+                                <input id="act-amount" class="ad-input" type="number" step="0.01" min="0.01" wire:model="amount" required>
+                                @error('amount') <span class="ad-error">{{ $message }}</span> @enderror
+                            </div>
+                        @endif
+                    </div>
+                @endif
+
+                <div class="ad-field">
+                    <label class="ad-label" for="act-reason">{{ $action === 'escalate' ? __('admin/actions.escalate_note') : __('admin/actions.reason') }}</label>
+                    <textarea id="act-reason" class="ad-textarea" rows="2" wire:model="reason" required></textarea>
+                    @error('reason') <span class="ad-error">{{ $message }}</span> @enderror
+                </div>
+                <div class="ad-row">
+                    <button type="submit" @class(['ad-btn', 'ad-btn--danger' => $action === 'write_off', 'ad-btn--primary' => $action !== 'write_off']) wire:loading.attr="disabled">{{ __('admin/actions.confirm.'.$action) }}</button>
+                    <button type="button" class="ad-btn" wire:click="$set('action', '')">{{ __('admin.queue.cancel') }}</button>
+                </div>
+            </form>
+        </x-admin.card>
+    @endif
 
     {{-- Banners: money owed and disputes, the two things that change what staff say first. --}}
     @if ($driverStanding && $driverStanding->owedPiastres() > 0)

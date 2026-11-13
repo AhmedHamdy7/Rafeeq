@@ -290,7 +290,9 @@
                             @endif
 
                             <div class="ad-row">
-                                <button type="submit" class="ad-btn ad-btn--danger" wire:loading.attr="disabled">{{ __('admin.members.confirm_suspend') }}</button>
+                                {{-- D14: a permanent ban asks twice — the checkbox, then this question. --}}
+                                <button type="submit" class="ad-btn ad-btn--danger" wire:loading.attr="disabled"
+                                        x-data x-on:click="if ($wire.permanent && ! confirm(@js(__('admin/actions.ban_confirm', ['name' => $opened->full_name])))) $event.preventDefault()">{{ __('admin.members.confirm_suspend') }}</button>
                                 <button type="button" class="ad-btn" wire:click="startForm('')">{{ __('admin.queue.cancel') }}</button>
                             </div>
                         </form>

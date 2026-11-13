@@ -45,6 +45,11 @@ final class AdminActionLog
         'account.suspend',
         // Why somebody's full phone number was shown (D15).
         'member.reveal_phone',
+        // Every "More actions" step on a member (D16–D18, D22): what changed and why.
+        'member.correct',
+        'member.escalate',
+        'debt.write_off',
+        'account.unlock_sign_in',
         'account.suspension_appeal_decide',
         'account.reactivate',
         'commute.unpublish',

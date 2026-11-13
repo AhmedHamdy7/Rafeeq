@@ -33,6 +33,7 @@ return [
         'urgent' => 'عاجلة',
     ],
     'categories' => [
+        'escalation' => 'تصعيد من خدمة العملاء',
         'payment_issue' => 'مشكلة دفع',
     ],
 ];
