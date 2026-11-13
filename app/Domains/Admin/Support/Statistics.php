@@ -92,13 +92,18 @@ final class Statistics
     }
 
     /** @return array<string, int|float|null> */
-    public static function trips(StatisticsPeriod $period): array
+    public static function trips(StatisticsPeriod $period, ?StatisticsFilter $filter = null): array
     {
+        $filter ??= new StatisticsFilter;
+        $inPeriod = fn (Builder $trip) => $trip
+            ->whereBetween('trip_date', [$period->firstDay(), $period->lastDay()])
+            ->when($filter->isActive(), fn (Builder $q) => $q->whereHas('commuteOffer', fn (Builder $offer) => $filter->offers($offer)));
+
         $completedBookings = Booking::query()
             ->where('status', BookingStatus::Completed->value)
-            ->whereHas('scheduledTrip', fn (Builder $trip) => $trip->whereBetween('trip_date', [$period->firstDay(), $period->lastDay()]));
+            ->whereHas('scheduledTrip', $inPeriod);
 
-        $days = ScheduledTrip::query()->whereBetween('trip_date', [$period->firstDay(), $period->lastDay()]);
+        $days = $inPeriod(ScheduledTrip::query());
         $completedDays = (clone $days)->where('status', ScheduledTripStatus::Completed->value);
 
         $offered = (int) (clone $completedDays)->sum('seats_total');
@@ -113,7 +118,7 @@ final class Statistics
             'daysCancelled' => (clone $days)->where('status', ScheduledTripStatus::Cancelled->value)->count(),
             'noShows' => Booking::query()
                 ->where('status', BookingStatus::NoShow->value)
-                ->whereHas('scheduledTrip', fn (Builder $trip) => $trip->whereBetween('trip_date', [$period->firstDay(), $period->lastDay()]))
+                ->whereHas('scheduledTrip', $inPeriod)
                 ->count(),
             'occupancy' => $offered > 0 ? round($taken / $offered * 100, 1) : null,
         ];
@@ -125,13 +130,16 @@ final class Statistics
      *
      * @return list<array{day: string, seats: int}>
      */
-    public static function seatsPerDay(StatisticsPeriod $period): array
+    public static function seatsPerDay(StatisticsPeriod $period, ?StatisticsFilter $filter = null): array
     {
+        $filter ??= new StatisticsFilter;
+
         $rows = Booking::query()
             ->toBase()
             ->join('scheduled_trips', 'scheduled_trips.id', '=', 'bookings.scheduled_trip_id')
             ->where('bookings.status', BookingStatus::Completed->value)
             ->whereBetween('scheduled_trips.trip_date', [$period->firstDay(), $period->lastDay()])
+            ->when($filter->isActive(), fn ($query) => $query->whereIn('scheduled_trips.commute_offer_id', $filter->offers(CommuteOffer::query())->select('id')))
             ->selectRaw('scheduled_trips.trip_date as day, sum(bookings.seats_reserved) as seats')
             ->groupBy('scheduled_trips.trip_date')
             ->pluck('seats', 'day');
