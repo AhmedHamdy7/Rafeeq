@@ -18,6 +18,7 @@ use App\Domains\Trip\Models\MemberWarning;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Validation\Rule;
 use Livewire\Attributes\Layout;
+use Livewire\Attributes\Url;
 use Livewire\Component;
 use Livewire\WithPagination;
 
@@ -36,6 +37,10 @@ class Payments extends Component
     use WithPagination;
 
     /** The payment whose Refuse form is open. */
+    /** I01 the queue, or I04 the history of decided payments. */
+    #[Url(as: 'view')]
+    public string $view = 'queue';
+
     public ?string $refusing = null;
 
     public string $note = '';
@@ -269,7 +274,17 @@ class Payments extends Component
             ->limit(50)
             ->get();
 
+        $history = $this->view === 'history'
+            ? DebtPayment::query()
+                ->whereIn('status', [DebtPaymentStatus::Confirmed->value, DebtPaymentStatus::Rejected->value])
+                ->with(['user', 'decidedBy'])
+                ->latest('decided_at')
+                ->latest('id')
+                ->paginate(25, pageName: 'history')
+            : null;
+
         return view('livewire.admin.payments', [
+            'history' => $history,
             'pending' => $pending,
             'appeals' => $appeals,
             'driverAppeals' => $driverAppeals,

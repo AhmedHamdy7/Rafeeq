@@ -42,6 +42,16 @@ return [
         'exited_due_to_driver_delay' => 'Left: driver late',
         'active' => 'Active',
         'matched' => 'Matched',
+        'waitlisted' => 'Waiting list',
+        'counteroffered' => 'Counteroffer',
+        'withdrawn' => 'Withdrawn',
+        'open' => 'Open',
+        'accepted' => 'Accepted',
+        'taken_by_other' => 'Taken by someone else',
+        'ineligible' => 'Not eligible',
+        'closed' => 'Closed',
+        'declined' => 'Declined',
+        'applied' => 'Applied',
     ],
     'weekdays' => [
         'sat' => 'Sat',
@@ -71,5 +81,31 @@ return [
     'demands' => [
         'title' => 'Demands',
         'sub' => 'what passengers asked for',
+    ],
+    'seat_requests' => [
+        'title' => 'Seat requests',
+    ],
+    'seat_offers' => [
+        'title' => 'Waiting lists and seat offers',
+    ],
+    'change_proposals' => [
+        'title' => 'Change proposals',
+    ],
+    'booking_nav' => [
+        'bookings' => 'Bookings',
+        'seat_requests' => 'Seat requests',
+        'seat_offers' => 'Waiting lists',
+        'change_proposals' => 'Change proposals',
+    ],
+    'commitment' => 'Kind',
+    'commitments' => [
+        'trial' => 'Trial',
+        'recurring' => 'Recurring',
+    ],
+    'change' => 'What changes',
+    'answers' => 'Answers',
+    'scopes' => [
+        'only_this_occurrence' => 'this day only',
+        'all_future_on_this_weekday' => 'every week',
     ],
 ];

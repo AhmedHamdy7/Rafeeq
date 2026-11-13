@@ -29,11 +29,22 @@ class Settlements extends Component
     #[Url(as: 'week')]
     public string $week = '';
 
+    /** W01 drivers (commission) or W02 passengers (fees). */
+    #[Url(as: 'side')]
+    public string $side = 'driver';
+
+    public function pickSide(string $side): void
+    {
+        $this->side = $side === DebtSide::Passenger->value ? DebtSide::Passenger->value : DebtSide::Driver->value;
+    }
+
     public function mount(): void
     {
         abort_unless(Auth::guard('admin')->user()?->can(AdminPermission::PaymentView->value) === true, 403);
 
         $this->week = $this->normalise($this->week);
+
+        $this->pickSide($this->side);
     }
 
     public function previous(): void
@@ -61,9 +72,16 @@ class Settlements extends Component
     {
         $week = $this->normalise($this->week);
 
+        $side = DebtSide::from($this->side === DebtSide::Passenger->value ? DebtSide::Passenger->value : DebtSide::Driver->value);
+
+        // What the week charged: commission for drivers, fees for passengers; late fees for both.
+        $charges = $side === DebtSide::Driver
+            ? [DebtEntryType::Commission, DebtEntryType::LateFee]
+            : [DebtEntryType::Fee, DebtEntryType::FeeLine, DebtEntryType::LateFee];
+
         $lines = DebtEntry::query()
             ->toBase()
-            ->where('side', DebtSide::Driver->value)
+            ->where('side', $side->value)
             ->where('week_of', $week)
             ->selectRaw('user_id, type, sum(amount_piastres) as total')
             ->groupBy('user_id', 'type')
@@ -75,20 +93,20 @@ class Settlements extends Component
         }
 
         $accounts = DebtAccount::query()
-            ->where('side', DebtSide::Driver->value)
+            ->where('side', $side->value)
             ->whereIn('user_id', array_keys($byDriver))
             ->get()
             ->keyBy('user_id');
 
         $users = User::query()->whereIn('id', array_keys($byDriver))->get(['id', 'full_name'])->keyBy('id');
 
-        $rows = collect($byDriver)->map(function (array $totals, string $userId) use ($accounts, $users) {
+        $rows = collect($byDriver)->map(function (array $totals, string $userId) use ($accounts, $users, $charges) {
             $account = $accounts->get($userId);
 
             return [
                 'id' => $userId,
                 'name' => $users->get($userId)?->full_name,
-                'commission' => ($totals[DebtEntryType::Commission->value] ?? 0) + ($totals[DebtEntryType::LateFee->value] ?? 0),
+                'commission' => array_sum(array_map(fn (DebtEntryType $type) => $totals[$type->value] ?? 0, $charges)),
                 'paid' => -1 * ($totals[DebtEntryType::Payment->value] ?? 0),
                 'owesNow' => max(0, (int) ($account?->balance_piastres ?? 0)),
                 'blocked' => $account?->suspended_at !== null,
@@ -99,11 +117,12 @@ class Settlements extends Component
             'weekStart' => CarbonImmutable::parse($week, SettlementWeek::TIMEZONE),
             'isCurrent' => $week === SettlementWeek::current(),
             'rows' => $rows,
+            'side' => $side->value,
             'totals' => [
                 'commission' => $rows->sum('commission'),
                 'paid' => $rows->sum('paid'),
-                'owedNow' => (int) DebtAccount::query()->where('side', DebtSide::Driver->value)->where('balance_piastres', '>', 0)->sum('balance_piastres'),
-                'blocked' => DebtAccount::query()->where('side', DebtSide::Driver->value)->whereNotNull('suspended_at')->count(),
+                'owedNow' => (int) DebtAccount::query()->where('side', $side->value)->where('balance_piastres', '>', 0)->sum('balance_piastres'),
+                'blocked' => DebtAccount::query()->where('side', $side->value)->whereNotNull('suspended_at')->count(),
             ],
         ])->title(__('admin/money.settlements.title'));
     }

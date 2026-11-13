@@ -119,4 +119,27 @@
             </table>
         </div>
     </x-admin.card>
+
+    {{-- M03 · What each role may do. Read-only: roles are set in code, so the matrix cannot drift from what is enforced. --}}
+    <div class="ad-section-label">{{ __('admin/team.matrix_title') }}</div>
+    <x-admin.card flush>
+        <div class="ad-table-wrap"><table class="ad-table ad-table--dense">
+            <thead><tr>
+                <th>{{ __('admin/team.permission') }}</th>
+                @foreach ($roles as $matrixRole)
+                    <th class="ad-end">{{ __('admin/shell.roles.'.$matrixRole->value) }}</th>
+                @endforeach
+            </tr></thead>
+            <tbody>
+            @foreach (\App\Domains\Admin\Enums\AdminPermission::cases() as $permission)
+                <tr>
+                    <td><span class="ad-code">{{ $permission->value }}</span></td>
+                    @foreach ($roles as $matrixRole)
+                        <td class="ad-end">@if (in_array($permission, $matrixRole->permissions(), true))<x-admin.icon name="check" size="14" /><span class="ad-sr">{{ __('admin/team.allowed') }}</span>@else<span class="ad-subtle" aria-hidden="true">—</span><span class="ad-sr">{{ __('admin/team.not_allowed') }}</span>@endif</td>
+                    @endforeach
+                </tr>
+            @endforeach
+            </tbody>
+        </table></div>
+    </x-admin.card>
 </div>

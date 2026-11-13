@@ -60,4 +60,8 @@ return [
         'wrong_code' => 'That code is not right. Check the app shows RAFEEQ and try the current code.',
         'too_many' => 'Too many wrong codes. Wait 15 minutes, or ask an Admin for a new link.',
     ],
+    'matrix_title' => 'Roles · what each one may do',
+    'permission' => 'Permission',
+    'allowed' => 'Allowed',
+    'not_allowed' => 'Not allowed',
 ];

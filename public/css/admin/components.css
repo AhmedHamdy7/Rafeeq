@@ -464,7 +464,8 @@ a.ad-stat:hover {
   overflow: hidden;
 }
 
-.ad-seg button {
+.ad-seg button,
+.ad-seg a {
   border: none;
   background: var(--bg-surface);
   color: var(--fg-muted);
@@ -474,9 +475,21 @@ a.ad-stat:hover {
   cursor: pointer;
 }
 
-.ad-seg button[aria-pressed='true'] {
+.ad-seg button[aria-pressed='true'],
+.ad-seg a[aria-pressed='true'] {
   background: var(--fg-default);
   color: var(--bg-surface);
+}
+
+/* A row of links styled as a segmented control scrolls sideways on a phone instead of wrapping. */
+.ad-seg:has(> a) {
+  max-inline-size: 100%;
+  overflow-x: auto;
+}
+
+.ad-seg a {
+  white-space: nowrap;
+  text-decoration: none;
 }
 
 .ad-fchip {

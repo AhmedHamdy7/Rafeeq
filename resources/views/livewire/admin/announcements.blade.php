@@ -138,6 +138,24 @@
             @endif
         </x-admin.card>
 
+    @elseif ($tab === 'events')
+        {{-- Z03 · Reference: what the platform sends by itself. Read-only. --}}
+        <x-admin.card flush>
+            <p class="ad-hint" style="margin:12px 16px">{{ __('admin/communication.events_hint') }}</p>
+            <div class="ad-table-wrap"><table class="ad-table ad-table--dense">
+                <thead><tr><th>{{ __('admin/communication.type') }}</th><th>{{ __('admin/communication.switch') }}</th><th>{{ __('admin/communication.example') }}</th></tr></thead>
+                <tbody>
+                @foreach ($events as $event)
+                    <tr>
+                        <td><span class="ad-code">{{ $event->value }}</span></td>
+                        <td><span @class(['ad-chip', 'ad-chip--bad' => $event->category()->value === 'safety'])>{{ __('admin/communication.categories.'.$event->category()->value) }}</span></td>
+                        <td dir="auto" class="ad-muted" style="font-size:12.5px">{{ \Illuminate\Support\Facades\Lang::has('notifications.'.$event->value.'.title') ? __('notifications.'.$event->value.'.title') : '—' }}</td>
+                    </tr>
+                @endforeach
+                </tbody>
+            </table></div>
+        </x-admin.card>
+
     @elseif ($tab === 'failed')
         <x-admin.card flush>
             @if ($failed->isEmpty())

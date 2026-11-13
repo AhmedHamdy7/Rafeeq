@@ -2,6 +2,7 @@
 @php use App\Livewire\Admin\Directory\DirectoryPage; @endphp
 <div>
     <x-admin.page-head :title="__('admin/directory.bookings.title')" :sub="trans_choice('admin/directory.count', $bookings->total(), ['count' => $bookings->total()])" />
+    @include('livewire.admin.directory._bookings-nav')
     @include('livewire.admin.directory._tabs')
     <x-admin.card flush>
         @if ($bookings->isEmpty())

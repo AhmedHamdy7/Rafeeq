@@ -5,10 +5,12 @@ use App\Domains\Admin\Models\AdminAction;
 use App\Domains\Booking\Enums\BookingStatus;
 use App\Domains\Booking\Models\Booking;
 use App\Domains\Commute\Actions\ChangeCommuteStatusAction;
+use App\Domains\Commute\Enums\CommuteAudience;
 use App\Domains\Commute\Enums\CommuteOfferStatus;
 use App\Domains\Commute\Enums\CommutePausedReason;
 use App\Domains\Commute\Models\CommuteOffer;
 use App\Domains\Driver\Enums\VehicleVerificationStatus;
+use App\Domains\Identity\Enums\Gender;
 use App\Domains\Reliability\Models\ReliabilityEvent;
 use App\Domains\Trip\Models\MemberWarning;
 use App\Livewire\Admin\Directory\BookingDetail;
@@ -70,6 +72,7 @@ it('keeps a car from staff without the driver desk', function () {
 
 it('resumes a women-only commute after a gender review, with a reason', function () {
     $commute = CommuteOffer::factory()->published()->create();
+    $commute->driverProfile->user->forceFill(['gender' => Gender::Woman])->save();
     app(ChangeCommuteStatusAction::class)->pause($commute, CommutePausedReason::GenderReview);
     actingAsAdmin(adminWithRole(AdminRole::Operations));
 
@@ -94,6 +97,21 @@ it('refuses to resume a commute paused for any other reason', function () {
         ->set('reason', 'Trying anyway')
         ->call('resume')
         ->assertStatus(409);
+});
+
+it('says why when the driver can no longer run a women-only commute', function () {
+    $commute = CommuteOffer::factory()->published()->create(['audience' => CommuteAudience::WomenOnly]);
+    $commute->driverProfile->user->forceFill(['gender' => Gender::Man])->save();
+    app(ChangeCommuteStatusAction::class)->pause($commute, CommutePausedReason::GenderReview);
+    actingAsAdmin(adminWithRole(AdminRole::Operations));
+
+    Livewire::test(CommuteDetail::class, ['commute' => $commute->refresh()])
+        ->call('startResume')
+        ->set('reason', 'Checked the new ID card')
+        ->call('resume')
+        ->assertHasErrors('record');
+
+    expect($commute->refresh()->status)->toBe(CommuteOfferStatus::Paused);
 });
 
 it('cancels a seat for a member with no fee and nothing on their record', function () {

@@ -3,9 +3,12 @@
 namespace App\Livewire\Admin;
 
 use App\Domains\Admin\Enums\AdminPermission;
+use App\Domains\Payment\Enums\DebtEntryType;
 use App\Domains\Payment\Models\Coupon;
+use App\Domains\Payment\Models\DebtEntry;
 use Illuminate\Support\Facades\Auth;
 use Livewire\Attributes\Layout;
+use Livewire\Attributes\Url;
 use Livewire\Component;
 use Livewire\WithPagination;
 
@@ -19,6 +22,10 @@ class Coupons extends Component
 {
     use WithPagination;
 
+    /** K03 coupons issued, or K04 credits added by hand. */
+    #[Url(as: 'view')]
+    public string $view = 'coupons';
+
     public function mount(): void
     {
         abort_unless(Auth::guard('admin')->user()?->can(AdminPermission::PaymentView->value) === true, 403);
@@ -27,7 +34,10 @@ class Coupons extends Component
     public function render()
     {
         return view('livewire.admin.coupons', [
-            'coupons' => Coupon::query()->with(['user', 'issuedBy'])->orderByDesc('created_at')->orderByDesc('id')->paginate(25),
+            'coupons' => $this->view === 'credits' ? null : Coupon::query()->with(['user', 'issuedBy'])->orderByDesc('created_at')->orderByDesc('id')->paginate(25),
+            'credits' => $this->view === 'credits'
+                ? DebtEntry::query()->where('type', DebtEntryType::Credit->value)->with(['user', 'createdBy'])->orderByDesc('created_at')->orderByDesc('id')->paginate(25)
+                : null,
             'mayIssue' => Auth::guard('admin')->user()?->can(AdminPermission::DebtManage->value) === true,
         ])->title(__('admin/money.coupons.title'));
     }
