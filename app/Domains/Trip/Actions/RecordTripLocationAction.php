@@ -15,6 +15,8 @@ use App\Domains\Trip\Models\TripSession;
 use App\Domains\Trip\Support\LiveLocationStore;
 use App\Domains\Trip\Support\TripSettings;
 use App\Domains\Trip\ValueObjects\TripPosition;
+use Carbon\CarbonInterface;
+use Illuminate\Support\Facades\Cache;
 
 /**
  * Where the car is (Chapter 8's Live Location).
@@ -66,31 +68,38 @@ final readonly class RecordTripLocationAction
 
         $latest = end($accepted);
 
-        $this->store->buffer($session->id, $accepted);
+        $moved = Cache::lock("trip:{$session->id}:location", 10)->block(5, function () use ($session, $accepted, $latest): bool {
+            $this->store->buffer($session->id, $accepted);
 
-        if ($session->last_location_at !== null && $latest->recordedAt->lt($session->last_location_at)) {
-            return $accepted;
-        }
+            $last = TripSession::query()->whereKey($session->id)->value('last_location_at');
 
-        $this->store->putCurrent($session->id, $latest);
+            if ($last !== null && $latest->recordedAt->lessThanOrEqualTo($last)) {
+                return false;
+            }
 
-        /*
-         * `last_location_at` on the session is the GPS-dropout signal, and it is the one
-         * thing here that goes to the database on every batch. That is affordable — one
-         * indexed update per batch, not per point — and it is what lets a client say "this
-         * dot is four minutes old" instead of drawing a car that stopped reporting.
-         */
-        $changes = ['last_location_at' => $latest->recordedAt];
+            $this->store->putCurrent($session->id, $latest);
 
-        $changes = [...$changes, ...$this->deviation($session, $latest)];
+            /*
+             * `last_location_at` on the session is the GPS-dropout signal, and it is the one
+             * thing here that goes to the database on every batch. That is affordable — one
+             * indexed update per batch, not per point — and it is what lets a client say "this
+             * dot is four minutes old" instead of drawing a car that stopped reporting.
+             */
+            $session->forceFill([
+                'last_location_at' => $latest->recordedAt,
+                ...$this->deviation($session, $latest),
+            ])->save();
 
-        $session->forceFill($changes)->save();
+            return true;
+        });
 
         /*
          * Broadcast after the cache is written, so a listener that immediately re-reads gets
          * the position it was just told about rather than the one before it.
          */
-        TripLocationUpdated::dispatch($session->id, $latest);
+        if ($moved) {
+            TripLocationUpdated::dispatch($session->id, $latest);
+        }
 
         return $accepted;
     }
@@ -122,16 +131,7 @@ final readonly class RecordTripLocationAction
      */
     private function plausible(TripSession $session, array $reported): array
     {
-        $ceiling = now()->addSeconds(TripSettings::locationClockSkewSeconds());
-
-        /*
-         * The earliest instant this run could have been started at all. Using `started_at`
-         * instead looked right and was wrong: a phone that already had a fix reports the
-         * reading it took a few seconds before the driver pressed the button, and every one
-         * of those would have been thrown away.
-         */
-        $floor = $session->scheduledTrip->departure_at->copy()
-            ->subMinutes(TripSettings::startWindowMinutes());
+        [$floor, $ceiling] = $this->timeBounds($session);
 
         $worstAccuracy = TripSettings::locationMaxAccuracyMeters();
 
@@ -154,6 +154,43 @@ final readonly class RecordTripLocationAction
         }
 
         return $accepted;
+    }
+
+    /**
+     * @param  array<int, TripPosition>  $reported
+     */
+    public function clockSkewed(TripSession $session, array $reported): bool
+    {
+        if ($reported === []) {
+            return false;
+        }
+
+        [$floor, $ceiling] = $this->timeBounds($session);
+
+        foreach ($reported as $position) {
+            if ($position->recordedAt->betweenIncluded($floor, $ceiling)) {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    /**
+     * @return array{0: CarbonInterface, 1: CarbonInterface}
+     */
+    private function timeBounds(TripSession $session): array
+    {
+        /*
+         * The earliest instant this run could have been started at all. Using `started_at`
+         * instead looked right and was wrong: a phone that already had a fix reports the
+         * reading it took a few seconds before the driver pressed the button, and every one
+         * of those would have been thrown away.
+         */
+        return [
+            $session->scheduledTrip->departure_at->copy()->subMinutes(TripSettings::startWindowMinutes()),
+            now()->addSeconds(TripSettings::locationClockSkewSeconds()),
+        ];
     }
 
     /**

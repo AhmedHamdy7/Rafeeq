@@ -64,7 +64,7 @@ final class FlushTripLocations extends Command
             }
 
             foreach (array_chunk($positions, self::CHUNK) as $chunk) {
-                TripLocation::query()->insert(
+                $written += TripLocation::query()->insertOrIgnore(
                     array_map(
                         fn (TripPosition $position) => [
                             // Generated here: `insert()` bypasses the model, so `HasUlids`
@@ -83,8 +83,6 @@ final class FlushTripLocations extends Command
                         $chunk,
                     )
                 );
-
-                $written += count($chunk);
             }
 
             $store->forgetPending($sessionId);

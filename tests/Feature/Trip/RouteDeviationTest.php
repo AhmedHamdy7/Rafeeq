@@ -252,7 +252,7 @@ it('follows the threshold from settings rather than from code', function () {
     driving($this->driverToken, $this->tripId);
 
     // A point that is off-route but comfortably inside the default kilometre.
-    reportPosition($this->driverToken, $this->tripId, [position(lat: 30.0700, lng: 31.2314)])->assertOk();
+    reportPosition($this->driverToken, $this->tripId, [position(lat: 30.0700, lng: 31.2314, agoSeconds: 15)])->assertOk();
 
     expect(TripSession::sole()->deviation_detected_at)->toBeNull();
 

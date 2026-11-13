@@ -94,6 +94,8 @@ final class SettingsCatalogue
         'trip.location_retention_days' => ['group' => 'trip', 'min' => 30, 'max' => 730, 'unit' => 'days'],
         'trip.deviation_threshold_meters' => ['group' => 'trip', 'min' => 200, 'max' => 10_000, 'unit' => 'meters'],
         'trip.gps_silence_alert_seconds' => ['group' => 'trip', 'min' => 30, 'max' => 1_800, 'unit' => 'seconds'],
+        'trip.live_route_refresh_seconds' => ['group' => 'trip', 'min' => 30, 'max' => 1_800, 'unit' => 'seconds'],
+        'trip.live_route_off_meters' => ['group' => 'trip', 'min' => 20, 'max' => 500, 'unit' => 'meters'],
         // The 1-hour and 10-minute reminders (Feature 03 files §8). Filed with the trip: they are about the day.
         'notifications.trip_reminder_early_minutes' => ['group' => 'trip', 'min' => 15, 'max' => 240, 'unit' => 'minutes'],
         'notifications.trip_reminder_final_minutes' => ['group' => 'trip', 'min' => 1, 'max' => 30, 'unit' => 'minutes'],

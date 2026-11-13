@@ -450,7 +450,7 @@ travelled is step 19, and the driver records that. Two different tables on purpo
 16 POST /trips/{trip}/start                                  (driver)  → 201  the session
 17 POST /trips/{trip}/status   { status: "EN_ROUTE" }         (driver)  → 200
    POST /trips/{trip}/location { points: [ {lat,lng,recordedAt,accuracyMeters,speedKmh}, ... ] }
-   → 200  { accepted, rejected }
+   → 200  { accepted, rejected, rejectedReason }
 ```
 
 Positions are sent in **batches**, and `recordedAt` is the **device's** clock — a phone that loses
@@ -3712,10 +3712,15 @@ An **array**, because a phone that loses signal buffers and sends the backlog. `
 |---|---|
 | `accepted` | How many were kept. |
 | `rejected` | How many were dropped as implausible. **Log this** — the usual cause is a wrong device clock, and the driver will never notice. |
+| `rejectedReason` | `"CLOCK_SKEW"` when **every** point in the batch was dropped because its `recordedAt` is in the future or from before the run could have begun: tell the driver his phone's clock is wrong. `null` otherwise. |
 
 Points are dropped, not refused, when they are from the future (beyond a 2-minute skew), from
 before the run could have begun, or the phone's accuracy figure is hopeless (over 500m). A batch
 of six with one bad point delivers five.
+
+Sending the same point again changes nothing. A point is identified by its `recordedAt` (to the
+second) within the run: a repeat is counted in `accepted`, so drop it from your buffer, but it adds
+no trail row and sends no `location.updated`.
 
 #### `GET /trips/{trip}/location` — active, profile complete, driver or a **live** booking
 
@@ -3728,8 +3733,16 @@ of six with one bad point delivers five.
 | `carToPickupPolyline` | Encoded road from the car to her pickup, **only while her pickup is the next stop** and a position is current. Null otherwise: draw it yourself or not at all. |
 | `stopsBeforeYou` | **Passenger with a confirmed seat:** how many pickups and drop-offs the car still makes before hers. `0` when she is next and after the arrival tap. A count only. Null for the driver, before the start and after she boarded. Same value as `nextJourney.live.stopsBeforeYou`. |
 
-A late batch never moves the car back: when every point in a batch is older than the newest one
-already received, the points join the trail but `position` and `lastLocationAt` stay as they were.
+A late batch never moves the car back: when no point in a batch is newer than the newest one
+already received, the points join the trail but `position` and `lastLocationAt` stay as they were,
+and no `location.updated` is sent. This holds when two requests for the same run arrive at the same
+instant. A batch that does move the car sends **one** `location.updated`, carrying its newest point.
+One response is one moment: `carToPickupPolyline` starts at the returned `position`, and
+`pickupEtaAt` is counted from `position.recordedAt`, not from when you asked. Both move with every
+new position. The road underneath is fetched once and trimmed as the car advances; it is fetched
+again only when the next stop changes, when the car is more than 75 m off it on two readings in a
+row, or when it is 5 minutes old. Durations are **without live traffic**.
+
 `position.recordedAt` and `lastLocationAt` are the **phone's** time of the fix. `position` becomes
 `null` 5 minutes after the last fix; `lastLocationAt` stays, so "Last seen 7 min ago" is
 `now − lastLocationAt`.

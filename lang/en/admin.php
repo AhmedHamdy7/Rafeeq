@@ -596,6 +596,8 @@ return [
             'trip__location_retention_days' => 'How long GPS trails are kept',
             'trip__deviation_threshold_meters' => 'Off-route alert distance',
             'trip__gps_silence_alert_seconds' => 'GPS silence before the board flags a car',
+            'trip__live_route_refresh_seconds' => 'Live road to the next stop is refreshed every',
+            'trip__live_route_off_meters' => 'Distance off the live road before it is fetched again',
             'rating__window_days' => 'Time to rate a journey',
             'rating__edit_window_minutes' => 'Time to correct a rating',
             'safety__night_escort_enabled' => 'Night escort arms itself every night',

@@ -593,6 +593,8 @@ return [
             'trip__location_retention_days' => 'مدة الاحتفاظ بمسار الـ GPS',
             'trip__deviation_threshold_meters' => 'مسافة تنبيه الخروج عن المسار',
             'trip__gps_silence_alert_seconds' => 'سكوت الـ GPS قبل ما اللوحة تنبّه',
+            'trip__live_route_refresh_seconds' => 'تحديث الطريق الحي للمحطة الجاية كل',
+            'trip__live_route_off_meters' => 'مسافة البعد عن الطريق الحي قبل ما يتجاب من جديد',
             'rating__window_days' => 'مهلة تقييم الرحلة',
             'rating__edit_window_minutes' => 'مهلة تصحيح التقييم',
             'safety__night_escort_enabled' => 'المرافقة الليلية بتشتغل لوحدها كل ليلة',

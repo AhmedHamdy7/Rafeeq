@@ -751,6 +751,10 @@ return [
          * matters.
          */
         'gps_silence_alert_seconds' => 120,
+
+        'live_route_refresh_seconds' => 300,
+
+        'live_route_off_meters' => 75,
     ],
 
     /*
