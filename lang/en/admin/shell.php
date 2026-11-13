@@ -86,4 +86,14 @@ return [
         'locked_text' => 'Ask an Admin if you need this.',
         'loading' => 'Loading',
     ],
+    'alerts' => [
+        'title' => 'Needs attention',
+        'none' => 'Nothing is waiting past its time.',
+        'label' => '{0} No alerts|{1} :count alert|[2,*] :count alerts',
+        'sos_untouched' => '{1} SOS nobody has picked up|[2,*] SOS alerts nobody has picked up',
+        'reports_overdue' => '{1} report past its deadline|[2,*] reports past their deadline',
+        'payments_late' => '{1} payment waiting over :hours h|[2,*] payments waiting over :hours h',
+        'drivers_late' => '{1} driver application waiting over :hours h|[2,*] driver applications waiting over :hours h',
+        'escalations' => '{1} escalation from CS|[2,*] escalations from CS',
+    ],
 ];

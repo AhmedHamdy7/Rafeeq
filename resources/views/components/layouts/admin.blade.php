@@ -164,6 +164,27 @@
                 </a>
             @endif
 
+            {{-- N03 · Team alerts: what is waiting past its promise, only what this person may open. --}}
+            @php($alertTotal = collect($teamAlerts ?? [])->sum('count'))
+            <div class="ad-menu-anchor" x-data="{ open: false }" x-on:click.outside="open = false">
+                <button type="button" class="ad-icon-btn" x-on:click="open = ! open" x-bind:aria-expanded="open" aria-haspopup="menu">
+                    <x-admin.icon name="bell" size="18" />
+                    @if ($alertTotal > 0)<span class="ad-icon-btn__dot" aria-hidden="true"></span>@endif
+                    <span class="ad-sr">{{ trans_choice('admin/shell.alerts.label', $alertTotal, ['count' => $alertTotal]) }}</span>
+                </button>
+                <div class="ad-pop" role="menu" x-show="open" x-cloak style="inline-size:300px">
+                    <div class="ad-pop__head">{{ __('admin/shell.alerts.title') }}</div>
+                    @forelse ($teamAlerts ?? [] as $alert)
+                        <a class="ad-pop__item" role="menuitem" href="{{ route($alert['route'], $alert['params']) }}" wire:navigate>
+                            <span class="ad-badge ad-badge--{{ $alert['tone'] }}">{{ $alert['count'] }}</span>
+                            <span>{{ trans_choice('admin/shell.alerts.'.$alert['key'], $alert['count'], ['count' => $alert['count'], 'hours' => \App\Domains\Admin\Support\TeamAlerts::LATE_HOURS]) }}</span>
+                        </a>
+                    @empty
+                        <p class="ad-hint" style="margin:0;padding:8px 10px">{{ __('admin/shell.alerts.none') }}</p>
+                    @endforelse
+                </div>
+            </div>
+
             {{-- Language. A form, because switching changes the session (never a GET). --}}
             <div class="ad-menu-anchor" x-data="{ open: false }" x-on:click.outside="open = false">
                 <button type="button" class="ad-icon-btn" x-on:click="open = ! open" x-bind:aria-expanded="open" aria-haspopup="menu">

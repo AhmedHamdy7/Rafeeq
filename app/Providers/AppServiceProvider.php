@@ -6,6 +6,7 @@ use App\Domains\Admin\Enums\AdminPermission;
 use App\Domains\Admin\Support\LiveTripBoard;
 use App\Domains\Admin\Support\MemberDirectory;
 use App\Domains\Admin\Support\SafetyCaseQueue;
+use App\Domains\Admin\Support\TeamAlerts;
 use App\Domains\Driver\Enums\DriverProfileStatus;
 use App\Domains\Driver\Enums\VehicleVerificationStatus;
 use App\Domains\Driver\Models\DriverProfile;
@@ -267,6 +268,9 @@ class AppServiceProvider extends ServiceProvider
                  * keep insisting nobody had picked up an alert the operator just picked up.
                  * That page's own red cards say the same thing and stay current.
                  */
+                // N03 · the bell: what is waiting past its promise, per permission.
+                'teamAlerts' => TeamAlerts::for($admin),
+
                 'unacknowledgedAlert' => $mayReadSafety && ! request()->routeIs('admin.safety')
                     ? SafetyCaseQueue::oldestUnacknowledged()
                     : null,
