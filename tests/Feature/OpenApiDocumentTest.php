@@ -127,6 +127,8 @@ it('generates a document describing every /v1 route', function () {
         'GET /v1/account/comfort-preferences',
         'PATCH /v1/account/comfort-preferences',
         'GET /v1/account/stats',
+        // Texts staff write on the dashboard's Content page (help, support, terms, guidelines).
+        'GET /v1/content/{key}',
 
         /*
          * Her own reliability standing and every event behind it (Feature 03 v5). No parameter for
