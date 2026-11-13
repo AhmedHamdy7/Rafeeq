@@ -12,15 +12,35 @@
     $age = fn (?\DateTimeInterface $since) => $since === null ? null : \Carbon\CarbonImmutable::instance($since)->diffForHumans(syntax: \Carbon\CarbonInterface::DIFF_ABSOLUTE, short: true, parts: 2);
     $late = fn (?\DateTimeInterface $since) => $since !== null && \Carbon\CarbonImmutable::instance($since)->lt(now()->subHours($slaHours));
     $sosOpen = $safety !== null && $safety['alerts'] > 0;
+    $shows = fn (string $card) => in_array($card, $cards, true);
+    $egp = fn (int $piastres) => __('admin/home.egp', ['amount' => number_format($piastres / 100, 2)]);
 @endphp
 <div wire:poll.30s.visible>
     <x-admin.page-head
         :title="__('admin/home.greeting.'.$greeting, ['name' => (string) \Illuminate\Support\Str::of((string) $admin?->name)->before(' ')])"
         :sub="__('admin/home.sub', ['date' => $now->locale(app()->getLocale())->translatedFormat('D j M'), 'time' => $now->format('H:i')])"
-    />
+    >
+        {{-- Customise (H01): which cards this staff member sees, saved for them. --}}
+        <div class="ad-menu-anchor" x-data="{ open: false, cards: @js($cards) }" x-on:click.outside="open = false">
+            <button type="button" class="ad-btn" x-on:click="open = ! open" x-bind:aria-expanded="open"><x-admin.icon name="settings" />{{ __('admin/home.customise') }}</button>
+            <div class="ad-pop" x-show="open" x-cloak style="inline-size:260px">
+                <div class="ad-pop__head">{{ __('admin/home.cards_title') }}</div>
+                @foreach (\App\Livewire\Admin\Dashboard::CARDS as $card)
+                    <label class="ad-pop__item" style="cursor:pointer">
+                        <input type="checkbox" value="{{ $card }}" x-model="cards">
+                        <span>{{ __('admin/home.cards.'.$card) }}</span>
+                    </label>
+                @endforeach
+                <p class="ad-hint" style="margin:6px 10px">{{ __('admin/home.cards_hint') }}</p>
+                <div style="padding:6px 10px 10px">
+                    <button type="button" class="ad-btn ad-btn--primary ad-btn--sm" x-on:click="$wire.saveCards(cards); open = false">{{ __('admin/home.cards_save') }}</button>
+                </div>
+            </div>
+        </div>
+    </x-admin.page-head>
 
     {{-- LIVE --}}
-    @if ($safety !== null || $trips !== null)
+    @if ($shows('live') && ($safety !== null || $trips !== null))
         <div class="ad-section-label">{{ __('admin/home.live') }}</div>
         <div class="ad-home-live">
             @if ($safety !== null)
@@ -99,7 +119,7 @@
         ]));
     @endphp
 
-    @if ($queues !== [])
+    @if ($shows('queues') && $queues !== [])
         <div class="ad-section-label">{{ __('admin/home.queues_label') }}</div>
         <div class="ad-grid ad-grid--4">
             @foreach ($queues as $queue)
@@ -125,12 +145,55 @@
         </div>
     @endif
 
+    {{-- WATCH LIST (H03): what the rules will act on soon unless somebody does first. --}}
+    @php
+        $watch = array_values(array_filter([
+            $watchDebts !== null ? ['label' => __('admin/home.watch.drivers_owing'), 'count' => $watchDebts['driversOwing'], 'unit' => 'drivers',
+                'detail' => trans_choice('admin/home.watch.drivers_owing_detail', $watchDebts['driversBlocked'], ['count' => $watchDebts['driversBlocked']]), 'rule' => 'PAY-12 · PAY-45', 'route' => 'admin.settlements'] : null,
+            $watchDebts !== null ? ['label' => __('admin/home.watch.passengers_near'), 'count' => $watchDebts['passengersNear'], 'unit' => 'passengers',
+                'detail' => __('admin/home.watch.passengers_near_detail'), 'rule' => 'PAY-17', 'route' => 'admin.ledger'] : null,
+            $watchPapers !== null ? ['label' => __('admin/home.watch.papers', ['days' => \App\Domains\Admin\Support\HomeWatch::EXPIRY_DAYS]), 'count' => $watchPapers['licences'] + $watchPapers['carPapers'], 'unit' => 'papers',
+                'detail' => __('admin/home.watch.papers_detail', ['licences' => $watchPapers['licences'], 'cars' => $watchPapers['carPapers']]), 'rule' => 'PROF-33', 'route' => 'admin.vehicles'] : null,
+            $watchGender !== null ? ['label' => __('admin/home.watch.gender_review'), 'count' => $watchGender, 'unit' => 'commutes',
+                'detail' => __('admin/home.watch.gender_review_detail'), 'rule' => 'COM-45', 'route' => 'admin.commutes'] : null,
+        ]));
+    @endphp
+    @if ($shows('watch') && $watch !== [])
+        <div class="ad-section-label">{{ __('admin/home.cards.watch') }}</div>
+        <x-admin.card flush>
+            <div class="ad-table-wrap"><table class="ad-table ad-table--cards">
+                <thead><tr><th>{{ __('admin/home.cards.watch') }}</th><th class="ad-end">{{ __('admin/home.watch.count') }}</th><th>{{ __('admin/home.watch.detail') }}</th><th>{{ __('admin/home.watch.rule') }}</th></tr></thead>
+                <tbody>
+                @foreach ($watch as $line)
+                    <tr>
+                        <td data-label="{{ __('admin/home.cards.watch') }}"><a class="ad-link" href="{{ route($line['route']) }}" wire:navigate>{{ $line['label'] }}</a></td>
+                        <td data-label="{{ __('admin/home.watch.count') }}" class="ad-end"><span @class(['ad-chip', 'ad-chip--warn' => $line['count'] > 0, 'ad-chip--ok' => $line['count'] === 0])>{{ trans_choice('admin/home.watch.units.'.$line['unit'], $line['count'], ['count' => $line['count']]) }}</span></td>
+                        <td data-label="{{ __('admin/home.watch.detail') }}" class="ad-muted">{{ $line['detail'] }}</td>
+                        <td data-label="{{ __('admin/home.watch.rule') }}"><span class="ad-code">{{ $line['rule'] }}</span></td>
+                    </tr>
+                @endforeach
+                </tbody>
+            </table></div>
+        </x-admin.card>
+    @endif
+
+    {{-- MONEY SNAPSHOT (H04): this settlement week. --}}
+    @if ($shows('money') && $money !== null)
+        <div class="ad-section-label">{{ __('admin/home.money_title', ['from' => $money['weekStart']->locale(app()->getLocale())->translatedFormat('D j'), 'to' => $money['weekStart']->addDays(6)->locale(app()->getLocale())->translatedFormat('D j M')]) }}</div>
+        <div class="ad-grid ad-grid--4">
+            <x-admin.card flush><x-admin.stat money :label="__('admin/home.money.commission')" :value="$egp($money['commission'])" :href="route('admin.settlements')" /></x-admin.card>
+            <x-admin.card flush><x-admin.stat money :label="__('admin/home.money.received')" :value="$egp($money['received'])" :href="route('admin.payments')" /></x-admin.card>
+            <x-admin.card flush><x-admin.stat money :label="__('admin/home.money.owed_now')" :value="$egp($money['owedNow'])" :href="route('admin.ledger')" /></x-admin.card>
+            <x-admin.card flush><x-admin.stat money :label="__('admin/home.money.suspended_owe')" :value="$egp($money['suspendedOwe'])" :href="route('admin.settlements')" /></x-admin.card>
+        </div>
+    @endif
+
     @if ($safety === null && $trips === null && $queues === [] && $recent === null)
         <x-admin.card flush style="margin-block-start:20px"><x-admin.state kind="empty" :title="__('admin/home.nothing_title')" :text="__('admin/home.nothing_text')" /></x-admin.card>
     @endif
 
     {{-- WHAT THE TEAM DID --}}
-    @if ($recent !== null)
+    @if ($shows('team') && $recent !== null)
         <div class="ad-section-label">{{ __('admin/home.team') }}</div>
         <x-admin.card flush>
             <div class="ad-table-wrap">

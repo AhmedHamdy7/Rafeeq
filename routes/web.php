@@ -10,8 +10,10 @@ use App\Http\Controllers\LiveShareController;
 use App\Http\Middleware\SetAdminLocale;
 use App\Livewire\Admin\AcceptInvitation;
 use App\Livewire\Admin\Account;
+use App\Livewire\Admin\Announcements;
 use App\Livewire\Admin\Appeals;
 use App\Livewire\Admin\AuditLog;
+use App\Livewire\Admin\Content;
 use App\Livewire\Admin\Coupons;
 use App\Livewire\Admin\Dashboard;
 use App\Livewire\Admin\Directory\Bookings;
@@ -145,6 +147,8 @@ Route::prefix('admin')->name('admin.')->middleware(SetAdminLocale::class)->group
         Route::get('coupons', Coupons::class)->name('coupons');
         Route::get('audit', AuditLog::class)->name('audit');
         Route::get('settings', Settings::class)->name('settings');
+        Route::get('announcements', Announcements::class)->name('announcements');
+        Route::get('content', Content::class)->name('content');
 
         Route::get('account', Account::class)->name('account');
 

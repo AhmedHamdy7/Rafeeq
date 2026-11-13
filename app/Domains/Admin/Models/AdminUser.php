@@ -38,6 +38,8 @@ class AdminUser extends Authenticatable
             'mfa_confirmed_at' => 'datetime',
             'status' => AdminStatus::class,
             'last_login_at' => 'datetime',
+            'home_cards' => 'array',
+            'table_views' => 'array',
         ];
     }
 

@@ -375,4 +375,13 @@ return [
         'title' => 'مكان الركوب زي ما هو',
         'body' => ':name فضّل مكان الركوب الحالي بدل :place. مفيش حاجة اتغيرت.',
     ],
+    // Written by staff: the text is theirs, already in her language.
+    'announcement' => [
+        'title' => ':title',
+        'body' => ':body',
+    ],
+    'staff_message' => [
+        'title' => ':title',
+        'body' => ':body',
+    ],
 ];

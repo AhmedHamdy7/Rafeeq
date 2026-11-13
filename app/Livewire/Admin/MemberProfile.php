@@ -4,6 +4,7 @@ namespace App\Livewire\Admin;
 
 use App\Domains\Admin\Actions\ManageDebtAction;
 use App\Domains\Admin\Actions\ManageMemberAction;
+use App\Domains\Admin\Actions\ModerateMemberRecordAction;
 use App\Domains\Admin\Enums\AdminPermission;
 use App\Domains\Admin\Models\AdminAction;
 use App\Domains\Admin\Models\AdminUser;
@@ -65,6 +66,12 @@ class MemberProfile extends Component
     /** The open "More actions" form: correct, write_off, credit, unlock, escalate — or ''. */
     public string $action = '';
 
+    /** The reliability event or rating a record action is about. */
+    public string $target = '';
+
+    /** D19 · the message's title; its text goes in `reason`. */
+    public string $messageTitle = '';
+
     public string $reason = '';
 
     public string $fullName = '';
@@ -118,11 +125,14 @@ class MemberProfile extends Component
         $this->reset('revealing', 'revealReason');
     }
 
-    public function startAction(string $action): void
+    public const array RECORD_ACTIONS = ['reverse_event', 'decline_appeal', 'hide_rating', 'restore_rating'];
+
+    public function startAction(string $action, string $target = ''): void
     {
         $this->resetValidation();
-        $this->reset('reason', 'amount', 'done');
-        $this->action = in_array($action, ['correct', 'write_off', 'credit', 'unlock', 'escalate'], true) ? $action : '';
+        $this->reset('reason', 'amount', 'done', 'messageTitle');
+        $this->action = in_array($action, ['correct', 'write_off', 'credit', 'unlock', 'escalate', 'message', ...self::RECORD_ACTIONS], true) ? $action : '';
+        $this->target = in_array($this->action, self::RECORD_ACTIONS, true) ? $target : '';
 
         if ($this->action === 'correct') {
             $user = $this->member();
@@ -132,20 +142,22 @@ class MemberProfile extends Component
         }
     }
 
-    public function runAction(ManageMemberAction $members, ManageDebtAction $debts): void
+    public function runAction(ManageMemberAction $members, ManageDebtAction $debts, ModerateMemberRecordAction $records): void
     {
         $rules = ['reason' => ['required', 'string', 'min:5', 'max:255']];
 
-        $rules += match ($this->action) {
+        // The action's own rules win, so a message may be longer than a reason.
+        $rules = match ($this->action) {
             'correct' => [
                 'fullName' => ['required', 'string', 'min:2', 'max:150'],
                 'gender' => ['required', 'string', Rule::enum(Gender::class)],
                 'dateOfBirth' => ['nullable', 'date', 'before:-15 years'],
             ],
             'write_off' => ['side' => ['required', 'string', Rule::enum(DebtSide::class)]],
+            'message' => ['messageTitle' => ['required', 'string', 'min:2', 'max:120'], 'reason' => ['required', 'string', 'min:2', 'max:1000']],
             'credit' => ['side' => ['required', 'string', Rule::enum(DebtSide::class)], 'amount' => ['required', 'numeric', 'min:0.01', 'max:100000']],
             default => [],
-        };
+        } + $rules;
 
         $this->validate($rules, attributes: ['reason' => __('admin/actions.reason')]);
 
@@ -170,15 +182,36 @@ class MemberProfile extends Component
 
                 return __('admin/actions.done.unlock');
             })(),
+            'message' => (function () use ($members, $admin, $user) {
+                $members->message($admin, $user, $this->messageTitle, $this->reason);
+
+                return __('admin/actions.done.message');
+            })(),
             'escalate' => (function () use ($members, $admin, $user) {
                 $members->escalate($admin, $user, $this->reason);
 
                 return __('admin/actions.done.escalate');
             })(),
+            'reverse_event', 'decline_appeal' => (function () use ($records, $admin, $user) {
+                $event = ReliabilityEvent::query()->whereKey($this->target)->where('user_id', $user->id)->first() ?? abort(404);
+                $this->action === 'reverse_event'
+                    ? $records->reverseEvent($admin, $user, $event, $this->reason)
+                    : $records->declineAppeal($admin, $user, $event, $this->reason);
+
+                return __('admin/actions.done.'.$this->action);
+            })(),
+            'hide_rating', 'restore_rating' => (function () use ($records, $admin, $user) {
+                $rating = Rating::query()->whereKey($this->target)->where('reviewed_user_id', $user->id)->first() ?? abort(404);
+                $this->action === 'hide_rating'
+                    ? $records->hideRating($admin, $user, $rating, $this->reason)
+                    : $records->restoreRating($admin, $user, $rating, $this->reason);
+
+                return __('admin/actions.done.'.$this->action);
+            })(),
             default => null,
         };
 
-        $this->reset('action', 'reason', 'amount');
+        $this->reset('action', 'reason', 'amount', 'target', 'messageTitle');
     }
 
     /** @return list<string> the tabs this staff member may open */
@@ -227,7 +260,7 @@ class MemberProfile extends Component
             'money' => ['entries' => DebtEntry::query()->where('user_id', $user->id)->latest('created_at')->latest('id')->limit(40)->get()],
             'reliability' => [
                 'events' => ReliabilityEvent::query()->where('user_id', $user->id)->latest('occurred_at')->limit(30)->get(),
-                'ratings' => Rating::query()->where('reviewed_user_id', $user->id)->latest('created_at')->limit(20)->get(),
+                'ratings' => Rating::query()->where('reviewed_user_id', $user->id)->withCount(['reports as open_reports_count' => fn ($q) => $q->whereIn('status', ['pending', 'under_review'])])->latest('created_at')->limit(20)->get(),
             ],
             'reports' => ['incidents' => Incident::query()->where(fn ($q) => $q->where('reported_user_id', $user->id)->orWhere('reporter_user_id', $user->id))->with(['reporter', 'reportedUser'])->latest('created_at')->limit(30)->get()],
             'notifications' => ['notifications' => Notification::query()->where('user_id', $user->id)->latest('created_at')->limit(40)->get()],

@@ -35,22 +35,52 @@ class Vehicles extends DirectoryPage
         $this->resetPage();
     }
 
-    public function render()
+    protected function tableQuery(): Builder
     {
         $search = trim($this->search);
         $like = '%'.addcslashes($search, '%_\\').'%';
 
+        return Vehicle::query()
+            ->with('driverProfile.user')
+            ->when($this->status !== 'all', fn (Builder $query) => $query->where('verification_status', $this->status))
+            ->when($search !== '', fn (Builder $query) => $query->where(fn (Builder $q) => $q
+                ->where('plate_number', 'like', $like)
+                ->orWhereHas('driverProfile.user', fn (Builder $user) => $user->where('full_name', 'like', $like))))
+            ->latest('created_at')
+            ->latest('id');
+    }
+
+    protected function filters(): array
+    {
+        return ['status' => $this->status, 'q' => $this->search];
+    }
+
+    protected function applyFilters(array $filters): void
+    {
+        $this->search = (string) ($filters['q'] ?? '');
+        parent::applyFilters($filters);
+    }
+
+    protected function exportColumns(): array
+    {
+        return [
+            'id' => fn (Vehicle $vehicle) => $vehicle->id,
+            'plate' => fn (Vehicle $vehicle) => $vehicle->plate_number,
+            'car' => fn (Vehicle $vehicle) => trim($vehicle->make.' '.$vehicle->model),
+            'colour' => fn (Vehicle $vehicle) => $vehicle->colour,
+            'driver' => fn (Vehicle $vehicle) => $vehicle->driverProfile?->user?->full_name,
+            'seats' => fn (Vehicle $vehicle) => $vehicle->approved_seats ?? $vehicle->seats,
+            'status' => fn (Vehicle $vehicle) => $vehicle->verification_status instanceof \BackedEnum ? $vehicle->verification_status->value : $vehicle->verification_status,
+            'created_at' => fn (Vehicle $vehicle) => $vehicle->created_at?->timezone('Africa/Cairo')->format('Y-m-d H:i'),
+        ];
+    }
+
+    public function render()
+    {
         return view('livewire.admin.directory.vehicles', [
-            'vehicles' => Vehicle::query()
-                ->with('driverProfile.user')
-                ->when($this->status !== 'all', fn (Builder $query) => $query->where('verification_status', $this->status))
-                ->when($search !== '', fn (Builder $query) => $query->where(fn (Builder $q) => $q
-                    ->where('plate_number', 'like', $like)
-                    ->orWhereHas('driverProfile.user', fn (Builder $user) => $user->where('full_name', 'like', $like))))
-                ->latest('created_at')
-                ->latest('id')
-                ->paginate(25),
+            'vehicles' => $this->tableQuery()->paginate(25),
             'tabs' => $this->statuses(),
+            ...$this->tableTools(),
         ])->title(__('admin/directory.vehicles.title'));
     }
 }

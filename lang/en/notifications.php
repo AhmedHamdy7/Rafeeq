@@ -449,4 +449,13 @@ return [
         'title' => ':name kept their pickup',
         'body' => ':name prefers their current pickup to :place. Nothing changes.',
     ],
+    // Written by staff: the text is theirs, already in her language.
+    'announcement' => [
+        'title' => ':title',
+        'body' => ':body',
+    ],
+    'staff_message' => [
+        'title' => ':title',
+        'body' => ':body',
+    ],
 ];

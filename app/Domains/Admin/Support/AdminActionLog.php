@@ -48,6 +48,11 @@ final class AdminActionLog
         // Every "More actions" step on a member (D16–D18, D22): what changed and why.
         'member.correct',
         'member.escalate',
+        // Changes to what a member's record says about them (reliability and reviews).
+        'reliability.reverse',
+        'reliability.decline_appeal',
+        'rating.hide',
+        'rating.restore',
         'debt.write_off',
         'account.unlock_sign_in',
         'account.suspension_appeal_decide',
