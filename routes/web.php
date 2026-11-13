@@ -32,6 +32,7 @@ use App\Livewire\Admin\Reports;
 use App\Livewire\Admin\SafetyCases;
 use App\Livewire\Admin\Settings;
 use App\Livewire\Admin\Settlements;
+use App\Livewire\Admin\SosDetail;
 use App\Livewire\Admin\Statistics;
 use App\Livewire\Admin\Support;
 use App\Livewire\Admin\Team;
@@ -121,6 +122,7 @@ Route::prefix('admin')->name('admin.')->middleware(SetAdminLocale::class)->group
         Route::get('dashboard', Dashboard::class)->name('dashboard');
         Route::get('statistics', Statistics::class)->name('statistics');
         Route::get('safety', SafetyCases::class)->name('safety');
+        Route::get('safety/sos/{sos}', SosDetail::class)->name('safety.sos');
         Route::get('trips', LiveTrips::class)->name('trips');
         Route::get('reports', Reports::class)->name('reports');
         Route::get('appeals', Appeals::class)->name('appeals');

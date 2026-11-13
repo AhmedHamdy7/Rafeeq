@@ -40,7 +40,7 @@
                         <div class="ad-row" style="gap:12px">
                             <span class="ad-avatar" aria-hidden="true">{{ mb_substr($member->full_name ?? '?', 0, 1) }}</span>
                             <div style="flex:1;min-inline-size:160px">
-                                <div style="font-weight:700"><bdi>{{ $member->full_name }}</bdi></div>
+                                <div style="font-weight:700"><a class="ad-link" href="{{ route('admin.safety.sos', $alert->id) }}" wire:navigate><bdi>{{ $member->full_name }}</bdi></a></div>
                                 <div class="ad-muted" style="font-size:12.5px">
                                     {{ __('admin.safety.raised', ['ago' => $alert->created_at->diffForHumans(), 'time' => $alert->created_at->timezone('Africa/Cairo')->format('H:i:s')]) }}
                                 </div>
@@ -158,6 +158,28 @@
             </x-admin.card>
         </aside>
     </div>
+
+    {{-- ─────────── History (O01): the last closed alerts ─────────── --}}
+    <div class="ad-section-label">{{ __('admin/safety.history') }}</div>
+    <x-admin.card flush>
+        @if ($history->isEmpty())
+            <x-admin.state kind="empty" :title="__('admin/safety.no_history')" />
+        @else
+            <div class="ad-table-wrap"><table class="ad-table ad-table--cards">
+                <thead><tr><th>{{ __('admin/safety.outcome') }}</th><th>{{ __('admin/safety.raised_by') }}</th><th>{{ __('admin/safety.raised_at') }}</th><th>{{ __('admin.safety.handled_by') }}</th></tr></thead>
+                <tbody>
+                @foreach ($history as $past)
+                    <tr class="ad-click" wire:key="sos-history-{{ $past->id }}" x-data x-on:click="Livewire.navigate(@js(route('admin.safety.sos', $past->id)))">
+                        <td data-label="{{ __('admin/safety.outcome') }}"><span class="ad-chip">{{ $past->resolution ? __('admin.safety.outcomes.'.$past->resolution->value) : __('admin/safety.cancelled_by_member') }}</span></td>
+                        <td data-label="{{ __('admin/safety.raised_by') }}"><a class="ad-link" href="{{ route('admin.safety.sos', $past->id) }}" wire:navigate><bdi>{{ $past->safetyEvent?->user?->full_name ?? '—' }}</bdi></a></td>
+                        <td data-label="{{ __('admin/safety.raised_at') }}" class="ad-num ad-muted">{{ $past->created_at->timezone('Africa/Cairo')->format('D j M H:i') }}</td>
+                        <td data-label="{{ __('admin.safety.handled_by') }}">{{ $past->responderAdmin?->name ?? '—' }}</td>
+                    </tr>
+                @endforeach
+                </tbody>
+            </table></div>
+        @endif
+    </x-admin.card>
 
     {{-- ─────────── Open reports (also on their own page, Reports) ─────────── --}}
     <div class="ad-section-label">{{ __('admin.safety.reports') }}</div>
