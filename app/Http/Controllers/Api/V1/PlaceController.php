@@ -40,6 +40,7 @@ final class PlaceController extends Controller
             within: $request->filled('radiusMetres')
                 ? Distance::fromMetres((int) $request->validated('radiusMetres'))
                 : null,
+            limit: (int) ($request->validated('limit') ?? SearchPlacesAction::DEFAULT_LIMIT),
         );
 
         return ApiResponse::success(PlaceResource::near($places, $near));

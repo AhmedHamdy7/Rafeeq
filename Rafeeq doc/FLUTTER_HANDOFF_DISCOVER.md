@@ -47,7 +47,7 @@ General rules: responses are `{"success": true, "data": …}`; `…At` is UTC (u
 
 | Screen | Call | Read |
 |---|---|---|
-| From / To fields (F3P-12) | `GET /places?q=` | `id`, `name`, `nameAr`, `lat`, `lng`. No `q` → the 20 most used places. `q` matches part of a word, any case, max 20 |
+| From / To fields (F3P-12) | `GET /places?q=&lat=&lng=&limit=` | `id`, `name`, `nameAr`, `lat`, `lng`, `district`, `city` (in the request's language), `distanceMetres` with `lat`/`lng`. No `q` → the 20 most used places. `q` finds the place wherever it is: name starts with it → contains it → area only, nearest first in each. `limit` 1–20 |
 | Dropped pin label (B04) | `GET /places?lat=&lng=&radiusMetres=1000` | first `name`, nearest first, with `distanceMetres`; empty → she types it |
 | Results (F3P-12) | `GET /search/commutes` | §3 |
 | Recent searches (F3P-13, Home) | `GET /me/recent-searches` · `DELETE /me/recent-searches/{id}` · `DELETE /me/recent-searches` | `criteria.origin.label` → `criteria.destination.label`, `searchedAt` |

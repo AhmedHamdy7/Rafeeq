@@ -19,11 +19,19 @@ final class SearchPlacesRequest extends FormRequest
     public function rules(): array
     {
         return [
-            // Part of a name or district, in Arabic or English.
+            /*
+             * Part of a place name, district or city, in Arabic or English. With `q`, every matching
+             * place is found wherever it is: names that start with it come first, then names that
+             * contain it, then places that only match by area. Inside each group the nearest comes
+             * first when `lat` / `lng` are sent, then the most used.
+             */
             'q' => ['sometimes', 'nullable', 'string', 'max:100'],
 
             /*
-             * Search near a point on the map. Both must be sent together.
+             * The point to measure from, usually where the person is. Both must be sent together.
+             * Without `q`: the places near this point, nearest first, within `radiusMetres`.
+             * With `q`: only orders the results and adds `distanceMetres` to each; places far
+             * away are still returned unless `radiusMetres` is sent.
              *
              * `nullable`, NOT `sometimes`: `sometimes` skips a field's whole rule
              * set when the field is absent, so `required_with` on the missing half
@@ -33,8 +41,14 @@ final class SearchPlacesRequest extends FormRequest
             'lat' => ['nullable', 'required_with:lng', 'numeric', 'between:-90,90'],
             'lng' => ['nullable', 'required_with:lat', 'numeric', 'between:-180,180'],
 
-            // How far from that point to look. Defaults to 5km.
+            /*
+             * How far from that point to look. Without `q` it defaults to 5km. With `q` it applies
+             * only when sent, and the matches inside it are then ordered by distance alone.
+             */
             'radiusMetres' => ['sometimes', 'integer', 'min:100', 'max:50000'],
+
+            // How many places to return, best first. Defaults to 20.
+            'limit' => ['sometimes', 'integer', 'min:1', 'max:20'],
         ];
     }
 }
