@@ -55,9 +55,29 @@
                                     @if ($row['override'])
                                         <button type="button" class="ad-btn ad-btn--sm ad-btn--quiet" wire:click="edit('{{ $row['key'] }}', 'reset')">{{ __('admin.settings.reset') }}</button>
                                     @endif
+                                    <button type="button" class="ad-btn ad-btn--sm ad-btn--quiet" wire:click="$set('historyFor', {{ $historyFor === $row['key'] ? 'null' : "'".$row['key']."'" }})" aria-expanded="{{ $historyFor === $row['key'] ? 'true' : 'false' }}">{{ __('admin.settings.history') }}</button>
                                 @endif
                             </div>
                         </div>
+
+                        @if ($historyFor === $row['key'])
+                            <div class="ad-confirm">
+                                @if ($history->isEmpty())
+                                    <p class="ad-hint" style="margin:0">{{ __('admin.settings.no_history') }}</p>
+                                @else
+                                    <table class="ad-table ad-table--dense"><tbody>
+                                    @foreach ($history as $change)
+                                        <tr wire:key="sh-{{ $change->id }}">
+                                            <td class="ad-num" style="white-space:nowrap"><bdi>{{ is_scalar($change->old_value['value'] ?? null) ? $change->old_value['value'] : '—' }}</bdi> → <bdi>{{ $change->action === 'settings.reset' ? __('admin.settings.default_label') : (is_scalar($change->new_value['value'] ?? null) ? $change->new_value['value'] : '—') }}</bdi></td>
+                                            <td dir="auto">{{ $change->reason }}</td>
+                                            <td>{{ $change->admin?->name ?? '—' }}</td>
+                                            <td class="ad-muted ad-num" style="white-space:nowrap">{{ $change->created_at?->timezone('Africa/Cairo')->format('j M Y H:i') }}</td>
+                                        </tr>
+                                    @endforeach
+                                    </tbody></table>
+                                @endif
+                            </div>
+                        @endif
 
                         @if ($editing === $row['key'])
                             <form wire:submit="save" class="ad-confirm">

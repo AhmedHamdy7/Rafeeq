@@ -628,6 +628,9 @@ return [
             'reliability__weights__passenger_late' => 'الراكب اتأخر',
             'reliability__weights__driver_ended_trip' => 'السوّاق أنهى رحلة شغالة',
         ],
+        'history' => 'السجل',
+        'no_history' => 'ماتغيرش قبل كده: طول عمره على القيمة الافتراضية.',
+        'default_label' => 'الافتراضي',
     ],
 
     'payments' => [

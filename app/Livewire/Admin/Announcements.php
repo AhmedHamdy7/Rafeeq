@@ -9,6 +9,7 @@ use App\Domains\Admin\Jobs\DeliverAnnouncement;
 use App\Domains\Admin\Models\AdminUser;
 use App\Domains\Admin\Models\Announcement;
 use App\Domains\Notification\Enums\NotificationChannel;
+use App\Domains\Notification\Enums\NotificationType;
 use App\Domains\Notification\Models\Notification;
 use Carbon\CarbonImmutable;
 use Illuminate\Support\Facades\Auth;
@@ -30,7 +31,7 @@ class Announcements extends Component
 {
     use WithPagination;
 
-    public const array TABS = ['compose', 'sent', 'failed'];
+    public const array TABS = ['compose', 'sent', 'failed', 'events'];
 
     #[Url(as: 'tab')]
     public string $tab = 'sent';
@@ -146,6 +147,8 @@ class Announcements extends Component
             'failed' => $this->tab === 'failed'
                 ? Notification::query()->with('user')->where('channel', NotificationChannel::Push->value)->whereNotNull('failed_reason')->latest('created_at')->paginate(25)
                 : null,
+            // Z03: every message the platform sends on its own, with the switch that governs it.
+            'events' => $this->tab === 'events' ? NotificationType::cases() : [],
             'audiences' => AnnouncementAudience::cases(),
             'links' => Announcement::LINKS,
         ])->title(__('admin/communication.title'));

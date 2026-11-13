@@ -631,6 +631,9 @@ return [
             'reliability__weights__passenger_late' => 'Passenger late',
             'reliability__weights__driver_ended_trip' => 'Driver ends a trip under way',
         ],
+        'history' => 'History',
+        'no_history' => 'Never changed: it has always been the default.',
+        'default_label' => 'default',
     ],
 
     'payments' => [

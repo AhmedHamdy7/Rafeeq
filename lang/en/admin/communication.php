@@ -8,6 +8,7 @@ return [
         'compose' => 'Compose',
         'sent' => 'Sent',
         'failed' => 'Delivery log',
+        'events' => 'Push events (reference)',
     ],
     'new' => 'New announcement',
     'inbox_only' => 'Inbox only, never a push (NOTIF-02). Each member gets it in their app language.',
@@ -69,4 +70,14 @@ return [
     'version' => 'Version :version · :at · :name',
     'content_saved' => 'Saved as a new version.',
     'content_app_note' => 'The app does not read these yet: the mobile endpoint comes next, once the wording is final (Q-055).',
+    'events_hint' => 'Every message RAFEEQ sends by itself, and the switch in the member\'s settings that governs it. Safety ones cannot be switched off.',
+    'switch' => 'Member\'s switch',
+    'example' => 'Title (in the app language)',
+    'categories' => [
+        'booking' => 'Bookings',
+        'payment' => 'Payments',
+        'trip' => 'Trips',
+        'safety' => 'Safety (always on)',
+        'marketing' => 'Offers',
+    ],
 ];

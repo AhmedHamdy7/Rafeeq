@@ -4,6 +4,7 @@ namespace App\Livewire\Admin;
 
 use App\Domains\Admin\Actions\UpdatePlatformSettingAction;
 use App\Domains\Admin\Enums\AdminPermission;
+use App\Domains\Admin\Models\AdminAction;
 use App\Domains\Admin\Models\AdminUser;
 use App\Domains\Admin\Models\PlatformSetting;
 use App\Domains\Admin\Support\SettingsCatalogue;
@@ -26,6 +27,9 @@ use Livewire\Component;
 class Settings extends Component
 {
     public ?string $editing = null;
+
+    /** F04 · the setting whose change history is open. */
+    public ?string $historyFor = null;
 
     /** 'update' or 'reset'. */
     public string $mode = '';
@@ -145,6 +149,16 @@ class Settings extends Component
 
         return view('livewire.admin.settings', [
             'groups' => $groups,
+            // F04: every change to the open setting, newest first, from the audit log.
+            'history' => $this->historyFor === null ? collect() : AdminAction::query()
+                ->whereIn('action', ['settings.update', 'settings.reset'])
+                ->where('entity_type', 'PlatformSetting')
+                ->where('entity_id', $this->historyFor)
+                ->with('admin')
+                ->latest('created_at')
+                ->latest('id')
+                ->limit(20)
+                ->get(),
         ])->title(__('admin.settings.title'));
     }
 }
