@@ -11,6 +11,46 @@
         <p class="ad-flash" role="status"><x-admin.icon name="check" />{{ session('status') }}</p>
     @endif
 
+    <div class="ad-seg" role="group" style="margin-block-end:12px">
+        <button type="button" wire:click="$set('view', 'queue')" aria-pressed="{{ $view === 'queue' ? 'true' : 'false' }}">{{ __('admin/payments.views.queue') }}</button>
+        <button type="button" wire:click="$set('view', 'history')" aria-pressed="{{ $view === 'history' ? 'true' : 'false' }}">{{ __('admin/payments.views.history') }}</button>
+    </div>
+
+    @if ($view === 'history')
+        {{-- ─────────── History (I04): confirmed and refused, newest decision first ─────────── --}}
+        <x-admin.card flush>
+            @if ($history->isEmpty())
+                <x-admin.state kind="empty" :title="__('admin/payments.no_history')" />
+            @else
+                <div class="ad-table-wrap"><table class="ad-table ad-table--cards">
+                    <thead><tr>
+                        <th>{{ __('admin.payments.member') }}</th>
+                        <th class="ad-end">{{ __('admin.payments.amount') }}</th>
+                        <th>{{ __('admin.payments.reference') }}</th>
+                        <th>{{ __('admin/payments.result') }}</th>
+                        <th>{{ __('admin/payments.decided_by') }}</th>
+                        <th>{{ __('admin/payments.decided_at') }}</th>
+                    </tr></thead>
+                    <tbody>
+                    @foreach ($history as $payment)
+                        <tr wire:key="ph-{{ $payment->id }}">
+                            <td data-label="{{ __('admin.payments.member') }}"><bdi>{{ $payment->user?->full_name ?? '—' }}</bdi> <span class="ad-chip ad-chip--plain">{{ __('admin.payments.side_'.$payment->side->value) }}</span></td>
+                            <td data-label="{{ __('admin.payments.amount') }}" class="ad-end ad-num">EGP {{ number_format($payment->amount_piastres / 100, 2) }}</td>
+                            <td data-label="{{ __('admin.payments.reference') }}"><span class="ad-mono">{{ $payment->instapay_reference }}</span></td>
+                            <td data-label="{{ __('admin/payments.result') }}">
+                                <span @class(['ad-chip', 'ad-chip--ok' => $payment->status->value === 'confirmed', 'ad-chip--bad' => $payment->status->value === 'rejected'])>{{ __('admin/payments.results.'.$payment->status->value) }}</span>
+                                @if ($payment->decision_note)<div class="ad-muted" style="font-size:12px" dir="auto">{{ \Illuminate\Support\Str::limit($payment->decision_note, 80) }}</div>@endif
+                            </td>
+                            <td data-label="{{ __('admin/payments.decided_by') }}">{{ $payment->decidedBy?->name ?? '—' }}</td>
+                            <td data-label="{{ __('admin/payments.decided_at') }}" class="ad-num ad-muted">{{ $payment->decided_at?->timezone('Africa/Cairo')->format('j M Y H:i') }}</td>
+                        </tr>
+                    @endforeach
+                    </tbody>
+                </table></div>
+                <x-rq-pager :page="$history" />
+            @endif
+        </x-admin.card>
+    @else
     {{-- ─────────── Transfers to confirm (I) ─────────── --}}
     <x-admin.card flush>
         @if ($pending->isEmpty())
@@ -213,5 +253,6 @@
                 </form>
             </x-admin.card>
         </div>
+    @endif
     @endif
 </div>
