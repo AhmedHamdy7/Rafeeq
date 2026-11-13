@@ -15,4 +15,13 @@ return [
     'about' => 'About',
     'outcome' => 'Outcome',
     'closed_at' => 'Closed',
+    'case_title' => 'Report',
+    'evidence_title' => 'Evidence',
+    'no_evidence' => 'No file was attached.',
+    'new_evidence' => 'New since the decision',
+    'new_evidence_hint' => 'Marked new: sent after the first decision (:at), usually with the appeal.',
+    'people' => 'The case',
+    'severity' => 'Severity',
+    'opened' => 'Opened',
+    'filed' => 'Report filed',
 ];
