@@ -100,7 +100,7 @@ it('saves content as a new version each time, with the old text in the audit log
 
     expect($page->version)->toBe(2)
         ->and($page->body_en)->toBe('WhatsApp 06:00–22:00')
-        ->and(AdminAction::query()->where('action', 'content.update')->latest('created_at')->latest('id')->first()->old_value['body_en'])->toBe('WhatsApp');
+        ->and(AdminAction::query()->where('action', 'content.update')->whereNotNull('old_value')->sole()->old_value['body_en'])->toBe('WhatsApp');
 });
 
 it('keeps Content to Admins', function () {

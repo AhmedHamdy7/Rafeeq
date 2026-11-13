@@ -193,7 +193,7 @@ class MemberProfile extends Component
                 return __('admin/actions.done.escalate');
             })(),
             'reverse_event', 'decline_appeal' => (function () use ($records, $admin, $user) {
-                $event = ReliabilityEvent::query()->whereKey($this->target)->where('user_id', $user->id)->firstOrFail();
+                $event = ReliabilityEvent::query()->whereKey($this->target)->where('user_id', $user->id)->first() ?? abort(404);
                 $this->action === 'reverse_event'
                     ? $records->reverseEvent($admin, $user, $event, $this->reason)
                     : $records->declineAppeal($admin, $user, $event, $this->reason);
@@ -201,7 +201,7 @@ class MemberProfile extends Component
                 return __('admin/actions.done.'.$this->action);
             })(),
             'hide_rating', 'restore_rating' => (function () use ($records, $admin, $user) {
-                $rating = Rating::query()->whereKey($this->target)->where('reviewed_user_id', $user->id)->firstOrFail();
+                $rating = Rating::query()->whereKey($this->target)->where('reviewed_user_id', $user->id)->first() ?? abort(404);
                 $this->action === 'hide_rating'
                     ? $records->hideRating($admin, $user, $rating, $this->reason)
                     : $records->restoreRating($admin, $user, $rating, $this->reason);

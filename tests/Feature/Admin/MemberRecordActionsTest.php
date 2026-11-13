@@ -84,7 +84,7 @@ it('never touches another member’s record from this page', function () {
     $someoneElse = ReliabilityEvent::factory()->create();
     actingAsAdmin(adminWithRole(AdminRole::SuperAdmin));
 
-    expect(fn () => runRecordAction($this->member, 'reverse_event', $someoneElse->id))->toThrow(Illuminate\Database\Eloquent\ModelNotFoundException::class);
+    runRecordAction($this->member, 'reverse_event', $someoneElse->id)->assertNotFound();
     expect($someoneElse->refresh()->reversed_at)->toBeNull();
 });
 
