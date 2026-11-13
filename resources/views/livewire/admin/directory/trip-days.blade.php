@@ -28,7 +28,7 @@
                         @php($origin = $offer?->locations->firstWhere('type', CommuteLocationType::Origin))
                         @php($destination = $offer?->locations->firstWhere('type', CommuteLocationType::Destination))
                         <tr wire:key="trip-day-{{ $trip->id }}">
-                            <td data-label="{{ __('admin/directory.departs') }}" class="ad-num" style="font-weight:700">{{ $trip->departure_at?->timezone('Africa/Cairo')->format('H:i') }}</td>
+                            <td data-label="{{ __('admin/directory.departs') }}" class="ad-num" style="font-weight:700"><a class="ad-link" href="{{ route('admin.trip-days.show', $trip->id) }}" wire:navigate>{{ $trip->departure_at?->timezone('Africa/Cairo')->format('H:i') }}</a></td>
                             <td data-label="{{ __('admin/directory.route') }}"><bdi>{{ $origin?->address ?? '—' }}</bdi> <x-admin.icon name="chevron" size="12" class="ad-flip ad-subtle" /> <bdi>{{ $destination?->address ?? '—' }}</bdi></td>
                             <td data-label="{{ __('admin/directory.driver') }}"><bdi>{{ $offer?->driverProfile?->user?->full_name ?? '—' }}</bdi></td>
                             <td data-label="{{ __('admin/directory.seats') }}" class="ad-end ad-num">{{ $trip->seats_taken }} / {{ $trip->seats_total }}</td>

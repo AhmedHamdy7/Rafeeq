@@ -433,6 +433,8 @@ return [
             'announcement__cancel' => 'Cancelled a scheduled announcement',
             'content__update' => 'Updated app content',
             'table__export' => 'Exported a table',
+            'booking__cancel' => 'Cancelled a seat for a member',
+            'commute__resume_after_review' => 'Resumed a commute after a gender review',
             'member__correct' => 'Corrected a member’s details',
             'member__escalate' => 'Escalated a member to an Admin',
             'debt__write_off' => 'Wrote off a debt',

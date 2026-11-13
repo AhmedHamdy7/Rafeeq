@@ -21,7 +21,7 @@
                     <tbody>
                     @foreach ($bookings as $booking)
                         <tr wire:key="booking-{{ $booking->id }}">
-                            <td data-label="{{ __('admin/directory.ref') }}"><span class="ad-code">{{ \Illuminate\Support\Str::upper(\Illuminate\Support\Str::substr($booking->id, -6)) }}</span></td>
+                            <td data-label="{{ __('admin/directory.ref') }}"><a class="ad-link ad-code" href="{{ route('admin.bookings.show', $booking->id) }}" wire:navigate>{{ \Illuminate\Support\Str::upper(\Illuminate\Support\Str::substr($booking->id, -6)) }}</a></td>
                             <td data-label="{{ __('admin/directory.passenger') }}"><bdi>{{ $booking->passenger?->full_name ?? '—' }}</bdi></td>
                             <td data-label="{{ __('admin/directory.driver') }}"><bdi>{{ $booking->driverProfile?->user?->full_name ?? '—' }}</bdi></td>
                             <td data-label="{{ __('admin/directory.day') }}" class="ad-num">{{ $booking->scheduledTrip?->trip_date?->format('D j M') }} · {{ $booking->scheduledTrip?->departure_at?->timezone('Africa/Cairo')->format('H:i') }}</td>
