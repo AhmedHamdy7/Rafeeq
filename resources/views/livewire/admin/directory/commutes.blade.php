@@ -23,7 +23,7 @@
                         @php($destination = $commute->locations->firstWhere('type', CommuteLocationType::Destination))
                         <tr wire:key="commute-{{ $commute->id }}">
                             <td data-label="{{ __('admin/directory.route') }}">
-                                <bdi>{{ $origin?->address ?? '—' }}</bdi> <x-admin.icon name="chevron" size="12" class="ad-flip ad-subtle" /> <bdi>{{ $destination?->address ?? '—' }}</bdi>
+                                <a class="ad-link" href="{{ route('admin.commutes.show', $commute->id) }}" wire:navigate><bdi>{{ $origin?->address ?? '—' }}</bdi> <x-admin.icon name="chevron" size="12" class="ad-flip ad-subtle" /> <bdi>{{ $destination?->address ?? '—' }}</bdi></a>
                                 @if ($commute->audience?->value === 'women_only')
                                     <span class="ad-chip ad-chip--plain">{{ __('admin.trips.women_only') }}</span>
                                 @endif

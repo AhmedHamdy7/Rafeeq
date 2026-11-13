@@ -27,7 +27,7 @@
                     @foreach ($vehicles as $vehicle)
                         @php($state = $vehicle->verification_status->value)
                         <tr wire:key="vehicle-{{ $vehicle->id }}">
-                            <td data-label="{{ __('admin/directory.car') }}"><bdi>{{ $vehicle->make }} {{ $vehicle->model }}</bdi> <span class="ad-muted">· {{ $vehicle->year }} · <bdi>{{ $vehicle->colour }}</bdi></span></td>
+                            <td data-label="{{ __('admin/directory.car') }}"><a class="ad-link" href="{{ route('admin.vehicles.show', $vehicle->id) }}" wire:navigate><bdi>{{ $vehicle->make }} {{ $vehicle->model }}</bdi></a> <span class="ad-muted">· {{ $vehicle->year }} · <bdi>{{ $vehicle->colour }}</bdi></span></td>
                             <td data-label="{{ __('admin/directory.vehicles.plate') }}"><span class="ad-mono"><bdi>{{ $vehicle->plate_number }}</bdi></span></td>
                             <td data-label="{{ __('admin/directory.driver') }}">
                                 @if ($vehicle->driverProfile?->user)

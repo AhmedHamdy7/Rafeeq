@@ -430,6 +430,8 @@ return [
             'announcement__cancel' => 'لغى إعلان متجدول',
             'content__update' => 'عدّل محتوى التطبيق',
             'table__export' => 'صدّر جدول',
+            'booking__cancel' => 'لغى مقعد بالنيابة عن عضو',
+            'commute__resume_after_review' => 'شغّل رحلة بعد مراجعة النوع',
             'member__correct' => 'صحّح بيانات عضو',
             'member__escalate' => 'صعّد عضو للأدمن',
             'debt__write_off' => 'أعفى من دين',

@@ -59,6 +59,9 @@ final class AdminActionLog
         'account.reactivate',
         'commute.unpublish',
         'booking.refund',
+        // A seat staff cancelled for a member, and a commute resumed after a gender review.
+        'booking.cancel',
+        'commute.resume_after_review',
         // Money off somebody's debt that she did not pay, or a payment she says she made refused.
         'debt.payment_reject',
         'debt.coupon',
