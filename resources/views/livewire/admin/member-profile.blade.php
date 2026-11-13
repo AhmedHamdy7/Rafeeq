@@ -114,7 +114,8 @@
 
                 <details wire:ignore.self class="ad-details">
                     <summary class="ad-btn ad-btn--sm">{{ __('admin.details.show_all') }}</summary>
-                    <x-rq-member-details :member="$user" :may-see-documents="$maySeeDocuments" :revealed="$revealedId === $user->id" />
+                    <x-rq-member-details :member="$user" :may-see-documents="$maySeeDocuments" :revealed="$revealedId === $user->id"
+                                         :phone="$revealedPhone ?? PhoneNumber::fromRaw($user->phone_e164)->masked()" />
                 </details>
             </x-admin.card>
 

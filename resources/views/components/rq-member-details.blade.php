@@ -1,4 +1,8 @@
-@props(['member', 'maySeeDocuments' => false, 'revealed' => false])
+{{--
+    `phone`: what to print for the phone number. Null prints the full number (driver review,
+    the Users panel); the full profile page passes the masked one until a reasoned reveal (D15).
+--}}
+@props(['member', 'maySeeDocuments' => false, 'revealed' => false, 'phone' => null])
 @php
     $label = function ($value): string {
         if ($value === null || $value === '') {
@@ -25,7 +29,7 @@
     <dl class="ad-facts">
         <div><dt>{{ __('admin.details.full_name') }}</dt><dd><bdi>{{ $member->full_name ?? '—' }}</bdi></dd></div>
         <div><dt>{{ __('admin.details.public_name') }}</dt><dd><bdi>{{ $member->public_first_name ?? '—' }}</bdi></dd></div>
-        <div><dt>{{ __('admin.details.phone') }}</dt><dd class="ad-mono" dir="ltr">{{ $member->phone_e164 }}</dd></div>
+        <div><dt>{{ __('admin.details.phone') }}</dt><dd class="ad-mono" dir="ltr">{{ $phone ?? $member->phone_e164 }}</dd></div>
         <div><dt>{{ __('admin.details.phone_verified') }}</dt><dd>{{ $date($member->phone_verified_at, 'j M Y H:i') }}</dd></div>
         <div><dt>{{ __('admin.details.email') }}</dt><dd dir="ltr">{{ $member->email ?? '—' }}</dd></div>
         <div><dt>{{ __('admin.details.email_verified') }}</dt><dd>{{ $date($member->email_verified_at, 'j M Y H:i') }}</dd></div>
