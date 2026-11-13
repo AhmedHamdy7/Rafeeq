@@ -6,6 +6,7 @@ use App\Domains\Admin\Enums\AdminPermission;
 use App\Domains\Admin\Models\AdminUser;
 use App\Domains\Identity\Models\SuspensionAppeal;
 use App\Domains\Payment\Models\FeeAppeal;
+use App\Domains\Reliability\Models\ReliabilityEvent;
 use App\Domains\Safety\Enums\IncidentStatus;
 use App\Domains\Safety\Models\Incident;
 use App\Domains\Trip\Models\MemberWarning;
@@ -29,7 +30,7 @@ use Livewire\Component;
 #[Layout('components.layouts.admin')]
 class Appeals extends Component
 {
-    public const array KINDS = ['fee', 'warning', 'suspension', 'report'];
+    public const array KINDS = ['fee', 'warning', 'suspension', 'reliability', 'report'];
 
     #[Url(as: 'kind')]
     public string $kind = 'all';
@@ -67,6 +68,7 @@ class Appeals extends Component
             $may(AdminPermission::PaymentView) ? 'fee' : null,
             $may(AdminPermission::PaymentView) ? 'warning' : null,
             $may(AdminPermission::MemberView) ? 'suspension' : null,
+            $may(AdminPermission::MemberView) ? 'reliability' : null,
             $may(AdminPermission::SafetyView) ? 'report' : null,
         ]));
     }
@@ -103,6 +105,16 @@ class Appeals extends Component
                     'kind' => 'suspension', 'id' => $appeal->id, 'who' => $appeal->user?->full_name,
                     'since' => CarbonImmutable::instance($appeal->created_at), 'text' => (string) $appeal->message,
                     'url' => route('admin.members', ['member' => $appeal->user_id]),
+                ]));
+        }
+
+        // Reliability appeals: decided on the member's Reliability tab (reverse, or decline).
+        if (in_array('reliability', $kinds, true)) {
+            ReliabilityEvent::query()->awaitingAppealReview()->with('user')->orderBy('appealed_at')->limit($limit)->get()
+                ->each(fn (ReliabilityEvent $event) => $rows->push([
+                    'kind' => 'reliability', 'id' => $event->id, 'who' => $event->user?->full_name,
+                    'since' => CarbonImmutable::instance($event->appealed_at), 'text' => (string) $event->appeal_reason,
+                    'url' => route('admin.members.show', ['user' => $event->user_id, 'tab' => 'reliability']),
                 ]));
         }
 

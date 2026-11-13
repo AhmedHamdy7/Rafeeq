@@ -10,6 +10,7 @@ return [
         'warning' => 'Passenger warnings',
         'suspension' => 'Suspensions',
         'report' => 'Report decisions',
+        'reliability' => 'Reliability',
     ],
     'kind' => 'Kind',
     'who' => 'Who',
