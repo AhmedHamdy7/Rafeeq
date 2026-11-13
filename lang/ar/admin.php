@@ -429,6 +429,7 @@ return [
             'announcement__create' => 'كتب إعلان',
             'announcement__cancel' => 'لغى إعلان متجدول',
             'content__update' => 'عدّل محتوى التطبيق',
+            'table__export' => 'صدّر جدول',
             'member__correct' => 'صحّح بيانات عضو',
             'member__escalate' => 'صعّد عضو للأدمن',
             'debt__write_off' => 'أعفى من دين',

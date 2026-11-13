@@ -39,6 +39,7 @@ class AdminUser extends Authenticatable
             'status' => AdminStatus::class,
             'last_login_at' => 'datetime',
             'home_cards' => 'array',
+            'table_views' => 'array',
         ];
     }
 

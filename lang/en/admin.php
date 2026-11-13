@@ -432,6 +432,7 @@ return [
             'announcement__create' => 'Wrote an announcement',
             'announcement__cancel' => 'Cancelled a scheduled announcement',
             'content__update' => 'Updated app content',
+            'table__export' => 'Exported a table',
             'member__correct' => 'Corrected a member’s details',
             'member__escalate' => 'Escalated a member to an Admin',
             'debt__write_off' => 'Wrote off a debt',
