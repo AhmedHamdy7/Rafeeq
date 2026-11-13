@@ -1309,3 +1309,50 @@ a.ad-stat:hover {
     grid-template-columns: minmax(0, 1fr);
   }
 }
+
+/* ---------- A timeline (SOS detail, O02) ---------- */
+
+.ad-timeline {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.ad-timeline__item {
+  display: grid;
+  grid-template-columns: 48px 14px minmax(0, 1fr);
+  gap: 0 8px;
+  padding-block: 6px;
+}
+
+.ad-timeline__item::before {
+  content: '';
+  grid-column: 2;
+  grid-row: 1;
+  inline-size: 10px;
+  block-size: 10px;
+  margin-block-start: 4px;
+  border-radius: 50%;
+  background: var(--warning-600);
+}
+
+.ad-timeline__item--bad::before {
+  background: var(--danger-600);
+}
+
+.ad-timeline__item--waiting::before {
+  background: var(--border-strong);
+}
+
+.ad-timeline__time {
+  grid-column: 1;
+  grid-row: 1;
+  color: var(--fg-muted);
+  font-size: 12px;
+}
+
+.ad-timeline__body {
+  grid-column: 3;
+  grid-row: 1;
+  min-inline-size: 0;
+}

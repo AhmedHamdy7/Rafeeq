@@ -19,6 +19,9 @@ return [
     'days' => 'Days',
     'arrive' => 'Arrive',
     'statuses' => [
+        'approved' => 'Approved',
+        'rejected' => 'Rejected',
+        'suspended' => 'Suspended',
         'draft' => 'Draft',
         'published' => 'Published',
         'paused' => 'Paused',
@@ -48,6 +51,12 @@ return [
         'wed' => 'Wed',
         'thu' => 'Thu',
         'fri' => 'Fri',
+    ],
+    'vehicles' => [
+        'title' => 'Vehicles',
+        'search' => 'Plate or driver name',
+        'plate' => 'Plate',
+        'tier' => 'Tier',
     ],
     'commutes' => [
         'title' => 'Commutes',

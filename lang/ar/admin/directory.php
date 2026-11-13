@@ -19,6 +19,9 @@ return [
     'days' => 'الأيام',
     'arrive' => 'الوصول',
     'statuses' => [
+        'approved' => 'مقبولة',
+        'rejected' => 'مرفوضة',
+        'suspended' => 'موقوفة',
         'draft' => 'مسودة',
         'published' => 'منشور',
         'paused' => 'متوقف مؤقتًا',
@@ -48,6 +51,12 @@ return [
         'wed' => 'أربع',
         'thu' => 'خميس',
         'fri' => 'جمعة',
+    ],
+    'vehicles' => [
+        'title' => 'العربيات',
+        'search' => 'اللوحة أو اسم السواق',
+        'plate' => 'اللوحة',
+        'tier' => 'الفئة',
     ],
     'commutes' => [
         'title' => 'المشاوير',

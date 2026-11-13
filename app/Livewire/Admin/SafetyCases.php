@@ -222,6 +222,14 @@ class SafetyCases extends Component
             'reports' => SafetyCaseQueue::openReports($this->perPage()),
             'mayAct' => $this->admin()?->can(AdminPermission::SafetyResolve->value) === true,
             'outcomes' => SosResolution::cases(),
+            // O01: the searchable history under the open alerts — the last closed ones.
+            'history' => SosEvent::query()
+                ->where(fn ($query) => $query->whereNotNull('cancelled_at')->orWhereNotNull('resolution'))
+                ->with(['safetyEvent.user', 'responderAdmin'])
+                ->latest('created_at')
+                ->latest('id')
+                ->limit(20)
+                ->get(),
         ])->title(__('admin.safety.title'));
     }
 }
