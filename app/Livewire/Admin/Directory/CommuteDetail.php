@@ -10,6 +10,7 @@ use App\Domains\Commute\Enums\CommuteOfferStatus;
 use App\Domains\Commute\Enums\CommutePausedReason;
 use App\Domains\Commute\Models\CommuteOffer;
 use App\Domains\Commute\Models\ScheduledTrip;
+use App\Domains\Shared\Exceptions\DomainException;
 use Illuminate\Support\Facades\DB;
 use Livewire\Attributes\Layout;
 use Livewire\Attributes\Locked;
@@ -51,10 +52,18 @@ class CommuteDetail extends RecordPage
         $offer = CommuteOffer::query()->whereKey($this->commuteId)->firstOrFail();
         abort_unless($offer->status === CommuteOfferStatus::Paused && $offer->paused_reason === CommutePausedReason::GenderReview, 409);
 
-        DB::transaction(function () use ($commutes, $offer): void {
-            $commutes->resume($offer);
-            AdminActionLog::record($this->admin(), 'commute.resume_after_review', $offer, ['status' => 'paused', 'paused_reason' => 'gender_review'], ['status' => 'published'], $this->reason);
-        });
+        try {
+            DB::transaction(function () use ($commutes, $offer): void {
+                $commutes->resume($offer);
+                AdminActionLog::record($this->admin(), 'commute.resume_after_review', $offer, ['status' => 'paused', 'paused_reason' => 'gender_review'], ['status' => 'published'], $this->reason);
+            });
+        } catch (DomainException $e) {
+            // The commonest refusal: the driver is no longer a woman, so a women-only commute
+            // cannot run. That is the review's answer, and staff read it rather than a blank page.
+            $this->addError('record', __('errors.'.$e->errorCode->value));
+
+            return;
+        }
 
         $this->reset('resuming', 'reason');
         $this->done = __('admin/records.commute.resumed');
