@@ -751,6 +751,10 @@ return [
          * matters.
          */
         'gps_silence_alert_seconds' => 120,
+
+        'live_route_refresh_seconds' => 300,
+
+        'live_route_off_meters' => 75,
     ],
 
     /*
@@ -1026,6 +1030,10 @@ return [
          * why the two are cached separately (see CachingGeoEngine).
          */
         'route_cache_days' => 30,
+
+        'area_radius_metres' => ['district' => 4000, 'city' => 8000],
+
+        'near_label_metres' => 1000,
 
         /*
          * How far outside a route's own extent the search box reaches, so a

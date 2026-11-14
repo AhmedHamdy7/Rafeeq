@@ -2,12 +2,18 @@
 
 namespace App\Http\Controllers\Api\V1\Driver;
 
+use App\Domains\Booking\Actions\DisplaceConfirmedBookingsAction;
+use App\Domains\Commute\Actions\CreateCommuteOfferAction;
+use App\Domains\Commute\Enums\CommuteOfferStatus;
+use App\Domains\Commute\Models\CommuteOffer;
 use App\Domains\Driver\Actions\AutoSubmitDriverApplicationAction;
 use App\Domains\Driver\Actions\ManageVehicleAction;
 use App\Domains\Driver\Actions\UploadVehicleDocumentAction;
 use App\Domains\Driver\Enums\VehicleDocumentType;
+use App\Domains\Driver\Enums\VehicleVerificationStatus;
 use App\Domains\Driver\Models\DriverProfile;
 use App\Domains\Driver\Models\Vehicle;
+use App\Domains\Payment\Support\DriverFees;
 use App\Domains\Shared\Exceptions\DomainException;
 use App\Domains\Shared\Support\ErrorCode;
 use App\Http\Controllers\Controller;
@@ -128,6 +134,77 @@ final class VehicleController extends Controller
         $autoSubmit->attempt($request->user());
 
         return ApiResponse::success(new VehicleResource($target->load('documents')), status: 201);
+    }
+
+    #[ApiErrors(ErrorCode::NotFound)]
+    public function replacePreview(Request $request): JsonResponse
+    {
+        $profile = $this->profile($request);
+
+        $target = $request->query('vehicle');
+
+        $replaces = $profile->vehicles()
+            ->where('is_active', true)
+            ->when(is_string($target) && $target !== '', fn ($query) => $query->whereKeyNot($target))
+            ->exists();
+
+        $bookings = collect();
+
+        if ($replaces) {
+            $offers = CommuteOffer::query()
+                ->where('driver_profile_id', $profile->user_id)
+                ->whereNot('status', CommuteOfferStatus::Archived->value)
+                ->get();
+
+            $bookings = $offers->flatMap(fn (CommuteOffer $offer) => DisplaceConfirmedBookingsAction::futureConfirmedBookings($offer));
+        }
+
+        return ApiResponse::success([
+            'affectedBookings' => $bookings->count(),
+            'affectedCommutes' => $bookings->pluck('scheduledTrip.commute_offer_id')->filter()->unique()->count(),
+            ...DriverFees::preview($bookings),
+            'blocked' => is_string($target) && $target !== '' ? $this->blocked($profile, $target) : null,
+        ]);
+    }
+
+    /**
+     * Why activating this car would be refused, before the driver confirms — the same checks
+     * `activate` makes, in the same order, so the sheet never promises a switch that then fails.
+     *
+     * @return array{code: string, commuteIds: list<string>, approvedSeats: int|null}|null
+     */
+    private function blocked(DriverProfile $profile, string $vehicleId): ?array
+    {
+        $vehicle = $profile->vehicles()->whereKey($vehicleId)->first();
+
+        if ($vehicle === null) {
+            return null;
+        }
+
+        if ($vehicle->verification_status !== VehicleVerificationStatus::Approved) {
+            return ['code' => ErrorCode::VehicleNotAllowed->value, 'commuteIds' => [], 'approvedSeats' => $vehicle->approved_seats];
+        }
+
+        $moving = CommuteOffer::query()
+            ->where('driver_profile_id', $profile->user_id)
+            ->whereIn('vehicle_id', $profile->vehicles()->where('is_active', true)->whereKeyNot($vehicle->id)->pluck('id'))
+            ->whereNot('status', CommuteOfferStatus::Archived->value)
+            ->orderBy('id')
+            ->get();
+
+        $code = null;
+        $commuteIds = [];
+
+        foreach ($moving as $offer) {
+            try {
+                CreateCommuteOfferAction::assertCommuteFitsVehicle($offer, $vehicle);
+            } catch (DomainException $refusal) {
+                $code ??= $refusal->errorCode->value;
+                $commuteIds[] = (string) $offer->id;
+            }
+        }
+
+        return $code === null ? null : ['code' => $code, 'commuteIds' => $commuteIds, 'approvedSeats' => $vehicle->approved_seats];
     }
 
     private function profile(Request $request): DriverProfile

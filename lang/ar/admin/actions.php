@@ -65,4 +65,11 @@ return [
         'restore_rating' => 'التقييم ظاهر.',
         'message' => 'الرسالة وصلت صندوقه.',
     ],
+    'decline_code' => 'السبب اللي هيظهر للعضو',
+    'decline_codes' => [
+        'not_enough_evidence' => 'الأدلة مش كفاية',
+        'evidence_does_not_match' => 'الأدلة مش مطابقة للحدث',
+        'within_member_control' => 'كان في إيد العضو',
+        'other' => 'سبب تاني',
+    ],
 ];

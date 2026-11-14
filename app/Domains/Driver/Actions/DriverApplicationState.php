@@ -3,6 +3,8 @@
 namespace App\Domains\Driver\Actions;
 
 use App\Domains\Driver\Enums\DriverProfileStatus;
+use App\Domains\Driver\Enums\VehicleVerificationStatus;
+use App\Domains\Driver\Models\Vehicle;
 use App\Domains\Shared\Exceptions\DomainException;
 use App\Domains\Shared\Support\ErrorCode;
 
@@ -67,9 +69,21 @@ final class DriverApplicationState
         }
     }
 
-    public static function assertVehicleEditable(DriverProfileStatus $status): void
+    public static function assertVehicleEditable(DriverProfileStatus $status, ?Vehicle $vehicle = null): void
     {
-        if (! self::isEditable($status)) {
+        if (self::isEditable($status)) {
+            return;
+        }
+
+        $replacement = $status === DriverProfileStatus::Approved
+            && $vehicle !== null
+            && ! $vehicle->is_active
+            && in_array($vehicle->verification_status, [
+                VehicleVerificationStatus::Pending,
+                VehicleVerificationStatus::Rejected,
+            ], true);
+
+        if (! $replacement) {
             throw DomainException::of(ErrorCode::VehicleLocked);
         }
     }

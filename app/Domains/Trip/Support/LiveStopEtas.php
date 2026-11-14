@@ -4,18 +4,21 @@ namespace App\Domains\Trip\Support;
 
 use App\Domains\Commute\Models\ScheduledTrip;
 use App\Domains\Geo\Contracts\GeoQueryEngine;
+use App\Domains\Geo\Support\Polyline;
+use App\Domains\Geo\Support\RouteRemainder;
 use App\Domains\Shared\ValueObjects\Coordinate;
 use App\Domains\Trip\Actions\RecordTripLocationAction;
 use App\Domains\Trip\Enums\NavigationStopKind;
 use App\Domains\Trip\Models\NavigationStop;
 use App\Domains\Trip\Models\TripWaitTimer;
+use App\Domains\Trip\ValueObjects\TripPosition;
 use Carbon\CarbonImmutable;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Cache;
 
 final readonly class LiveStopEtas
 {
-    private const int CACHE_SECONDS = 30;
+    private const int ROUTE_TTL_SECONDS = 3600;
 
     /**
      * @param  array<string, CarbonImmutable|null>  $etas
@@ -36,6 +39,16 @@ final readonly class LiveStopEtas
      * @param  Collection<int, NavigationStop>  $stops
      */
     public static function for(ScheduledTrip $trip, Collection $stops): self
+    {
+        $session = $trip->tripSession;
+
+        return self::at($trip, $stops, $session === null ? null : app(RecordTripLocationAction::class)->current($session));
+    }
+
+    /**
+     * @param  Collection<int, NavigationStop>  $stops
+     */
+    public static function at(ScheduledTrip $trip, Collection $stops, ?TripPosition $position): self
     {
         $stops = $stops->sortBy('sequence')->values();
         $session = $trip->tripSession;
@@ -63,55 +76,38 @@ final readonly class LiveStopEtas
             return new self($planned, $nextIndex, $nextIndex === null ? null : (string) $stops[$nextIndex]->getKey(), null, null, false, $startedAt, $arrivals);
         }
 
-        $position = app(RecordTripLocationAction::class)->current($session);
         $next = $stops[$nextIndex];
+        $now = CarbonImmutable::now();
+        $distance = null;
+        $polyline = null;
 
-        $key = sprintf(
-            'trip:%s:live-etas:%s:%s:%s',
-            $trip->getKey(),
-            $next->getKey(),
-            $trip->itinerary_built_version,
-            $position?->recordedAt->getTimestamp() ?? 'none',
-        );
+        if ($position !== null && $next->lat !== null) {
+            $leg = self::leg($trip, $next, $position);
+            $base = CarbonImmutable::instance($position->recordedAt)->addSeconds($leg['seconds']);
+            $distance = $leg['metres'];
+            $polyline = $leg['polyline'];
+        } else {
+            $reached = $stops->slice(0, $nextIndex)
+                ->filter(fn (NavigationStop $stop): bool => $stop->reached_at !== null)
+                ->last();
+            $since = $reached?->reached_at !== null ? CarbonImmutable::instance($reached->reached_at) : $startedAt;
+            $base = ($since ?? $now)->addSeconds((int) ($next->leg_duration_seconds ?? 0));
+        }
 
-        $live = Cache::remember($key, self::CACHE_SECONDS, function () use ($stops, $nextIndex, $next, $position, $startedAt): array {
-            $now = CarbonImmutable::now();
-            $distance = null;
-            $polyline = null;
+        $clock = $base->lessThan($now) ? $now : $base;
+        $live = ['etas' => [], 'distance' => $distance, 'polyline' => $polyline];
 
-            if ($position !== null && $next->lat !== null) {
-                $route = app(GeoQueryEngine::class)->routeBetween(
-                    new Coordinate($position->lat, $position->lng),
-                    new Coordinate((float) $next->lat, (float) $next->lng),
-                );
-                $base = $now->addSeconds($route->durationSeconds);
-                $distance = (int) round($route->distance->metres);
-                $polyline = $route->polyline;
-            } else {
-                $reached = $stops->slice(0, $nextIndex)
-                    ->filter(fn (NavigationStop $stop): bool => $stop->reached_at !== null)
-                    ->last();
-                $since = $reached?->reached_at !== null ? CarbonImmutable::instance($reached->reached_at) : $startedAt;
-                $base = ($since ?? $now)->addSeconds((int) ($next->leg_duration_seconds ?? 0));
+        foreach ($stops as $index => $stop) {
+            if ($index < $nextIndex) {
+                continue;
             }
 
-            $clock = $base->lessThan($now) ? $now : $base;
-            $etas = [];
-
-            foreach ($stops as $index => $stop) {
-                if ($index < $nextIndex) {
-                    continue;
-                }
-
-                if ($index > $nextIndex) {
-                    $clock = $clock->addSeconds((int) ($stop->leg_duration_seconds ?? 0));
-                }
-
-                $etas[(string) $stop->getKey()] = $clock->toIso8601String();
+            if ($index > $nextIndex) {
+                $clock = $clock->addSeconds((int) ($stop->leg_duration_seconds ?? 0));
             }
 
-            return ['etas' => $etas, 'distance' => $distance, 'polyline' => $polyline];
-        });
+            $live['etas'][(string) $stop->getKey()] = $clock->toIso8601String();
+        }
 
         $etas = $planned;
 
@@ -129,6 +125,56 @@ final readonly class LiveStopEtas
             $startedAt,
             $arrivals,
         );
+    }
+
+    /**
+     * @return array{seconds: int, metres: int, polyline: string}
+     */
+    private static function leg(ScheduledTrip $trip, NavigationStop $next, TripPosition $position): array
+    {
+        $key = sprintf('trip:%s:live-route:%s:%s', $trip->getKey(), $next->getKey(), $trip->itinerary_built_version);
+        $car = new Coordinate($position->lat, $position->lng);
+        $moment = $position->recordedAt->getTimestamp();
+
+        $stored = Cache::get($key);
+        $remainder = null;
+
+        if (is_array($stored)) {
+            $remainder = RouteRemainder::from(Polyline::decode($stored['polyline']), $car);
+            $off = $remainder->offMetres > TripSettings::liveRouteOffMeters();
+            $offBefore = $stored['offAt'] !== null && $stored['offAt'] !== $moment;
+            $stale = now()->getTimestamp() - $stored['fetchedAt'] >= TripSettings::liveRouteRefreshSeconds();
+
+            if ($stale || ($off && $offBefore)) {
+                $stored = null;
+            } elseif ($off !== ($stored['offAt'] !== null)) {
+                $stored['offAt'] = $off ? $moment : null;
+                Cache::put($key, $stored, self::ROUTE_TTL_SECONDS);
+            }
+        }
+
+        if (! is_array($stored)) {
+            $route = app(GeoQueryEngine::class)->routeBetween($car, new Coordinate((float) $next->lat, (float) $next->lng));
+
+            $stored = [
+                'polyline' => $route->polyline,
+                'seconds' => $route->durationSeconds,
+                'fetchedAt' => now()->getTimestamp(),
+                'offAt' => null,
+            ];
+
+            Cache::put($key, $stored, self::ROUTE_TTL_SECONDS);
+
+            $remainder = RouteRemainder::from($route->points(), $car);
+        }
+
+        $share = $remainder->totalMetres > 0.0 ? $remainder->remainingMetres / $remainder->totalMetres : 0.0;
+
+        return [
+            'seconds' => (int) round($stored['seconds'] * $share),
+            'metres' => (int) round($remainder->remainingMetres),
+            'polyline' => Polyline::encode($remainder->points),
+        ];
     }
 
     /**

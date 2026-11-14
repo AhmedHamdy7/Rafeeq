@@ -45,13 +45,15 @@ final class SearchController extends Controller
          *
          * After the results, and it cannot fail the request — see the Action.
          */
-        $remember->execute($request->user(), $criteria, $request->places());
+        if (! $criteria->isAreaSearch()) {
+            $remember->execute($request->user(), $criteria, $request->places());
+        }
 
         return ApiResponse::success(
             MatchResultResource::page($results, $request->user()),
             // An empty result is not an error — Chapter 5 turns it into the offer
             // to save a private demand, so the client needs to tell the two apart.
-            meta: ['matched' => count($results)],
+            meta: ['matched' => count($results), 'scope' => $criteria->isAreaSearch() ? 'area' : 'point'],
         );
     }
 }

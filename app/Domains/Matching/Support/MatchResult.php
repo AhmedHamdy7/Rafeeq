@@ -32,6 +32,7 @@ final readonly class MatchResult
         public ?float $dropOffWalkMinutes = null,
         public ?int $meetingPointSeconds = null,
         public ?int $dropOffSeconds = null,
+        public ?int $distanceMetres = null,
     ) {}
 
     public function withOtherDays(array $otherDays): self
@@ -46,6 +47,7 @@ final readonly class MatchResult
             $this->dropOffWalkMinutes,
             $this->meetingPointSeconds,
             $this->dropOffSeconds,
+            $this->distanceMetres,
         );
     }
 }

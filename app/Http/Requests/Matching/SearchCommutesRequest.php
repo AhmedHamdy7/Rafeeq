@@ -5,7 +5,10 @@ namespace App\Http\Requests\Matching;
 use App\Domains\Commute\Enums\CommuteAudience;
 use App\Domains\Commute\Enums\CommuteRuleKey;
 use App\Domains\Driver\Enums\VehicleTier;
+use App\Domains\Geo\Enums\PlaceType;
+use App\Domains\Geo\Models\Place;
 use App\Domains\Matching\Support\PlaceLabels;
+use App\Domains\Matching\Support\SearchArea;
 use App\Domains\Matching\Support\SearchCriteria;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
@@ -57,6 +60,7 @@ final class SearchCommutesRequest extends FormRequest
              */
             'origin.label' => ['nullable', 'string', 'max:120'],
             'origin.placeId' => ['nullable', 'string', 'max:26'],
+            'origin.areaPlaceId' => ['nullable', 'string', Rule::exists('places', 'id')->whereIn('type', PlaceType::areaValues())],
 
             // Where you need to get to.
             'destination' => ['required', 'array'],
@@ -64,6 +68,7 @@ final class SearchCommutesRequest extends FormRequest
             'destination.lng' => ['required', 'numeric', 'between:-180,180'],
             'destination.label' => ['nullable', 'string', 'max:120'],
             'destination.placeId' => ['nullable', 'string', 'max:26'],
+            'destination.areaPlaceId' => ['nullable', 'string', Rule::exists('places', 'id')->whereIn('type', PlaceType::areaValues())],
 
             /*
              * Which days you need, as a bitmask: Saturday 1, Sunday 2, Monday 4,
@@ -131,7 +136,19 @@ final class SearchCommutesRequest extends FormRequest
 
     public function criteria(): SearchCriteria
     {
-        return SearchCriteria::fromArray($this->validated());
+        $criteria = SearchCriteria::fromArray($this->validated());
+
+        $originId = $this->validated('origin.areaPlaceId');
+        $destinationId = $this->validated('destination.areaPlaceId');
+
+        if ($originId === null && $destinationId === null) {
+            return $criteria;
+        }
+
+        return $criteria->withAreas(
+            $originId === null ? null : SearchArea::of(Place::query()->find($originId)),
+            $destinationId === null ? null : SearchArea::of(Place::query()->find($destinationId)),
+        );
     }
 
     /**

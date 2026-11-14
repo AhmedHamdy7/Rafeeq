@@ -3,6 +3,10 @@
 namespace App\Http\Resources;
 
 use App\Domains\Reliability\Enums\ReliabilityRole;
+use App\Domains\Reliability\Models\ReliabilityAppealEvidence;
+use App\Domains\Reliability\Models\ReliabilityEvent;
+use App\Domains\Reliability\Support\EventFee;
+use App\Domains\Reliability\Support\ReliabilityAppeals;
 use App\Domains\Reliability\Support\ReliabilityLedger;
 use App\Domains\Reliability\Support\ReliabilitySettings;
 
@@ -42,47 +46,100 @@ final class ReliabilityResource
         ];
     }
 
+    public static function event(ReliabilityEvent $event): array
+    {
+        $event->load('appeals', 'evidence', 'booking.passenger');
+
+        $fees = $event->role === ReliabilityRole::Driver ? EventFee::forEvents([$event]) : [];
+
+        return self::item($event, $fees[(string) $event->getKey()] ?? null);
+    }
+
     /**
      * @return array<string, mixed>
      */
     private static function forRole(string $userId, ReliabilityRole $role): array
     {
         $events = ReliabilityLedger::historyFor($userId, $role);
+        $events->load('appeals', 'evidence', 'booking.passenger');
 
-        /*
-         * A foreach rather than a mapped collection: a mapped array loses its element type to the
-         * OpenAPI generator (standard #37) and the mobile team cannot generate a client from a list
-         * of `mixed`.
-         */
+        $fees = $role === ReliabilityRole::Driver ? EventFee::forEvents($events) : [];
+
         $items = [];
 
         foreach ($events as $event) {
-            $items[] = [
-                'id' => (string) $event->getKey(),
-                'kind' => strtoupper($event->kind->value),
-                'weight' => $event->weight,
-                'occurredAt' => $event->occurred_at->toIso8601String(),
-
-                // What it was about, so she can find the morning in question.
-                'bookingId' => $event->booking_id,
-                'tripId' => $event->scheduled_trip_id,
-                'commuteId' => $event->commute_offer_id,
-
-                /*
-                 * Whether it still counts. Named rather than left to be inferred from
-                 * `reversedAt`, because the client's behaviour differs — a reversed event is shown
-                 * struck through rather than hidden — and inferring it would have every client
-                 * re-derive the rule.
-                 */
-                'counts' => $event->counts(),
-                'reversedAt' => $event->reversed_at?->toIso8601String(),
-                'reversedReason' => $event->reversed_reason,
-            ];
+            $items[] = self::item($event, $fees[(string) $event->getKey()] ?? null);
         }
 
         return [
             'score' => ReliabilityLedger::scoreFor($userId, $role),
             'events' => $items,
+        ];
+    }
+
+    /**
+     * @param  array{debtEntryId: string, amountPiastres: int, reversed: bool}|null  $fee
+     */
+    private static function item(ReliabilityEvent $event, ?array $fee): array
+    {
+        $refusal = ReliabilityAppeals::refusal($event);
+        $last = ReliabilityAppeals::last($event);
+        $left = ReliabilityAppeals::left($event);
+        $evidence = [];
+
+        foreach ($event->evidence->sortBy('id') as $file) {
+            $evidence[] = self::evidenceItem($file);
+        }
+
+        $passenger = $event->role === ReliabilityRole::Driver ? $event->booking?->passenger : null;
+
+        return [
+            'id' => (string) $event->getKey(),
+            'kind' => strtoupper($event->kind->value),
+            'weight' => $event->weight,
+            'occurredAt' => $event->occurred_at->toIso8601String(),
+            'bookingId' => $event->booking_id,
+            'tripId' => $event->scheduled_trip_id,
+            'commuteId' => $event->commute_offer_id,
+            'cause' => $event->cause?->value,
+            'groupId' => $event->group_id,
+            'cancelReason' => $event->cancel_reason,
+            'person' => $passenger === null ? null : [
+                'userId' => (string) $passenger->getKey(),
+                'publicFirstName' => $passenger->public_first_name,
+            ],
+            'counts' => $event->counts(),
+            'reversedAt' => $event->reversed_at?->toIso8601String(),
+            'reversedReason' => null,
+            'canAppeal' => $refusal === null,
+            'appealsLeft' => $left,
+            'needsNewEvidence' => $last !== null && $left > 0,
+            'appealBy' => ReliabilityAppeals::appealableUntil($event)?->toIso8601String(),
+            'appealRefusal' => $refusal,
+            'evidence' => $evidence,
+            'appeal' => $last === null ? null : [
+                'id' => (string) $last->getKey(),
+                'round' => $last->round,
+                'status' => $last->status(),
+                'appealedAt' => $last->created_at?->toIso8601String(),
+                'decidedAt' => $last->resolved_at?->toIso8601String(),
+                'declineReasonCode' => $last->decline_reason_code?->value,
+            ],
+            'fee' => $fee === null ? null : [
+                'debtEntryId' => (string) $fee['debtEntryId'],
+                'amountPiastres' => (int) $fee['amountPiastres'],
+                'reversed' => (bool) $fee['reversed'],
+            ],
+        ];
+    }
+
+    public static function evidenceItem(ReliabilityAppealEvidence $evidence): array
+    {
+        return [
+            'id' => (string) $evidence->getKey(),
+            'kind' => $evidence->kind?->value,
+            'purgeAfter' => $evidence->purge_after?->toDateString(),
+            'createdAt' => $evidence->created_at->toIso8601String(),
         ];
     }
 }

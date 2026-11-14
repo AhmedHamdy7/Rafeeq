@@ -6,6 +6,7 @@ use App\Domains\Booking\Enums\BookingStatus;
 use App\Domains\Booking\Models\Booking;
 use App\Domains\Booking\Models\PickupPointRequest;
 use App\Domains\Geo\Actions\SearchPlacesAction;
+use App\Domains\Geo\Support\NearPlace;
 use App\Domains\Shared\ValueObjects\Coordinate;
 use App\Domains\Shared\ValueObjects\Distance;
 use App\Http\Resources\LocalisedLabel;
@@ -72,6 +73,7 @@ final class PickupRequestContext
                 'label' => $request->requested_pickup_label,
                 'lat' => (float) $request->requested_pickup_lat,
                 'lng' => (float) $request->requested_pickup_lng,
+                ...NearPlace::fields($request->requested_pickup_lat, $request->requested_pickup_lng),
                 'isExact' => true,
             ];
         }
@@ -84,6 +86,7 @@ final class PickupRequestContext
             'label' => $next->pickup_label,
             'lat' => (float) $next->pickup_lat,
             'lng' => (float) $next->pickup_lng,
+            ...NearPlace::fields($next->pickup_lat, $next->pickup_lng),
             'isExact' => true,
         ];
     }

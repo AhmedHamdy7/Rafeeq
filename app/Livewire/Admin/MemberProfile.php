@@ -20,6 +20,7 @@ use App\Domains\Payment\Enums\DebtSide;
 use App\Domains\Payment\Models\DebtEntry;
 use App\Domains\Payment\Support\DebtStanding;
 use App\Domains\Rating\Models\Rating;
+use App\Domains\Reliability\Enums\AppealDeclineReason;
 use App\Domains\Reliability\Models\ReliabilityEvent;
 use App\Domains\Safety\Enums\IncidentStatus;
 use App\Domains\Safety\Models\Incident;
@@ -125,6 +126,8 @@ class MemberProfile extends Component
         $this->reset('revealing', 'revealReason');
     }
 
+    public string $declineCode = 'not_enough_evidence';
+
     public const array RECORD_ACTIONS = ['reverse_event', 'decline_appeal', 'hide_rating', 'restore_rating'];
 
     public function startAction(string $action, string $target = ''): void
@@ -196,7 +199,7 @@ class MemberProfile extends Component
                 $event = ReliabilityEvent::query()->whereKey($this->target)->where('user_id', $user->id)->first() ?? abort(404);
                 $this->action === 'reverse_event'
                     ? $records->reverseEvent($admin, $user, $event, $this->reason)
-                    : $records->declineAppeal($admin, $user, $event, $this->reason);
+                    : $records->declineAppeal($admin, $user, $event, $this->reason, AppealDeclineReason::tryFrom($this->declineCode) ?? AppealDeclineReason::NotEnoughEvidence);
 
                 return __('admin/actions.done.'.$this->action);
             })(),
@@ -259,7 +262,7 @@ class MemberProfile extends Component
             'driver' => ['commutes' => $user->driverProfile === null ? collect() : CommuteOffer::query()->where('driver_profile_id', $user->driverProfile->user_id)->with(['vehicle', 'locations'])->latest('created_at')->limit(20)->get()],
             'money' => ['entries' => DebtEntry::query()->where('user_id', $user->id)->latest('created_at')->latest('id')->limit(40)->get()],
             'reliability' => [
-                'events' => ReliabilityEvent::query()->where('user_id', $user->id)->latest('occurred_at')->limit(30)->get(),
+                'events' => ReliabilityEvent::query()->where('user_id', $user->id)->with('appeals', 'evidence')->latest('occurred_at')->limit(30)->get(),
                 'ratings' => Rating::query()->where('reviewed_user_id', $user->id)->withCount(['reports as open_reports_count' => fn ($q) => $q->whereIn('status', ['pending', 'under_review'])])->latest('created_at')->limit(20)->get(),
             ],
             'reports' => ['incidents' => Incident::query()->where(fn ($q) => $q->where('reported_user_id', $user->id)->orWhere('reporter_user_id', $user->id))->with(['reporter', 'reportedUser'])->latest('created_at')->limit(30)->get()],

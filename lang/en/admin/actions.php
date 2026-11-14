@@ -65,4 +65,11 @@ return [
         'restore_rating' => 'Review is showing.',
         'message' => 'Message sent to their inbox.',
     ],
+    'decline_code' => 'Reason shown to the member',
+    'decline_codes' => [
+        'not_enough_evidence' => 'Not enough evidence',
+        'evidence_does_not_match' => 'Evidence does not match the event',
+        'within_member_control' => 'Within the member’s control',
+        'other' => 'Other',
+    ],
 ];

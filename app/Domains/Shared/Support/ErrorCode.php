@@ -311,6 +311,12 @@ enum ErrorCode: string
     case SuspensionAppealNotOpen = 'SUSPENSION_APPEAL_NOT_OPEN';
     // The early-drop question was not asked on this booking, or she already answered (TRIP-20).
     case EarlyDropNotAsked = 'EARLY_DROP_NOT_ASKED';
+    // A reliability appeal or a review report that was already decided (testing calls).
+    case AppealNotPending = 'APPEAL_NOT_PENDING';
+    case ReviewReportNotPending = 'REVIEW_REPORT_NOT_PENDING';
+    // A car that cannot be removed: it is the active one, or a commute still names it (testing calls).
+    case VehicleIsActive = 'VEHICLE_IS_ACTIVE';
+    case VehicleInUse = 'VEHICLE_IN_USE';
 
     // ---- Account deletion (F1-4, PROF-31) ------------------------------
     // She owes money on either side; `error.fields.debtPiastres` is how much.
@@ -613,6 +619,10 @@ enum ErrorCode: string
             self::CouponNotAllowed,
             self::FeeAppealNotOpen,
             self::SuspensionAppealNotOpen,
+            self::AppealNotPending,
+            self::ReviewReportNotPending,
+            self::VehicleIsActive,
+            self::VehicleInUse,
             self::EarlyDropNotAsked => 409,
         };
     }

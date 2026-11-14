@@ -6,6 +6,7 @@ use App\Domains\Booking\Enums\PickupPointRequestStatus;
 use App\Domains\Booking\Models\PickupPointRequest;
 use App\Domains\Booking\Support\PickupDetour;
 use App\Domains\Booking\Support\PickupRequestContext;
+use App\Domains\Geo\Support\NearPlace;
 use App\Domains\Verification\Support\Avatar;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
@@ -132,6 +133,7 @@ final class PickupPointRequestResource extends JsonResource
                 : PickupRequestContext::areaLabel($point),
             'lat' => $agreed ? $point->lat : round($point->lat, self::FUZZ_DECIMALS),
             'lng' => $agreed ? $point->lng : round($point->lng, self::FUZZ_DECIMALS),
+            ...($agreed ? NearPlace::fields($point->lat, $point->lng) : NearPlace::fields(null, null)),
             // Stated rather than inferred, so a map can say "approximate" honestly.
             'isExact' => $agreed,
         ];

@@ -10,6 +10,7 @@ use App\Domains\Commute\Models\CommuteOffer;
 use App\Domains\Commute\Models\ScheduledTrip;
 use App\Domains\Commute\Support\RouteSettings;
 use App\Domains\Geo\Contracts\GeoQueryEngine;
+use App\Domains\Geo\Support\NearPlace;
 use App\Domains\Shared\Exceptions\DomainException;
 use App\Domains\Shared\Support\ErrorCode;
 use App\Domains\Shared\ValueObjects\Coordinate;
@@ -38,8 +39,8 @@ final readonly class CounterofferOptions
             'maxDetourMinutes' => RouteSettings::maxTripDetourMinutes(),
             'canDropPin' => true,
             'requested' => [
-                'pickup' => ['label' => $request->requested_pickup_label, 'lat' => $pickup->lat, 'lng' => $pickup->lng],
-                'dropoff' => ['label' => $request->requested_dropoff_label, 'lat' => $dropoff->lat, 'lng' => $dropoff->lng],
+                'pickup' => ['label' => $request->requested_pickup_label, 'lat' => $pickup->lat, 'lng' => $pickup->lng, ...NearPlace::fields($pickup->lat, $pickup->lng)],
+                'dropoff' => ['label' => $request->requested_dropoff_label, 'lat' => $dropoff->lat, 'lng' => $dropoff->lng, ...NearPlace::fields($dropoff->lat, $dropoff->lng)],
                 'addedMinutes' => (int) round($requested->addedMinutes),
                 'withinLimit' => $requested->isWithin(),
                 'tier' => $requested->tier()?->value,
@@ -92,6 +93,7 @@ final readonly class CounterofferOptions
                     'label' => LocalisedLabel::location($stop),
                     'lat' => $candidate->lat,
                     'lng' => $candidate->lng,
+                    ...NearPlace::fields($candidate->lat, $candidate->lng),
                     'addedMinutes' => (int) round($detour->addedMinutes),
                     'changeFromRequestedMinutes' => (int) round($detour->addedMinutes - $requestedMinutes),
                     'walkMeters' => $this->geo->distanceMeters($chosen, $candidate)->metres,

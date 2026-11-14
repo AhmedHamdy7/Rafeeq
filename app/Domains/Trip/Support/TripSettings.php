@@ -109,6 +109,16 @@ final class TripSettings
         return max(1, (int) self::get('trip.gps_silence_alert_seconds'));
     }
 
+    public static function liveRouteRefreshSeconds(): int
+    {
+        return max(1, (int) self::get('trip.live_route_refresh_seconds'));
+    }
+
+    public static function liveRouteOffMeters(): int
+    {
+        return max(1, (int) self::get('trip.live_route_off_meters'));
+    }
+
     private static function get(string $key): mixed
     {
         return PlatformSetting::value($key, config("rafeeq.{$key}"));

@@ -195,11 +195,7 @@ it('leaves the double-blind rule alone for a journey that happened', function ()
         ->and($rating->visible_at)->toBeNull();
 });
 
-/**
- * v5: *"Driver can report comment for Admin review."* The existing report route takes it, because
- * this is a rating like any other as far as moderation is concerned.
- */
-it('lets the driver report the feedback for admin review', function () {
+it('gives the driver nothing to report on stars-only feedback', function () {
     cancelledByHer($this->driverToken, $this->bookingId);
 
     $ratingId = test()->flushHeaders()->withToken($this->paxToken)
@@ -210,7 +206,8 @@ it('lets the driver report the feedback for admin review', function () {
 
     test()->flushHeaders()->withToken($this->driverToken)
         ->postJson("/api/v1/ratings/{$ratingId}/report", ['reason' => 'This is not what happened at all.'])
-        ->assertStatus(201);
+        ->assertStatus(422)
+        ->assertJsonPath('error.fields.rating.0', 'NOT_REPORTABLE');
 });
 
 /**

@@ -1,11 +1,16 @@
 <?php
 
+use App\Domains\Admin\Models\PlatformSetting;
 use App\Domains\Commute\Models\ScheduledTrip;
 use App\Domains\Driver\Models\Vehicle;
+use App\Domains\Geo\Models\RouteCache;
+use App\Domains\Geo\Support\Polyline;
+use App\Domains\Trip\Actions\RecordTripLocationAction;
 use App\Domains\Trip\Events\TripLocationUpdated;
 use App\Domains\Trip\Models\TripLocation;
 use App\Domains\Trip\Models\TripSession;
 use App\Domains\Trip\ValueObjects\TripPosition;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Facades\Storage;
 
@@ -558,4 +563,261 @@ it('still checks the distance when the last streamed point is away from her pick
         ->postJson("/api/v1/trips/{$this->tripId}/wait-timers", ['bookingId' => $this->bookingId])
         ->assertStatus(409)
         ->assertJsonPath('error.code', 'NOT_AT_PICKUP');
+});
+
+it('keeps a late point in the trail without making it current', function () {
+    underway($this->driverToken, $this->tripId);
+
+    reportPosition($this->driverToken, $this->tripId, [position(lat: 30.0600, agoSeconds: 5)])->assertOk();
+    reportPosition($this->driverToken, $this->tripId, [position(lat: 30.0400, agoSeconds: 35)])->assertOk();
+
+    test()->artisan('trips:flush-locations')->assertSuccessful();
+
+    expect(TripLocation::count())->toBe(2)
+        ->and(test()->withToken($this->driverToken)->getJson("/api/v1/trips/{$this->tripId}/location")
+            ->assertOk()->json('data.position.lat'))->toBe(30.06);
+});
+
+it('changes nothing when the same batch is sent twice', function () {
+    Event::fake([TripLocationUpdated::class]);
+
+    underway($this->driverToken, $this->tripId);
+
+    $points = [position(lat: 30.0500, agoSeconds: 20), position(lat: 30.0600, agoSeconds: 10)];
+
+    reportPosition($this->driverToken, $this->tripId, $points)->assertOk();
+    reportPosition($this->driverToken, $this->tripId, $points)
+        ->assertOk()
+        ->assertJsonPath('data.accepted', 2)
+        ->assertJsonPath('data.rejected', 0);
+
+    test()->artisan('trips:flush-locations')->assertSuccessful();
+
+    Event::assertDispatchedTimes(TripLocationUpdated::class, 1);
+
+    expect(TripLocation::count())->toBe(2);
+});
+
+it('does not write a point again when it is repeated after the flush', function () {
+    underway($this->driverToken, $this->tripId);
+
+    $points = [position(agoSeconds: 20), position(agoSeconds: 10)];
+
+    reportPosition($this->driverToken, $this->tripId, $points)->assertOk();
+    test()->artisan('trips:flush-locations')->assertSuccessful();
+
+    reportPosition($this->driverToken, $this->tripId, $points)->assertOk()->assertJsonPath('data.accepted', 2);
+    test()->artisan('trips:flush-locations')->assertSuccessful();
+
+    expect(TripLocation::count())->toBe(2);
+});
+
+it('keeps the newer point when an older one is processed by a request that started first', function () {
+    underway($this->driverToken, $this->tripId);
+
+    reportPosition($this->driverToken, $this->tripId, [position(lat: 30.0300, agoSeconds: 90)])->assertOk();
+
+    $stale = TripSession::query()->with('scheduledTrip.commuteOffer')->sole();
+
+    reportPosition($this->driverToken, $this->tripId, [position(lat: 30.0600, agoSeconds: 5)])->assertOk();
+
+    Event::fake([TripLocationUpdated::class]);
+
+    app(RecordTripLocationAction::class)->execute($stale, [
+        new TripPosition(lat: 30.0400, lng: 31.2314, recordedAt: now()->subSeconds(40), accuracyMeters: 12),
+    ]);
+
+    Event::assertNotDispatched(TripLocationUpdated::class);
+
+    $live = test()->withToken($this->driverToken)->getJson("/api/v1/trips/{$this->tripId}/location")
+        ->assertOk()->json('data');
+
+    expect($live['position']['lat'])->toBe(30.06)
+        ->and(TripSession::sole()->last_location_at->diffInSeconds(now(), absolute: true))->toBeLessThan(30);
+});
+
+it('sends no event for a full late batch', function () {
+    underway($this->driverToken, $this->tripId);
+
+    reportPosition($this->driverToken, $this->tripId, [position(lat: 30.0600, agoSeconds: 5)])->assertOk();
+
+    Event::fake([TripLocationUpdated::class]);
+
+    $late = [];
+
+    foreach (range(1, 60) as $step) {
+        $late[] = position(lat: 30.0400, agoSeconds: 10 + $step);
+    }
+
+    reportPosition($this->driverToken, $this->tripId, $late)->assertOk()->assertJsonPath('data.accepted', 60);
+
+    Event::assertNotDispatched(TripLocationUpdated::class);
+
+    expect(test()->withToken($this->driverToken)->getJson("/api/v1/trips/{$this->tripId}/location")
+        ->assertOk()->json('data.position.lat'))->toBe(30.06);
+});
+
+it('sends one event, with the newest point, for a full newer batch', function () {
+    underway($this->driverToken, $this->tripId);
+
+    reportPosition($this->driverToken, $this->tripId, [position(lat: 30.0300, agoSeconds: 100)])->assertOk();
+
+    Event::fake([TripLocationUpdated::class]);
+
+    $batch = [];
+
+    foreach (range(1, 59) as $step) {
+        $batch[] = position(lat: 30.0400, agoSeconds: 10 + $step);
+    }
+
+    $batch[] = position(lat: 30.0700, agoSeconds: 5);
+
+    shuffle($batch);
+
+    reportPosition($this->driverToken, $this->tripId, $batch)->assertOk()->assertJsonPath('data.accepted', 60);
+
+    Event::assertDispatchedTimes(TripLocationUpdated::class, 1);
+    Event::assertDispatched(TripLocationUpdated::class, fn (TripLocationUpdated $event) => $event->position->lat === 30.07);
+});
+
+it('never returns an older position on a later read', function () {
+    underway($this->driverToken, $this->tripId);
+
+    $read = fn () => test()->withToken($this->driverToken)
+        ->getJson("/api/v1/trips/{$this->tripId}/location")->assertOk()->json('data.position.recordedAt');
+
+    reportPosition($this->driverToken, $this->tripId, [position(agoSeconds: 20)])->assertOk();
+    reportPosition($this->driverToken, $this->tripId, [position(agoSeconds: 5)])->assertOk();
+    $first = $read();
+
+    reportPosition($this->driverToken, $this->tripId, [position(agoSeconds: 50), position(agoSeconds: 12)])->assertOk();
+    $second = $read();
+
+    expect(strtotime($second))->toBeGreaterThanOrEqual(strtotime($first));
+});
+
+it('says so when a whole batch is dropped because the phone clock is wrong', function () {
+    underway($this->driverToken, $this->tripId);
+
+    reportPosition($this->driverToken, $this->tripId, [
+        position(agoSeconds: -600),
+        position(agoSeconds: -660),
+    ])->assertOk()
+        ->assertJsonPath('data.accepted', 0)
+        ->assertJsonPath('data.rejected', 2)
+        ->assertJsonPath('data.rejectedReason', 'CLOCK_SKEW');
+});
+
+it('gives no reason when the batch was kept or dropped for something other than the clock', function () {
+    underway($this->driverToken, $this->tripId);
+
+    reportPosition($this->driverToken, $this->tripId, [position(agoSeconds: -600), position(agoSeconds: 5)])
+        ->assertOk()
+        ->assertJsonPath('data.accepted', 1)
+        ->assertJsonPath('data.rejectedReason', null);
+
+    reportPosition($this->driverToken, $this->tripId, [position(accuracy: 900)])
+        ->assertOk()
+        ->assertJsonPath('data.accepted', 0)
+        ->assertJsonPath('data.rejectedReason', null);
+});
+
+function liveFor(string $token, string $tripId): array
+{
+    return test()->withToken($token)->getJson("/api/v1/trips/{$tripId}/location")->assertOk()->json('data');
+}
+
+it('starts the road to her pickup at the position it returns', function () {
+    underway($this->driverToken, $this->tripId);
+
+    reportPosition($this->driverToken, $this->tripId, [position(lat: 30.0500, lng: 31.2000, agoSeconds: 3)])->assertOk();
+
+    $live = liveFor($this->paxToken, $this->tripId);
+    $start = Polyline::decode($live['carToPickupPolyline'])[0];
+
+    expect($start->lat)->toEqualWithDelta($live['position']['lat'], 0.00002)
+        ->and($start->lng)->toEqualWithDelta($live['position']['lng'], 0.00002)
+        ->and($live['lastLocationAt'])->toBe($live['position']['recordedAt']);
+});
+
+it('reuses the fetched road while the car stays on it', function () {
+    underway($this->driverToken, $this->tripId);
+
+    reportPosition($this->driverToken, $this->tripId, [position(lat: 30.0500, lng: 31.2000, agoSeconds: 20)])->assertOk();
+
+    $first = liveFor($this->paxToken, $this->tripId);
+    $road = Polyline::decode($first['carToPickupPolyline']);
+    $pickup = end($road);
+    $fetched = RouteCache::count();
+
+    $halfway = position(lat: (30.0500 + $pickup->lat) / 2, lng: (31.2000 + $pickup->lng) / 2, agoSeconds: 5);
+    reportPosition($this->driverToken, $this->tripId, [$halfway])->assertOk();
+
+    $second = liveFor($this->paxToken, $this->tripId);
+    $start = Polyline::decode($second['carToPickupPolyline'])[0];
+
+    expect(RouteCache::count())->toBe($fetched)
+        ->and($start->lat)->toEqualWithDelta($halfway['lat'], 0.00002)
+        ->and($start->lng)->toEqualWithDelta($halfway['lng'], 0.00002)
+        ->and(strtotime($second['pickupEtaAt']))->toBeLessThan(strtotime($first['pickupEtaAt']));
+});
+
+it('fetches a new road only after two readings off the old one', function () {
+    underway($this->driverToken, $this->tripId);
+
+    reportPosition($this->driverToken, $this->tripId, [position(lat: 30.0500, lng: 31.2000, agoSeconds: 30)])->assertOk();
+    liveFor($this->paxToken, $this->tripId);
+    $fetched = RouteCache::count();
+
+    reportPosition($this->driverToken, $this->tripId, [position(lat: 30.0800, lng: 31.1700, agoSeconds: 20)])->assertOk();
+    liveFor($this->paxToken, $this->tripId);
+
+    expect(RouteCache::count())->toBe($fetched);
+
+    reportPosition($this->driverToken, $this->tripId, [position(lat: 30.0810, lng: 31.1690, agoSeconds: 10)])->assertOk();
+    $live = liveFor($this->paxToken, $this->tripId);
+    $start = Polyline::decode($live['carToPickupPolyline'])[0];
+
+    expect(RouteCache::count())->toBe($fetched + 1)
+        ->and($start->lat)->toEqualWithDelta(30.0810, 0.00002);
+});
+
+it('fetches the road again once it is older than the refresh setting', function () {
+    underway($this->driverToken, $this->tripId);
+
+    reportPosition($this->driverToken, $this->tripId, [position(lat: 30.0500, lng: 31.2000, agoSeconds: 20)])->assertOk();
+    $road = Polyline::decode(liveFor($this->paxToken, $this->tripId)['carToPickupPolyline']);
+    $pickup = end($road);
+    $fetched = RouteCache::count();
+
+    PlatformSetting::query()->create([
+        'setting_key' => 'trip.live_route_refresh_seconds',
+        'setting_value' => 30,
+        'value_type' => 'integer',
+        'description' => 'Refresh the live road sooner',
+    ]);
+
+    $this->travel(31)->seconds();
+
+    reportPosition($this->driverToken, $this->tripId, [
+        position(lat: (30.0500 + $pickup->lat) / 2, lng: (31.2000 + $pickup->lng) / 2, agoSeconds: 2),
+    ])->assertOk();
+    liveFor($this->paxToken, $this->tripId);
+
+    expect(RouteCache::count())->toBe($fetched + 1);
+});
+
+it('counts her pickup time from when the phone took the reading', function () {
+    underway($this->driverToken, $this->tripId);
+
+    reportPosition($this->driverToken, $this->tripId, [position(lat: 30.0500, lng: 31.2000, agoSeconds: 4)])->assertOk();
+    $fresh = strtotime(liveFor($this->paxToken, $this->tripId)['pickupEtaAt']) - now()->getTimestamp();
+
+    Cache::flush();
+    TripSession::query()->update(['last_location_at' => null]);
+
+    reportPosition($this->driverToken, $this->tripId, [position(lat: 30.0500, lng: 31.2000, agoSeconds: 64)])->assertOk();
+    $old = strtotime(liveFor($this->paxToken, $this->tripId)['pickupEtaAt']) - now()->getTimestamp();
+
+    expect($fresh - $old)->toBeGreaterThanOrEqual(55);
 });

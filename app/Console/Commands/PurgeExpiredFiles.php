@@ -15,7 +15,7 @@ final class PurgeExpiredFiles extends Command
     {
         $purged = $action->execute();
 
-        $this->info("Purged {$purged['documents']} identity documents, {$purged['vehicleDocuments']} vehicle documents, {$purged['evidence']} evidence files.");
+        $this->info("Purged {$purged['documents']} identity documents, {$purged['vehicleDocuments']} vehicle documents, {$purged['evidence']} evidence files, {$purged['appealEvidence']} appeal evidence files.");
 
         return self::SUCCESS;
     }

@@ -21,6 +21,7 @@ use App\Domains\Outbox\Support\Outbox;
 use App\Domains\Payment\Support\DriverFees;
 use App\Domains\Payment\Support\FeeLines;
 use App\Domains\Payment\Support\FeeSettings;
+use App\Domains\Reliability\Enums\ReliabilityEventCause;
 use App\Domains\Reliability\Enums\ReliabilityEventKind;
 use App\Domains\Reliability\Support\ReliabilityLedger;
 use App\Domains\Safety\Support\LiveShares;
@@ -257,6 +258,13 @@ final readonly class CancelBookingAction
                 $kind,
                 booking: $booking,
                 commuteOfferId: $trip->commute_offer_id,
+                cause: match ($reason) {
+                    'driver_replaced' => ReliabilityEventCause::Replacement,
+                    DisplacementReason::CommutePaused->value => ReliabilityEventCause::Pause,
+                    DisplacementReason::VehicleReplaced->value => ReliabilityEventCause::VehicleReplaced,
+                    DisplacementReason::CommuteDeleted->value => ReliabilityEventCause::CommuteDeleted,
+                    default => ReliabilityEventCause::CancelledBooking,
+                },
             );
 
             return;

@@ -3,6 +3,7 @@
 namespace App\Domains\Trip\Support;
 
 use App\Domains\Trip\ValueObjects\TripPosition;
+use Carbon\CarbonImmutable;
 use Illuminate\Support\Facades\Cache;
 
 /**
@@ -83,11 +84,17 @@ final class LiveLocationStore
 
         $pending = Cache::get(self::bufferKey($sessionId), []);
 
-        foreach ($positions as $position) {
-            $pending[] = $position->toArray();
+        $byMoment = [];
+
+        foreach ($pending as $row) {
+            $byMoment[CarbonImmutable::parse($row['recordedAt'])->getTimestamp()] ??= $row;
         }
 
-        Cache::put(self::bufferKey($sessionId), $pending, self::BUFFER_TTL_SECONDS);
+        foreach ($positions as $position) {
+            $byMoment[$position->recordedAt->getTimestamp()] ??= $position->toArray();
+        }
+
+        Cache::put(self::bufferKey($sessionId), array_values($byMoment), self::BUFFER_TTL_SECONDS);
 
         $sessions = Cache::get(self::INDEX_KEY, []);
 

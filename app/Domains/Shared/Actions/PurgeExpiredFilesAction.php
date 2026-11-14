@@ -4,6 +4,7 @@ namespace App\Domains\Shared\Actions;
 
 use App\Domains\Driver\Enums\VehicleVerificationStatus;
 use App\Domains\Driver\Models\VehicleDocument;
+use App\Domains\Reliability\Models\ReliabilityAppealEvidence;
 use App\Domains\Safety\Enums\IncidentStatus;
 use App\Domains\Safety\Models\IncidentEvidence;
 use App\Domains\Verification\Enums\VerificationStatus;
@@ -52,6 +53,8 @@ final readonly class PurgeExpiredFilesAction
 
             'evidence' => $this->purge(IncidentEvidence::query()->whereHas('incident', fn (Builder $incident) => $incident
                 ->whereIn('status', [IncidentStatus::Resolved->value, IncidentStatus::Closed->value]))),
+
+            'appealEvidence' => $this->purge(ReliabilityAppealEvidence::query()),
         ];
     }
 

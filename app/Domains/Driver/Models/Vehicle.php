@@ -17,7 +17,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 
 #[Fillable([
     'driver_profile_id', 'make', 'model', 'year', 'colour', 'plate_number',
-    'transmission', 'fuel_type', 'photo_path', 'seats', 'is_active',
+    'transmission', 'fuel_type', 'photo_path', 'seats', 'is_active', 'declared_ac',
 ])]
 class Vehicle extends Model
 {
@@ -39,6 +39,7 @@ class Vehicle extends Model
             'approved_seats' => 'integer',
             'tier' => VehicleTier::class,
             'has_ac' => 'boolean',
+            'declared_ac' => 'boolean',
             'is_active' => 'boolean',
             'fuel_type' => FuelType::class,
             'transmission' => Transmission::class,

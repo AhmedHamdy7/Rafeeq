@@ -8,8 +8,10 @@ use App\Domains\Commute\Models\CommuteOffer;
 use App\Domains\Commute\Models\ScheduledTrip;
 use App\Domains\Identity\Models\User;
 use App\Domains\Rating\Models\Rating;
+use App\Domains\Reliability\Enums\ReliabilityEventCause;
 use App\Domains\Reliability\Enums\ReliabilityEventKind;
 use App\Domains\Reliability\Enums\ReliabilityRole;
+use App\Domains\Reliability\Support\ReliabilityAppeals;
 use App\Domains\Reliability\Support\ReliabilityLedger;
 use Database\Factories\ReliabilityEventFactory;
 use Illuminate\Database\Eloquent\Builder;
@@ -17,6 +19,7 @@ use Illuminate\Database\Eloquent\Concerns\HasUlids;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 
 /**
  * One line in somebody's reliability record (Feature 03 v5).
@@ -36,6 +39,7 @@ class ReliabilityEvent extends Model
         return [
             'role' => ReliabilityRole::class,
             'kind' => ReliabilityEventKind::class,
+            'cause' => ReliabilityEventCause::class,
             'weight' => 'integer',
             'occurred_at' => 'datetime',
             'reversed_at' => 'datetime',
@@ -68,6 +72,16 @@ class ReliabilityEvent extends Model
     public function commuteOffer(): BelongsTo
     {
         return $this->belongsTo(CommuteOffer::class);
+    }
+
+    public function appeals(): HasMany
+    {
+        return $this->hasMany(ReliabilityEventAppeal::class)->orderBy('round');
+    }
+
+    public function evidence(): HasMany
+    {
+        return $this->hasMany(ReliabilityAppealEvidence::class);
     }
 
     public function reverser(): BelongsTo
@@ -117,11 +131,8 @@ class ReliabilityEvent extends Model
             ->whereNull('appeal_declined_at');
     }
 
-    /**
-     * Whether she may still file one. Once per event, which is v5's "appeal once".
-     */
     public function isAppealable(): bool
     {
-        return $this->appealed_at === null && $this->reversed_at === null;
+        return ReliabilityAppeals::refusal($this) === null;
     }
 }

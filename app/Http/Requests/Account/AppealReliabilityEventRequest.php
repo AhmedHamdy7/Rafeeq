@@ -26,7 +26,7 @@ final class AppealReliabilityEventRequest extends FormRequest
              * attached to a reliability event for a reviewer to weigh, so her account of that
              * morning is all there is to read.
              */
-            'reason' => ['required', 'string', 'min:3', 'max:255'],
+            'reason' => ['required', 'string', 'min:3', 'max:1000'],
         ];
     }
 }

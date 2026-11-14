@@ -2,6 +2,7 @@
 
 namespace App\Http\Resources;
 
+use App\Domains\Geo\Support\NearPlace;
 use App\Domains\Trip\Models\NavigationStop;
 use App\Domains\Trip\Support\DirectionsLink;
 use App\Domains\Trip\Support\ItineraryStop;
@@ -50,6 +51,7 @@ final class NavigationRouteResource
                     'lat' => (float) $stop->lat,
                     'lng' => (float) $stop->lng,
                     'label' => $stop->label,
+                    ...NearPlace::fields($stop->lat, $stop->lng),
                     'etaAt' => ($live?->etaFor($stop) ?? $stop->eta_at)?->toIso8601String(),
                     'legDurationSeconds' => $stop->leg_duration_seconds,
                     'legDistanceMeters' => $stop->leg_distance_meters,
@@ -101,6 +103,7 @@ final class NavigationRouteResource
                 'lat' => $stop->point->lat,
                 'lng' => $stop->point->lng,
                 'label' => $stop->label,
+                ...NearPlace::fields($stop->point->lat, $stop->point->lng),
                 'etaAt' => $stop->etaAt?->toIso8601String(),
                 'legDurationSeconds' => $stop->legDurationSeconds,
                 'legDistanceMeters' => $stop->legDistanceMeters,

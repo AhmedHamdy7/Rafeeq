@@ -3,14 +3,18 @@
 namespace App\Http\Controllers\Api\V1\Account;
 
 use App\Domains\Reliability\Actions\AppealReliabilityEventAction;
+use App\Domains\Reliability\Actions\AttachAppealEvidenceAction;
 use App\Domains\Reliability\Models\ReliabilityEvent;
+use App\Domains\Reliability\Support\ReliabilityAppeals;
 use App\Domains\Shared\Exceptions\DomainException;
 use App\Domains\Shared\Support\ErrorCode;
 use App\Http\Controllers\Controller;
 use App\Http\OpenApi\ApiErrors;
 use App\Http\Requests\Account\AppealReliabilityEventRequest;
+use App\Http\Requests\Account\AttachAppealEvidenceRequest;
 use App\Http\Resources\ReliabilityResource;
 use App\Http\Responses\ApiResponse;
+use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
@@ -66,15 +70,135 @@ final class ReliabilityController extends Controller
             ?? throw DomainException::of(ErrorCode::NotFound);
 
         $appealed = $action->file($request->user(), $target, (string) $request->validated('reason'));
+        $appeal = ReliabilityAppeals::last($appealed);
 
         return ApiResponse::success([
             'reliabilityEventId' => (string) $appealed->getKey(),
             'appealedAt' => $appealed->appealed_at?->toIso8601String(),
-            /*
-             * Stated back to her, because it is the thing most likely to be misunderstood: she has
-             * been heard, and nothing has changed yet.
-             */
             'stillCounts' => $appealed->counts(),
+            'appeal' => $appeal === null ? null : [
+                'id' => (string) $appeal->getKey(),
+                'round' => $appeal->round,
+                'status' => $appeal->status(),
+                'appealedAt' => $appeal->created_at?->toIso8601String(),
+                'decidedAt' => null,
+                'declineReasonCode' => null,
+            ],
+            'appealsLeft' => ReliabilityAppeals::left($appealed),
         ]);
+    }
+
+    #[ApiErrors(
+        ErrorCode::ValidationFailed,
+        ErrorCode::IncidentEvidenceLimitReached,
+        ErrorCode::DocumentRejectedByScanner,
+        ErrorCode::DocumentUnreadable,
+        ErrorCode::DocumentDimensionsTooLarge,
+        ErrorCode::NotFound,
+    )]
+    public function attachEvidence(
+        AttachAppealEvidenceRequest $request,
+        string $event,
+        AttachAppealEvidenceAction $action,
+    ): JsonResponse {
+        $evidence = $action->execute(
+            $request->user(),
+            $this->ownEvent($request, $event),
+            $request->file('file'),
+            $request->kind(),
+        );
+
+        return ApiResponse::success(ReliabilityResource::evidenceItem($evidence), status: 201);
+    }
+
+    /**
+     * POST /v1/account/reliability/groups/{groupId}/appeal — one appeal for one act that wrote
+     * several events: a pause, a deleted commute or a replaced car.
+     *
+     * Files the same appeal on every event in the group that can still be appealed, and one staff
+     * decision then applies to all of them. Appealing any single event of a group through
+     * `events/{event}/appeal` does the same. Answers the group's events as rows of `events[]`.
+     */
+    #[ApiErrors(ErrorCode::ValidationFailed, ErrorCode::NotFound)]
+    public function appealGroup(
+        AppealReliabilityEventRequest $request,
+        string $groupId,
+        AppealReliabilityEventAction $action,
+    ): JsonResponse {
+        $events = $this->ownGroup($request, $groupId);
+
+        $action->file(
+            $request->user(),
+            $events->first(fn (ReliabilityEvent $event) => ReliabilityAppeals::refusal($event) === null) ?? $events->first(),
+            (string) $request->validated('reason'),
+        );
+
+        return ApiResponse::success($this->groupRows($request, $groupId));
+    }
+
+    /**
+     * POST /v1/account/reliability/groups/{groupId}/evidence — one file for the whole group. It is
+     * added to every event in the group that still takes evidence.
+     */
+    #[ApiErrors(
+        ErrorCode::ValidationFailed,
+        ErrorCode::IncidentEvidenceLimitReached,
+        ErrorCode::DocumentRejectedByScanner,
+        ErrorCode::DocumentUnreadable,
+        ErrorCode::DocumentDimensionsTooLarge,
+        ErrorCode::NotFound,
+    )]
+    public function attachGroupEvidence(
+        AttachAppealEvidenceRequest $request,
+        string $groupId,
+        AttachAppealEvidenceAction $action,
+    ): JsonResponse {
+        $events = $this->ownGroup($request, $groupId);
+
+        $evidence = $action->execute(
+            $request->user(),
+            $events->first(fn (ReliabilityEvent $event) => ReliabilityAppeals::acceptsEvidence($event)) ?? $events->first(),
+            $request->file('file'),
+            $request->kind(),
+        );
+
+        return ApiResponse::success(ReliabilityResource::evidenceItem($evidence), status: 201);
+    }
+
+    /**
+     * @return Collection<int, ReliabilityEvent>
+     */
+    private function ownGroup(Request $request, string $groupId): Collection
+    {
+        $events = AppealReliabilityEventAction::group($request->user(), $groupId);
+
+        if ($events->isEmpty()) {
+            throw DomainException::of(ErrorCode::NotFound);
+        }
+
+        return $events;
+    }
+
+    /**
+     * @return array{groupId: string, events: list<array<string, mixed>>}
+     */
+    private function groupRows(Request $request, string $groupId): array
+    {
+        $rows = [];
+
+        foreach (AppealReliabilityEventAction::group($request->user(), $groupId) as $event) {
+            $rows[] = ReliabilityResource::event($event);
+        }
+
+        return ['groupId' => strtoupper($groupId), 'events' => $rows];
+    }
+
+    private function ownEvent(Request $request, string $event): ReliabilityEvent
+    {
+        return ReliabilityEvent::query()
+            ->whereKey($event)
+            ->where('user_id', $request->user()->id)
+            ->first()
+            ?? throw DomainException::of(ErrorCode::NotFound);
     }
 }

@@ -10,6 +10,8 @@ use App\Domains\Payment\Enums\DebtSide;
 use App\Domains\Payment\Models\DebtEntry;
 use App\Domains\Payment\Models\FeeAppeal;
 use App\Domains\Payment\Support\DebtLedger;
+use App\Domains\Reliability\Actions\AppealReliabilityEventAction;
+use App\Domains\Reliability\Support\EventFee;
 use App\Domains\Shared\Exceptions\DomainException;
 use App\Domains\Shared\Support\ErrorCode;
 use App\Domains\Trip\Enums\DisputeResolution;
@@ -109,6 +111,12 @@ final readonly class ResolveFeeAppealAction
                     side: DebtSide::Driver,
                     idempotencyKey: "fee_appeal_reversal:{$appeal->getKey()}",
                 );
+
+                $event = EventFee::eventFor($fee);
+
+                if ($event !== null && $event->reversed_at === null) {
+                    app(AppealReliabilityEventAction::class)->approve($admin, $event, $note, reverseFee: false);
+                }
             }
 
             AdminActionLog::record($admin, 'fee.appeal_decide', $appeal,

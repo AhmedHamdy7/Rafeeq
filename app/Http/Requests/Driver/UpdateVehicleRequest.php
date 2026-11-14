@@ -47,6 +47,7 @@ final class UpdateVehicleRequest extends FormRequest
             ],
 
             'transmission' => ['sometimes', 'nullable', 'string', Rule::enum(Transmission::class)],
+            'hasAc' => ['sometimes', 'nullable', 'boolean'],
             'fuelType' => ['sometimes', 'nullable', 'string', Rule::enum(FuelType::class)],
         ];
     }

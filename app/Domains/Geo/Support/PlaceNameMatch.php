@@ -36,8 +36,7 @@ final readonly class PlaceNameMatch
         $pattern = '%'.self::likePattern($this->needle).'%';
 
         $query->where(function (Builder $query) use ($pattern): void {
-            $query->where('name', 'like', $pattern)
-                ->orWhere('name_ar', 'like', $pattern)
+            $query->where('search_name', 'like', '%'.self::escape($this->needle).'%')
                 ->orWhere('district', 'like', $pattern)
                 ->orWhere('city', 'like', $pattern);
 
@@ -50,7 +49,7 @@ final readonly class PlaceNameMatch
 
     public function rank(Place $place): ?int
     {
-        $names = [self::normalise($place->name), self::normalise($place->name_ar)];
+        $names = array_map(self::normalise(...), [$place->name, $place->name_ar, ...($place->aliases ?? [])]);
 
         foreach ($names as $name) {
             if (str_starts_with($name, $this->needle)) {
@@ -83,14 +82,39 @@ final readonly class PlaceNameMatch
         $text = (string) preg_replace('/[\x{0640}\x{064B}-\x{065F}\x{0670}]/u', '', $text);
         $text = (string) preg_replace('/\s+/u', ' ', $text);
 
-        return strtr($text, ['أ' => 'ا', 'إ' => 'ا', 'آ' => 'ا', 'ٱ' => 'ا', 'ة' => 'ه', 'ى' => 'ي']);
+        return strtr($text, [
+            'أ' => 'ا', 'إ' => 'ا', 'آ' => 'ا', 'ٱ' => 'ا', 'ة' => 'ه', 'ى' => 'ي',
+            '٠' => '0', '١' => '1', '٢' => '2', '٣' => '3', '٤' => '4', '٥' => '5', '٦' => '6', '٧' => '7', '٨' => '8', '٩' => '9',
+            '۰' => '0', '۱' => '1', '۲' => '2', '۳' => '3', '۴' => '4', '۵' => '5', '۶' => '6', '۷' => '7', '۸' => '8', '۹' => '9',
+        ]);
+    }
+
+    /**
+     * @param  array<int, string|null>  $names
+     */
+    public static function searchName(array $names): string
+    {
+        $parts = [];
+
+        foreach ($names as $name) {
+            $name = self::normalise($name);
+
+            if ($name !== '' && ! in_array($name, $parts, true)) {
+                $parts[] = $name;
+            }
+        }
+
+        return implode(' | ', $parts);
+    }
+
+    private static function escape(string $needle): string
+    {
+        return strtr($needle, ['\\' => '\\\\', '%' => '\\%', '_' => '\\_']);
     }
 
     private static function likePattern(string $needle): string
     {
-        $escaped = strtr($needle, ['\\' => '\\\\', '%' => '\\%', '_' => '\\_']);
-
-        return strtr($escaped, ['ا' => '_', 'ه' => '_', 'ي' => '_']);
+        return strtr(self::escape($needle), ['ا' => '_', 'ه' => '_', 'ي' => '_']);
     }
 
     /**

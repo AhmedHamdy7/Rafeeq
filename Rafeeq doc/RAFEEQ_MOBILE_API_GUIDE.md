@@ -14,7 +14,7 @@
 >
 > **Base URL:** `{host}/api/v1` · **Auth:** bearer token · **Format:** JSON only.
 
-**Last updated:** 2026-11-13 · **224 endpoints live** · Phases 0–7, 9 and 11 complete · 10, 12 and 13 all but a decision each
+**Last updated:** 2026-11-14 · **234 endpoints live** · Phases 0–7, 9 and 11 complete · 10, 12 and 13 all but a decision each
 
 ---
 
@@ -22,7 +22,7 @@
 
 ### What is ready
 
-**224 endpoints live** and tested, across the 47 designed screens:
+**234 endpoints live** and tested, across the 47 designed screens:
 
 | | Count | Covers |
 |---|---|---|
@@ -450,7 +450,7 @@ travelled is step 19, and the driver records that. Two different tables on purpo
 16 POST /trips/{trip}/start                                  (driver)  → 201  the session
 17 POST /trips/{trip}/status   { status: "EN_ROUTE" }         (driver)  → 200
    POST /trips/{trip}/location { points: [ {lat,lng,recordedAt,accuracyMeters,speedKmh}, ... ] }
-   → 200  { accepted, rejected }
+   → 200  { accepted, rejected, rejectedReason }
 ```
 
 Positions are sent in **batches**, and `recordedAt` is the **device's** clock — a phone that loses
@@ -596,7 +596,7 @@ Status: ✅ fully served · ⚠️ served, something named missing · ⛔ no API
 | # | Screen | Endpoints | Status |
 |---|---|---|---|
 | 15 | **Verification centre** | `GET /account/verifications` | ✅ `level` / `of` / `percentage`, plus per level: state, `actionNeededReason` in the reviewer's own words, `expectedReviewMinutes`, `attemptsRemaining`. |
-| 30 | Identity capture | `POST /account/verifications/{type}/documents` · `/submit` · `POST /account/consents` | ⚠️ Biometric consent exists. **Confirm with us that `selfie` is an accepted document kind before you build the liveness step.** |
+| 30 | Identity capture | `POST /account/verifications/{type}/documents` · `/submit` · `POST /account/consents` | ✅ `selfie` is an accepted type and kind: **one selfie image is the whole check, there is no liveness step** (PROF-14) — drop "blink" from the copy. Biometric consent: `POST /account/consents` with `type: "biometric"`. |
 
 ### Driver and publishing
 
@@ -694,6 +694,8 @@ fails if this list and the running routes ever disagree in either direction.
 | `GET /account/stats` | 4.2 Account, devices, consents |
 | `GET /account/reliability` | 4.2 Account, devices, consents |
 | `POST /account/reliability/events/{event}/appeal` | 4.2 Account, devices, consents |
+| `POST /account/reliability/groups/{groupId}/appeal` | 4.2 Account, devices, consents |
+| `POST /account/reliability/groups/{groupId}/evidence` | 4.2 Account, devices, consents |
 | `POST /account/suspension/appeal` | 4.2 Account, devices, consents |
 | `GET /account/warnings` | 4.2 Account, devices, consents |
 | `POST /account/warnings/{warning}/dispute` | 4.2 Account, devices, consents |
@@ -717,6 +719,7 @@ fails if this list and the running routes ever disagree in either direction.
 | `POST /driver/vehicles` | 4.4 Driver application and vehicles |
 | `PATCH /driver/vehicles/{vehicle}` | 4.4 Driver application and vehicles |
 | `POST /driver/vehicles/{vehicle}/activate` | 4.4 Driver application and vehicles |
+| `GET /driver/vehicles/replace-preview` | 4.4 Driver application and vehicles |
 | `POST /driver/vehicles/{vehicle}/documents` | 4.4 Driver application and vehicles |
 | `GET /commutes` | 4.5 Commutes (driver) |
 | `POST /commutes` | 4.5 Commutes (driver) |
@@ -879,6 +882,12 @@ fails if this list and the running routes ever disagree in either direction.
 | `POST /testing/bookings/{booking}/age` | 4.17 Testing (staging only) |
 | `POST /testing/jobs/{name}/run` | 4.17 Testing (staging only) |
 | `POST /testing/attendance` | 4.17 Testing (staging only) |
+| `POST /testing/reliability/appeals/{appeal}/decide` | 4.17 Testing (staging only) |
+| `POST /testing/reliability/reset` | 4.17 Testing (staging only) |
+| `POST /testing/reliability/events/{event}/age` | 4.17 Testing (staging only) |
+| `POST /testing/reliability/events` | 4.17 Testing (staging only) |
+| `POST /testing/ratings/reports/{report}/decide` | 4.17 Testing (staging only) |
+| `DELETE /testing/driver/vehicles/{vehicle}` | 4.17 Testing (staging only) |
 | `DELETE /safety/live-shares/{share}` | 4.12 Safety |
 | `POST /trips/{trip}/live-share` | 4.12 Safety |
 | `POST /sos` | 4.12 Safety |
@@ -1042,7 +1051,15 @@ Put this URL in the Play Console data-safety form.
 | `currentVersions` | The version of each document in force right now, e.g. `{"terms": "1.0", "privacy": "1.0"}`. |
 | `outstanding` | Which consents this person has **not** accepted at the current version. Non-empty means you must show the acceptance screen — bumping a version makes everyone's consent stale again, which is the whole reason we store a version rather than a boolean. |
 
-**POST request:** `type` and `version` — the version you showed them.
+| `biometric` | `{ version, acceptedAt }` — the consent behind the selfie checkbox. `acceptedAt` is `null` until she ticks it at the current version. |
+
+**POST request:** optional `type`. Omitted, `terms` or `privacy`: records terms and privacy at their
+current versions. `biometric`: records the biometric consent (the selfie checkbox) at its current
+version, which follows the privacy version. Anything else is a `422`. No `version` is sent — the
+server records the one in force.
+
+> ⚠️ `biometric` is an interim type (2026-11-14): the product rules name a consent checkbox but no
+> consent type. The name may change once they do.
 
 #### `PUT /account/profile/basic` — signed-in, active account
 
@@ -1262,7 +1279,20 @@ she has to be able to read it, and the reasons, **before** a review rather than 
 |---|---|
 | `asDriver` / `asPassenger` | **Two separate records.** One account is one person doing two things; a driver's cancellations never reach her passenger standing. |
 | `score` | `0`–`perfectScore`, and **lower is worse**. Everybody starts at `perfectScore`: a new member has not failed anybody, and starting her at zero would make the number say she had. |
-| `events[]` | `kind` · `weight` · `occurredAt` · `bookingId` / `tripId` / `commuteId` · `counts` · `reversedAt` · `reversedReason`. |
+| `events[]` | `id` · `kind` · `weight` · `occurredAt` · `bookingId` / `tripId` / `commuteId` · `cause` · `groupId` · `cancelReason` · `person` · `counts` · `reversedAt` · `canAppeal` · `appealsLeft` · `needsNewEvidence` · `appealBy` · `appealRefusal` · `appeal` · `evidence[]` · `fee`. At most 50 per role, newest first. |
+| `id` | The event id — what the appeal and evidence calls take. |
+| `cause` | Why a driver event happened: `cancelled_booking` · `replacement` (she took a replacement offer's passenger instead) · `cancelled_day` · `pause` · `commute_deleted` · `vehicle_replaced` · `active_trip_cancelled`. `null` on lateness and no-show events and on events recorded before 2026-11-14. |
+| `groupId` | Shared by every event of **one act** — one pause, one vehicle replacement, one cancelled day, one stopped trip. Group rows on it to show "Paused commute · 5 bookings canceled". `null` on single events and older ones. |
+| `cancelReason` | `breakdown` · `accident` · `emergency` · `other` — what she gave on `POST /trips/{trip}/cancel-active`. `null` elsewhere. |
+| `person` | `{ userId, publicFirstName }` of the passenger concerned, on driver events with a booking. First name only (SAFE-18). `null` on passenger events. |
+| `appeal` | `null`, or the **latest** appeal: `{ id, round (1|2), status: pending|approved|declined, appealedAt, decidedAt, declineReasonCode }`. `declineReasonCode` is a fixed list you translate: `not_enough_evidence` · `evidence_does_not_match` · `within_member_control` · `other`. |
+| `canAppeal` · `appealRefusal` | Whether she may file now, and if not, why: `ALREADY_APPEALED` (one is pending) · `ALREADY_REVERSED` · `NO_APPEALS_LEFT` · `APPEAL_WINDOW_CLOSED` · `NEW_EVIDENCE_REQUIRED`. |
+| `appealsLeft` | `2`, `1` or `0` (D-0021: one appeal, then one second appeal with new evidence, then final). |
+| `needsNewEvidence` | `true` once a first appeal was declined: the second is refused until she uploads something new. |
+| `appealBy` | When the window closes: 48 hours from the event appearing, then 48 hours from the decision (SAFE-11). `null` when nothing more can be filed. |
+| `evidence[]` | `{ id, kind, purgeAfter, createdAt }` for what she attached. Metadata only: no path, no URL. |
+| `fee` | `null`, or the cancellation fee charged for the same booking: `{ debtEntryId, amountPiastres, reversed }`. Driver events only. |
+| `reversedReason` | Always `null`. Kept so older builds still parse; the reviewer's note is never sent. |
 | `counts` | Whether this event still counts against the score. **Render a `counts: false` event struck through rather than hiding it** — that she appealed and won is the most favourable thing on her record. |
 | `windowDays` | How far back the **score** looks. The events themselves are kept for ever. |
 
@@ -1294,27 +1324,59 @@ Each event's `weight` is the one in force **when it happened** — a later chang
 >
 #### `POST /account/reliability/events/{event}/appeal` — signed-in
 
-🔴 **Now built.** `{ "reason": "..." }`, required, 3–255 characters — her account of that morning,
-which is the entire case, because nothing is attached to a reliability event for a reviewer to weigh.
+`{ "reason": "..." }`, required, 3–1000 characters.
 
-Answers `{ reliabilityEventId, appealedAt, stillCounts }`.
+Answers `{ reliabilityEventId, appealedAt, stillCounts, appeal, appealsLeft }`; `appeal` has the
+shape described above.
+
+🔴 **One appeal covers the fee and the score** (SAFE-11, 2026-11-14). When a reviewer approves it,
+the event stops counting **and** the cancellation fee in `fee` is credited back; `fee.reversed`
+turns `true`. There is nothing second to file. The older `POST /account/debt/entries/{entry}/appeal`
+still works, and overturning a fee there now reverses its reliability event too — so the two can
+never disagree.
 
 ⚠️ **`stillCounts` is `true` and that is not a bug — show it.** Filing changes nothing on its own:
-the event keeps counting until a reviewer reverses it. If asking were enough to suspend the
-consequence, everything would be appealed as a matter of course and the score would stop meaning
-anything. What filing buys her is that a person has to look, and that she is told the answer.
+the event keeps counting until a reviewer reverses it.
 
 | | |
 |---|---|
-| Once per event | `422` with `error.fields.appeal`: `ALREADY_APPEALED`, or `ALREADY_REVERSED` if it has already been cleared. |
-| Somebody else's event | `404`, never `403` — a `403` would confirm the id names a real judgement about a real person. |
-| The answer | `appeal_approved` or `appeal_declined` notification. An **approved** appeal stops the event counting and **leaves it readable** (`reversed: true` in the events list), so she can see she was cleared. |
-| 🔒 The reviewer's note | Never sent to her. It is written for the desk and may name another member or quote a driver; she is told the outcome and support explains the rest. |
+| Two rounds (D-0021) | A first appeal within 48 hours of the event appearing. If declined, **one second appeal** within 48 hours of the decision, and only after new evidence was uploaded. Then the decision is final. |
+| Refusals | `422` with `error.fields.appeal`: `ALREADY_APPEALED` (one is waiting) · `ALREADY_REVERSED` · `APPEAL_WINDOW_CLOSED` · `NEW_EVIDENCE_REQUIRED` · `NO_APPEALS_LEFT`. Read `canAppeal` / `appealRefusal` on the event rather than trying the call. |
+| Somebody else's event | `404`, never `403`. |
+| The answer | `appeal_approved` or `appeal_declined` notification with `data.reliabilityEventId`. Re-read `GET /account/reliability` for `appeal.status`, `decidedAt` and `declineReasonCode`. An approved appeal leaves the event readable with `counts: false`. |
+| 🔒 The reviewer's note | Never sent. She gets the outcome and a `declineReasonCode`. |
+| An event with a `groupId` | Appealed with its whole group: filing here files the same appeal on every event in the group that can still be appealed. See the group calls below. |
 
-⚠️ **The reviewer's own screen is not built, and v5 says not to build it yet**: §275 lists "admin
-UI" among the things to leave as "durable states/hooks, not speculative behavior". The decision
-Actions exist and are tested, so the desk can act today; the queue page lands with the admin
-dashboard (Phase 12). Nothing about the member-facing half changes when it does.
+#### `POST /account/reliability/events/{event}/evidence` — signed-in · multipart
+
+**Request:** `kind` (`photo` · `screenshot` · `document`, use `document` for a receipt) and `file`
+(jpeg, png or webp, up to **6 MB**). Answers `201` with `{ id, kind, purgeAfter, createdAt }`.
+
+Upload **before** filing: the Appeal screen's tiles upload here, then submit calls the appeal. At
+most 5 files per event (`422 INCIDENT_EVIDENCE_LIMIT_REACHED`). Accepted only while an appeal can
+still be filed; otherwise `422` with `error.fields.appeal` naming why. What is attached comes back
+in `events[].evidence` — there is no separate list call. Images only for now; audio is not accepted
+here or on incident evidence.
+
+#### `POST /account/reliability/groups/{groupId}/appeal` — signed-in
+
+🔴 **A grouped act is appealed once.** Pausing a commute, deleting one or replacing the car cancels several
+bookings and writes one event per passenger, all with the same `groupId`. Show them as one row and appeal them
+here, with the same body as the single appeal: `{ "reason": "..." }`.
+
+- It files the appeal on every event in the group that can still be appealed. One staff decision then applies to
+  all of them: approved reverses every event and every fee, declined declines every one and opens the second round
+  for all of them. One `appeal_approved` or `appeal_declined` notification, not one per event.
+- Answers `{ groupId, events: [...] }`, the group's events as rows of `events[]`, each with its `appeal`.
+- Refusals as for one event (`422` with `error.fields.appeal`), from the first event in the group. Read `canAppeal`
+  and `appealRefusal` on any event of the group: they agree across the group.
+- `groupId` in either case. A group that is not the caller's answers `404`.
+
+#### `POST /account/reliability/groups/{groupId}/evidence` — signed-in · multipart
+
+Same body and answer as the single evidence call. The file is added to every event in the group that still takes
+evidence, so the second round's `NEW_EVIDENCE_REQUIRED` clears on all of them at once. Uploading to one event of a
+group through `events/{event}/evidence` does the same.
 
 **`cancellationRate` has been removed from `GET /account/stats`** — **if you read it, stop.** It was
 published before anything computed it and answered `null` for every account from the day it shipped.
@@ -1478,6 +1540,16 @@ Each row:
 
 **Request:** `kind` (which side or type of document), `file` (jpeg/jpg/png/webp).
 
+| `type` | Accepted `kind` |
+|---|---|
+| `government_id` | `national_id_front` · `national_id_back` |
+| `selfie` | `selfie` — one image, no liveness step |
+| `driving_licence` | `licence_front` · `licence_back` |
+| `organization` | `badge` |
+
+Any other pair answers `422 DOCUMENT_KIND_NOT_ACCEPTED`. Each row of `GET /account/verifications`
+also lists `requiredDocuments`, `uploadedDocuments` and `missingDocuments`.
+
 | Response field | Meaning |
 |---|---|
 | `id` | The stored document. |
@@ -1625,7 +1697,16 @@ missing, so gating it would leave them with a refusal and no explanation.
 #### `GET` / `POST /driver/vehicles` · `PATCH /driver/vehicles/{vehicle}` — active, profile complete
 
 **POST/PATCH request:** `make`, `model`, `year`, `colour`, `plateNumber`, `seats`,
-`transmission`, `fuelType`.
+`transmission`, `fuelType`, `hasAc`.
+
+Required on POST: `make`, `model`, `year`, `colour`, `plateNumber`, `seats`. `make` and `model` are
+two fields — split "Kia Sportage" before sending; an empty `model` is a `422`. `transmission`,
+`fuelType` and `hasAc` are optional. Seat belts are **not** a field: the reviewer checks them and
+sets `approvedSeats` (PROF-25).
+
+**An approved driver can edit a replacement car** (2026-11-14): `PATCH` and document uploads are
+accepted on a car of hers that is not active and is `PENDING` or `REJECTED`. Her active car and any
+approved car stay locked (`409 VEHICLE_LOCKED`).
 
 | Field | Meaning |
 |---|---|
@@ -1634,11 +1715,36 @@ missing, so gating it would leave them with a refusal and no explanation.
 | `seats` | What the driver entered: total including the driver. It does **not** limit a commute — `approvedSeats` does. |
 | `approvedSeats` | Set by RAFEEQ at the car review (F2-6, PROF-28): seats with working belts, at least 3. No commute or day may offer more, and the seat price is divided by it. `null` until reviewed — such a car cannot publish (`VEHICLE_SEATS_NOT_APPROVED`). |
 | `tier` | `standard` · `comfort`, set at the review (PROF-26). Comfort is priced at a higher km rate and shown as a badge. |
-| `hasAc` | Air conditioning, as checked by the reviewer. |
+| `hasAc` | In the **response**: air conditioning as confirmed by the reviewer (COM-44) — the value everything else reads. In the **request**: what the driver declares, stored as `declaredAc`. |
+| `declaredAc` | What the driver declared (`true` · `false` · `null` if never said). The reviewer sees it and decides `hasAc`. |
+| `submittedAt` | When the car was added — for "Submitted today". |
+| `approvalValidUntil` | The date the car's approval ends: the earliest registration expiry the reviewer set, or `null` if none is set yet. After it the car becomes `SUSPENDED` with `suspensionReason: registration_expired`. |
 | `rejectionReason` | Why the reviewer rejected this car, or `null`. Use it in the draft banner for `vehicle_rejected`. |
 | `isActive` | Only one vehicle per driver may be active at a time. |
-| `status` | `PENDING` · `APPROVED` · `REJECTED`. A commute can only be published on an approved, active vehicle. |
+| `status` | `PENDING` · `APPROVED` · `REJECTED` · `SUSPENDED`. A commute can only be published on an approved, active vehicle. A deactivated car keeps `APPROVED` and can be activated again with no new review. |
+| `suspensionReason` · `registrationRenewalSubmittedAt` | Why a `SUSPENDED` car is suspended, as a code, and when she last sent a renewal. The codes are `registration_expired` (its registration date passed) and `report` (staff suspended it after reviewing a report, PROF-35). Show a fixed sentence per code. 🔒 The text staff type is never sent: it is written for the audit log and can name the report it came from. |
 | `documents[]` | `id`, `type`, `status`, `expiresAt`. **No path and no URL** — a document's storage path never appears in any payload. |
+
+#### `GET /driver/vehicles/replace-preview?vehicle={id}` — active, profile complete
+
+What activating another car would cancel, across the **whole account** — no commute id needed.
+`vehicle` is the car she is about to activate (the new one, or the old one when switching back).
+
+`{ affectedBookings, affectedCommutes, affectedSeats, feePiastres, reason, perTrip[], blocked }` — the
+middle four exactly as in `GET /commutes/{commute}/cancel-preview`. All zeros when nothing would be
+cancelled. Show it before `activate`: two confirmations, the fee on the second (COM-23, COM-25).
+
+`blocked` says whether `activate` would refuse this car, with the same checks in the same order. `null`
+when the switch would go through (and always `null` without `vehicle`). Otherwise
+`{ code, commuteIds[], approvedSeats }`:
+
+| `code` | Means |
+|---|---|
+| `VEHICLE_NOT_ALLOWED` | The car isn't approved yet. `commuteIds` is empty. |
+| `VEHICLE_SEATS_NOT_APPROVED` | The car has no approved seat count. |
+| `COMMUTE_SEATS_EXCEED_APPROVED` | These commutes offer more seats than the car's `approvedSeats`. |
+
+When `blocked` is set, say why instead of offering the confirm.
 
 #### `POST /driver/vehicles/{vehicle}/activate` — active, profile complete
 
@@ -1659,10 +1765,12 @@ missing, so gating it would leave them with a refusal and no explanation.
 > **`booking_vehicle_changed` no longer exists.** Nothing produces it: there is no surviving booking
 > to tell about. Remove any handling for it.
 
-**It can still be refused for seats.** If a live commute advertises more seats than the replacement
-has, the whole swap answers `422` and nothing moves — the seat count is published and people search
-on it, so a commute selling four seats cannot run in a three-seater. Re-price or re-size the commute
-first, or use a bigger car.
+**It can still be refused for seats.** If any of her commutes that isn't archived advertises more
+seats than the replacement has, the whole swap answers `422` and nothing moves. **A paused commute
+counts too:** it moves to the new car with the others and resumes on it, selling the seats it
+advertises. The seat count is published and people search on it, so a commute selling four seats
+cannot run in a three-seater. Re-size the commute first, or use a bigger car. `replace-preview` →
+`blocked` says so before she confirms.
 
 **The old vehicle is kept**, inactive, with its documents. It is what carried every completed
 journey and the evidence that it was allowed to.
@@ -1672,7 +1780,8 @@ moment with none active, and never one with two.
 
 #### `POST /driver/vehicles/{vehicle}/documents` — active, profile complete
 
-**Request:** `type`, `file`, `expiresAt`.
+**Request:** `type`, `file`, `expiresAt`. `expiresAt` is optional and the app should not send it:
+the reviewer sets the registration expiry (PROF-30).
 
 **Upload limits, on this endpoint and `POST /account/verifications/{type}/documents`:** a file up to
 **8 MB** and **16 megapixels**. Over 8 MB answers `422 VALIDATION_FAILED`; a whole request over
@@ -1867,7 +1976,7 @@ fix, he waits for the review. The form carries on without a price; publishing is
 #### `GET /commutes/{commute}/cancel-preview?action=pause|delete|replace_vehicle` — verified
 
 What pausing, deleting or replacing the car would cost **before** she confirms (C-9, PAY-23). Each
-cancels **every** confirmed seat on an upcoming day — inside the 12-hour lock too — and each seat
+cancels **every** confirmed seat on an upcoming day — inside the schedule lock too — and each seat
 costs the driver-cancel fee by the notice she gives now (16h+: 0 · 10–16h: 10 % · under 10h: 25 %).
 `replace_vehicle` counts every commute of hers: one car serves them all.
 
@@ -1992,7 +2101,7 @@ confirmed seat (16h+: 0 · 10–16h: 10 % · < 10h: 25 %) — **show it first** 
 | `formStep` | The form step the driver stopped at, 1 to 5, sent on `PATCH` to a draft. `null` until sent. Stored only; use `missing[]` for what's still needed. |
 | `publishedAt`, `pausedAt`, `pausedReason`, `archivedAt` | `pausedReason` is `by_driver` · `vehicle_suspended` · `licence_expired` · `commission_unpaid` · `account_suspended` · `driver_suspended` — all but `by_driver` are automatic, so show the right copy. `licence_expired` means her licence lapsed (COM-26): she can resume after the renewed licence is approved. `driver_suspended` means staff suspended her driving only (PROF-27): Resume answers `403 DRIVER_NOT_ELIGIBLE` and Passenger mode still works. `account_suspended` means staff suspended her account (F1-3); once it is lifted she resumes the commute herself. `commission_unpaid` means a week's commission missed two Fridays (PAY-45): show the debt screen; after paying she resumes the commute herself. |
 | `missing[]` | What still has to be done before it can be published. Drive the wizard from this. The values are `origin`, `destination`, `schedule`, `vehicle` and `one_time_single_date`. |
-| `locations[]` | `{id, type, lat, lng, address, placeId, sequence}`; type is `origin` · `pickup` · `dropoff` · `destination`. |
+| `locations[]` | `{id, type, lat, lng, address, placeId, nearPlaceId, nearLabel, nearDistanceMetres, sequence}`; type is `origin` · `pickup` · `dropoff` · `destination`. |
 | `schedule` | `{daysMask, departureTime, timezone, startDate, endDate, generatedUntil}`. `generatedUntil` is **how far ahead bookable days currently exist**, rolled forward daily — not the end of the commute. |
 | `weekdays[]` | One row per weekday, to refill the form from a draft: `{weekdayBit, promisedArrivalTime, departureTime, departureIsComputed, seatsTotal}`. A commute made before arrivals existed has `promisedArrivalTime: null` and `departureIsComputed: false`, so ask for the arrival when refilling. `seatsTotal` is `null` when the day follows the commute. |
 | `rules` | A map of `{key: bool}`; `{}` when empty. |
@@ -2013,6 +2122,12 @@ confirmed seat (16h+: 0 · 10–16h: 10 % · < 10h: 25 %) — **show it first** 
 `false` or `1` / `0`. Optionally `origin[label]`, `origin[placeId]`,
 `destination[label]`, `destination[placeId]` — they change nothing about the search; they are kept
 on her recent search so the row can say "New Cairo → Smart Village" (DISCOVER-8).
+
+**Area search (2026-11-14):** send `origin[areaPlaceId]` and/or `destination[areaPlaceId]` (a place with
+`isArea: true` from `GET /places`) to match commutes with a suggested point or route inside that area's
+radius. `meta.scope` is `point` or `area`. Area searches are not kept in recent searches. Every result
+carries `distanceMetres`: the shortest distance from `origin` to the commute's route or nearest pickup
+point. Full contract and responses: `FLUTTER_HANDOFF_MAPS_ARABIC.md`.
 
 **Verification is NOT required here** — searching is how somebody decides whether Rafeeq is worth
 verifying for. What they are *eligible* to see is decided inside the query from their own account:
@@ -3712,10 +3827,15 @@ An **array**, because a phone that loses signal buffers and sends the backlog. `
 |---|---|
 | `accepted` | How many were kept. |
 | `rejected` | How many were dropped as implausible. **Log this** — the usual cause is a wrong device clock, and the driver will never notice. |
+| `rejectedReason` | `"CLOCK_SKEW"` when **every** point in the batch was dropped because its `recordedAt` is in the future or from before the run could have begun: tell the driver his phone's clock is wrong. `null` otherwise. |
 
 Points are dropped, not refused, when they are from the future (beyond a 2-minute skew), from
 before the run could have begun, or the phone's accuracy figure is hopeless (over 500m). A batch
 of six with one bad point delivers five.
+
+Sending the same point again changes nothing. A point is identified by its `recordedAt` (to the
+second) within the run: a repeat is counted in `accepted`, so drop it from your buffer, but it adds
+no trail row and sends no `location.updated`.
 
 #### `GET /trips/{trip}/location` — active, profile complete, driver or a **live** booking
 
@@ -3728,8 +3848,16 @@ of six with one bad point delivers five.
 | `carToPickupPolyline` | Encoded road from the car to her pickup, **only while her pickup is the next stop** and a position is current. Null otherwise: draw it yourself or not at all. |
 | `stopsBeforeYou` | **Passenger with a confirmed seat:** how many pickups and drop-offs the car still makes before hers. `0` when she is next and after the arrival tap. A count only. Null for the driver, before the start and after she boarded. Same value as `nextJourney.live.stopsBeforeYou`. |
 
-A late batch never moves the car back: when every point in a batch is older than the newest one
-already received, the points join the trail but `position` and `lastLocationAt` stay as they were.
+A late batch never moves the car back: when no point in a batch is newer than the newest one
+already received, the points join the trail but `position` and `lastLocationAt` stay as they were,
+and no `location.updated` is sent. This holds when two requests for the same run arrive at the same
+instant. A batch that does move the car sends **one** `location.updated`, carrying its newest point.
+One response is one moment: `carToPickupPolyline` starts at the returned `position`, and
+`pickupEtaAt` is counted from `position.recordedAt`, not from when you asked. Both move with every
+new position. The road underneath is fetched once and trimmed as the car advances; it is fetched
+again only when the next stop changes, when the car is more than 75 m off it on two readings in a
+row, or when it is 5 minutes old. Durations are **without live traffic**.
+
 `position.recordedAt` and `lastLocationAt` are the **phone's** time of the fix. `position` becomes
 `null` 5 minutes after the last fix; `lastLocationAt` stays, so "Last seen 7 min ago" is
 `now − lastLocationAt`.
@@ -4470,6 +4598,17 @@ reviewer block, make it an anonymous one.
 
 #### `GET /ratings/about-me` — paginated · what was said about you
 
+Each item now has `kind` (`completed_ride` · `canceled_booking`), `reportedByMe` and `report`: the caller's
+report on that review, `{ id, status }` or `null`. `status` is `PENDING` · `DISMISSED` (kept), and `UNDER_REVIEW`,
+which nothing sets today (treat it as `PENDING`). A
+review whose report was upheld is hidden, so it is no longer listed. Pass
+`?kind=completed_ride` or `?kind=canceled_booking` to page each section on its own. `meta.byKind`
+gives `{ completed_ride: { count, average }, canceled_booking: { count, average } }` whatever the
+filter — use `canceled_booking.average` for the Reliability row. `average` is `null` with no ratings.
+
+Canceled-booking feedback is **stars only** (SAFE-23): `comment` is always `null`, there is nothing
+to report, and `month` is all the date you get — show "Oct 2026 · anonymous".
+
 The same anonymous shape, and **anonymous to you as well.** Being shown who gave you two stars is
 the retaliation vector, not a courtesy. Hidden reviews are not here either — double-blind is
 symmetric, and a subject who could read one early would be writing her own rating with knowledge of
@@ -4477,7 +4616,9 @@ it.
 
 #### `POST /ratings/{rating}/report` — "this review is abusive"
 
-**Request:** `reason` (required, 3–255 characters).
+**Request:** `reason` is optional (3–255 characters when sent), so one tap is enough. Canceled-booking
+feedback cannot be reported: `422` with `error.fields.rating: NOT_REPORTABLE`. A second report of
+the same review answers `409 REVIEW_ALREADY_REPORTED`; read `reportedByMe` to show "Reported".
 
 🔴 **A report flags for a human and takes nothing down.** The review stays on the profile and stays
 in the average until a moderator decides otherwise, and the response says so (`reviewRemains:
@@ -4907,7 +5048,7 @@ neither is distinguishable from the other.
 
 ## 4.17 Testing (staging only)
 
-For the automated tests. **All three answer `404`** unless the server has `RAFEEQ_TESTING_API=true`
+For the automated tests. **All of them answer `404`** unless the server has `RAFEEQ_TESTING_API=true`
 and is not production. When on, any signed-in account can call them, and each acts only on the
 caller's own account and commutes.
 
@@ -4924,6 +5065,8 @@ must have been sent to review first; otherwise `409 DRIVER_APPLICATION_LOCKED` o
 Deletes the caller's account the way `DELETE /account` does (commutes archived, seats cancelled,
 requests withdrawn, demands cancelled, sessions ended, the number freed), **without** the checks that
 block a real deletion. End a live run first with `POST /trips/{trip}/cancel-active`.
+Other members still see her past seats and requests in their lists, with `person.publicFirstName: null`,
+as after a real `DELETE /account`.
 
 #### `POST /testing/trips/{trip}/departure`
 
@@ -4954,8 +5097,12 @@ A reviewer's decision on the caller's own **replacement car** (an approved drive
 Approve sets it `APPROVED` with approved seats; then `POST /driver/vehicles/{vehicle}/activate` swaps it in as for a
 real approval. Reject takes optional `item` (`vehicle_details` · `vehicle_registration`) and `reason`; her driver
 status is unchanged. Both send `driver_item_approved` / `driver_item_rejected` with `vehicleId`. Answers `{id,
-verificationStatus, approvedSeats, isActive, rejectedItem, rejectionReason}`. `422 VEHICLE_NOT_ALLOWED` if the car
-isn't pending or the driver isn't approved.
+verificationStatus, approvedSeats, tier, hasAc, declaredAc, isActive, rejectedItem, rejectionReason}`.
+`422 VEHICLE_NOT_ALLOWED` if the car isn't pending or the driver isn't approved.
+
+Approve takes the reviewer's three values, each optional: `approvedSeats` (the dashboard's range, 3 to 7 today;
+default: the seats she typed, up to 7), `tier` (`standard` · `comfort`, default `comfort`) and `hasAc` (default: what
+she declared). Outside the range: `422 VALIDATION_FAILED` with `fields.approvedSeats`.
 
 #### `POST /testing/debt/payments/{payment}/confirm` · `POST /testing/debt/payments/{payment}/reject`
 
@@ -4990,7 +5137,9 @@ caller's account (commutes paused with `account_suspended`); `vehicle` the given
 
 `key` is `licence` or `vehicle_registration`; body `{expiresAt: "YYYY-MM-DD", vehicleId?}`. Sets the date, then
 runs that document's "expiring soon" and "expired" checks. A past date stops the licence (`EXPIRED_DOCUMENTS`)
-or suspends the car; a date within the warning window sends the warning. Answers `{key, expiresAt}`.
+or suspends the car; a date within the warning window sends the warning. Answers `{key, expiresAt}`. For
+`vehicle_registration` the date is also the car's `approvalValidUntil` in `GET /driver/vehicles`; a past date
+makes the car `SUSPENDED` with `suspensionReason: registration_expired`.
 
 #### `POST /testing/bookings/{booking}/age`
 
@@ -5010,6 +5159,66 @@ schedule does. `name`: `generate-trips`, `roll-memberships`, `match-demands`, `e
 `{kind: "no_show" | "late_boarding" | "late_cancel", count}` (1–10). Adds that many past offences to the
 caller's history, one per day before today, so the next real one lands on the next rung of the fee ladder.
 Answers `{kind, standing, nextRung}`.
+
+#### `POST /testing/reliability/appeals/{appeal}/decide`
+
+`{decision: "approved" | "declined", declineReasonCode?, note?}`. Staff's decision on the caller's own pending
+appeal (`appeal.id` from `GET /account/reliability`), made the same way as on the dashboard:
+
+- **approved:** the event stops counting (`counts: false`, `reversedAt`), its fee is credited back
+  (`fee.reversed: true`), the score is recomputed, and `appeal_approved` is sent.
+- **declined:** `appeal.status: declined` with `declineReasonCode` (`not_enough_evidence` ·
+  `evidence_does_not_match` · `within_member_control` · `other`, default `other`), and `appeal_declined` is sent.
+  While a round is left, a new 48-hour window opens from the decision and the next appeal needs new evidence
+  (`appealRefusal: NEW_EVIDENCE_REQUIRED` until a file is added).
+
+Answers the event as `GET /account/reliability` lists it. `409 APPEAL_NOT_PENDING` once decided; `404` for
+somebody else's appeal.
+
+#### `POST /testing/reliability/reset`
+
+Removes every reliability event on the caller (driver and passenger sides), with their appeals and evidence
+files, and takes off any fee those events wrote (a credit, so the debt ledger still adds up). The score is
+`perfectScore` again. Nothing else changes: a suspension for debt stays until `driver/reinstate`. Answers the
+record as `GET /account/reliability` does.
+
+#### `POST /testing/reliability/events/{event}/age`
+
+`{hours}` (1–2400). Moves one of the caller's events back: when it happened and was recorded, its appeals and
+their decisions, and its fee line. The appeal window is measured from the new times. 49 hours closes the window
+(`appealRefusal: APPEAL_WINDOW_CLOSED`, `appealBy: null`), also after a declined first round. 2400 hours (100
+days) takes the event out of the 90-day score; it stays in the list. Answers the event.
+
+#### `POST /testing/reliability/events`
+
+Writes events on the caller: `{kind, cause?, count?, minutesAgo?, grouped?, bookingId?, withFee?, feePercent?}`.
+
+| Field | |
+|---|---|
+| `kind` | Any documented kind, upper or lower case. Driver kinds need an approved driver (`422`, `fields.kind: DRIVER_NOT_APPROVED`). |
+| `cause` | Any documented cause, or leave it out for an event with no cause (the shape of events written before causes existed). |
+| `count` | 1–10, default 1. |
+| `minutesAgo` | When it happened, default now. The appeal window runs from then. |
+| `grouped` | One shared `groupId` for all of them. Default: no group. |
+| `bookingId` | A booking on the caller's commute (driver kinds) or her own seat (passenger kinds); fills `person` and the ids. Only with `count: 1`. |
+| `withFee` · `feePercent` | A fee line on that booking, `feePercent` (1–100, default 50) of its price. Needs `bookingId` and a kind that carries a fee. |
+
+The weight is the one in force now. Answers `201` with the written events, as `GET /account/reliability` lists
+them.
+
+#### `POST /testing/ratings/reports/{report}/decide`
+
+`{decision: "removed" | "kept"}`, on a report the caller made (`id` from `POST /ratings/{rating}/report`). As the
+moderator does: **removed** hides the review (it leaves `GET /ratings/about-me` and `meta.byKind`); **kept** closes
+the report and the review stays, still with `reportedByMe: true`. Answers `{id, status: "UPHELD" | "DISMISSED",
+reviewVisible}`. `409 REVIEW_REPORT_NOT_PENDING` once decided; `404` for somebody else's report.
+
+#### `DELETE /testing/driver/vehicles/{vehicle}`
+
+Removes one of the caller's cars that isn't the active one, whatever its status, with its documents and their
+files. Answers `{vehicleId, deleted: true}`. `409 VEHICLE_IS_ACTIVE` for the active car; `409 VEHICLE_IN_USE`
+(`fields.commuteIds`) while a draft, published or paused commute still names it; `404` for somebody else's.
+Archived commutes don't block it: they keep no car (`vehicle_id` null) once it is deleted.
 
 ---
 
@@ -5221,6 +5430,7 @@ exist, and every live endpoint must be named here.
 
 | Date | Change |
 |---|---|
+| 2026-11-14 | 🧾 **Vehicle and reliability findings.** **2 new endpoints:** `POST /account/reliability/groups/{groupId}/appeal` and `/evidence`. 🔴 **A grouped act is appealed once:** appealing or adding evidence to any event with a `groupId` applies to every event in the group, and one staff decision decides them all. `GET /ratings/about-me` rows gain `report: { id, status } \| null`. `DELETE /testing/driver/vehicles/{vehicle}` no longer counts archived commutes. A vehicle's `suspensionReason` stays a code (`registration_expired` · `report`); the staff's text is never sent. |
 | 2026-11-13 | 📄 **New: `GET /content/{key}` (4.18).** Help, support contact, terms and guidelines as staff write them on the dashboard, in Arabic and English, with a `version` that goes up on every save. |
 | 2026-11-13 | 📣 **Two new inbox notification types, no new endpoint.** `announcement` (staff to everyone, passengers or drivers; may carry `data.link`) and `staff_message` (staff to one member). Both arrive through `GET /notifications` like any other row, already in the member's language, and are never pushed. Show them with the generic inbox card. |
 | 2026-11-13 | 🔎 **Place search.** `GET /places?q=` now finds a place wherever it is: with `lat`/`lng` it is ranked (name starts with `q` → contains `q` → area only, nearest first in each, then most used) instead of cut to 5 km. `radiusMetres` with `q` still limits by distance when you send it. New `limit` (1–20). `city` and `district` now follow `Accept-Language`. `q` also matches the city, English area names and Arabic spelling variants. |

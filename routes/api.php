@@ -45,6 +45,7 @@ use App\Http\Controllers\Api\V1\Search\RecentSearchController;
 use App\Http\Controllers\Api\V1\Search\SavedSearchController;
 use App\Http\Controllers\Api\V1\Search\SearchController;
 use App\Http\Controllers\Api\V1\Testing\TestingController;
+use App\Http\Controllers\Api\V1\Testing\TestingRecordsController;
 use App\Http\Controllers\Api\V1\Testing\TestingScenarioController;
 use App\Http\Controllers\Api\V1\Trip\AttendanceController;
 use App\Http\Controllers\Api\V1\Trip\DriverTripController;
@@ -92,7 +93,7 @@ Route::prefix('v1')->group(function (): void {
         });
     });
 
-    Route::prefix('testing')->middleware('auth:sanctum')->group(function (): void {
+    Route::prefix('testing')->middleware(['testing.api', 'auth:sanctum'])->group(function (): void {
         Route::post('driver/approve', [TestingController::class, 'approveDriver']);
         Route::delete('account', [TestingController::class, 'destroyAccount']);
         Route::post('trips/{trip}/departure', [TestingController::class, 'moveDeparture']);
@@ -110,6 +111,12 @@ Route::prefix('v1')->group(function (): void {
         Route::post('bookings/{booking}/age', [TestingScenarioController::class, 'ageBooking']);
         Route::post('jobs/{name}/run', [TestingScenarioController::class, 'runJob']);
         Route::post('attendance', [TestingScenarioController::class, 'seedHistory']);
+        Route::post('reliability/appeals/{appeal}/decide', [TestingRecordsController::class, 'decideAppeal']);
+        Route::post('reliability/reset', [TestingRecordsController::class, 'resetReliability']);
+        Route::post('reliability/events/{event}/age', [TestingRecordsController::class, 'ageEvent']);
+        Route::post('reliability/events', [TestingRecordsController::class, 'writeEvents']);
+        Route::post('ratings/reports/{report}/decide', [TestingRecordsController::class, 'decideReport']);
+        Route::delete('driver/vehicles/{vehicle}', [TestingRecordsController::class, 'deleteVehicle']);
     });
 
     Route::prefix('account')->middleware('auth:sanctum')->group(function (): void {
@@ -167,6 +174,15 @@ Route::prefix('v1')->group(function (): void {
          * is told either way — but a score that can end an account has to be answerable.
          */
         Route::post('reliability/events/{event}/appeal', [ReliabilityController::class, 'appeal'])
+            ->middleware('throttle:safety-reports');
+
+        Route::post('reliability/events/{event}/evidence', [ReliabilityController::class, 'attachEvidence'])
+            ->middleware('throttle:safety-reports');
+
+        Route::post('reliability/groups/{groupId}/appeal', [ReliabilityController::class, 'appealGroup'])
+            ->middleware('throttle:safety-reports');
+
+        Route::post('reliability/groups/{groupId}/evidence', [ReliabilityController::class, 'attachGroupEvidence'])
             ->middleware('throttle:safety-reports');
 
         /*
@@ -301,6 +317,7 @@ Route::prefix('v1')->group(function (): void {
             Route::delete('application', [DriverApplicationController::class, 'withdraw']);
 
             Route::get('vehicles', [VehicleController::class, 'index']);
+            Route::get('vehicles/replace-preview', [VehicleController::class, 'replacePreview']);
             Route::post('vehicles', [VehicleController::class, 'store']);
             Route::patch('vehicles/{vehicle}', [VehicleController::class, 'update']);
             Route::post('vehicles/{vehicle}/activate', [VehicleController::class, 'activate']);

@@ -7,4 +7,5 @@ enum ConsentDocumentType: string
     case Terms = 'terms';
     case Privacy = 'privacy';
     case Marketing = 'marketing';
+    case Biometric = 'biometric';
 }

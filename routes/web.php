@@ -179,6 +179,7 @@ Route::prefix('admin')->name('admin.')->middleware(SetAdminLocale::class)->group
         // Private files, opened through the session — never a link that works elsewhere.
         Route::get('files/documents/{document}', [StaffFileController::class, 'document'])->name('files.document');
         Route::get('files/evidence/{evidence}', [StaffFileController::class, 'evidence'])->name('files.evidence');
+        Route::get('files/appeal-evidence/{evidence}', [StaffFileController::class, 'appealEvidence'])->name('files.appeal-evidence');
         Route::get('files/vehicle-documents/{vehicleDocument}', [StaffFileController::class, 'vehicleDocument'])->name('files.vehicle-document');
         Route::get('files/photos/{user}', [StaffFileController::class, 'photo'])->name('files.photo');
 

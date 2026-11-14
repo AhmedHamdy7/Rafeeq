@@ -4,6 +4,7 @@ namespace App\Domains\Rating\Actions;
 
 use App\Domains\Identity\Models\User;
 use App\Domains\Rating\Enums\ModerationStatus;
+use App\Domains\Rating\Enums\RatingKind;
 use App\Domains\Rating\Enums\ReviewReportStatus;
 use App\Domains\Rating\Models\Rating;
 use App\Domains\Rating\Models\ReviewReport;
@@ -34,7 +35,7 @@ use Illuminate\Support\Facades\DB;
  */
 final readonly class ReportReviewAction
 {
-    public function execute(User $reporter, Rating $rating, string $reason): ReviewReport
+    public function execute(User $reporter, Rating $rating, ?string $reason = null): ReviewReport
     {
         /*
          * 🔒 Only about yourself, and only once it is readable. A hidden rating is one nobody has
@@ -44,6 +45,10 @@ final readonly class ReportReviewAction
          */
         if ($rating->reviewed_user_id !== $reporter->id || ! $rating->isVisible()) {
             throw DomainException::of(ErrorCode::NotFound);
+        }
+
+        if ($rating->kind === RatingKind::CanceledBooking) {
+            throw DomainException::of(ErrorCode::ValidationFailed, fields: ['rating' => ['NOT_REPORTABLE']]);
         }
 
         $already = ReviewReport::query()

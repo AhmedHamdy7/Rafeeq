@@ -80,6 +80,7 @@ final class TripLocationController extends Controller
              * cause is a phone clock that is wrong and the driver will never notice.
              */
             'rejected' => count($positions) - count($accepted),
+            'rejectedReason' => $accepted === [] && $action->clockSkewed($session, $positions) ? 'CLOCK_SKEW' : null,
         ]);
     }
 
@@ -99,13 +100,18 @@ final class TripLocationController extends Controller
         $session = AdvanceTripAction::sessionFor($occurrence);
 
         $position = $action->current($session);
-        $towards = $this->towardsHer($request, $occurrence);
+        $towards = $this->towardsHer($request, $occurrence, $position);
+        $lastLocationAt = $session->last_location_at;
+
+        if ($position !== null && ($lastLocationAt === null || $position->recordedAt->greaterThan($lastLocationAt))) {
+            $lastLocationAt = $position->recordedAt;
+        }
 
         return ApiResponse::success([
             'position' => $position?->toArray(),
             // When the last reading arrived, whether or not one is still current — this is
             // how a client knows its map is out of date rather than that the car has stopped.
-            'lastLocationAt' => $session->last_location_at?->toIso8601String(),
+            'lastLocationAt' => $lastLocationAt?->toIso8601String(),
             'isUnderway' => $session->current_status->isUnderway(),
             'pickupEtaAt' => $towards['pickupEtaAt'],
             'carToPickupPolyline' => $towards['carToPickupPolyline'],
@@ -116,7 +122,7 @@ final class TripLocationController extends Controller
     /**
      * @return array{pickupEtaAt: string|null, carToPickupPolyline: string|null, stopsBeforeYou: int|null}
      */
-    private function towardsHer(Request $request, ScheduledTrip $occurrence): array
+    private function towardsHer(Request $request, ScheduledTrip $occurrence, ?TripPosition $position): array
     {
         $none = ['pickupEtaAt' => null, 'carToPickupPolyline' => null, 'stopsBeforeYou' => null];
 
@@ -139,7 +145,7 @@ final class TripLocationController extends Controller
             return $none;
         }
 
-        $live = LiveStopEtas::for($occurrence, $stops);
+        $live = LiveStopEtas::at($occurrence, $stops, $position);
 
         if (! $live->isLive) {
             return $none;

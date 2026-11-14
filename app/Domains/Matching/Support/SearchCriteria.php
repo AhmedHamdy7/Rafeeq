@@ -66,7 +66,24 @@ final readonly class SearchCriteria
          * HardFilters::requireTier.
          */
         public ?VehicleTier $tier = null,
+        public ?SearchArea $originArea = null,
+        public ?SearchArea $destinationArea = null,
     ) {}
+
+    public function isAreaSearch(): bool
+    {
+        return $this->originArea !== null || $this->destinationArea !== null;
+    }
+
+    public function withAreas(?SearchArea $originArea, ?SearchArea $destinationArea): self
+    {
+        return clone ($this, ['originArea' => $originArea, 'destinationArea' => $destinationArea]);
+    }
+
+    public function withEnds(Coordinate $origin, Coordinate $destination): self
+    {
+        return clone ($this, ['origin' => $origin, 'destination' => $destination]);
+    }
 
     /**
      * @param  array<string, mixed>  $input  already validated upstream
@@ -167,6 +184,7 @@ final readonly class SearchCriteria
             $this->minRating ?? 'any',
             $this->womenOnly ? 'women-only' : 'any-audience',
             $this->tier?->value ?? 'any-tier',
+            ...($this->isAreaSearch() ? [$this->originArea?->placeId ?? 'point', $this->destinationArea?->placeId ?? 'point'] : []),
         ]));
     }
 

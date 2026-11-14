@@ -1,7 +1,9 @@
 <?php
 
 use App\Console\Commands\SeedGreaterCairoPlaces;
+use App\Domains\Geo\Enums\PlaceType;
 use App\Domains\Geo\Models\Place;
+use App\Domains\Geo\Models\PlaceSearchMiss;
 use App\Domains\Shared\ValueObjects\Coordinate;
 
 beforeEach(function () {
@@ -197,3 +199,50 @@ it('forgives Arabic spelling variants', function (string $typed, string $stored)
     'alef maqsura' => ['مصطفي', 'مصطفى'],
     'tashkeel typed' => ['مَدِينَتِي', 'مدينتي'],
 ]);
+
+it('finds a place by an alias', function (string $typed) {
+    $place = searchablePlace('Fifth Settlement', 30.0074, 31.4913, [
+        'name_ar' => 'التجمع الخامس',
+        'aliases' => ['tagamo3', '5th Settlement', 'التجمع'],
+    ]);
+    searchablePlace('Maadi', 29.9602, 31.2569, ['name_ar' => 'المعادي']);
+
+    expect(collect(placesFor('q='.urlencode($typed), 'ar'))->pluck('id')->all())->toBe([$place->id]);
+})->with(['tagamo3', 'TAGAMO3', '5th settlement', 'التجمع', '٥th settlement']);
+
+it('reads Arabic digits as English digits', function () {
+    $place = searchablePlace('Gate 5', 30.0626, 31.4913, ['name_ar' => 'بوابة 5']);
+
+    expect(collect(placesFor('q='.urlencode('بوابة ٥'), 'ar'))->pluck('id')->all())->toBe([$place->id]);
+});
+
+it('logs a search that finds nothing', function () {
+    searchablePlace('Maadi', 29.9602, 31.2569, ['name_ar' => 'المعادي']);
+
+    expect(placesFor('q='.urlencode('مدينة بدر').'&'.REHAB_GATE_6, 'ar'))->toBe([]);
+    placesFor('q=maadi');
+
+    $miss = PlaceSearchMiss::query()->sole();
+
+    expect($miss->query)->toBe('مدينة بدر')
+        ->and($miss->normalised_query)->toBe('مدينه بدر')
+        ->and($miss->lat)->toBe(30.06)
+        ->and($miss->lng)->toBe(31.49)
+        ->and($miss->user_id)->not->toBeNull();
+});
+
+it('marks areas and gives their radius', function () {
+    searchablePlace('Nasr City', 30.0566, 31.3301, ['name_ar' => 'مدينة نصر', 'type' => PlaceType::District]);
+    searchablePlace('Nasr Gate', 30.0570, 31.3310, ['name_ar' => 'بوابة نصر', 'type' => PlaceType::CompoundGate]);
+
+    $places = collect(placesFor('q=nasr'))->keyBy('name');
+
+    expect($places['Nasr City']['isArea'])->toBeTrue()
+        ->and($places['Nasr City']['radiusMetres'])->toBe(4000)
+        ->and($places['Nasr Gate']['isArea'])->toBeFalse()
+        ->and($places['Nasr Gate']['radiusMetres'])->toBeNull();
+});
+
+it('refuses a place with no Arabic name', function () {
+    Place::factory()->create(['name_ar' => ' ']);
+})->throws(InvalidArgumentException::class);

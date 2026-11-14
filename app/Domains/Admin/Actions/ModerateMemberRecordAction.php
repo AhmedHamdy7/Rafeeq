@@ -11,6 +11,7 @@ use App\Domains\Rating\Enums\ModerationStatus;
 use App\Domains\Rating\Enums\ReviewReportStatus;
 use App\Domains\Rating\Models\Rating;
 use App\Domains\Reliability\Actions\AppealReliabilityEventAction;
+use App\Domains\Reliability\Enums\AppealDeclineReason;
 use App\Domains\Reliability\Models\ReliabilityEvent;
 use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Support\Facades\DB;
@@ -48,16 +49,7 @@ final readonly class ModerateMemberRecordAction
         return DB::transaction(function () use ($by, $member, $event, $reason): ReliabilityEvent {
             $hadAppeal = $event->appealed_at !== null && $event->appeal_declined_at === null;
 
-            if ($hadAppeal) {
-                $event = $this->appeals->approve($by, $event, $reason);
-            } else {
-                // A correction nobody asked for: no "your appeal was approved" message about an appeal she never filed.
-                $event->forceFill([
-                    'reversed_at' => now(),
-                    'reversed_by' => $by->getKey(),
-                    'reversed_reason' => mb_substr($reason, 0, 255),
-                ])->save();
-            }
+            $event = $this->appeals->approve($by, $event, $reason, reverseFee: $hadAppeal, notify: $hadAppeal);
 
             AdminActionLog::record($by, 'reliability.reverse', $member, ['event' => $event->id, 'kind' => $event->kind->value, 'weight' => $event->weight], ['reversed' => true, 'appeal' => $hadAppeal], $reason);
 
@@ -65,7 +57,7 @@ final readonly class ModerateMemberRecordAction
         });
     }
 
-    public function declineAppeal(AdminUser $by, User $member, ReliabilityEvent $event, string $reason): ReliabilityEvent
+    public function declineAppeal(AdminUser $by, User $member, ReliabilityEvent $event, string $reason, AppealDeclineReason $code = AppealDeclineReason::NotEnoughEvidence): ReliabilityEvent
     {
         $this->authorize($by);
         $this->belongs($event->user_id === $member->id);
@@ -74,9 +66,9 @@ final readonly class ModerateMemberRecordAction
             throw ValidationException::withMessages(['record' => __('admin/actions.no_open_appeal')]);
         }
 
-        return DB::transaction(function () use ($by, $member, $event, $reason): ReliabilityEvent {
-            $event = $this->appeals->decline($by, $event, $reason);
-            AdminActionLog::record($by, 'reliability.decline_appeal', $member, ['event' => $event->id], ['declined' => true], $reason);
+        return DB::transaction(function () use ($by, $member, $event, $reason, $code): ReliabilityEvent {
+            $event = $this->appeals->decline($by, $event, $reason, $code);
+            AdminActionLog::record($by, 'reliability.decline_appeal', $member, ['event' => $event->id], ['declined' => true, 'code' => $code->value], $reason);
 
             return $event;
         });

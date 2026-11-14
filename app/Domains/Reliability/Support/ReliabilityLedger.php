@@ -4,6 +4,7 @@ namespace App\Domains\Reliability\Support;
 
 use App\Domains\Booking\Models\Booking;
 use App\Domains\Commute\Models\ScheduledTrip;
+use App\Domains\Reliability\Enums\ReliabilityEventCause;
 use App\Domains\Reliability\Enums\ReliabilityEventKind;
 use App\Domains\Reliability\Enums\ReliabilityRole;
 use App\Domains\Reliability\Models\ReliabilityEvent;
@@ -41,6 +42,23 @@ final class ReliabilityLedger
      */
     public const int PERFECT = 100;
 
+    private static ?string $groupId = null;
+
+    public static function grouped(callable $act): mixed
+    {
+        if (self::$groupId !== null) {
+            return $act();
+        }
+
+        self::$groupId = (string) Str::ulid();
+
+        try {
+            return $act();
+        } finally {
+            self::$groupId = null;
+        }
+    }
+
     /**
      * Record something that happened.
      *
@@ -56,6 +74,9 @@ final class ReliabilityLedger
         ?string $scheduledTripId = null,
         ?string $commuteOfferId = null,
         ?CarbonImmutable $occurredAt = null,
+        ?ReliabilityEventCause $cause = null,
+        ?string $cancelReason = null,
+        ?string $groupId = null,
     ): ?ReliabilityEvent {
         if ($booking !== null && self::alreadyRecorded($userId, $kind, (string) $booking->getKey())) {
             return null;
@@ -92,6 +113,9 @@ final class ReliabilityLedger
             'booking_id' => $booking?->getKey(),
             'scheduled_trip_id' => $scheduledTripId ?? $booking?->scheduled_trip_id,
             'commute_offer_id' => $commuteOfferId,
+            'cause' => $cause?->value,
+            'group_id' => $groupId ?? self::$groupId,
+            'cancel_reason' => $cancelReason,
         ])->save();
 
         return $event;

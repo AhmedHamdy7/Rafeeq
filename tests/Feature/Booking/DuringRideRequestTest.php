@@ -361,6 +361,7 @@ it('keeps an open offer alive after the run sets off, and closes it once the car
         ->toBe(SeatOfferStatus::Open);
 
     // And now it has gone past her.
+    $this->travel(10)->seconds();
     carAt($this->driverToken, $this->trip->id, 30.0684, 31.2000);
 
     test()->artisan('requests:expire')->assertExitCode(0);

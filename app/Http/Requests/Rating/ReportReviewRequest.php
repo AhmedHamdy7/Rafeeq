@@ -26,7 +26,7 @@ final class ReportReviewRequest extends FormRequest
              * reason on the row is a queue a human has to guess at — and the person reporting is
              * the only one who knows what is wrong with it.
              */
-            'reason' => ['required', 'string', 'min:3', 'max:255'],
+            'reason' => ['nullable', 'string', 'min:3', 'max:255'],
         ];
     }
 }
