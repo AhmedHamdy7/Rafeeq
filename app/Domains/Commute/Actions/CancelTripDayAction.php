@@ -17,6 +17,7 @@ use App\Domains\Notification\Enums\NotificationType;
 use App\Domains\Notification\Support\Notifier;
 use App\Domains\Payment\Support\DriverFees;
 use App\Domains\Payment\Support\FeeLines;
+use App\Domains\Reliability\Enums\ReliabilityEventCause;
 use App\Domains\Reliability\Enums\ReliabilityEventKind;
 use App\Domains\Reliability\Support\ReliabilityLedger;
 use App\Domains\Shared\Exceptions\DomainException;
@@ -119,6 +120,8 @@ final readonly class CancelTripDayAction
                     booking: $booking,
                     scheduledTripId: $trip->id,
                     commuteOfferId: $trip->commute_offer_id,
+                    cause: ReliabilityEventCause::CancelledDay,
+                    groupId: (string) $trip->id,
                 );
 
                 if ($booking->passenger !== null) {

@@ -17,6 +17,7 @@ use App\Domains\Commute\Models\ScheduledTrip;
 use App\Domains\Driver\Models\DriverProfile;
 use App\Domains\Notification\Enums\NotificationType;
 use App\Domains\Notification\Support\Notifier;
+use App\Domains\Reliability\Support\ReliabilityLedger;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 
@@ -66,7 +67,7 @@ final readonly class DisplaceConfirmedBookingsAction
      */
     public function forCommute(CommuteOffer $offer, DisplacementReason $reason, bool $chargeDriver = false): int
     {
-        return DB::transaction(function () use ($offer, $reason, $chargeDriver): int {
+        return ReliabilityLedger::grouped(fn () => DB::transaction(function () use ($offer, $reason, $chargeDriver): int {
             $bookings = self::futureConfirmedBookings($offer);
 
             if ($bookings->isEmpty()) {
@@ -99,7 +100,7 @@ final readonly class DisplaceConfirmedBookingsAction
             $this->tellThem($offer, $bookings, $reason);
 
             return $bookings->count();
-        });
+        }));
     }
 
     /**
@@ -113,7 +114,7 @@ final readonly class DisplaceConfirmedBookingsAction
      */
     public function forDriver(DriverProfile $profile, DisplacementReason $reason, bool $chargeDriver = false): int
     {
-        return DB::transaction(function () use ($profile, $reason, $chargeDriver): int {
+        return ReliabilityLedger::grouped(fn () => DB::transaction(function () use ($profile, $reason, $chargeDriver): int {
             $offers = CommuteOffer::query()
                 ->where('driver_profile_id', $profile->user_id)
                 ->whereNot('status', CommuteOfferStatus::Archived->value)
@@ -129,7 +130,7 @@ final readonly class DisplaceConfirmedBookingsAction
             }
 
             return $cancelled;
-        });
+        }));
     }
 
     /**

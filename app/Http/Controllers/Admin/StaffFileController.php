@@ -6,6 +6,7 @@ use App\Domains\Admin\Enums\AdminPermission;
 use App\Domains\Admin\Support\AdminActionLog;
 use App\Domains\Driver\Models\VehicleDocument;
 use App\Domains\Identity\Models\User;
+use App\Domains\Reliability\Models\ReliabilityAppealEvidence;
 use App\Domains\Safety\Models\IncidentEvidence;
 use App\Domains\Verification\Models\IdentityDocument;
 use App\Domains\Verification\Support\DocumentStorage;
@@ -58,6 +59,17 @@ final class StaffFileController extends Controller
         $this->authorizeTo(AdminPermission::SafetyViewEvidence);
 
         $file = IncidentEvidence::query()->whereKey($evidence)->firstOrFail();
+
+        $this->assertNotPurged($file->purged_at);
+
+        return $this->serve($storage, $file->file_path, $file->file_hash, 'evidence.view', $file);
+    }
+
+    public function appealEvidence(string $evidence, DocumentStorage $storage): Response
+    {
+        $this->authorizeTo(AdminPermission::SafetyViewEvidence);
+
+        $file = ReliabilityAppealEvidence::query()->whereKey($evidence)->firstOrFail();
 
         $this->assertNotPurged($file->purged_at);
 

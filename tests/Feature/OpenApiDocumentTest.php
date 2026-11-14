@@ -137,6 +137,7 @@ it('generates a document describing every /v1 route', function () {
          */
         'GET /v1/account/reliability',
         'POST /v1/account/reliability/events/{event}/appeal',
+        'POST /v1/account/reliability/events/{event}/evidence',
         'POST /v1/account/suspension/appeal',
         'GET /v1/account/warnings',
         'POST /v1/account/warnings/{warning}/dispute',
@@ -155,6 +156,7 @@ it('generates a document describing every /v1 route', function () {
         'POST /v1/driver/application/submit',
         'DELETE /v1/driver/application',
         'GET /v1/driver/vehicles',
+        'GET /v1/driver/vehicles/replace-preview',
         'POST /v1/driver/vehicles',
         'PATCH /v1/driver/vehicles/{vehicle}',
         'PATCH /v1/notifications/preferences',

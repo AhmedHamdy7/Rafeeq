@@ -28,7 +28,7 @@ final class ConsentRegistry
     {
         $key = match ($document) {
             ConsentDocumentType::Terms => 'legal.terms_version',
-            ConsentDocumentType::Privacy => 'legal.privacy_version',
+            ConsentDocumentType::Privacy, ConsentDocumentType::Biometric => 'legal.privacy_version',
             // Marketing consent has no published document to version; the
             // acceptance itself is the whole record.
             ConsentDocumentType::Marketing => null,

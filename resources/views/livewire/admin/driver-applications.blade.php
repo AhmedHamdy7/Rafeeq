@@ -96,7 +96,7 @@
                                         </select>
                                     </div>
                                     <label class="ad-check" style="align-self:end;padding-block-end:14px">
-                                        <input type="checkbox" wire:model="cars.{{ $vehicle->id }}.hasAc"> {{ __('admin.drivers.car.has_ac') }}
+                                        <input type="checkbox" wire:model="cars.{{ $vehicle->id }}.hasAc"> {{ __('admin.drivers.car.has_ac') }}@if ($vehicle->declared_ac !== null) <span class="ad-muted">· {{ __('admin.drivers.car.'.($vehicle->declared_ac ? 'declared_ac_yes' : 'declared_ac_no')) }}</span>@endif
                                     </label>
                                 </div>
                                 <div class="ad-row">

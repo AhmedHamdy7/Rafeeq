@@ -596,7 +596,7 @@ Status: ✅ fully served · ⚠️ served, something named missing · ⛔ no API
 | # | Screen | Endpoints | Status |
 |---|---|---|---|
 | 15 | **Verification centre** | `GET /account/verifications` | ✅ `level` / `of` / `percentage`, plus per level: state, `actionNeededReason` in the reviewer's own words, `expectedReviewMinutes`, `attemptsRemaining`. |
-| 30 | Identity capture | `POST /account/verifications/{type}/documents` · `/submit` · `POST /account/consents` | ⚠️ Biometric consent exists. **Confirm with us that `selfie` is an accepted document kind before you build the liveness step.** |
+| 30 | Identity capture | `POST /account/verifications/{type}/documents` · `/submit` · `POST /account/consents` | ✅ `selfie` is an accepted type and kind: **one selfie image is the whole check, there is no liveness step** (PROF-14) — drop "blink" from the copy. Biometric consent: `POST /account/consents` with `type: "biometric"`. |
 
 ### Driver and publishing
 
@@ -1042,7 +1042,15 @@ Put this URL in the Play Console data-safety form.
 | `currentVersions` | The version of each document in force right now, e.g. `{"terms": "1.0", "privacy": "1.0"}`. |
 | `outstanding` | Which consents this person has **not** accepted at the current version. Non-empty means you must show the acceptance screen — bumping a version makes everyone's consent stale again, which is the whole reason we store a version rather than a boolean. |
 
-**POST request:** `type` and `version` — the version you showed them.
+| `biometric` | `{ version, acceptedAt }` — the consent behind the selfie checkbox. `acceptedAt` is `null` until she ticks it at the current version. |
+
+**POST request:** optional `type`. Omitted, `terms` or `privacy`: records terms and privacy at their
+current versions. `biometric`: records the biometric consent (the selfie checkbox) at its current
+version, which follows the privacy version. Anything else is a `422`. No `version` is sent — the
+server records the one in force.
+
+> ⚠️ `biometric` is an interim type (2026-11-14): the product rules name a consent checkbox but no
+> consent type. The name may change once they do.
 
 #### `PUT /account/profile/basic` — signed-in, active account
 
@@ -1262,7 +1270,20 @@ she has to be able to read it, and the reasons, **before** a review rather than 
 |---|---|
 | `asDriver` / `asPassenger` | **Two separate records.** One account is one person doing two things; a driver's cancellations never reach her passenger standing. |
 | `score` | `0`–`perfectScore`, and **lower is worse**. Everybody starts at `perfectScore`: a new member has not failed anybody, and starting her at zero would make the number say she had. |
-| `events[]` | `kind` · `weight` · `occurredAt` · `bookingId` / `tripId` / `commuteId` · `counts` · `reversedAt` · `reversedReason`. |
+| `events[]` | `id` · `kind` · `weight` · `occurredAt` · `bookingId` / `tripId` / `commuteId` · `cause` · `groupId` · `cancelReason` · `person` · `counts` · `reversedAt` · `canAppeal` · `appealsLeft` · `needsNewEvidence` · `appealBy` · `appealRefusal` · `appeal` · `evidence[]` · `fee`. At most 50 per role, newest first. |
+| `id` | The event id — what the appeal and evidence calls take. |
+| `cause` | Why a driver event happened: `cancelled_booking` · `replacement` (she took a replacement offer's passenger instead) · `cancelled_day` · `pause` · `commute_deleted` · `vehicle_replaced` · `active_trip_cancelled`. `null` on lateness and no-show events and on events recorded before 2026-11-14. |
+| `groupId` | Shared by every event of **one act** — one pause, one vehicle replacement, one cancelled day, one stopped trip. Group rows on it to show "Paused commute · 5 bookings canceled". `null` on single events and older ones. |
+| `cancelReason` | `breakdown` · `accident` · `emergency` · `other` — what she gave on `POST /trips/{trip}/cancel-active`. `null` elsewhere. |
+| `person` | `{ userId, publicFirstName }` of the passenger concerned, on driver events with a booking. First name only (SAFE-18). `null` on passenger events. |
+| `appeal` | `null`, or the **latest** appeal: `{ id, round (1|2), status: pending|approved|declined, appealedAt, decidedAt, declineReasonCode }`. `declineReasonCode` is a fixed list you translate: `not_enough_evidence` · `evidence_does_not_match` · `within_member_control` · `other`. |
+| `canAppeal` · `appealRefusal` | Whether she may file now, and if not, why: `ALREADY_APPEALED` (one is pending) · `ALREADY_REVERSED` · `NO_APPEALS_LEFT` · `APPEAL_WINDOW_CLOSED` · `NEW_EVIDENCE_REQUIRED`. |
+| `appealsLeft` | `2`, `1` or `0` (D-0021: one appeal, then one second appeal with new evidence, then final). |
+| `needsNewEvidence` | `true` once a first appeal was declined: the second is refused until she uploads something new. |
+| `appealBy` | When the window closes: 48 hours from the event appearing, then 48 hours from the decision (SAFE-11). `null` when nothing more can be filed. |
+| `evidence[]` | `{ id, kind, purgeAfter, createdAt }` for what she attached. Metadata only: no path, no URL. |
+| `fee` | `null`, or the cancellation fee charged for the same booking: `{ debtEntryId, amountPiastres, reversed }`. Driver events only. |
+| `reversedReason` | Always `null`. Kept so older builds still parse; the reviewer's note is never sent. |
 | `counts` | Whether this event still counts against the score. **Render a `counts: false` event struck through rather than hiding it** — that she appealed and won is the most favourable thing on her record. |
 | `windowDays` | How far back the **score** looks. The events themselves are kept for ever. |
 
@@ -1294,27 +1315,38 @@ Each event's `weight` is the one in force **when it happened** — a later chang
 >
 #### `POST /account/reliability/events/{event}/appeal` — signed-in
 
-🔴 **Now built.** `{ "reason": "..." }`, required, 3–255 characters — her account of that morning,
-which is the entire case, because nothing is attached to a reliability event for a reviewer to weigh.
+`{ "reason": "..." }`, required, 3–1000 characters.
 
-Answers `{ reliabilityEventId, appealedAt, stillCounts }`.
+Answers `{ reliabilityEventId, appealedAt, stillCounts, appeal, appealsLeft }`; `appeal` has the
+shape described above.
+
+🔴 **One appeal covers the fee and the score** (SAFE-11, 2026-11-14). When a reviewer approves it,
+the event stops counting **and** the cancellation fee in `fee` is credited back; `fee.reversed`
+turns `true`. There is nothing second to file. The older `POST /account/debt/entries/{entry}/appeal`
+still works, and overturning a fee there now reverses its reliability event too — so the two can
+never disagree.
 
 ⚠️ **`stillCounts` is `true` and that is not a bug — show it.** Filing changes nothing on its own:
-the event keeps counting until a reviewer reverses it. If asking were enough to suspend the
-consequence, everything would be appealed as a matter of course and the score would stop meaning
-anything. What filing buys her is that a person has to look, and that she is told the answer.
+the event keeps counting until a reviewer reverses it.
 
 | | |
 |---|---|
-| Once per event | `422` with `error.fields.appeal`: `ALREADY_APPEALED`, or `ALREADY_REVERSED` if it has already been cleared. |
-| Somebody else's event | `404`, never `403` — a `403` would confirm the id names a real judgement about a real person. |
-| The answer | `appeal_approved` or `appeal_declined` notification. An **approved** appeal stops the event counting and **leaves it readable** (`reversed: true` in the events list), so she can see she was cleared. |
-| 🔒 The reviewer's note | Never sent to her. It is written for the desk and may name another member or quote a driver; she is told the outcome and support explains the rest. |
+| Two rounds (D-0021) | A first appeal within 48 hours of the event appearing. If declined, **one second appeal** within 48 hours of the decision, and only after new evidence was uploaded. Then the decision is final. |
+| Refusals | `422` with `error.fields.appeal`: `ALREADY_APPEALED` (one is waiting) · `ALREADY_REVERSED` · `APPEAL_WINDOW_CLOSED` · `NEW_EVIDENCE_REQUIRED` · `NO_APPEALS_LEFT`. Read `canAppeal` / `appealRefusal` on the event rather than trying the call. |
+| Somebody else's event | `404`, never `403`. |
+| The answer | `appeal_approved` or `appeal_declined` notification with `data.reliabilityEventId`. Re-read `GET /account/reliability` for `appeal.status`, `decidedAt` and `declineReasonCode`. An approved appeal leaves the event readable with `counts: false`. |
+| 🔒 The reviewer's note | Never sent. She gets the outcome and a `declineReasonCode`. |
 
-⚠️ **The reviewer's own screen is not built, and v5 says not to build it yet**: §275 lists "admin
-UI" among the things to leave as "durable states/hooks, not speculative behavior". The decision
-Actions exist and are tested, so the desk can act today; the queue page lands with the admin
-dashboard (Phase 12). Nothing about the member-facing half changes when it does.
+#### `POST /account/reliability/events/{event}/evidence` — signed-in · multipart
+
+**Request:** `kind` (`photo` · `screenshot` · `document`, use `document` for a receipt) and `file`
+(jpeg, png or webp, up to **6 MB**). Answers `201` with `{ id, kind, purgeAfter, createdAt }`.
+
+Upload **before** filing: the Appeal screen's tiles upload here, then submit calls the appeal. At
+most 5 files per event (`422 INCIDENT_EVIDENCE_LIMIT_REACHED`). Accepted only while an appeal can
+still be filed; otherwise `422` with `error.fields.appeal` naming why. What is attached comes back
+in `events[].evidence` — there is no separate list call. Images only for now; audio is not accepted
+here or on incident evidence.
 
 **`cancellationRate` has been removed from `GET /account/stats`** — **if you read it, stop.** It was
 published before anything computed it and answered `null` for every account from the day it shipped.
@@ -1478,6 +1510,16 @@ Each row:
 
 **Request:** `kind` (which side or type of document), `file` (jpeg/jpg/png/webp).
 
+| `type` | Accepted `kind` |
+|---|---|
+| `government_id` | `national_id_front` · `national_id_back` |
+| `selfie` | `selfie` — one image, no liveness step |
+| `driving_licence` | `licence_front` · `licence_back` |
+| `organization` | `badge` |
+
+Any other pair answers `422 DOCUMENT_KIND_NOT_ACCEPTED`. Each row of `GET /account/verifications`
+also lists `requiredDocuments`, `uploadedDocuments` and `missingDocuments`.
+
 | Response field | Meaning |
 |---|---|
 | `id` | The stored document. |
@@ -1625,7 +1667,16 @@ missing, so gating it would leave them with a refusal and no explanation.
 #### `GET` / `POST /driver/vehicles` · `PATCH /driver/vehicles/{vehicle}` — active, profile complete
 
 **POST/PATCH request:** `make`, `model`, `year`, `colour`, `plateNumber`, `seats`,
-`transmission`, `fuelType`.
+`transmission`, `fuelType`, `hasAc`.
+
+Required on POST: `make`, `model`, `year`, `colour`, `plateNumber`, `seats`. `make` and `model` are
+two fields — split "Kia Sportage" before sending; an empty `model` is a `422`. `transmission`,
+`fuelType` and `hasAc` are optional. Seat belts are **not** a field: the reviewer checks them and
+sets `approvedSeats` (PROF-25).
+
+**An approved driver can edit a replacement car** (2026-11-14): `PATCH` and document uploads are
+accepted on a car of hers that is not active and is `PENDING` or `REJECTED`. Her active car and any
+approved car stay locked (`409 VEHICLE_LOCKED`).
 
 | Field | Meaning |
 |---|---|
@@ -1634,11 +1685,24 @@ missing, so gating it would leave them with a refusal and no explanation.
 | `seats` | What the driver entered: total including the driver. It does **not** limit a commute — `approvedSeats` does. |
 | `approvedSeats` | Set by RAFEEQ at the car review (F2-6, PROF-28): seats with working belts, at least 3. No commute or day may offer more, and the seat price is divided by it. `null` until reviewed — such a car cannot publish (`VEHICLE_SEATS_NOT_APPROVED`). |
 | `tier` | `standard` · `comfort`, set at the review (PROF-26). Comfort is priced at a higher km rate and shown as a badge. |
-| `hasAc` | Air conditioning, as checked by the reviewer. |
+| `hasAc` | In the **response**: air conditioning as confirmed by the reviewer (COM-44) — the value everything else reads. In the **request**: what the driver declares, stored as `declaredAc`. |
+| `declaredAc` | What the driver declared (`true` · `false` · `null` if never said). The reviewer sees it and decides `hasAc`. |
+| `submittedAt` | When the car was added — for "Submitted today". |
+| `approvalValidUntil` | The date the car's approval ends: the earliest registration expiry the reviewer set, or `null` if none is set yet. After it the car becomes `SUSPENDED` with `suspensionReason: registration_expired`. |
 | `rejectionReason` | Why the reviewer rejected this car, or `null`. Use it in the draft banner for `vehicle_rejected`. |
 | `isActive` | Only one vehicle per driver may be active at a time. |
-| `status` | `PENDING` · `APPROVED` · `REJECTED`. A commute can only be published on an approved, active vehicle. |
+| `status` | `PENDING` · `APPROVED` · `REJECTED` · `SUSPENDED`. A commute can only be published on an approved, active vehicle. A deactivated car keeps `APPROVED` and can be activated again with no new review. |
+| `suspensionReason` · `registrationRenewalSubmittedAt` | Why a `SUSPENDED` car is suspended (`registration_expired` or after a report), and when she last sent a renewal. |
 | `documents[]` | `id`, `type`, `status`, `expiresAt`. **No path and no URL** — a document's storage path never appears in any payload. |
+
+#### `GET /driver/vehicles/replace-preview?vehicle={id}` — active, profile complete
+
+What activating another car would cancel, across the **whole account** — no commute id needed.
+`vehicle` is the car she is about to activate (the new one, or the old one when switching back).
+
+`{ affectedBookings, affectedCommutes, affectedSeats, feePiastres, reason, perTrip[] }` — the last
+four exactly as in `GET /commutes/{commute}/cancel-preview`. All zeros when nothing would be
+cancelled. Show it before `activate`: two confirmations, the fee on the second (COM-23, COM-25).
 
 #### `POST /driver/vehicles/{vehicle}/activate` — active, profile complete
 
@@ -1672,7 +1736,8 @@ moment with none active, and never one with two.
 
 #### `POST /driver/vehicles/{vehicle}/documents` — active, profile complete
 
-**Request:** `type`, `file`, `expiresAt`.
+**Request:** `type`, `file`, `expiresAt`. `expiresAt` is optional and the app should not send it:
+the reviewer sets the registration expiry (PROF-30).
 
 **Upload limits, on this endpoint and `POST /account/verifications/{type}/documents`:** a file up to
 **8 MB** and **16 megapixels**. Over 8 MB answers `422 VALIDATION_FAILED`; a whole request over
@@ -1867,7 +1932,7 @@ fix, he waits for the review. The form carries on without a price; publishing is
 #### `GET /commutes/{commute}/cancel-preview?action=pause|delete|replace_vehicle` — verified
 
 What pausing, deleting or replacing the car would cost **before** she confirms (C-9, PAY-23). Each
-cancels **every** confirmed seat on an upcoming day — inside the 12-hour lock too — and each seat
+cancels **every** confirmed seat on an upcoming day — inside the schedule lock too — and each seat
 costs the driver-cancel fee by the notice she gives now (16h+: 0 · 10–16h: 10 % · under 10h: 25 %).
 `replace_vehicle` counts every commute of hers: one car serves them all.
 
@@ -4483,6 +4548,14 @@ reviewer block, make it an anonymous one.
 
 #### `GET /ratings/about-me` — paginated · what was said about you
 
+Each item now has `kind` (`completed_ride` · `canceled_booking`) and `reportedByMe`. Pass
+`?kind=completed_ride` or `?kind=canceled_booking` to page each section on its own. `meta.byKind`
+gives `{ completed_ride: { count, average }, canceled_booking: { count, average } }` whatever the
+filter — use `canceled_booking.average` for the Reliability row. `average` is `null` with no ratings.
+
+Canceled-booking feedback is **stars only** (SAFE-23): `comment` is always `null`, there is nothing
+to report, and `month` is all the date you get — show "Oct 2026 · anonymous".
+
 The same anonymous shape, and **anonymous to you as well.** Being shown who gave you two stars is
 the retaliation vector, not a courtesy. Hidden reviews are not here either — double-blind is
 symmetric, and a subject who could read one early would be writing her own rating with knowledge of
@@ -4490,7 +4563,9 @@ it.
 
 #### `POST /ratings/{rating}/report` — "this review is abusive"
 
-**Request:** `reason` (required, 3–255 characters).
+**Request:** `reason` is optional (3–255 characters when sent), so one tap is enough. Canceled-booking
+feedback cannot be reported: `422` with `error.fields.rating: NOT_REPORTABLE`. A second report of
+the same review answers `409 REVIEW_ALREADY_REPORTED`; read `reportedByMe` to show "Reported".
 
 🔴 **A report flags for a human and takes nothing down.** The review stays on the profile and stays
 in the average until a moderator decides otherwise, and the response says so (`reviewRemains:

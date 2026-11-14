@@ -339,13 +339,15 @@ it('refuses a report on a review nobody can read yet', function () {
     expect(ReviewReport::count())->toBe(0);
 });
 
-it('requires a reason to report', function () {
+it('takes a report with no reason, and refuses one too short to read', function () {
     reviewed();
 
     $id = test()->withToken($this->driverToken)->getJson('/api/v1/ratings/about-me')
         ->assertOk()->json('data.0.id');
 
-    // A moderation queue with no reason on the row is a queue a human has to guess at.
-    test()->withToken($this->driverToken)->postJson("/api/v1/ratings/{$id}/report", [])
+    test()->withToken($this->driverToken)->postJson("/api/v1/ratings/{$id}/report", ['reason' => 'x'])
         ->assertStatus(422);
+
+    test()->withToken($this->driverToken)->postJson("/api/v1/ratings/{$id}/report", [])
+        ->assertStatus(201);
 });

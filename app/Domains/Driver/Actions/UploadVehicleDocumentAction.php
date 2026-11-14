@@ -49,7 +49,7 @@ final readonly class UploadVehicleDocumentAction
         $renewal = $this->isRenewal($profile, $vehicle, $type);
 
         if (! $renewal) {
-            DriverApplicationState::assertVehicleEditable($profile->status);
+            DriverApplicationState::assertVehicleEditable($profile->status, $vehicle);
         }
 
         $stored = $this->intake->accept($owner, $file, auditContext: [

@@ -55,6 +55,7 @@ final class VehicleResource extends JsonResource
             'tier' => $this->tierOrDefault()->value,
             // Air conditioning, as checked by the reviewer.
             'hasAc' => (bool) $this->has_ac,
+            'declaredAc' => $this->declared_ac,
             // `manual` · `automatic` · null (F2-5).
             'transmission' => $this->transmission?->value,
             'fuelType' => $this->fuel_type?->value,
@@ -63,7 +64,21 @@ final class VehicleResource extends JsonResource
             'suspensionReason' => $this->suspension_reason,
             'registrationRenewalSubmittedAt' => $this->registration_renewal_submitted_at?->toIso8601String(),
             'rejectionReason' => $this->rejection_reason,
+            'submittedAt' => $this->created_at?->toIso8601String(),
+            'approvalValidUntil' => $this->approvalValidUntil(),
             'documents' => $documents,
         ];
+    }
+
+    private function approvalValidUntil(): ?string
+    {
+        if (! $this->resource->relationLoaded('documents')) {
+            return null;
+        }
+
+        return $this->documents
+            ->filter(fn ($document) => $document->type->isRegistration() && $document->expires_at !== null)
+            ->min('expires_at')
+            ?->toDateString();
     }
 }

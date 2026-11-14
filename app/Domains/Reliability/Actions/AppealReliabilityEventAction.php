@@ -6,65 +6,56 @@ use App\Domains\Admin\Models\AdminUser;
 use App\Domains\Identity\Models\User;
 use App\Domains\Notification\Enums\NotificationType;
 use App\Domains\Notification\Support\Notifier;
+use App\Domains\Reliability\Enums\AppealDeclineReason;
 use App\Domains\Reliability\Models\ReliabilityEvent;
+use App\Domains\Reliability\Models\ReliabilityEventAppeal;
+use App\Domains\Reliability\Support\EventFee;
+use App\Domains\Reliability\Support\ReliabilityAppeals;
 use App\Domains\Shared\Exceptions\DomainException;
 use App\Domains\Shared\Support\ErrorCode;
+use App\Domains\Trip\Enums\DisputeResolution;
 use Illuminate\Support\Facades\DB;
 
-/**
- * Filing an appeal against a reliability event, and answering one (Feature 03 v5 §115).
- *
- * > *"...permanent person/account/phone ban **with appeal**."*
- *
- * 🔴 **The outcome has been storable since the ledger was built and nothing could ever write it**,
- * because there was no way to file. An appeal that cannot be filed is not an appeal, and a number
- * that can end somebody's account with no way to answer it is exactly what v5 attaches the word to.
- *
- * 🔴 **Filing changes nothing by itself.** The event keeps counting until a reviewer reverses it —
- * the same rule a disputed warning follows, and for the same reason: if asking were enough to
- * suspend the consequence, everything would be appealed as a matter of course and the score would
- * stop meaning anything. What filing buys her is that a person has to look, and that she is told
- * what they decided.
- *
- * 🔒 **An approved appeal reverses rather than deletes.** The row stays readable with its weight and
- * its reason intact — which is what lets her show she was cleared, and what lets a later reviewer
- * see that the first one was wrong. Deleting it would make both impossible and would quietly alter
- * a history somebody may be judged on.
- */
 final readonly class AppealReliabilityEventAction
 {
-    /**
-     * Her side: she asks for it to be looked at.
-     */
     public function file(User $member, ReliabilityEvent $event, string $reason): ReliabilityEvent
     {
         if ($event->user_id !== $member->id) {
-            // 404-shaped: a 403 would confirm the id names a real judgement about a real person.
             throw DomainException::of(ErrorCode::NotFound);
         }
 
-        if (! $event->isAppealable()) {
-            throw DomainException::of(ErrorCode::ValidationFailed, fields: [
-                'appeal' => [$event->reversed_at !== null ? 'ALREADY_REVERSED' : 'ALREADY_APPEALED'],
-            ]);
-        }
+        return DB::transaction(function () use ($member, $event, $reason): ReliabilityEvent {
+            $event = ReliabilityEvent::query()->whereKey($event->getKey())->lockForUpdate()->firstOrFail();
 
-        $event->forceFill([
-            'appealed_at' => now(),
-            'appeal_reason' => mb_substr($reason, 0, 255),
-        ])->save();
+            $refusal = ReliabilityAppeals::refusal($event);
 
-        return $event->refresh();
+            if ($refusal !== null) {
+                throw DomainException::of(ErrorCode::ValidationFailed, fields: ['appeal' => [$refusal]]);
+            }
+
+            $appeal = new ReliabilityEventAppeal;
+
+            $appeal->forceFill([
+                'reliability_event_id' => $event->getKey(),
+                'user_id' => $member->id,
+                'round' => ReliabilityAppeals::made($event) + 1,
+                'reason' => $reason,
+                'evidence_count' => ReliabilityAppeals::evidenceCount($event),
+            ])->save();
+
+            $event->forceFill([
+                'appealed_at' => now(),
+                'appeal_reason' => mb_substr($reason, 0, 255),
+                'appeal_declined_at' => null,
+            ])->save();
+
+            return $event->refresh();
+        });
     }
 
-    /**
-     * A reviewer approves it: the event stops counting and stays readable.
-     *
-     * @param  string  $reason  the reviewer's note, which the member is NOT shown — see below
-     */
-    public function approve(AdminUser $reviewer, ReliabilityEvent $event, string $reason): ReliabilityEvent
+    public function approve(AdminUser $reviewer, ReliabilityEvent $event, string $reason, bool $reverseFee = true, bool $notify = true): ReliabilityEvent
     {
-        return DB::transaction(function () use ($reviewer, $event, $reason): ReliabilityEvent {
+        return DB::transaction(function () use ($reviewer, $event, $reason, $reverseFee, $notify): ReliabilityEvent {
             $event->refresh();
 
             if ($event->reversed_at !== null) {
@@ -77,22 +68,30 @@ final readonly class AppealReliabilityEventAction
                 'reversed_at' => now(),
                 'reversed_by' => $reviewer->getKey(),
                 'reversed_reason' => mb_substr($reason, 0, 255),
-                // Cleared, in case it had been declined and is being reconsidered.
                 'appeal_declined_at' => null,
             ])->save();
 
-            $this->tell($event, approved: true);
+            $this->resolve($event, $reviewer, DisputeResolution::Overturned, $reason, null);
+
+            if ($reverseFee) {
+                EventFee::reverse($event, $reviewer, $reason);
+            }
+
+            if ($notify) {
+                $this->tell($event, approved: true);
+            }
 
             return $event->refresh();
         });
     }
 
-    /**
-     * A reviewer declines it: the event keeps counting, and she is told.
-     */
-    public function decline(AdminUser $reviewer, ReliabilityEvent $event, string $reason): ReliabilityEvent
-    {
-        return DB::transaction(function () use ($reviewer, $event, $reason): ReliabilityEvent {
+    public function decline(
+        AdminUser $reviewer,
+        ReliabilityEvent $event,
+        string $reason,
+        AppealDeclineReason $code = AppealDeclineReason::NotEnoughEvidence,
+    ): ReliabilityEvent {
+        return DB::transaction(function () use ($reviewer, $event, $reason, $code): ReliabilityEvent {
             $event->refresh();
 
             if ($event->reversed_at !== null) {
@@ -103,14 +102,11 @@ final readonly class AppealReliabilityEventAction
 
             $event->forceFill([
                 'appeal_declined_at' => now(),
-                /*
-                 * Recorded on the same column the reversal uses, because it is the same thing from
-                 * the desk's point of view: the reviewer's note about this decision. Which decision
-                 * it was is told by which timestamp is set.
-                 */
                 'reversed_reason' => mb_substr($reason, 0, 255),
                 'reversed_by' => $reviewer->getKey(),
             ])->save();
+
+            $this->resolve($event, $reviewer, DisputeResolution::Upheld, $reason, $code);
 
             $this->tell($event, approved: false);
 
@@ -118,14 +114,26 @@ final readonly class AppealReliabilityEventAction
         });
     }
 
-    /**
-     * She learns what was decided.
-     *
-     * 🔒 The reviewer's note is NOT sent. It is written for the desk — it may name another member,
-     * quote a driver, or record something about an investigation — and v5's own privacy rule is to
-     * avoid leaking one member's account of a morning to another. She is told the outcome, which is
-     * the part that affects her, and support can explain the rest.
-     */
+    private function resolve(
+        ReliabilityEvent $event,
+        AdminUser $reviewer,
+        DisputeResolution $resolution,
+        string $note,
+        ?AppealDeclineReason $code,
+    ): void {
+        ReliabilityEventAppeal::query()
+            ->where('reliability_event_id', $event->getKey())
+            ->whereNull('resolution')
+            ->get()
+            ->each(fn (ReliabilityEventAppeal $appeal) => $appeal->forceFill([
+                'resolution' => $resolution,
+                'decline_reason_code' => $code,
+                'resolved_by_admin_id' => $reviewer->getKey(),
+                'resolved_at' => now(),
+                'resolution_note' => mb_substr($note, 0, 255),
+            ])->save());
+    }
+
     private function tell(ReliabilityEvent $event, bool $approved): void
     {
         $event->loadMissing('user');

@@ -136,6 +136,8 @@ return [
             'tier_standard' => 'Standard',
             'tier_comfort' => 'Comfort badge',
             'has_ac' => 'Air conditioning works',
+            'declared_ac_yes' => 'Driver says: has AC',
+            'declared_ac_no' => 'Driver says: no AC',
             'required' => 'Set the approved seats for every car before approving.',
             'seats_out_of_range' => 'Approved seats must be between :min and :max.',
             'reject_registration' => 'Reject registration',

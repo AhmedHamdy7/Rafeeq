@@ -11,12 +11,14 @@ use App\Domains\Rating\Actions\ReportReviewAction;
 use App\Domains\Rating\Actions\SubmitRatingAction;
 use App\Domains\Rating\Enums\ModerationStatus;
 use App\Domains\Rating\Enums\RatingDirection;
+use App\Domains\Rating\Enums\RatingKind;
 use App\Domains\Rating\Models\Rating;
 use App\Domains\Shared\Exceptions\DomainException;
 use App\Domains\Shared\Support\ErrorCode;
 use App\Http\Controllers\Controller;
 use App\Http\OpenApi\ApiErrors;
 use App\Http\Requests\Rating\ReportReviewRequest;
+use App\Http\Requests\Rating\ReviewsAboutMeRequest;
 use App\Http\Requests\Rating\SubmitRatingRequest;
 use App\Http\Requests\Rating\UpdateRatingRequest;
 use App\Http\Resources\PersonSummary;
@@ -214,18 +216,42 @@ final class RatingController extends Controller
      * a courtesy — and on a three-seat commute an exact date names the reviewer even when the
      * payload does not. See that class for the full reasoning.
      */
-    public function aboutMe(Request $request): JsonResponse
+    public function aboutMe(ReviewsAboutMeRequest $request): JsonResponse
     {
+        $kind = $request->kind();
+
         $reviews = Rating::query()
             ->visible()
             ->where('reviewed_user_id', $request->user()->id)
             ->where('moderation_status', '!=', ModerationStatus::Hidden->value)
+            ->when($kind !== null, fn ($query) => $query->where('kind', $kind->value))
             ->with('tags')
+            ->withExists(['reports as reported_by_me' => fn ($reports) => $reports->where('reporter_id', $request->user()->id)])
             ->latest('visible_at')
             ->orderByDesc('id')
             ->paginate(ApiResponse::perPage($request));
 
-        return ApiResponse::paginated($reviews, PublicReviewResource::collection($reviews->items()));
+        $summary = Rating::query()
+            ->visible()
+            ->where('reviewed_user_id', $request->user()->id)
+            ->where('moderation_status', '!=', ModerationStatus::Hidden->value)
+            ->selectRaw('kind, count(*) as total, avg(stars) as average')
+            ->groupBy('kind')
+            ->get()
+            ->keyBy(fn ($row) => $row->getRawOriginal('kind'));
+
+        $byKind = [];
+
+        foreach (RatingKind::cases() as $case) {
+            $row = $summary->get($case->value);
+
+            $byKind[$case->value] = [
+                'count' => (int) ($row->total ?? 0),
+                'average' => $row === null ? null : round((float) $row->average, 1),
+            ];
+        }
+
+        return ApiResponse::paginated($reviews, PublicReviewResource::collection($reviews->items()), ['byKind' => $byKind]);
     }
 
     /**
@@ -241,7 +267,7 @@ final class RatingController extends Controller
         $row = Rating::query()->whereKey($rating)->first()
             ?? throw DomainException::of(ErrorCode::NotFound);
 
-        $report = $action->execute($request->user(), $row, $request->string('reason')->value());
+        $report = $action->execute($request->user(), $row, $request->filled('reason') ? $request->string('reason')->value() : null);
 
         return ApiResponse::success([
             'id' => $report->id,

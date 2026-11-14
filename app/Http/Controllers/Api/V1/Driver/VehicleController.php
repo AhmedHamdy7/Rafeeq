@@ -2,12 +2,16 @@
 
 namespace App\Http\Controllers\Api\V1\Driver;
 
+use App\Domains\Booking\Actions\DisplaceConfirmedBookingsAction;
+use App\Domains\Commute\Enums\CommuteOfferStatus;
+use App\Domains\Commute\Models\CommuteOffer;
 use App\Domains\Driver\Actions\AutoSubmitDriverApplicationAction;
 use App\Domains\Driver\Actions\ManageVehicleAction;
 use App\Domains\Driver\Actions\UploadVehicleDocumentAction;
 use App\Domains\Driver\Enums\VehicleDocumentType;
 use App\Domains\Driver\Models\DriverProfile;
 use App\Domains\Driver\Models\Vehicle;
+use App\Domains\Payment\Support\DriverFees;
 use App\Domains\Shared\Exceptions\DomainException;
 use App\Domains\Shared\Support\ErrorCode;
 use App\Http\Controllers\Controller;
@@ -128,6 +132,36 @@ final class VehicleController extends Controller
         $autoSubmit->attempt($request->user());
 
         return ApiResponse::success(new VehicleResource($target->load('documents')), status: 201);
+    }
+
+    #[ApiErrors(ErrorCode::NotFound)]
+    public function replacePreview(Request $request): JsonResponse
+    {
+        $profile = $this->profile($request);
+
+        $target = $request->query('vehicle');
+
+        $replaces = $profile->vehicles()
+            ->where('is_active', true)
+            ->when(is_string($target) && $target !== '', fn ($query) => $query->whereKeyNot($target))
+            ->exists();
+
+        $bookings = collect();
+
+        if ($replaces) {
+            $offers = CommuteOffer::query()
+                ->where('driver_profile_id', $profile->user_id)
+                ->whereNot('status', CommuteOfferStatus::Archived->value)
+                ->get();
+
+            $bookings = $offers->flatMap(fn (CommuteOffer $offer) => DisplaceConfirmedBookingsAction::futureConfirmedBookings($offer));
+        }
+
+        return ApiResponse::success([
+            'affectedBookings' => $bookings->count(),
+            'affectedCommutes' => $bookings->pluck('scheduledTrip.commute_offer_id')->filter()->unique()->count(),
+            ...DriverFees::preview($bookings),
+        ]);
     }
 
     private function profile(Request $request): DriverProfile

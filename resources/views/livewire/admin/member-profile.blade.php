@@ -138,6 +138,16 @@
                         @error('messageTitle') <span class="ad-error">{{ $message }}</span> @enderror
                     </div>
                 @endif
+                @if ($action === 'decline_appeal')
+                    <div class="ad-field">
+                        <label class="ad-label" for="act-decline-code">{{ __('admin/actions.decline_code') }}</label>
+                        <select id="act-decline-code" class="ad-select" wire:model="declineCode">
+                            @foreach (\App\Domains\Reliability\Enums\AppealDeclineReason::cases() as $code)
+                                <option value="{{ $code->value }}">{{ __('admin/actions.decline_codes.'.$code->value) }}</option>
+                            @endforeach
+                        </select>
+                    </div>
+                @endif
                 <div class="ad-field">
                     <label class="ad-label" for="act-reason">{{ match ($action) { 'escalate' => __('admin/actions.escalate_note'), 'message' => __('admin/actions.message_body'), default => __('admin/actions.reason') } }}</label>
                     <textarea id="act-reason" class="ad-textarea" dir="auto" rows="{{ $action === 'message' ? 4 : 2 }}" wire:model="reason" required></textarea>
@@ -362,7 +372,16 @@
                             @endcan
                         </tr>
                         @if ($event->appealed_at && $event->appeal_reason)
-                            <tr wire:key="ra-{{ $event->id }}"><td colspan="5" class="ad-muted" style="font-size:12.5px" dir="auto">{{ __('admin/profile.appeal_says') }}: {{ $event->appeal_reason }}</td></tr>
+                            <tr wire:key="ra-{{ $event->id }}"><td colspan="5" class="ad-muted" style="font-size:12.5px" dir="auto">{{ __('admin/profile.appeal_says') }}@if ($event->appeals->count() > 1) ({{ $event->appeals->count() }})@endif: {{ $event->appeals->last()?->reason ?? $event->appeal_reason }}</td></tr>
+                        @endif
+                        @if ($event->evidence->isNotEmpty())
+                            @can('safety.view_evidence')
+                                <tr wire:key="re-{{ $event->id }}"><td colspan="5" style="font-size:12.5px">
+                                    @foreach ($event->evidence as $file)
+                                        <a class="ad-link" href="{{ route('admin.files.appeal-evidence', $file->id) }}" target="_blank" rel="noopener">{{ __('admin.files.open', ['what' => $loop->iteration]) }}</a>@if (! $loop->last) · @endif
+                                    @endforeach
+                                </td></tr>
+                            @endcan
                         @endif
                     @endforeach
                     </tbody></table>

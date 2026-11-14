@@ -45,6 +45,7 @@ final class PublicReviewResource extends JsonResource
              * driver or the reverse. Not who — see the class note.
              */
             'direction' => $this->direction->value,
+            'kind' => $this->kind?->value,
 
             'stars' => $this->stars,
             'comment' => $this->comment,
@@ -59,6 +60,7 @@ final class PublicReviewResource extends JsonResource
             // Whether it was changed before it became readable. Honest about the text's history
             // without revealing what it used to say.
             'wasEdited' => $this->edited_at !== null,
+            'reportedByMe' => $this->when(array_key_exists('reported_by_me', $this->resource->getAttributes()), fn () => (bool) $this->reported_by_me),
         ];
     }
 

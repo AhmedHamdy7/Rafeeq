@@ -134,6 +134,8 @@ return [
             'tier_standard' => 'عادية',
             'tier_comfort' => 'شارة كومفورت',
             'has_ac' => 'التكييف شغّال',
+            'declared_ac_yes' => 'السائق قال: فيه تكييف',
+            'declared_ac_no' => 'السائق قال: مفيش تكييف',
             'required' => 'حدّد المقاعد المعتمدة لكل عربية قبل الاعتماد.',
             'seats_out_of_range' => 'المقاعد المعتمدة لازم تكون بين :min و :max.',
             'reject_registration' => 'رفض رخصة العربية',

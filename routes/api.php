@@ -169,6 +169,9 @@ Route::prefix('v1')->group(function (): void {
         Route::post('reliability/events/{event}/appeal', [ReliabilityController::class, 'appeal'])
             ->middleware('throttle:safety-reports');
 
+        Route::post('reliability/events/{event}/evidence', [ReliabilityController::class, 'attachEvidence'])
+            ->middleware('throttle:safety-reports');
+
         /*
          * The escalating warnings, and her answer to one (Feature 03 v5 §239).
          *
@@ -301,6 +304,7 @@ Route::prefix('v1')->group(function (): void {
             Route::delete('application', [DriverApplicationController::class, 'withdraw']);
 
             Route::get('vehicles', [VehicleController::class, 'index']);
+            Route::get('vehicles/replace-preview', [VehicleController::class, 'replacePreview']);
             Route::post('vehicles', [VehicleController::class, 'store']);
             Route::patch('vehicles/{vehicle}', [VehicleController::class, 'update']);
             Route::post('vehicles/{vehicle}/activate', [VehicleController::class, 'activate']);

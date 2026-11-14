@@ -54,6 +54,7 @@ final class StoreVehicleRequest extends FormRequest
             ],
 
             'transmission' => ['nullable', 'string', Rule::enum(Transmission::class)],
+            'hasAc' => ['nullable', 'boolean'],
             'fuelType' => ['nullable', 'string', Rule::enum(FuelType::class)],
         ];
     }

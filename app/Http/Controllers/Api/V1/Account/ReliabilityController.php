@@ -3,12 +3,15 @@
 namespace App\Http\Controllers\Api\V1\Account;
 
 use App\Domains\Reliability\Actions\AppealReliabilityEventAction;
+use App\Domains\Reliability\Actions\AttachAppealEvidenceAction;
 use App\Domains\Reliability\Models\ReliabilityEvent;
+use App\Domains\Reliability\Support\ReliabilityAppeals;
 use App\Domains\Shared\Exceptions\DomainException;
 use App\Domains\Shared\Support\ErrorCode;
 use App\Http\Controllers\Controller;
 use App\Http\OpenApi\ApiErrors;
 use App\Http\Requests\Account\AppealReliabilityEventRequest;
+use App\Http\Requests\Account\AttachAppealEvidenceRequest;
 use App\Http\Resources\ReliabilityResource;
 use App\Http\Responses\ApiResponse;
 use Illuminate\Http\JsonResponse;
@@ -66,15 +69,53 @@ final class ReliabilityController extends Controller
             ?? throw DomainException::of(ErrorCode::NotFound);
 
         $appealed = $action->file($request->user(), $target, (string) $request->validated('reason'));
+        $appeal = ReliabilityAppeals::last($appealed);
 
         return ApiResponse::success([
             'reliabilityEventId' => (string) $appealed->getKey(),
             'appealedAt' => $appealed->appealed_at?->toIso8601String(),
-            /*
-             * Stated back to her, because it is the thing most likely to be misunderstood: she has
-             * been heard, and nothing has changed yet.
-             */
             'stillCounts' => $appealed->counts(),
+            'appeal' => $appeal === null ? null : [
+                'id' => (string) $appeal->getKey(),
+                'round' => $appeal->round,
+                'status' => $appeal->status(),
+                'appealedAt' => $appeal->created_at?->toIso8601String(),
+                'decidedAt' => null,
+                'declineReasonCode' => null,
+            ],
+            'appealsLeft' => ReliabilityAppeals::left($appealed),
         ]);
+    }
+
+    #[ApiErrors(
+        ErrorCode::ValidationFailed,
+        ErrorCode::IncidentEvidenceLimitReached,
+        ErrorCode::DocumentRejectedByScanner,
+        ErrorCode::DocumentUnreadable,
+        ErrorCode::DocumentDimensionsTooLarge,
+        ErrorCode::NotFound,
+    )]
+    public function attachEvidence(
+        AttachAppealEvidenceRequest $request,
+        string $event,
+        AttachAppealEvidenceAction $action,
+    ): JsonResponse {
+        $evidence = $action->execute(
+            $request->user(),
+            $this->ownEvent($request, $event),
+            $request->file('file'),
+            $request->kind(),
+        );
+
+        return ApiResponse::success(ReliabilityResource::evidenceItem($evidence), status: 201);
+    }
+
+    private function ownEvent(Request $request, string $event): ReliabilityEvent
+    {
+        return ReliabilityEvent::query()
+            ->whereKey($event)
+            ->where('user_id', $request->user()->id)
+            ->first()
+            ?? throw DomainException::of(ErrorCode::NotFound);
     }
 }

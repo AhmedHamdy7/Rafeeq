@@ -20,6 +20,7 @@ use App\Domains\Notification\Support\Notifier;
 use App\Domains\Payment\Actions\SettleBookingAction;
 use App\Domains\Payment\Support\DriverFees;
 use App\Domains\Payment\Support\FeeSettings;
+use App\Domains\Reliability\Enums\ReliabilityEventCause;
 use App\Domains\Reliability\Enums\ReliabilityEventKind;
 use App\Domains\Reliability\Support\ReliabilityLedger;
 use App\Domains\Safety\Support\LiveShares;
@@ -168,6 +169,9 @@ final readonly class CancelActiveTripAction
                     booking: $booking,
                     scheduledTripId: $trip->getKey(),
                     commuteOfferId: $trip->commute_offer_id,
+                    cause: ReliabilityEventCause::ActiveTripCancelled,
+                    cancelReason: $category->value,
+                    groupId: (string) $trip->getKey(),
                 );
 
                 $this->tell($booking, $driver, $aboard);
