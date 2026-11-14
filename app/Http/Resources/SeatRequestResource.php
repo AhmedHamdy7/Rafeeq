@@ -340,7 +340,9 @@ final class SeatRequestResource extends JsonResource
             'lat' => (float) $this->{"requested_{$kind}_lat"},
             'lng' => (float) $this->{"requested_{$kind}_lng"},
             'label' => $this->{"requested_{$kind}_label"},
-            ...NearPlace::fields($this->{"requested_{$kind}_lat"}, $this->{"requested_{$kind}_lng"}),
+            'nearPlaceId' => NearPlace::id($this->{"requested_{$kind}_lat"}, $this->{"requested_{$kind}_lng"}),
+            'nearLabel' => NearPlace::label($this->{"requested_{$kind}_lat"}, $this->{"requested_{$kind}_lng"}),
+            'nearDistanceMetres' => NearPlace::metres($this->{"requested_{$kind}_lat"}, $this->{"requested_{$kind}_lng"}),
             'source' => $this->{"requested_{$kind}_source"}?->value,
             // Which advertised stop she picked, when she picked one rather than dropping a pin.
             'suggestionId' => $this->{"requested_{$kind}_suggestion_id"},
@@ -363,7 +365,9 @@ final class SeatRequestResource extends JsonResource
             'lat' => (float) $this->{"counteroffer_{$kind}_lat"},
             'lng' => (float) $this->{"counteroffer_{$kind}_lng"},
             'label' => $this->{"counteroffer_{$kind}_label"},
-            ...NearPlace::fields($this->{"counteroffer_{$kind}_lat"}, $this->{"counteroffer_{$kind}_lng"}),
+            'nearPlaceId' => NearPlace::id($this->{"counteroffer_{$kind}_lat"}, $this->{"counteroffer_{$kind}_lng"}),
+            'nearLabel' => NearPlace::label($this->{"counteroffer_{$kind}_lat"}, $this->{"counteroffer_{$kind}_lng"}),
+            'nearDistanceMetres' => NearPlace::metres($this->{"counteroffer_{$kind}_lat"}, $this->{"counteroffer_{$kind}_lng"}),
         ];
     }
 }
