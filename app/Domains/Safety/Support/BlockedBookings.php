@@ -4,6 +4,7 @@ namespace App\Domains\Safety\Support;
 
 use App\Domains\Booking\Actions\CancelBookingAction;
 use App\Domains\Booking\Enums\BookingStatus;
+use App\Domains\Booking\Enums\CancelCode;
 use App\Domains\Booking\Models\Booking;
 use App\Domains\Commute\Enums\ScheduledTripStatus;
 use App\Domains\Identity\Models\User;
@@ -129,9 +130,9 @@ final readonly class BlockedBookings
         foreach (self::between($blocker, $otherUserId) as $booking) {
             try {
                 if ($booking->passenger_user_id === $blocker->id) {
-                    $this->cancel->byPassenger($booking);
+                    $this->cancel->byPassenger($booking, code: CancelCode::Blocked);
                 } else {
-                    $this->cancel->byDriver($booking, $blocker->id);
+                    $this->cancel->byDriver($booking, $blocker->id, code: CancelCode::Blocked);
                 }
             } catch (DomainException) {
                 // It stopped being cancellable between the read and now (the run set off, the other

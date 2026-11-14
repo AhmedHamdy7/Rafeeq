@@ -2,6 +2,8 @@
 
 namespace App\Domains\Booking\Actions;
 
+use App\Domains\Booking\Enums\SeatOfferClosedReason;
+use App\Domains\Booking\Enums\SeatOfferSource;
 use App\Domains\Booking\Enums\SeatOfferStatus;
 use App\Domains\Booking\Enums\SeatRequestStatus;
 use App\Domains\Booking\Models\SeatOffer;
@@ -112,6 +114,7 @@ final readonly class OfferSeatsToWaitlistMembersAction
                         'scheduled_trip_id' => $trip->getKey(),
                         'seat_request_id' => $member->getKey(),
                         'status' => SeatOfferStatus::Open->value,
+                        'source' => SeatOfferSource::DriverResume->value,
                         'release_event_id' => $releaseEventId,
                         'created_at' => now(),
                         'updated_at' => now(),
@@ -166,6 +169,7 @@ final readonly class OfferSeatsToWaitlistMembersAction
             $seatOffer->forceFill([
                 'status' => SeatOfferStatus::Withdrawn->value,
                 'closed_at' => now(),
+                'closed_reason' => SeatOfferClosedReason::WithdrawnByDriver->value,
             ])->save();
 
             return $seatOffer;

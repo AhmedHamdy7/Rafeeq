@@ -268,6 +268,9 @@ final readonly class ApplyChangeProposalAction
             ->with('passenger')
             ->get();
 
+        $proposal->loadMissing('commuteOffer.driverProfile.user');
+        $driverName = $proposal->commuteOffer?->driverProfile?->user?->public_first_name ?? '';
+
         foreach ($waiting as $request) {
             $request->forceFill([
                 /*
@@ -282,8 +285,12 @@ final readonly class ApplyChangeProposalAction
             ])->save();
 
             if ($request->passenger !== null) {
-                Notifier::send($request->passenger, NotificationType::WaitlistClearedByChange, data: [
+                Notifier::send($request->passenger, NotificationType::WaitlistClearedByChange, params: [
+                    'name' => $driverName,
+                ], data: [
                     'commuteId' => $proposal->commute_offer_id,
+                    'seatRequestId' => (string) $request->getKey(),
+                    'changeProposalId' => (string) $proposal->getKey(),
                 ]);
             }
         }

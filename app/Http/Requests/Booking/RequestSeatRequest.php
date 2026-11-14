@@ -71,21 +71,23 @@ final class RequestSeatRequest extends FormRequest
 
             // Where you want to be collected. Required: give either the id of one of
             // the driver's suggested points, or your own coordinates and a label.
-            'pickup' => ['required', 'array'],
-            'pickup.suggestionId' => ['nullable', 'string', 'size:26'],
-            'pickup.lat' => ['required_without:pickup.suggestionId', 'numeric', 'between:-90,90'],
-            'pickup.lng' => ['required_without:pickup.suggestionId', 'numeric', 'between:-180,180'],
-            'pickup.label' => ['required_without:pickup.suggestionId', 'nullable', 'string', 'max:255'],
+            'pickup' => ['required_without:alternativeForBookingId', 'array'],
+            'pickup.suggestionId' => ['exclude_without:pickup', 'nullable', 'string', 'size:26'],
+            'pickup.lat' => ['exclude_without:pickup', 'required_without:pickup.suggestionId', 'numeric', 'between:-90,90'],
+            'pickup.lng' => ['exclude_without:pickup', 'required_without:pickup.suggestionId', 'numeric', 'between:-180,180'],
+            'pickup.label' => ['exclude_without:pickup', 'required_without:pickup.suggestionId', 'nullable', 'string', 'max:255'],
 
             // Where you want to be set down. Required, on the same terms as `pickup`.
             // It is never assumed to be the end of the driver's route.
-            'dropoff' => ['required', 'array'],
-            'dropoff.suggestionId' => ['nullable', 'string', 'size:26'],
-            'dropoff.lat' => ['required_without:dropoff.suggestionId', 'numeric', 'between:-90,90'],
-            'dropoff.lng' => ['required_without:dropoff.suggestionId', 'numeric', 'between:-180,180'],
-            'dropoff.label' => ['required_without:dropoff.suggestionId', 'nullable', 'string', 'max:255'],
+            'dropoff' => ['required_without:alternativeForBookingId', 'array'],
+            'dropoff.suggestionId' => ['exclude_without:dropoff', 'nullable', 'string', 'size:26'],
+            'dropoff.lat' => ['exclude_without:dropoff', 'required_without:dropoff.suggestionId', 'numeric', 'between:-90,90'],
+            'dropoff.lng' => ['exclude_without:dropoff', 'required_without:dropoff.suggestionId', 'numeric', 'between:-180,180'],
+            'dropoff.label' => ['exclude_without:dropoff', 'required_without:dropoff.suggestionId', 'nullable', 'string', 'max:255'],
 
             // A short note to the driver, so they know who is asking.
+            'alternativeForBookingId' => ['sometimes', 'nullable', 'string', 'size:26'],
+
             'introMessage' => ['nullable', 'string', 'max:500'],
 
             // How you intend to pay. Send `cash`: it is settled in the car. `online` is

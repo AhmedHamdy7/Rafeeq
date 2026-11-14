@@ -47,6 +47,7 @@ use App\Http\Controllers\Api\V1\Search\SearchController;
 use App\Http\Controllers\Api\V1\Testing\TestingController;
 use App\Http\Controllers\Api\V1\Testing\TestingRecordsController;
 use App\Http\Controllers\Api\V1\Testing\TestingScenarioController;
+use App\Http\Controllers\Api\V1\Testing\TestingTripsController;
 use App\Http\Controllers\Api\V1\Trip\AttendanceController;
 use App\Http\Controllers\Api\V1\Trip\DriverTripController;
 use App\Http\Controllers\Api\V1\Trip\NavigationRouteController;
@@ -117,6 +118,8 @@ Route::prefix('v1')->group(function (): void {
         Route::post('reliability/events', [TestingRecordsController::class, 'writeEvents']);
         Route::post('ratings/reports/{report}/decide', [TestingRecordsController::class, 'decideReport']);
         Route::delete('driver/vehicles/{vehicle}', [TestingRecordsController::class, 'deleteVehicle']);
+        Route::post('seat-offers/{offer}/close', [TestingTripsController::class, 'closeOffer']);
+        Route::post('notifications', [TestingTripsController::class, 'writeNotification']);
     });
 
     Route::prefix('account')->middleware('auth:sanctum')->group(function (): void {
@@ -632,6 +635,9 @@ Route::prefix('v1')->group(function (): void {
          * which commute.
          */
         Route::get('seat-offers', [SeatOfferController::class, 'index']);
+        Route::get('seat-offers/{offer}', [SeatOfferController::class, 'show']);
+        Route::post('seat-offers/groups/{group}/accept', [SeatOfferController::class, 'acceptGroup']);
+        Route::post('seat-offers/groups/{group}/decline', [SeatOfferController::class, 'declineGroup']);
         Route::post('seat-offers/{offer}/accept', [SeatOfferController::class, 'accept']);
 
         /*
@@ -776,6 +782,7 @@ Route::prefix('v1')->group(function (): void {
         Route::delete('driver/change-proposals/{proposal}', [ChangeProposalController::class, 'destroy']);
 
         Route::get('change-proposals', [ChangeProposalController::class, 'mine']);
+        Route::get('change-proposals/{proposal}', [ChangeProposalController::class, 'show']);
         Route::post('change-proposals/{proposal}/respond', [ChangeProposalController::class, 'respond']);
 
         /*

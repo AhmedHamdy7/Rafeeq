@@ -2,6 +2,8 @@
 
 namespace App\Domains\Booking\Models;
 
+use App\Domains\Booking\Enums\SeatOfferClosedReason;
+use App\Domains\Booking\Enums\SeatOfferSource;
 use App\Domains\Booking\Enums\SeatOfferStatus;
 use App\Domains\Commute\Models\ScheduledTrip;
 use Database\Factories\SeatOfferFactory;
@@ -27,6 +29,8 @@ class SeatOffer extends Model
     {
         return [
             'status' => SeatOfferStatus::class,
+            'source' => SeatOfferSource::class,
+            'closed_reason' => SeatOfferClosedReason::class,
             'closed_at' => 'datetime',
         ];
     }

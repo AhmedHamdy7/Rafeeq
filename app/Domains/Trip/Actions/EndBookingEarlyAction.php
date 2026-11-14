@@ -5,6 +5,7 @@ namespace App\Domains\Trip\Actions;
 use App\Domains\Booking\Enums\BookingActorType;
 use App\Domains\Booking\Enums\BookingEventType;
 use App\Domains\Booking\Enums\BookingStatus;
+use App\Domains\Booking\Enums\CancelCode;
 use App\Domains\Booking\Models\Booking;
 use App\Domains\Booking\Support\BookingEventLog;
 use App\Domains\Notification\Enums\NotificationType;
@@ -92,6 +93,7 @@ final readonly class EndBookingEarlyAction
                  */
                 'cancelled_at' => now(),
                 'cancelled_reason' => $reason,
+                'cancel_code' => CancelCode::EndedEarly->value,
                 // No cancellation fee: this is not a cancellation, whatever the column is called.
                 'cancellation_fee_piastres' => 0,
             ])->save();

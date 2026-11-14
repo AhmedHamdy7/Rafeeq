@@ -14,7 +14,7 @@
 >
 > **Base URL:** `{host}/api/v1` · **Auth:** bearer token · **Format:** JSON only.
 
-**Last updated:** 2026-11-14 · **234 endpoints live** · Phases 0–7, 9 and 11 complete · 10, 12 and 13 all but a decision each
+**Last updated:** 2026-11-14 · **240 endpoints live** · Phases 0–7, 9 and 11 complete · 10, 12 and 13 all but a decision each
 
 ---
 
@@ -22,7 +22,7 @@
 
 ### What is ready
 
-**234 endpoints live** and tested, across the 47 designed screens:
+**240 endpoints live** and tested, across the 47 designed screens:
 
 | | Count | Covers |
 |---|---|---|
@@ -790,10 +790,14 @@ fails if this list and the running routes ever disagree in either direction.
 | `PATCH /driver/change-proposals/{proposal}` | 4.7 Seat requests and bookings |
 | `DELETE /driver/change-proposals/{proposal}` | 4.7 Seat requests and bookings |
 | `GET /change-proposals` | 4.7 Seat requests and bookings |
+| `GET /change-proposals/{proposal}` | 4.7 Seat requests and bookings |
 | `POST /change-proposals/{proposal}/respond` | 4.7 Seat requests and bookings |
 | `GET /driver/seat-requests/{seatRequest}/route-preview` | 4.7 Seat requests and bookings |
 | `GET /my-bookings` | 4.7 Seat requests and bookings |
 | `GET /seat-offers` | 4.7 Seat requests and bookings |
+| `GET /seat-offers/{offer}` | 4.7 Seat requests and bookings |
+| `POST /seat-offers/groups/{group}/accept` | 4.7 Seat requests and bookings |
+| `POST /seat-offers/groups/{group}/decline` | 4.7 Seat requests and bookings |
 | `POST /seat-offers/{offer}/accept` | 4.7 Seat requests and bookings |
 | `POST /seat-offers/{offer}/decline` | 4.7 Seat requests and bookings |
 | `GET /seat-requests` | 4.7 Seat requests and bookings |
@@ -888,6 +892,8 @@ fails if this list and the running routes ever disagree in either direction.
 | `POST /testing/reliability/events` | 4.17 Testing (staging only) |
 | `POST /testing/ratings/reports/{report}/decide` | 4.17 Testing (staging only) |
 | `DELETE /testing/driver/vehicles/{vehicle}` | 4.17 Testing (staging only) |
+| `POST /testing/seat-offers/{offer}/close` | 4.17 Testing (staging only) |
+| `POST /testing/notifications` | 4.17 Testing (staging only) |
 | `DELETE /safety/live-shares/{share}` | 4.12 Safety |
 | `POST /trips/{trip}/live-share` | 4.12 Safety |
 | `POST /sos` | 4.12 Safety |
@@ -2363,7 +2369,15 @@ deserves to see *why* one ranked above the other:
 `requestedDaysMask` (**required for recurring**), `seats` (1–4), **`pickup` (required)**,
 **`dropoff` (required)**, `meetingPreference` (`gate`/`street`/`landmark`/`custom`; **optional** — left out, it is `landmark` when `pickup.suggestionId` is a driver's suggested point and `custom` for her own pin),
 `customPickupPlaceId`, `introMessage` (max 500), `paymentType` (`cash`/`online`), `agreedToRules`
-(**must be true**).
+(**must be true**), `alternativeForBookingId` (optional).
+
+**From Alternatives (T-6):** send `alternativeForBookingId` with the booking she lost and leave
+`pickup` and `dropoff` out. The server fills them: the pickup is the same origin
+`GET /bookings/{booking}/alternatives` searched from (`meta.origin`), the drop-off is that booking's
+agreed drop-off. A point you do send wins over the filled one. The booking must be hers and not
+`COMPLETED`, and must have a recorded pickup and drop-off; otherwise `422` with
+`error.fields.alternativeForBookingId`. Everything else is the ordinary request with the ordinary
+refusals.
 
 🔴 **`pickup` and `dropoff` are new and both are required.** This is the biggest change to this
 endpoint. A request used to carry only `meetingPreference` — a hint about what *kind* of place she
@@ -2660,7 +2674,13 @@ every answer**, including ones already given.
 **`DELETE /driver/change-proposals/{proposal}`** — take it back.
 
 **`GET /change-proposals`** — what the caller is being asked to agree to, with `changes` against
-`previous` for the highlighted comparison, her own `bookingId`, and `myResponse`.
+`previous` for the highlighted comparison, her own `bookingId`, and `myResponse`. **`?bookingId=`**
+keeps only the ones about that booking of hers, with that `bookingId`.
+
+**`GET /change-proposals/{proposal}`** — one proposal in the same shape, **whatever its status**
+(`PENDING` · `APPLIED` · `REJECTED` · `EXPIRED` · `WITHDRAWN`), so the `change_proposal_*` pushes
+always open something. Readable by a passenger who answered it or who holds a booking on one of its
+days; `404` for anybody else. Same privacy as the list: nothing about how the others answered.
 
 **`POST /change-proposals/{proposal}/respond`** — **Request:** `response` of `accepted` ·
 `rejected` · `withdrawn` (take an acceptance back before it applies). `404` if she has no confirmed
@@ -2770,6 +2790,20 @@ paged with `perPage`, and an unknown status → `422`.
 | `pickup.label` · `dropoff.label` | The points on her waiting request. |
 | `promisedArrivalLocal` | The arrival the driver promised that day (`HH:MM`), or `null`. |
 | `conflictingBookingId` | Her own booking that overlaps this seat in time (R-3), the one **Switch Commute** replaces, or `null`. Only on an `OPEN` offer. |
+| `pickup.estimatedLocal` | `HH:MM`, when the car should pass her pickup that day, along the published route. `null` when the route can't be read. |
+| `dropoff.estimatedLocal` | `HH:MM`, the promised arrival (`promisedArrivalLocal` as a clock). |
+| `source` | `seat_freed` (a seat came free, everybody waiting was offered it) · `driver_resume` (the driver chose her on resume, COM-33) · `replacement` (the driver offered her a named passenger's seat). |
+| `isPreviousPassenger` | She has held a seat on this commute before. "Previous passenger". |
+| `commitment` | `trial` · `recurring`, from her waiting request. |
+| `offerGroupId` | Only on `driver_resume`: every row of one resume offer to her shares it. Draw them as one card. `null` otherwise. |
+| `daysMask` | Only on `driver_resume`: the weekdays of that group, same bits as `requestedDaysMask` (Sat 1, Sun 2, Mon 4, Tue 8, Wed 16, Thu 32, Fri 64). `null` otherwise. |
+| `closedReason` | `null` while `OPEN` or `ACCEPTED`. Else `car_passed` · `already_booked` · `seat_taken` · `declined` · `withdrawn_by_driver` · `request_withdrawn` · `day_cancelled` · `commute_paused` · `commute_deleted` · `vehicle_replaced` · `replaced_booking_cancelled`. |
+| `passedPointLabel` | Only with `car_passed`: her pickup label, for "{name}'s trip is already past **Rehab Gate 2**". `null` otherwise. |
+| `stillWaiting` | Her waiting request is still `WAITLISTED`, so "You're still on the waiting list for future dates" is true. |
+
+Offers from a resume are **one row per day** (BOOK-16: each day is its own seat), first to accept
+wins **each day**, and there is **no timer** (BOOK-22). She may accept one day with
+`POST /seat-offers/{offer}/accept`, or every open day of the card with the group call below.
 
 🔴 **`TAKEN_BY_OTHER` and `CLOSED` are different and the wording matters.** The first means somebody
 was quicker; the second that the seat stopped existing (the day was cancelled, or the driver filled
@@ -2779,6 +2813,25 @@ ran.
 > 🔒 There is **no** field here for her position, how many others were offered it, or who they are.
 > A waiting list is a set of people who all want the same commute, and telling each of them who they
 > are racing would turn a seat into a social problem.
+
+#### `GET /seat-offers/{offer}` — active, profile complete
+
+One offer, exactly as a row of `GET /seat-offers`, **in any status** — so a push opened late shows
+"Somebody was quicker" or "No longer available" and not an error. `404` for somebody else's.
+
+#### `POST /seat-offers/groups/{group}/accept` — active, profile complete
+
+`{group}` is an `offerGroupId`. Accepts every **open** day of that resume offer, one day at a time,
+earliest first, each by the ordinary accept rules (first to accept wins that day). Answers the
+bookings it made, plus `meta.offers[]` with one row per day: `{offerId, status, bookingId, error}` —
+`status` `ACCEPTED`, or the offer's status when that day was lost or already ended, with the error
+code that lost it (`SEAT_OFFER_CLOSED`, `BOOKING_ALREADY_BOOKED`, …). Some days can be lost while
+others are won; show which. `409 SEAT_OFFER_CLOSED` (with `fields.offers`) when **no** day could be
+taken. `403 RIDING_SUSPENDED_FOR_DEBT` stops the whole call. `404` for a group that isn't hers.
+
+#### `POST /seat-offers/groups/{group}/decline` — active, profile complete
+
+Declines every open day of the group. Answers all the group's rows. She stays on the waiting list.
 
 #### `POST /seat-offers/{offer}/accept` — active, profile complete
 
@@ -3242,11 +3295,45 @@ attendance decision acceptable, and it is the passenger's only move.
 | `paymentStatus` | `NOT_DUE` (nothing recorded yet) · `PENDING` · `PAID` · `FAILED` · `REFUNDED` · `DISPUTED`. **Cash:** the passenger pays in the car; the booking turns `PAID` about **two hours after the driver confirms they travelled** (the delay lets a wrong tap be noticed). A no-show stays `NOT_DUE`. `DISPUTED` as soon as the passenger contests the attendance record, until staff decide. |
 | `meetingPoint` | Her **pickup**: `{lat, lng, label, isExact}`, or **`null` for the standard point** — which is the run's origin. 🔒 Fuzzed to ~110m with `label: null` and `isExact: false` unless the booking is `CONFIRMED`, `COMPLETED`, `ENDED_EARLY` or `EXITED_DUE_TO_DRIVER_DELAY` — so a pending, expired or cancelled booking in History shows the area only. |
 | `dropoffPoint` | Her **drop-off**, same shape and same rule; `null` = the destination. |
-| `cancelledAt`, `cancelledReason`, `cancellationFeePiastres` | `cancellationFeePiastres` stays `0`: the real fees are charged to the debt ledger, not here — show `feeLinePiastres` / `feeLineReason` on the booking and the debt screen (4.16). |
+| `cancelledAt`, `cancellationFeePiastres` | `cancellationFeePiastres` stays `0`: the real fees are charged to the debt ledger, not here — show `feeLinePiastres` / `feeLineReason` on the booking and the debt screen (4.16). |
+| `cancelledReason` | **Always a code, never anybody's words** (BOOK-41), on every booking that ended early. `null` while it hasn't. The list is in the table below. |
+| `cancelledNote` | 🔒 The text the person typed, **only to the person who wrote it**: the driver sees his own note on `removed_by_driver` and `active_trip_cancelled`; the passenger sees her own on `passenger_cancelled` · `left_group` · `absence_planned`. Absent for everybody else. Support reads it on the dashboard. |
+| `tripCancelReason` | Only with `active_trip_cancelled`: the category the driver picked on `cancel-active` — `breakdown` · `accident` · `emergency` · `other`. `null` otherwise. Never his note. |
+| `wasAboard` | Only with `active_trip_cancelled`: `true` when she was in the car (the booking ends `ENDED_EARLY`), `false` when she was never collected (`CANCELLED_BY_DRIVER`). `null` otherwise. |
+| `commitment` | `trial` · `recurring`, from the request that made the booking. Never `null`, also after she left the group. On every booking, so `nextJourney` too. |
 | `otherPartyUserId` | 🔒 **The other person's user id — the driver's to the passenger, the passenger's to the driver — only once the journey is over** (`COMPLETED` · `ENDED_EARLY` · `NO_SHOW` · `EXITED_DUE_TO_DRIVER_DELAY`); `null` before. It is what the trip summary's **Block** sends (`POST /safety/blocked-users`). Before the trip there is no reason for either of you to hold a handle on the other, so don't cache it from anywhere else. |
 | `pickupEta` / `pickupEtaLocal` | "Pickup around 7:55" (DISCOVER-14): when the car should reach her pickup that day. Once the day's itinerary is built it is the departure plus the legs up to her stop — **the same time her wait grace starts from**, and frozen with the itinerary at the 12h lock; before that, an estimate along the route. Present wherever `trip` is. |
 | `myRating` | **Your own** rating of this journey — the same shape `POST /bookings/{booking}/rating` answers with (`id`, `stars`, `comment`, `tags`, `kind`, `isVisible`, `editableUntil`, …) — or `null` if you have not rated (HISTORY-4). 🔒 Never the other person's, and `null` says nothing about whether they rated. Show **Edit** only while `editableUntil` is set. On `GET /my-bookings` and `GET /bookings/{booking}`. |
 | `trip` | The scheduled trip above, when loaded. |
+
+**`cancelledReason` codes.** The list does not change silently; a new code is announced in the change log.
+
+| Code | When | Status |
+|---|---|---|
+| `removed_by_driver` | `POST /driver/bookings/{booking}/cancel` | `CANCELLED_BY_DRIVER` |
+| `day_cancelled` | The driver cancelled that day (`POST /trips/{trip}/cancel`) | `CANCELLED_BY_DRIVER` |
+| `commute_paused` | The driver paused the commute | `CANCELLED_BY_DRIVER` |
+| `commute_deleted` | The driver deleted the commute, or the driver's account was deleted | `CANCELLED_BY_DRIVER` |
+| `commute_ended` | The commute's schedule ended | `CANCELLED_BY_DRIVER` |
+| `commute_stopped` | The platform stopped the commute: licence expired (COM-26), car suspended (COM-47), driver suspended (COM-37), unpaid commission, a review. One code on purpose: the passenger is not told which. "This trip can't run" | `CANCELLED_BY_DRIVER` |
+| `vehicle_replaced` | The driver replaced the car | `CANCELLED_BY_DRIVER` |
+| `replaced` | Her seat went to another passenger (`replacement-offer` accepted) | `CANCELLED_BY_DRIVER` |
+| `active_trip_cancelled` | The run was stopped after it set off (`cancel-active`); read `wasAboard` and `tripCancelReason` | `ENDED_EARLY` or `CANCELLED_BY_DRIVER` |
+| `trip_expired` | The driver never started (+20 min) | `EXITED_DUE_TO_DRIVER_DELAY` |
+| `not_started` · `passed_your_stop` · `late_for_pickup` | She left with no fee because the driver let her down (`exit-without-fee`), the same values as `driverDelay` | `EXITED_DUE_TO_DRIVER_DELAY` |
+| `passenger_cancelled` | She cancelled | `CANCELLED_BY_PASSENGER` |
+| `left_group` · `absence_planned` · `declared_away` | She left the group, planned an absence, or said she won't come | `CANCELLED_BY_PASSENGER` |
+| `ended_early` | She ended her own ride early (`end-early`) | `ENDED_EARLY` |
+| `switched` | Switch Commute | either |
+| `blocked` | One of them blocked the other | either |
+| `account_suspended` · `account_deleted` | Her account was suspended (conduct or debt) or deleted | `CANCELLED_BY_PASSENGER` |
+
+Money on the driver-side codes: no cancellation fee and no fee line is ever charged to her
+(`cancellationFeePiastres` and her fee lines stay `0`). One exception to "You won't be charged":
+`active_trip_cancelled` with `wasAboard: true` and `tripCancelReason` `breakdown` · `accident` ·
+`emergency` — if she rode more than 25 % of her route she pays that share of the fare (PAY-24), and
+`price.totalPiastres` is already the reduced figure. 25 % or less, or reason `other`, she pays 0
+(`paymentStatus: WAIVED`).
 
 🔒 **All three money figures are frozen at approval and never recomputed.** A driver raising her
 price, or the platform changing its percentage, moves nothing here. And the meeting point is
@@ -4708,14 +4795,14 @@ hold must still be able to read the notice that says so.
 | `pickup_change_requested` | driver | the pickup request (4.8) | `pickupRequestId`, `commuteId` (+ `commuteGroupId` or `seatRequestId`) |
 | `pickup_change_approved` · `pickup_change_alternative` · `pickup_change_rejected` | passenger | the pickup request (4.8) | `pickupRequestId`, `commuteId` (+ `bookingId`, `commuteGroupId` for a member, or `seatRequestId`) |
 | `pickup_change_alternative_accepted` | driver | the pickup request (4.8) | `pickupRequestId`, `commuteId` (+ `commuteGroupId`) |
-| `seat_offered` | passenger on a waiting list | the offer (`GET /seat-offers`) | `offerId`, `tripId`, `commuteId` |
+| `seat_offered` | passenger on a waiting list | the offer (`GET /seat-offers/{offer}` with the `offerId`) | `offerId`, `tripId`, `commuteId` |
 | `seats_offered_by_driver` | passenger on a waiting list | her offers | `commuteId`, `seatRequestId` |
 | `booking_cancelled` | the other side | the booking | `bookingId` |
 | `trip_day_cancelled` | passenger | the booking | `tripId`, `bookingId` |
 | `commute_paused_seat_cancelled` · `vehicle_replaced_seat_cancelled` | passenger (back on the waiting list) | the commute | `commuteId`, `bookingId` |
 | `commute_deleted_seat_cancelled` | passenger (**not** on any list) | her bookings | `commuteId`, `bookingId` |
-| `change_proposal_received` · `_revised` · `_applied` · `_rejected` | passenger / driver | the proposal (4.7) | `changeProposalId` (+ `bookingId` / `commuteId`) |
-| `waitlist_cleared_by_change` | passenger | the commute | `commuteId` |
+| `change_proposal_received` · `_revised` · `_applied` · `_rejected` | passenger / driver | the proposal (`GET /change-proposals/{proposal}` with the `changeProposalId`, for a passenger) | `changeProposalId` (+ `bookingId` / `commuteId`) |
+| `waitlist_cleared_by_change` | passenger | the commute; **Reapply** fills the form from `GET /seat-requests/{seatRequest}` with the `seatRequestId` (status `TERMS_CHANGED`) and `GET /commutes/{commute}/public` | `commuteId`, `seatRequestId`, `changeProposalId` |
 | `departure_time_changed` | driver | that day | `scheduledTripId`, `commuteId` |
 | `match_found` | passenger | the match | `commuteId`, `demandId` |
 | `trip_starts_in_hour` · `trip_starts_soon` | driver and each confirmed passenger | the trip | `tripId` + `bookingId` (passenger) or `commuteId` (driver) |
@@ -5220,6 +5307,30 @@ files. Answers `{vehicleId, deleted: true}`. `409 VEHICLE_IS_ACTIVE` for the act
 (`fields.commuteIds`) while a draft, published or paused commute still names it; `404` for somebody else's.
 Archived commutes don't block it: they keep no car (`vehicle_id` null) once it is deleted.
 
+#### `POST /testing/seat-offers/{offer}/close`
+
+`{ "status": "INELIGIBLE" | "CLOSED" | "TAKEN_BY_OTHER", "closedReason"?: "…" }`. Ends the caller's
+**open** offer the way the server would, with the `offer.closed` socket event. Without
+`closedReason`: `INELIGIBLE` → `car_passed`, `TAKEN_BY_OTHER` → `seat_taken`, `CLOSED` →
+`day_cancelled`. Answers the offer as `GET /seat-offers/{offer}`. `404` for somebody else's,
+`409 SEAT_OFFER_CLOSED` if it already ended.
+
+#### `POST /testing/notifications`
+
+`{ "type": "…", "data"?: { … }, "params"?: { … } }`. Writes one inbox row for the caller, and the
+push, exactly as the server would. `type` is one of `waitlist_cleared_by_change` · `seat_offered` ·
+`seats_offered_by_driver` · `change_proposal_received` · `change_proposal_revised` ·
+`change_proposal_applied` · `change_proposal_rejected` · `booking_cancelled`. `data` keys are
+`offerId` · `seatRequestId` · `bookingId` · `changeProposalId` · `commuteId` · `tripId`, and the first
+three must be the caller's own (`422` with `fields.data.<key>` otherwise). `params` fills the text
+(`name`, `date`, `days`; defaults `Nour`, today, `3`). Answers the notification, or `null` when her
+in-app setting for that category is off.
+
+Cancel Active Trip needs no testing call: the real `POST /trips/{trip}/cancel-active` on a started
+test run gives `active_trip_cancelled`. Check one in first (`POST /trips/{trip}/check-in`) to get
+`wasAboard: true`. A cleared waiting list needs none either: publish → waitlist someone → propose an
+`all_future_on_this_weekday` change → every rider accepts.
+
 ---
 
 ## 4.18 Content (Help & legal)
@@ -5314,7 +5425,7 @@ Every message has the same envelope:
 |---|---|---|---|
 | `seat.opened` | `private-occurrence.{scheduledTripId}` | `{occurrenceId, commuteId, seatCount, releaseEventId}` | A seat came free on this day and **everybody waiting was offered it at once**. Refresh `GET /seat-offers`. The `releaseEventId` is also on every offer the release produced, so you can tie an offer to the opening it came from. |
 | `offer.accepted` | `private-occurrence.{scheduledTripId}` | `{occurrenceId, offerId, releaseEventId, seatsRemaining}` | Somebody took it. `seatsRemaining` is the live figure read under the seat lock. |
-| `offer.closed` | `private-user.{userId}` | `{offerId, occurrenceId, reason}` | **Your** offer is no longer live. `reason` says which — today the only value that arrives on the socket is `taken_by_other`, because somebody was quicker. Show that, not "something went wrong": she lost a race, the seat did not evaporate. An offer that expires or that the driver withdraws changes `GET /seat-offers` but is **not** broadcast yet. |
+| `offer.closed` | `private-user.{userId}` | `{offerId, occurrenceId, reason, closedReason, stillWaiting}` | **Your** offer is no longer live. `reason` is the offer's new status (`taken_by_other` · `ineligible` · `closed`), `closedReason` the code as on `GET /seat-offers`. Sent when somebody was quicker, when the car passed her pickup, when the day was cancelled or the run stopped, and when she left the waiting list. A pause, a deleted commute or a driver withdrawing changes `GET /seat-offers` but is **not** broadcast yet. |
 | `booking.cancelled` | `private-occurrence.{scheduledTripId}` | `{occurrenceId, bookingId, status, seatsReleased}` | A confirmed seat ended. `status` distinguishes `cancelled_by_passenger` from `cancelled_by_driver`. |
 
 🔒 **Who may subscribe to `private-occurrence.{scheduledTripId}`:** the driver, anybody holding a
@@ -5430,6 +5541,7 @@ exist, and every live endpoint must be named here.
 
 | Date | Change |
 |---|---|
+| 2026-11-14 | 🧳 **Trips (passenger) asks.** 🔴 **Privacy fix:** `cancelledReason` is now **always a code** (table in 4.7); the driver's typed reason never reaches the passenger. The author reads their own text in `cancelledNote`. Bookings gain `commitment`, `tripCancelReason`, `wasAboard`. **6 new endpoints:** `GET /seat-offers/{offer}`, `POST /seat-offers/groups/{group}/accept` and `/decline`, `GET /change-proposals/{proposal}`, and the staging-only `POST /testing/seat-offers/{offer}/close` and `POST /testing/notifications`. Offers gain `source`, `isPreviousPassenger`, `commitment`, `offerGroupId`, `daysMask`, `closedReason`, `passedPointLabel`, `stillWaiting`, `pickup.estimatedLocal`, `dropoff.estimatedLocal`; `offer.closed` carries `closedReason` and `stillWaiting` and is sent in more cases. An open offer now closes when its day is cancelled, its run is stopped, or she leaves the waiting list. `GET /change-proposals?bookingId=`. `waitlist_cleared_by_change` carries `seatRequestId` and `changeProposalId`, and its text names the driver (it showed `:name`). `POST /commutes/{commute}/seat-requests` takes `alternativeForBookingId` and fills the points. |
 | 2026-11-14 | 🧾 **Vehicle and reliability findings.** **2 new endpoints:** `POST /account/reliability/groups/{groupId}/appeal` and `/evidence`. 🔴 **A grouped act is appealed once:** appealing or adding evidence to any event with a `groupId` applies to every event in the group, and one staff decision decides them all. `GET /ratings/about-me` rows gain `report: { id, status } \| null`. `DELETE /testing/driver/vehicles/{vehicle}` no longer counts archived commutes. A vehicle's `suspensionReason` stays a code (`registration_expired` · `report`); the staff's text is never sent. |
 | 2026-11-13 | 📄 **New: `GET /content/{key}` (4.18).** Help, support contact, terms and guidelines as staff write them on the dashboard, in Arabic and English, with a `version` that goes up on every save. |
 | 2026-11-13 | 📣 **Two new inbox notification types, no new endpoint.** `announcement` (staff to everyone, passengers or drivers; may carry `data.link`) and `staff_message` (staff to one member). Both arrive through `GET /notifications` like any other row, already in the member's language, and are never pushed. Show them with the generic inbox card. |

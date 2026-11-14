@@ -36,6 +36,11 @@ return [
         'planned' => 'غياب مخطط',
     ],
 
+    'alternatives' => [
+        'current_location' => 'مكان توقف السيارة',
+        'your_dropoff' => 'مكان نزولك',
+    ],
+
     'group' => [
         'left' => 'مغادرة المجموعة',
     ],

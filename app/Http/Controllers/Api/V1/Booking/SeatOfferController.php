@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Api\V1\Booking;
 use App\Domains\Booking\Actions\AcceptSeatOfferAction;
 use App\Domains\Booking\Actions\DeclineSeatOfferAction;
 use App\Domains\Booking\Enums\BookingStatus;
+use App\Domains\Booking\Enums\SeatOfferSource;
 use App\Domains\Booking\Enums\SwitchReason;
 use App\Domains\Booking\Enums\SwitchScope;
 use App\Domains\Booking\Models\Booking;
@@ -18,8 +19,10 @@ use App\Http\Requests\Booking\ListSeatOffersRequest;
 use App\Http\Resources\BookingResource;
 use App\Http\Resources\SeatOfferResource;
 use App\Http\Responses\ApiResponse;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Collection;
 
 final class SeatOfferController extends Controller
 {
@@ -49,6 +52,100 @@ final class SeatOfferController extends Controller
             ->paginate(ApiResponse::perPage($request));
 
         return ApiResponse::paginated($offers, SeatOfferResource::collection($offers->items()));
+    }
+
+    #[ApiErrors(ErrorCode::NotFound)]
+    public function show(Request $request, string $offer): JsonResponse
+    {
+        $target = $this->ownOffers($request)
+            ->whereKey($offer)
+            ->with(SeatOfferResource::relations())
+            ->first()
+            ?? throw DomainException::of(ErrorCode::NotFound);
+
+        return ApiResponse::success(new SeatOfferResource($target));
+    }
+
+    #[ApiErrors(ErrorCode::NotFound, ErrorCode::SeatOfferClosed, ErrorCode::RidingSuspendedForDebt)]
+    public function acceptGroup(Request $request, string $group, AcceptSeatOfferAction $action): JsonResponse
+    {
+        $offers = $this->groupOffers($request, $group);
+        $bookings = [];
+        $results = [];
+
+        foreach ($offers as $offer) {
+            if (! $offer->status->isLive()) {
+                $results[] = ['offerId' => $offer->id, 'status' => strtoupper($offer->status->value), 'bookingId' => null, 'error' => null];
+
+                continue;
+            }
+
+            try {
+                $accepted = $action->execute($offer, null, SwitchReason::Voluntary, false, SwitchScope::ThisDate);
+                $bookings[] = $accepted->booking;
+                $results[] = ['offerId' => $offer->id, 'status' => 'ACCEPTED', 'bookingId' => $accepted->booking->id, 'error' => null];
+            } catch (DomainException $e) {
+                if ($e->errorCode === ErrorCode::RidingSuspendedForDebt) {
+                    throw $e;
+                }
+
+                $results[] = ['offerId' => $offer->id, 'status' => strtoupper((string) ($offer->fresh()?->status->value ?? 'closed')), 'bookingId' => null, 'error' => $e->errorCode->value];
+            }
+        }
+
+        if ($bookings === []) {
+            throw DomainException::of(ErrorCode::SeatOfferClosed, fields: [
+                'offers' => array_map(fn (array $row): string => $row['offerId'].':'.$row['status'], $results),
+            ]);
+        }
+
+        return ApiResponse::success(BookingResource::collection($bookings), meta: ['offers' => $results]);
+    }
+
+    #[ApiErrors(ErrorCode::NotFound)]
+    public function declineGroup(Request $request, string $group, DeclineSeatOfferAction $action): JsonResponse
+    {
+        $offers = $this->groupOffers($request, $group);
+
+        foreach ($offers as $offer) {
+            if ($offer->status->isLive()) {
+                $action->execute($offer);
+            }
+        }
+
+        $fresh = $this->ownOffers($request)
+            ->whereIn('id', $offers->pluck('id'))
+            ->with(SeatOfferResource::relations())
+            ->orderBy('scheduled_trip_id')
+            ->get();
+
+        return ApiResponse::success(SeatOfferResource::collection($fresh));
+    }
+
+    private function ownOffers(Request $request): Builder
+    {
+        return SeatOffer::query()->whereHas('seatRequest', fn ($query) => $query
+            ->where('passenger_user_id', $request->user()->id));
+    }
+
+    /**
+     * @return Collection<int, SeatOffer>
+     */
+    private function groupOffers(Request $request, string $group): Collection
+    {
+        $offers = $this->ownOffers($request)
+            ->where('release_event_id', $group)
+            ->where('source', SeatOfferSource::DriverResume->value)
+            ->with('scheduledTrip')
+            ->get()
+            ->sortBy(fn (SeatOffer $offer): string => (string) $offer->scheduledTrip?->departure_at?->toIso8601String())
+            ->values();
+
+        if ($offers->isEmpty()) {
+            throw DomainException::of(ErrorCode::NotFound);
+        }
+
+        return $offers;
     }
 
     /**

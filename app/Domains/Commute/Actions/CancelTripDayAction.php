@@ -5,10 +5,13 @@ namespace App\Domains\Commute\Actions;
 use App\Domains\Booking\Enums\BookingActorType;
 use App\Domains\Booking\Enums\BookingEventType;
 use App\Domains\Booking\Enums\BookingStatus;
+use App\Domains\Booking\Enums\CancelCode;
+use App\Domains\Booking\Enums\SeatOfferClosedReason;
 use App\Domains\Booking\Enums\SeatRequestStatus;
 use App\Domains\Booking\Models\Booking;
 use App\Domains\Booking\Models\SeatRequest;
 use App\Domains\Booking\Support\BookingEventLog;
+use App\Domains\Booking\Support\SeatOfferClosure;
 use App\Domains\Commute\Enums\ScheduledTripStatus;
 use App\Domains\Commute\Enums\TripCancelledBy;
 use App\Domains\Commute\Models\ScheduledTrip;
@@ -70,6 +73,8 @@ final readonly class CancelTripDayAction
                 'seats_taken' => 0,
             ])->save();
 
+            SeatOfferClosure::closeOnTrips([(string) $trip->getKey()], SeatOfferClosedReason::DayCancelled);
+
             $bookings = Booking::query()
                 ->where('scheduled_trip_id', $trip->id)
                 ->whereIn('status', [BookingStatus::Pending->value, BookingStatus::Confirmed->value])
@@ -85,6 +90,7 @@ final readonly class CancelTripDayAction
                     'status' => BookingStatus::CancelledByDriver->value,
                     'cancelled_at' => now(),
                     'cancelled_reason' => 'driver_cancelled_day',
+                    'cancel_code' => CancelCode::DayCancelled->value,
                     'cancellation_fee_piastres' => 0,
                 ])->save();
 

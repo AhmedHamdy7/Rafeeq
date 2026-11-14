@@ -257,6 +257,8 @@ it('generates a document describing every /v1 route', function () {
         'POST /v1/testing/attendance',
         'POST /v1/testing/reliability/appeals/{appeal}/decide',
         'POST /v1/testing/reliability/reset',
+        'POST /v1/testing/seat-offers/{offer}/close',
+        'POST /v1/testing/notifications',
         'POST /v1/testing/reliability/events/{event}/age',
         'POST /v1/testing/reliability/events',
         'POST /v1/testing/ratings/reports/{report}/decide',
@@ -298,6 +300,9 @@ it('generates a document describing every /v1 route', function () {
         // Phase 7 — seat requests, bookings and groups (Chapter 6, §889).
         'POST /v1/commutes/{commute}/seat-requests',
         'GET /v1/seat-offers',
+        'GET /v1/seat-offers/{offer}',
+        'POST /v1/seat-offers/groups/{group}/accept',
+        'POST /v1/seat-offers/groups/{group}/decline',
         'POST /v1/seat-offers/{offer}/accept',
         'POST /v1/seat-offers/{offer}/decline',
         'GET /v1/seat-requests',
@@ -374,6 +379,7 @@ it('generates a document describing every /v1 route', function () {
         'PATCH /v1/driver/change-proposals/{proposal}',
         'DELETE /v1/driver/change-proposals/{proposal}',
         'GET /v1/change-proposals',
+        'GET /v1/change-proposals/{proposal}',
         'POST /v1/change-proposals/{proposal}/respond',
 
         'POST /v1/seat-requests/{seatRequest}/pickup-request',

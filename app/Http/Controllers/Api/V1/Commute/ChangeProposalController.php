@@ -134,13 +134,35 @@ final class ChangeProposalController extends Controller
         $items = [];
 
         foreach ($proposals as $proposal) {
-            $items[] = ChangeProposalResource::forPassenger(
-                $proposal,
-                $this->bookingFor($proposal, $request),
-            );
+            $booking = $this->bookingFor($proposal, $request);
+
+            if ($request->filled('bookingId')) {
+                $booking = $proposal->affectedBookings()
+                    ->whereKey((string) $request->query('bookingId'))
+                    ->where('passenger_user_id', $request->user()->id)
+                    ->first();
+
+                if ($booking === null) {
+                    continue;
+                }
+            }
+
+            $items[] = ChangeProposalResource::forPassenger($proposal, $booking);
         }
 
         return ApiResponse::success($items);
+    }
+
+    #[ApiErrors(ErrorCode::NotFound)]
+    public function show(Request $request, string $proposal): JsonResponse
+    {
+        $target = ChangeProposal::query()->whereKey($proposal)->with('scheduledTrip')->first()
+            ?? throw DomainException::of(ErrorCode::NotFound);
+
+        $booking = $this->bookingFor($target, $request) ?? $this->anyBookingFor($target, $request)
+            ?? throw DomainException::of(ErrorCode::NotFound);
+
+        return ApiResponse::success(ChangeProposalResource::forPassenger($target, $booking));
     }
 
     /**
@@ -187,6 +209,22 @@ final class ChangeProposalController extends Controller
     {
         return $proposal->affectedBookings()
             ->where('passenger_user_id', $request->user()->id)
+            ->first();
+    }
+
+    private function anyBookingFor(ChangeProposal $proposal, Request $request): ?Booking
+    {
+        $answered = Booking::query()
+            ->where('passenger_user_id', $request->user()->id)
+            ->whereIn('id', $proposal->approvals()->select('booking_id'))
+            ->orderBy('id')
+            ->first();
+
+        return $answered ?? Booking::query()
+            ->where('passenger_user_id', $request->user()->id)
+            ->whereIn('scheduled_trip_id', $proposal->affectedTrips()->select('id'))
+            ->where('created_at', '<=', $proposal->updated_at ?? $proposal->created_at)
+            ->orderBy('id')
             ->first();
     }
 

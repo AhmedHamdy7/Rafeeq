@@ -36,6 +36,11 @@ return [
         'planned' => 'Planned absence',
     ],
 
+    'alternatives' => [
+        'current_location' => 'Where the car stopped',
+        'your_dropoff' => 'Your drop-off',
+    ],
+
     'group' => [
         'left' => 'Left the group',
     ],

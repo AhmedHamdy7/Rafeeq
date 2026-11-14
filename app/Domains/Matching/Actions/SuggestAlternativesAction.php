@@ -145,6 +145,35 @@ final readonly class SuggestAlternativesAction
      *    and is still better than refusing to answer. The response says which case it was, so a
      *    client can offer her the map rather than pretend.
      */
+    /**
+     * @return array{pickup: array{lat: float, lng: float, label: string}, dropoff: array{lat: float, lng: float, label: string}}|null
+     */
+    public function requestPoints(Booking $booking): ?array
+    {
+        $booking->loadMissing(['scheduledTrip.tripSession']);
+        $trip = $booking->scheduledTrip;
+        $destination = $this->destination($booking);
+
+        if ($trip === null || $destination === null || $booking->pickup_lat === null || $booking->pickup_lng === null) {
+            return null;
+        }
+
+        $origin = $this->origin($booking, $trip);
+
+        return [
+            'pickup' => [
+                'lat' => $origin->point->lat,
+                'lng' => $origin->point->lng,
+                'label' => $origin->label ?? __('commute.alternatives.current_location'),
+            ],
+            'dropoff' => [
+                'lat' => $destination->lat,
+                'lng' => $destination->lng,
+                'label' => $booking->dropoff_label ?? __('commute.alternatives.your_dropoff'),
+            ],
+        ];
+    }
+
     private function origin(Booking $booking, ScheduledTrip $trip): AlternativeOrigin
     {
         $agreed = new Coordinate((float) $booking->pickup_lat, (float) $booking->pickup_lng);

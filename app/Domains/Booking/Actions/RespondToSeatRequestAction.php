@@ -3,9 +3,11 @@
 namespace App\Domains\Booking\Actions;
 
 use App\Domains\Admin\Models\PlatformSetting;
+use App\Domains\Booking\Enums\SeatOfferClosedReason;
 use App\Domains\Booking\Enums\SeatRequestCommitment;
 use App\Domains\Booking\Enums\SeatRequestStatus;
 use App\Domains\Booking\Models\SeatRequest;
+use App\Domains\Booking\Support\SeatOfferClosure;
 use App\Domains\Booking\Support\WaitlistPositions;
 use App\Domains\Commute\Models\ScheduledTrip;
 use App\Domains\Identity\Models\User;
@@ -147,6 +149,8 @@ final readonly class RespondToSeatRequestAction
         ])->save();
 
         $this->closeTheirPlaceInTheQueue($request, $wasWaiting);
+
+        SeatOfferClosure::closeForRequest((string) $request->getKey(), SeatOfferClosedReason::RequestWithdrawn);
 
         return $request;
     }

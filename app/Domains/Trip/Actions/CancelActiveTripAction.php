@@ -5,11 +5,14 @@ namespace App\Domains\Trip\Actions;
 use App\Domains\Booking\Enums\BookingActorType;
 use App\Domains\Booking\Enums\BookingEventType;
 use App\Domains\Booking\Enums\BookingStatus;
+use App\Domains\Booking\Enums\CancelCode;
 use App\Domains\Booking\Enums\PaymentStatus;
+use App\Domains\Booking\Enums\SeatOfferClosedReason;
 use App\Domains\Booking\Enums\SeatRequestStatus;
 use App\Domains\Booking\Models\Booking;
 use App\Domains\Booking\Models\SeatRequest;
 use App\Domains\Booking\Support\BookingEventLog;
+use App\Domains\Booking\Support\SeatOfferClosure;
 use App\Domains\Commute\Actions\CancelTripDayAction;
 use App\Domains\Commute\Models\ScheduledTrip;
 use App\Domains\Geo\Contracts\GeoQueryEngine;
@@ -187,6 +190,8 @@ final readonly class CancelActiveTripAction
             ])->save();
 
             // A request still waiting on this day cannot be answered with a seat any more.
+            SeatOfferClosure::closeOnTrips([(string) $trip->getKey()], SeatOfferClosedReason::DayCancelled);
+
             SeatRequest::query()
                 ->where('scheduled_trip_id', $trip->getKey())
                 ->whereIn('status', [SeatRequestStatus::Pending->value, SeatRequestStatus::Waitlisted->value])
@@ -333,6 +338,7 @@ final readonly class CancelActiveTripAction
             'status' => $to->value,
             'cancelled_at' => now(),
             'cancelled_reason' => $reason,
+            'cancel_code' => CancelCode::ActiveTripCancelled->value,
             // v5 puts this one on the driver. Nothing is charged to the passenger whose journey
             // somebody else stopped — least of all the one who was already in the car.
             'cancellation_fee_piastres' => 0,
