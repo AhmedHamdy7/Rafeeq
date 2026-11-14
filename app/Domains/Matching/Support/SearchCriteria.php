@@ -77,12 +77,14 @@ final readonly class SearchCriteria
 
     public function withAreas(?SearchArea $originArea, ?SearchArea $destinationArea): self
     {
-        return clone ($this, ['originArea' => $originArea, 'destinationArea' => $destinationArea]);
+        // A copy with new values, built through the constructor: `clone ($this, [...])` is
+        // PHP 8.5 syntax, and the project runs on 8.4 (composer.json, CI).
+        return new self(...[...get_object_vars($this), 'originArea' => $originArea, 'destinationArea' => $destinationArea]);
     }
 
     public function withEnds(Coordinate $origin, Coordinate $destination): self
     {
-        return clone ($this, ['origin' => $origin, 'destination' => $destination]);
+        return new self(...[...get_object_vars($this), 'origin' => $origin, 'destination' => $destination]);
     }
 
     /**

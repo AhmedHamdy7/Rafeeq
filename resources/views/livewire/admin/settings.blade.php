@@ -65,7 +65,7 @@
                                 @if ($history->isEmpty())
                                     <p class="ad-hint" style="margin:0">{{ __('admin.settings.no_history') }}</p>
                                 @else
-                                    <table class="ad-table ad-table--dense"><tbody>
+                                    <div class="ad-table-wrap"><table class="ad-table ad-table--dense"><tbody>
                                     @foreach ($history as $change)
                                         <tr wire:key="sh-{{ $change->id }}">
                                             <td class="ad-num" style="white-space:nowrap"><bdi>{{ is_scalar($change->old_value['value'] ?? null) ? $change->old_value['value'] : '—' }}</bdi> → <bdi>{{ $change->action === 'settings.reset' ? __('admin.settings.default_label') : (is_scalar($change->new_value['value'] ?? null) ? $change->new_value['value'] : '—') }}</bdi></td>
@@ -74,7 +74,7 @@
                                             <td class="ad-muted ad-num" style="white-space:nowrap">{{ $change->created_at?->timezone('Africa/Cairo')->format('j M Y H:i') }}</td>
                                         </tr>
                                     @endforeach
-                                    </tbody></table>
+                                    </tbody></table></div>
                                 @endif
                             </div>
                         @endif

@@ -457,7 +457,9 @@ final class BookingResource extends JsonResource
              * fuzzing the pin and publishing the street name would make the fuzzing decorative.
              */
             'label' => $confirmed ? $label : null,
-            ...($confirmed ? NearPlace::fields($point->lat, $point->lng) : NearPlace::fields(null, null)),
+            'nearPlaceId' => NearPlace::id($confirmed ? $point->lat : null, $confirmed ? $point->lng : null),
+            'nearLabel' => NearPlace::label($confirmed ? $point->lat : null, $confirmed ? $point->lng : null),
+            'nearDistanceMetres' => NearPlace::metres($confirmed ? $point->lat : null, $confirmed ? $point->lng : null),
             // Stated rather than left for the client to infer from the status, so a
             // map can say "approximate" honestly.
             'isExact' => $confirmed,

@@ -133,7 +133,9 @@ final class PickupPointRequestResource extends JsonResource
                 : PickupRequestContext::areaLabel($point),
             'lat' => $agreed ? $point->lat : round($point->lat, self::FUZZ_DECIMALS),
             'lng' => $agreed ? $point->lng : round($point->lng, self::FUZZ_DECIMALS),
-            ...($agreed ? NearPlace::fields($point->lat, $point->lng) : NearPlace::fields(null, null)),
+            'nearPlaceId' => NearPlace::id($agreed ? $point->lat : null, $agreed ? $point->lng : null),
+            'nearLabel' => NearPlace::label($agreed ? $point->lat : null, $agreed ? $point->lng : null),
+            'nearDistanceMetres' => NearPlace::metres($agreed ? $point->lat : null, $agreed ? $point->lng : null),
             // Stated rather than inferred, so a map can say "approximate" honestly.
             'isExact' => $agreed,
         ];

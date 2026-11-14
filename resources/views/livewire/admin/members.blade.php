@@ -198,7 +198,7 @@
 
                 @if ($openReports->isNotEmpty())
                     <div class="ad-section-label">{{ __('admin.members.reports_about') }}</div>
-                    <table class="ad-table ad-table--dense">
+                    <div class="ad-table-wrap"><table class="ad-table ad-table--dense">
                         <tbody>
                         @foreach ($openReports as $report)
                             <tr>
@@ -207,7 +207,7 @@
                             </tr>
                         @endforeach
                         </tbody>
-                    </table>
+                    </table></div>
                     @if ($maySeeSafety)
                         <a class="ad-btn ad-btn--sm ad-btn--quiet" href="{{ route('admin.safety') }}" wire:navigate style="margin-block-start:8px">{{ __('admin.safety.open') }}</a>
                     @endif
@@ -215,7 +215,7 @@
 
                 @if ($opened->suspensions->isNotEmpty())
                     <div class="ad-section-label">{{ __('admin.members.history') }}</div>
-                    <table class="ad-table ad-table--dense">
+                    <div class="ad-table-wrap"><table class="ad-table ad-table--dense">
                         <tbody>
                         @foreach ($opened->suspensions as $past)
                             <tr>
@@ -229,7 +229,7 @@
                             </tr>
                         @endforeach
                         </tbody>
-                    </table>
+                    </table></div>
                 @endif
 
                 @if ($mayAct)

@@ -69,13 +69,13 @@
 
     <details class="ad-details">
         <summary class="ad-btn ad-btn--xs">{{ __('admin/stats.as_table') }}</summary>
-        <table class="ad-table ad-table--dense">
+        <div class="ad-table-wrap"><table class="ad-table ad-table--dense">
             <thead><tr><th></th>@foreach ($series as $one)<th class="ad-end">{{ $one['name'] }}</th>@endforeach</tr></thead>
             <tbody>
             @foreach ($labels as $i => $label)
                 <tr><td>{{ $label }}</td>@foreach ($series as $one)<td class="ad-end ad-num">{{ $format($one['values'][$i] ?? 0) }}</td>@endforeach</tr>
             @endforeach
             </tbody>
-        </table>
+        </table></div>
     </details>
 </figure>

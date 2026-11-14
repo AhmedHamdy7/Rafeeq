@@ -190,6 +190,66 @@
   display: none;
 }
 
+/* ─── The top-bar search and its results ─── */
+.ad-search-wrap {
+  position: relative;
+  inline-size: min(420px, 100%);
+}
+
+.ad-search-wrap .ad-search {
+  inline-size: 100%;
+}
+
+.ad-search:focus-within {
+  border-color: var(--brand-600, var(--fg-default));
+  box-shadow: 0 0 0 3px var(--focus-ring, rgba(13, 148, 136, 0.18));
+}
+
+.ad-search-results {
+  inset-inline: 0;
+  inset-inline-end: auto;
+  inline-size: max(100%, 360px);
+  max-block-size: min(70vh, 520px);
+}
+
+.ad-search-results__item {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.ad-search-results__item[aria-selected='true'] {
+  background: var(--bg-sunken);
+}
+
+.ad-search-results__label {
+  font-weight: 600;
+  min-inline-size: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ad-search-results__meta {
+  color: var(--fg-muted);
+  font-size: 12px;
+  flex: none;
+  max-inline-size: 55%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ad-search-results__all {
+  color: var(--fg-muted);
+}
+
+.ad-search-results__keys {
+  margin: 4px 10px 2px;
+  font-size: 11px;
+}
+
 .ad-user {
   display: flex;
   align-items: center;
@@ -417,7 +477,25 @@
     gap: 2px;
   }
 
-  .ad-search {
+  /* On a phone the box is hidden until the search icon opens it, full width under the bar. */
+  .ad-search-wrap {
+    display: none;
+  }
+
+  .ad-search-open .ad-search-wrap {
+    display: block;
+    position: absolute;
+    inset-inline: 8px;
+    inset-block-start: calc(100% + 6px);
+    inline-size: auto;
+    z-index: 70;
+  }
+
+  .ad-search-open .ad-search-results {
+    inline-size: 100%;
+  }
+
+  .ad-search-results__keys {
     display: none;
   }
 

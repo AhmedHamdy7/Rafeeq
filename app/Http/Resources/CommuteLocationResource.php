@@ -27,7 +27,9 @@ final class CommuteLocationResource extends JsonResource
             'lng' => (float) $this->lng,
             'address' => $this->address,
             'placeId' => $this->place_id,
-            ...NearPlace::fields($this->lat, $this->lng),
+            'nearPlaceId' => NearPlace::id($this->lat, $this->lng),
+            'nearLabel' => NearPlace::label($this->lat, $this->lng),
+            'nearDistanceMetres' => NearPlace::metres($this->lat, $this->lng),
             // Origin is 0 and destination 999, with stops in between in the
             // order they are reached.
             'sequence' => $this->sequence,

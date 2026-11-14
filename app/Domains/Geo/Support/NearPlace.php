@@ -10,6 +10,9 @@ final class NearPlace
 {
     private const string CACHE_KEY = 'geo.near_place.catalogue';
 
+    /** @var array<string, array{nearPlaceId: ?string, nearLabel: ?string, nearDistanceMetres: ?int}> */
+    private static array $memo = [];
+
     /**
      * @return array{nearPlaceId: ?string, nearLabel: ?string, nearDistanceMetres: ?int}
      */
@@ -52,8 +55,48 @@ final class NearPlace
         ];
     }
 
+    /**
+     * The three fields one at a time, for array literals in API resources. Spreading fields()
+     * into a resource (`...NearPlace::fields()`) left the OpenAPI document unable to type those
+     * keys, so every point in the API was documented as an untyped hole. Each of these has a
+     * declared return type the document reads, and they share one lookup per point.
+     */
+    public static function id(mixed $lat, mixed $lng): ?string
+    {
+        return self::memo($lat, $lng)['nearPlaceId'];
+    }
+
+    public static function label(mixed $lat, mixed $lng): ?string
+    {
+        return self::memo($lat, $lng)['nearLabel'];
+    }
+
+    public static function metres(mixed $lat, mixed $lng): ?int
+    {
+        return self::memo($lat, $lng)['nearDistanceMetres'];
+    }
+
+    /**
+     * @return array{nearPlaceId: ?string, nearLabel: ?string, nearDistanceMetres: ?int}
+     */
+    private static function memo(mixed $lat, mixed $lng): array
+    {
+        if ($lat === null || $lng === null) {
+            return self::fields(null, null);
+        }
+
+        $key = ((float) $lat).','.((float) $lng).','.app()->getLocale().','.config('rafeeq.geo.near_label_metres');
+
+        if (count(self::$memo) > 500) {
+            self::$memo = [];
+        }
+
+        return self::$memo[$key] ??= self::fields($lat, $lng);
+    }
+
     public static function forget(): void
     {
+        self::$memo = [];
         Cache::forget(self::CACHE_KEY);
     }
 

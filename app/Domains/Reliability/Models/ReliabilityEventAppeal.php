@@ -5,13 +5,16 @@ namespace App\Domains\Reliability\Models;
 use App\Domains\Identity\Models\User;
 use App\Domains\Reliability\Enums\AppealDeclineReason;
 use App\Domains\Trip\Enums\DisputeResolution;
+use Database\Factories\ReliabilityEventAppealFactory;
 use Illuminate\Database\Eloquent\Concerns\HasUlids;
+use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 class ReliabilityEventAppeal extends Model
 {
-    use HasUlids;
+    /** @use HasFactory<ReliabilityEventAppealFactory> */
+    use HasFactory, HasUlids;
 
     protected function casts(): array
     {

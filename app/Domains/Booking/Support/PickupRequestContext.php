@@ -58,7 +58,7 @@ final class PickupRequestContext
     }
 
     /**
-     * @return array{label: string|null, lat: float, lng: float, isExact: bool}|null
+     * @return array{label: string|null, lat: float, lng: float, nearPlaceId: ?string, nearLabel: ?string, nearDistanceMetres: ?int, isExact: bool}|null
      */
     public static function currentPoint(PickupPointRequest $pickup, ?Booking $next): ?array
     {
@@ -73,7 +73,9 @@ final class PickupRequestContext
                 'label' => $request->requested_pickup_label,
                 'lat' => (float) $request->requested_pickup_lat,
                 'lng' => (float) $request->requested_pickup_lng,
-                ...NearPlace::fields($request->requested_pickup_lat, $request->requested_pickup_lng),
+                'nearPlaceId' => NearPlace::id($request->requested_pickup_lat, $request->requested_pickup_lng),
+                'nearLabel' => NearPlace::label($request->requested_pickup_lat, $request->requested_pickup_lng),
+                'nearDistanceMetres' => NearPlace::metres($request->requested_pickup_lat, $request->requested_pickup_lng),
                 'isExact' => true,
             ];
         }
@@ -86,7 +88,9 @@ final class PickupRequestContext
             'label' => $next->pickup_label,
             'lat' => (float) $next->pickup_lat,
             'lng' => (float) $next->pickup_lng,
-            ...NearPlace::fields($next->pickup_lat, $next->pickup_lng),
+            'nearPlaceId' => NearPlace::id($next->pickup_lat, $next->pickup_lng),
+            'nearLabel' => NearPlace::label($next->pickup_lat, $next->pickup_lng),
+            'nearDistanceMetres' => NearPlace::metres($next->pickup_lat, $next->pickup_lng),
             'isExact' => true,
         ];
     }

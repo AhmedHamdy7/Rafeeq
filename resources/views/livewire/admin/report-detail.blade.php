@@ -33,17 +33,17 @@
                 @if ($report->evidence->isEmpty())
                     <x-admin.state kind="empty" :title="__('admin/reports.no_evidence')" />
                 @else
-                    <table class="ad-table ad-table--dense"><tbody>
+                    <div class="ad-table-wrap"><table class="ad-table ad-table--dense"><tbody>
                     @foreach ($report->evidence->sortBy('created_at') as $file)
                         @php($isNew = $firstDecision !== null && $file->created_at?->gt($firstDecision))
-                        <tr wire:key="ev-{{ $file->id }}" @if ($isNew) style="background:var(--warning-50, #fff7ed)" @endif>
+                        <tr wire:key="ev-{{ $file->id }}" @if ($isNew) style="background:var(--warning-100)" @endif>
                             <td>{{ __('admin.files.open', ['what' => $loop->iteration]) }} @if ($file->kind)<span class="ad-muted">· {{ $file->kind }}</span>@endif</td>
                             <td>@if ($isNew)<span class="ad-chip ad-chip--warn">{{ __('admin/reports.new_evidence') }}</span>@endif</td>
                             <td class="ad-muted ad-num">{{ $file->created_at?->timezone('Africa/Cairo')->format('j M H:i') }}</td>
                             <td class="ad-end">@if ($mayEvidence)<a class="ad-link" href="{{ route('admin.files.evidence', $file->id) }}" target="_blank" rel="noopener">{{ __('admin/records.open') }}</a>@endif</td>
                         </tr>
                     @endforeach
-                    </tbody></table>
+                    </tbody></table></div>
                     @if ($firstDecision)
                         <p class="ad-hint" style="margin:8px 12px">{{ __('admin/reports.new_evidence_hint', ['at' => $firstDecision->timezone('Africa/Cairo')->format('j M H:i')]) }}</p>
                     @endif

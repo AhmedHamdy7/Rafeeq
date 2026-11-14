@@ -188,7 +188,9 @@ final class PassengerCommuteResource extends JsonResource
             'label' => $location->address,
             'lat' => (float) $location->lat,
             'lng' => (float) $location->lng,
-            ...NearPlace::fields($location->lat, $location->lng),
+            'nearPlaceId' => NearPlace::id($location->lat, $location->lng),
+            'nearLabel' => NearPlace::label($location->lat, $location->lng),
+            'nearDistanceMetres' => NearPlace::metres($location->lat, $location->lng),
             // "Rehab Gate 2 · est. 07:05" — `HH:MM:SS` on the commute's own clock, from the usual
             // departure. Each day's own time comes with the day she picks.
             'estimatedTime' => $seconds === null || $departure === null

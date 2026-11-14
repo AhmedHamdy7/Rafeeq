@@ -76,14 +76,14 @@
                 @if ($openReports->isEmpty())
                     <x-admin.state kind="empty" :title="__('admin/records.none')" />
                 @else
-                    <table class="ad-table ad-table--dense"><tbody>
+                    <div class="ad-table-wrap"><table class="ad-table ad-table--dense"><tbody>
                     @foreach ($openReports as $incident)
                         <tr wire:key="or-{{ $incident->id }}">
                             <td>@can('safety.view')<a class="ad-link" href="{{ route('admin.reports.show', $incident->id) }}" wire:navigate>{{ __('admin.safety.categories.'.$incident->category->value) }}</a>@else{{ __('admin.safety.categories.'.$incident->category->value) }}@endcan</td>
                             <td><span class="ad-chip">{{ __('admin.safety.status.'.$incident->status->value) }}</span></td>
                         </tr>
                     @endforeach
-                    </tbody></table>
+                    </tbody></table></div>
                 @endif
             </x-admin.card>
         </div>

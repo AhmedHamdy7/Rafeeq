@@ -77,7 +77,7 @@
                 @if ($vehicle->documents->isEmpty())
                     <x-admin.state kind="empty" :title="__('admin/records.none')" />
                 @else
-                    <table class="ad-table ad-table--dense"><tbody>
+                    <div class="ad-table-wrap"><table class="ad-table ad-table--dense"><tbody>
                     @foreach ($vehicle->documents as $document)
                         @php($expires = $document->expires_at)
                         <tr wire:key="doc-{{ $document->id }}">
@@ -94,7 +94,7 @@
                             </td>
                         </tr>
                     @endforeach
-                    </tbody></table>
+                    </tbody></table></div>
                 @endif
             </x-admin.card>
         </div>
@@ -104,14 +104,14 @@
                 @if ($commutes->isEmpty())
                     <x-admin.state kind="empty" :title="__('admin/records.none')" />
                 @else
-                    <table class="ad-table ad-table--dense"><tbody>
+                    <div class="ad-table-wrap"><table class="ad-table ad-table--dense"><tbody>
                     @foreach ($commutes as $commute)
                         <tr wire:key="vc-{{ $commute->id }}">
                             <td><a class="ad-link" href="{{ route('admin.commutes.show', $commute->id) }}" wire:navigate><bdi>{{ $commute->locations->firstWhere('type', CommuteLocationType::Origin)?->address ?? '—' }}</bdi> → <bdi>{{ $commute->locations->firstWhere('type', CommuteLocationType::Destination)?->address ?? '—' }}</bdi></a></td>
                             <td><span class="ad-chip ad-chip--{{ DirectoryPage::tone($commute->status->value) }}">{{ __('admin/directory.statuses.'.$commute->status->value) }}</span></td>
                         </tr>
                     @endforeach
-                    </tbody></table>
+                    </tbody></table></div>
                 @endif
             </x-admin.card>
 

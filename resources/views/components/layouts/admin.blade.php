@@ -26,7 +26,8 @@
         'overdueHolds' => $overdueHolds ?? 0,
     ];
     $mayReadSafety = $admin?->can(AdminPermission::SafetyView->value) === true;
-    $maySearch = $admin?->can(AdminPermission::MemberView->value) === true;
+    // Everyone can search: pages for all, and each result group only for those who may open it.
+    $maySearch = $admin !== null;
     $role = $admin?->getRoleNames()->first();
 @endphp
 <!DOCTYPE html>
@@ -55,15 +56,35 @@
     --}}
     <script>
         (function () {
-            var root = document.documentElement;
-            try {
-                var saved = localStorage.getItem('rq-theme');
-                var system = window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
-                root.dataset.theme = saved || system;
-                root.dataset.side = localStorage.getItem('rq-side') || 'open';
-            } catch (e) {
-                root.dataset.theme = 'light';
-                root.dataset.side = 'open';
+            function applyPreferences() {
+                var root = document.documentElement;
+                try {
+                    var saved = localStorage.getItem('rq-theme');
+                    var system = window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+                    root.dataset.theme = saved || system;
+                    root.dataset.side = localStorage.getItem('rq-side') || 'open';
+                } catch (e) {
+                    root.dataset.theme = root.dataset.theme || 'light';
+                    root.dataset.side = root.dataset.side || 'open';
+                }
+            }
+
+            applyPreferences();
+
+            /*
+             * wire:navigate copies the new page's <html> attributes over the old ones, and the
+             * server always sends data-theme="light" — so without this, every click in the menu
+             * switched a dark-mode user back to light. Re-applied the moment the new page is
+             * swapped in, before it paints and before Alpine reads it.
+             */
+            if (! window.rqPreferencesBound) {
+                window.rqPreferencesBound = true;
+                document.addEventListener('livewire:navigating', function (event) {
+                    if (event.detail && typeof event.detail.onSwap === 'function') {
+                        event.detail.onSwap(applyPreferences);
+                    }
+                });
+                document.addEventListener('livewire:navigated', applyPreferences);
             }
         })();
     </script>
@@ -74,6 +95,7 @@
     class="ad-app"
     x-data="{
         drawer: false,
+        searchOpen: false,
         collapsed: document.documentElement.dataset.side === 'collapsed',
         theme: document.documentElement.dataset.theme,
         toggleSide() {
@@ -87,7 +109,7 @@
             try { localStorage.setItem('rq-theme', this.theme); } catch (e) {}
         },
     }"
-    x-bind:class="{ 'ad-drawer-open': drawer }"
+    x-bind:class="{ 'ad-drawer-open': drawer, 'ad-search-open': searchOpen }"
     x-on:keydown.escape.window="drawer = false"
 >
     {{-- Tablet and phone: the open drawer dims the page; a tap outside closes it. --}}
@@ -138,20 +160,13 @@
                 <span class="ad-sr">{{ __('admin/shell.nav.open') }}</span>
             </button>
 
-            @if ($maySearch && Route::has('admin.members'))
-                {{-- Finds a person by phone, name or reference — the users directory does the search. --}}
-                <form class="ad-search" method="GET" action="{{ route('admin.members') }}" role="search">
-                    <x-admin.icon name="search" />
-                    <input type="search" name="q" value="{{ request()->routeIs('admin.members') ? request('q') : '' }}"
-                           placeholder="{{ __('admin/shell.search.placeholder') }}"
-                           aria-label="{{ __('admin/shell.search.label') }}"
-                           x-on:keydown.window.slash="if (! ['INPUT', 'TEXTAREA', 'SELECT'].includes(document.activeElement.tagName)) { $event.preventDefault(); $el.focus(); }">
-                    <kbd aria-hidden="true">/</kbd>
-                </form>
-                <a href="{{ route('admin.members') }}" wire:navigate class="ad-icon-btn ad-search-icon">
+            @if ($maySearch)
+                {{-- One box for people, plates, reference codes and pages (see GlobalSearch). --}}
+                <livewire:admin.global-search />
+                <button type="button" class="ad-icon-btn ad-search-icon" x-on:click="searchOpen = ! searchOpen; if (searchOpen) $nextTick(() => document.querySelector('.ad-search-wrap input')?.focus())" x-bind:aria-expanded="searchOpen">
                     <x-admin.icon name="search" size="18" />
                     <span class="ad-sr">{{ __('admin/shell.search.label') }}</span>
-                </a>
+                </button>
             @endif
 
             <span class="ad-top__spacer"></span>

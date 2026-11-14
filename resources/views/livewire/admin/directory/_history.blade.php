@@ -3,7 +3,7 @@
     @if ($history->isEmpty())
         <x-admin.state kind="empty" :title="__('admin/records.no_history')" />
     @else
-        <table class="ad-table ad-table--dense"><tbody>
+        <div class="ad-table-wrap"><table class="ad-table ad-table--dense"><tbody>
         @foreach ($history as $entry)
             @php($label = 'admin.audit.actions.'.str_replace('.', '__', $entry->action))
             <tr wire:key="h-{{ $entry->id }}">
@@ -12,6 +12,6 @@
                 <td class="ad-muted ad-num" style="white-space:nowrap">{{ $entry->created_at?->timezone('Africa/Cairo')->format('j M Y H:i') }}</td>
             </tr>
         @endforeach
-        </tbody></table>
+        </tbody></table></div>
     @endif
 </x-admin.card>
