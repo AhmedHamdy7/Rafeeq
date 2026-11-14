@@ -6,6 +6,7 @@ use App\Domains\Booking\Enums\BookingStatus;
 use App\Domains\Booking\Models\Booking;
 use App\Domains\Booking\Support\PickupEta;
 use App\Domains\Geo\Contracts\GeoQueryEngine;
+use App\Domains\Geo\Support\NearPlace;
 use App\Domains\Group\Enums\GroupMemberRole;
 use App\Domains\Group\Enums\GroupMemberStatus;
 use App\Domains\Group\Models\GroupMember;
@@ -456,6 +457,7 @@ final class BookingResource extends JsonResource
              * fuzzing the pin and publishing the street name would make the fuzzing decorative.
              */
             'label' => $confirmed ? $label : null,
+            ...($confirmed ? NearPlace::fields($point->lat, $point->lng) : NearPlace::fields(null, null)),
             // Stated rather than left for the client to infer from the status, so a
             // map can say "approximate" honestly.
             'isExact' => $confirmed,

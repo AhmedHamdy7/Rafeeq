@@ -2057,7 +2057,7 @@ confirmed seat (16h+: 0 · 10–16h: 10 % · < 10h: 25 %) — **show it first** 
 | `formStep` | The form step the driver stopped at, 1 to 5, sent on `PATCH` to a draft. `null` until sent. Stored only; use `missing[]` for what's still needed. |
 | `publishedAt`, `pausedAt`, `pausedReason`, `archivedAt` | `pausedReason` is `by_driver` · `vehicle_suspended` · `licence_expired` · `commission_unpaid` · `account_suspended` · `driver_suspended` — all but `by_driver` are automatic, so show the right copy. `licence_expired` means her licence lapsed (COM-26): she can resume after the renewed licence is approved. `driver_suspended` means staff suspended her driving only (PROF-27): Resume answers `403 DRIVER_NOT_ELIGIBLE` and Passenger mode still works. `account_suspended` means staff suspended her account (F1-3); once it is lifted she resumes the commute herself. `commission_unpaid` means a week's commission missed two Fridays (PAY-45): show the debt screen; after paying she resumes the commute herself. |
 | `missing[]` | What still has to be done before it can be published. Drive the wizard from this. The values are `origin`, `destination`, `schedule`, `vehicle` and `one_time_single_date`. |
-| `locations[]` | `{id, type, lat, lng, address, placeId, sequence}`; type is `origin` · `pickup` · `dropoff` · `destination`. |
+| `locations[]` | `{id, type, lat, lng, address, placeId, nearPlaceId, nearLabel, nearDistanceMetres, sequence}`; type is `origin` · `pickup` · `dropoff` · `destination`. |
 | `schedule` | `{daysMask, departureTime, timezone, startDate, endDate, generatedUntil}`. `generatedUntil` is **how far ahead bookable days currently exist**, rolled forward daily — not the end of the commute. |
 | `weekdays[]` | One row per weekday, to refill the form from a draft: `{weekdayBit, promisedArrivalTime, departureTime, departureIsComputed, seatsTotal}`. A commute made before arrivals existed has `promisedArrivalTime: null` and `departureIsComputed: false`, so ask for the arrival when refilling. `seatsTotal` is `null` when the day follows the commute. |
 | `rules` | A map of `{key: bool}`; `{}` when empty. |
@@ -2078,6 +2078,12 @@ confirmed seat (16h+: 0 · 10–16h: 10 % · < 10h: 25 %) — **show it first** 
 `false` or `1` / `0`. Optionally `origin[label]`, `origin[placeId]`,
 `destination[label]`, `destination[placeId]` — they change nothing about the search; they are kept
 on her recent search so the row can say "New Cairo → Smart Village" (DISCOVER-8).
+
+**Area search (2026-11-14):** send `origin[areaPlaceId]` and/or `destination[areaPlaceId]` (a place with
+`isArea: true` from `GET /places`) to match commutes with a suggested point or route inside that area's
+radius. `meta.scope` is `point` or `area`. Area searches are not kept in recent searches. Every result
+carries `distanceMetres`: the shortest distance from `origin` to the commute's route or nearest pickup
+point. Full contract and responses: `FLUTTER_HANDOFF_MAPS_ARABIC.md`.
 
 **Verification is NOT required here** — searching is how somebody decides whether Rafeeq is worth
 verifying for. What they are *eligible* to see is decided inside the query from their own account:

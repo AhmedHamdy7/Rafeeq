@@ -211,6 +211,8 @@ final class MatchResultResource extends JsonResource
                 'reliability' => $this->score->reliability,
             ],
 
+            'distanceMetres' => $this->distanceMetres,
+
             'detourMinutes' => round($this->score->detourMinutes, 1),
             'tier' => $this->score->tier?->value,
             'extraMinutes' => (int) ceil($this->score->detourMinutes),

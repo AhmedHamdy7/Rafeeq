@@ -3,6 +3,8 @@
 namespace App\Http\Controllers\Api\V1;
 
 use App\Domains\Geo\Actions\SearchPlacesAction;
+use App\Domains\Geo\Models\PlaceSearchMiss;
+use App\Domains\Geo\Support\PlaceNameMatch;
 use App\Domains\Shared\ValueObjects\Coordinate;
 use App\Domains\Shared\ValueObjects\Distance;
 use App\Http\Controllers\Controller;
@@ -42,6 +44,18 @@ final class PlaceController extends Controller
                 : null,
             limit: (int) ($request->validated('limit') ?? SearchPlacesAction::DEFAULT_LIMIT),
         );
+
+        $term = trim((string) $request->validated('q'));
+
+        if ($term !== '' && $places->isEmpty()) {
+            PlaceSearchMiss::query()->create([
+                'user_id' => $request->user()?->id,
+                'query' => $term,
+                'normalised_query' => PlaceNameMatch::normalise($term),
+                'lat' => $near === null ? null : round($near->lat, 2),
+                'lng' => $near === null ? null : round($near->lng, 2),
+            ]);
+        }
 
         return ApiResponse::success(PlaceResource::near($places, $near));
     }

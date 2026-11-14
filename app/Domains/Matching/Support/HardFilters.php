@@ -145,22 +145,24 @@ final class HardFilters
      */
     private static function intersectBoundingBox(Builder $offer, SearchCriteria $criteria): void
     {
-        foreach ([$criteria->origin, $criteria->destination] as $point) {
-            $offer->where('bbox_min_lat', '<=', $point->lat)
-                ->where('bbox_max_lat', '>=', $point->lat)
-                ->where('bbox_min_lng', '<=', $point->lng)
-                ->where('bbox_max_lng', '>=', $point->lng);
+        $ends = [
+            [$criteria->origin, $criteria->originArea],
+            [$criteria->destination, $criteria->destinationArea],
+        ];
+
+        foreach ($ends as [$point, $area]) {
+            $centre = $area?->centre ?? $point;
+            $metres = $area?->radius->metres ?? 0;
+            $latReach = $metres / 111_320;
+            $lngReach = $metres / (111_320 * max(cos(deg2rad($centre->lat)), 0.01));
+
+            $offer->where('bbox_min_lat', '<=', $centre->lat + $latReach)
+                ->where('bbox_max_lat', '>=', $centre->lat - $latReach)
+                ->where('bbox_min_lng', '<=', $centre->lng + $lngReach)
+                ->where('bbox_max_lng', '>=', $centre->lng - $lngReach);
         }
     }
 
-    /**
-     * 🔴 Pitfall #27: a block is checked in BOTH directions. Looking only at who
-     * the passenger blocked misses the case that matters more — the driver who
-     * blocked them.
-     *
-     * A subquery rather than a join: the blocked set is small, and this keeps the
-     * outer query's plan simple.
-     */
     private static function excludeBlockedEitherWay(Builder $offer, User $passenger): void
     {
         $offer->whereNotExists(function ($query) use ($passenger): void {

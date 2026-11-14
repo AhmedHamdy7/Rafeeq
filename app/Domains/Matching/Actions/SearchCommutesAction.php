@@ -12,6 +12,7 @@ use App\Domains\Commute\Models\ScheduledTrip;
 use App\Domains\Commute\Support\RouteSettings;
 use App\Domains\Geo\Contracts\GeoQueryEngine;
 use App\Domains\Geo\Support\Haversine;
+use App\Domains\Geo\Support\NearestOnRoute;
 use App\Domains\Geo\Support\Polyline;
 use App\Domains\Geo\ValueObjects\Route;
 use App\Domains\Identity\Models\User;
@@ -20,6 +21,7 @@ use App\Domains\Matching\Support\HardFilters;
 use App\Domains\Matching\Support\MatchResult;
 use App\Domains\Matching\Support\ScoreBreakdown;
 use App\Domains\Matching\Support\ScoringModel;
+use App\Domains\Matching\Support\SearchArea;
 use App\Domains\Matching\Support\SearchCriteria;
 use App\Domains\Shared\ValueObjects\Coordinate;
 use App\Domains\Shared\ValueObjects\Distance;
@@ -129,7 +131,13 @@ final readonly class SearchCommutesAction
         $survivors = [];
 
         foreach ($candidates as $trip) {
-            $nearest = $this->nearestMeetingPoint($trip->commuteOffer, $criteria->origin);
+            $own = $this->criteriaFor($trip->commuteOffer, $criteria);
+
+            if ($own === null) {
+                continue;
+            }
+
+            $nearest = $this->nearestMeetingPoint($trip->commuteOffer, $own->origin);
 
             if ($nearest === null) {
                 continue;
@@ -139,7 +147,7 @@ final readonly class SearchCommutesAction
 
             $walk = $distance->asWalkTime();
 
-            if (! $walk->isWithin($criteria->maxWalk) && ! $this->reachesOrigin($trip->commuteOffer, $criteria)) {
+            if (! $walk->isWithin($own->maxWalk) && ! $this->reachesOrigin($trip->commuteOffer, $own)) {
                 continue;
             }
 
@@ -149,7 +157,8 @@ final readonly class SearchCommutesAction
                 'walk' => $walk,
                 // Where she would get out (DISCOVER-2). Not a filter: the search never asked how
                 // far she will walk at the other end, and ranking already rewards a good overlap.
-                'dropOff' => $this->nearestDropOff($trip->commuteOffer, $criteria->destination),
+                'dropOff' => $this->nearestDropOff($trip->commuteOffer, $own->destination),
+                'criteria' => $own,
             ];
         }
 
@@ -162,6 +171,63 @@ final readonly class SearchCommutesAction
      *
      * @return array{0: CommuteLocation, 1: Distance}|null
      */
+    private function criteriaFor(CommuteOffer $offer, SearchCriteria $criteria): ?SearchCriteria
+    {
+        if (! $criteria->isAreaSearch()) {
+            return $criteria;
+        }
+
+        $origin = $criteria->originArea === null
+            ? $criteria->origin
+            : $this->pointInside($offer, $criteria->originArea, [CommuteLocationType::Origin, CommuteLocationType::Pickup]);
+
+        $destination = $criteria->destinationArea === null
+            ? $criteria->destination
+            : $this->pointInside($offer, $criteria->destinationArea, [CommuteLocationType::Dropoff, CommuteLocationType::Destination]);
+
+        if ($origin === null || $destination === null) {
+            return null;
+        }
+
+        return $criteria->withEnds($origin, $destination);
+    }
+
+    /**
+     * @param  list<CommuteLocationType>  $types
+     */
+    private function pointInside(CommuteOffer $offer, SearchArea $area, array $types): ?Coordinate
+    {
+        $best = null;
+        $bestMetres = null;
+
+        foreach ($offer->locations as $location) {
+            if (! in_array($location->type, $types, true)) {
+                continue;
+            }
+
+            $point = $this->coordinateOf($location);
+            $metres = Haversine::between($area->centre, $point)->metres;
+
+            if ($metres <= $area->radius->metres && ($bestMetres === null || $metres < $bestMetres)) {
+                $best = $point;
+                $bestMetres = $metres;
+            }
+        }
+
+        if ($best !== null) {
+            return $best;
+        }
+
+        $route = $this->routeOf($offer);
+        $onRoute = $route === null ? null : NearestOnRoute::point($route, $area->centre);
+
+        if ($onRoute === null || Haversine::between($area->centre, $onRoute)->metres > $area->radius->metres) {
+            return null;
+        }
+
+        return $onRoute;
+    }
+
     private function reachesOrigin(CommuteOffer $offer, SearchCriteria $criteria): bool
     {
         $route = $this->routeOf($offer);
@@ -245,6 +311,7 @@ final readonly class SearchCommutesAction
 
         foreach (array_slice($candidates, 0, self::SCORING_LIMIT) as $candidate) {
             $trip = $candidate['trip'];
+            $own = $candidate['criteria'];
             $offer = $trip->commuteOffer;
 
             $offerRoute = $this->routeOf($offer);
@@ -253,12 +320,12 @@ final readonly class SearchCommutesAction
                 continue;
             }
 
-            $detour = $this->geo->detourMinutes($offerRoute, $criteria->origin);
+            $detour = $this->geo->detourMinutes($offerRoute, $own->origin);
 
             $tier = DetourTier::for(
                 max(
-                    $this->geo->distanceFromRoute($offerRoute, $criteria->origin)->metres,
-                    $this->geo->distanceFromRoute($offerRoute, $criteria->destination)->metres,
+                    $this->geo->distanceFromRoute($offerRoute, $own->origin)->metres,
+                    $this->geo->distanceFromRoute($offerRoute, $own->destination)->metres,
                 ),
                 $detour,
                 $detour,
@@ -273,7 +340,7 @@ final readonly class SearchCommutesAction
             $score = ScoringModel::score(
                 offer: $offer,
                 trip: $trip,
-                criteria: $criteria,
+                criteria: $own,
                 overlapPercent: $this->geo->overlapPercent($offerRoute, $passengerRoute),
                 walk: $candidate['walk'],
                 detourMinutes: $detour,
@@ -300,6 +367,10 @@ final readonly class SearchCommutesAction
                  * call per result.
                  */
                 meetingPointSeconds: $meetingPointSeconds,
+                distanceMetres: min(
+                    $this->geo->distanceFromRoute($offerRoute, $criteria->origin)->metres,
+                    Haversine::between($criteria->origin, $this->coordinateOf($candidate['meetingPoint']))->metres,
+                ),
                 dropOffSeconds: $dropOff === null ? null : PickupEta::secondsAlong($this->geo, $offer, $this->coordinateOf($dropOff)),
             );
         }

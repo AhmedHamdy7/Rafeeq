@@ -3,6 +3,7 @@
 namespace App\Http\Resources;
 
 use App\Domains\Commute\Models\CommuteLocation;
+use App\Domains\Geo\Support\NearPlace;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
 
@@ -26,6 +27,7 @@ final class CommuteLocationResource extends JsonResource
             'lng' => (float) $this->lng,
             'address' => $this->address,
             'placeId' => $this->place_id,
+            ...NearPlace::fields($this->lat, $this->lng),
             // Origin is 0 and destination 999, with stops in between in the
             // order they are reached.
             'sequence' => $this->sequence,

@@ -56,6 +56,8 @@ final class PlaceResource extends JsonResource
             'type' => $this->type->value,
             'lat' => (float) $this->lat,
             'lng' => (float) $this->lng,
+            'isArea' => $this->type->isArea(),
+            'radiusMetres' => $this->areaRadius()?->metres,
             'city' => LocalisedLabel::of($this->city),
             'district' => LocalisedLabel::of($this->district),
             // Only when `lat` / `lng` were sent: how far this place is from that point.

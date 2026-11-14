@@ -1031,6 +1031,10 @@ return [
          */
         'route_cache_days' => 30,
 
+        'area_radius_metres' => ['district' => 4000, 'city' => 8000],
+
+        'near_label_metres' => 1000,
+
         /*
          * How far outside a route's own extent the search box reaches, so a
          * passenger near the road still matches it. Too small is the one error
