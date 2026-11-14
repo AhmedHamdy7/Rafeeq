@@ -81,8 +81,9 @@ class GlobalSearch extends Component
                 ])->all();
         }
 
-        // A reference code: letters and digits, with at least one digit, as the grey code chips show.
-        if (preg_match('/^[0-9a-z]{4,26}$/i', $q) === 1 && preg_match('/\d/', $q) === 1) {
+        // A reference code, as the grey code chips show it: letters and digits, either with a digit
+        // or at least six long (a code can be all letters, like XZEMGH).
+        if (preg_match('/^[0-9a-z]{4,26}$/i', $q) === 1 && (preg_match('/\d/', $q) === 1 || mb_strlen($q) >= 6)) {
             $code = Str::upper($q);
             $refs = [];
 
