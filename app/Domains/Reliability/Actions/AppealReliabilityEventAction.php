@@ -14,6 +14,7 @@ use App\Domains\Reliability\Support\ReliabilityAppeals;
 use App\Domains\Shared\Exceptions\DomainException;
 use App\Domains\Shared\Support\ErrorCode;
 use App\Domains\Trip\Enums\DisputeResolution;
+use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Support\Facades\DB;
 
 final readonly class AppealReliabilityEventAction
@@ -33,24 +34,66 @@ final readonly class AppealReliabilityEventAction
                 throw DomainException::of(ErrorCode::ValidationFailed, fields: ['appeal' => [$refusal]]);
             }
 
-            $appeal = new ReliabilityEventAppeal;
+            $targets = self::siblings($event)
+                ->filter(fn (ReliabilityEvent $sibling) => ReliabilityAppeals::refusal($sibling) === null)
+                ->prepend($event);
 
-            $appeal->forceFill([
-                'reliability_event_id' => $event->getKey(),
-                'user_id' => $member->id,
-                'round' => ReliabilityAppeals::made($event) + 1,
-                'reason' => $reason,
-                'evidence_count' => ReliabilityAppeals::evidenceCount($event),
-            ])->save();
-
-            $event->forceFill([
-                'appealed_at' => now(),
-                'appeal_reason' => mb_substr($reason, 0, 255),
-                'appeal_declined_at' => null,
-            ])->save();
+            foreach ($targets as $target) {
+                $this->open($member, $target, $reason);
+            }
 
             return $event->refresh();
         });
+    }
+
+    /**
+     * @return Collection<int, ReliabilityEvent>
+     */
+    public static function group(User $member, string $groupId): Collection
+    {
+        return ReliabilityEvent::query()
+            ->where('user_id', $member->id)
+            ->where('group_id', strtoupper($groupId))
+            ->orderBy('occurred_at')
+            ->orderBy('id')
+            ->get();
+    }
+
+    /**
+     * @return Collection<int, ReliabilityEvent>
+     */
+    public static function siblings(ReliabilityEvent $event, bool $lock = true): Collection
+    {
+        if ($event->group_id === null) {
+            return new Collection;
+        }
+
+        return ReliabilityEvent::query()
+            ->where('user_id', $event->user_id)
+            ->where('group_id', $event->group_id)
+            ->whereKeyNot($event->getKey())
+            ->when($lock, fn ($query) => $query->lockForUpdate())
+            ->orderBy('id')
+            ->get();
+    }
+
+    private function open(User $member, ReliabilityEvent $event, string $reason): void
+    {
+        $appeal = new ReliabilityEventAppeal;
+
+        $appeal->forceFill([
+            'reliability_event_id' => $event->getKey(),
+            'user_id' => $member->id,
+            'round' => ReliabilityAppeals::made($event) + 1,
+            'reason' => $reason,
+            'evidence_count' => ReliabilityAppeals::evidenceCount($event),
+        ])->save();
+
+        $event->forceFill([
+            'appealed_at' => now(),
+            'appeal_reason' => mb_substr($reason, 0, 255),
+            'appeal_declined_at' => null,
+        ])->save();
     }
 
     public function approve(AdminUser $reviewer, ReliabilityEvent $event, string $reason, bool $reverseFee = true, bool $notify = true): ReliabilityEvent
@@ -64,17 +107,19 @@ final readonly class AppealReliabilityEventAction
                 ]);
             }
 
-            $event->forceFill([
-                'reversed_at' => now(),
-                'reversed_by' => $reviewer->getKey(),
-                'reversed_reason' => mb_substr($reason, 0, 255),
-                'appeal_declined_at' => null,
-            ])->save();
+            foreach ($this->decidedTogether($event) as $target) {
+                $target->forceFill([
+                    'reversed_at' => now(),
+                    'reversed_by' => $reviewer->getKey(),
+                    'reversed_reason' => mb_substr($reason, 0, 255),
+                    'appeal_declined_at' => null,
+                ])->save();
 
-            $this->resolve($event, $reviewer, DisputeResolution::Overturned, $reason, null);
+                $this->resolve($target, $reviewer, DisputeResolution::Overturned, $reason, null);
 
-            if ($reverseFee) {
-                EventFee::reverse($event, $reviewer, $reason);
+                if ($reverseFee || $target->isNot($event)) {
+                    EventFee::reverse($target, $reviewer, $reason);
+                }
             }
 
             if ($notify) {
@@ -100,18 +145,35 @@ final readonly class AppealReliabilityEventAction
                 ]);
             }
 
-            $event->forceFill([
-                'appeal_declined_at' => now(),
-                'reversed_reason' => mb_substr($reason, 0, 255),
-                'reversed_by' => $reviewer->getKey(),
-            ])->save();
+            foreach ($this->decidedTogether($event) as $target) {
+                $target->forceFill([
+                    'appeal_declined_at' => now(),
+                    'reversed_reason' => mb_substr($reason, 0, 255),
+                    'reversed_by' => $reviewer->getKey(),
+                ])->save();
 
-            $this->resolve($event, $reviewer, DisputeResolution::Upheld, $reason, $code);
+                $this->resolve($target, $reviewer, DisputeResolution::Upheld, $reason, $code);
+            }
 
             $this->tell($event, approved: false);
 
             return $event->refresh();
         });
+    }
+
+    /**
+     * @return Collection<int, ReliabilityEvent>
+     */
+    private function decidedTogether(ReliabilityEvent $event): Collection
+    {
+        if (! (ReliabilityAppeals::last($event)?->isPending() ?? false)) {
+            return new Collection([$event]);
+        }
+
+        return self::siblings($event)
+            ->filter(fn (ReliabilityEvent $sibling) => $sibling->reversed_at === null
+                && (ReliabilityAppeals::last($sibling)?->isPending() ?? false))
+            ->prepend($event);
     }
 
     private function resolve(

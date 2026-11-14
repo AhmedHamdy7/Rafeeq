@@ -61,6 +61,24 @@ final class PublicReviewResource extends JsonResource
             // without revealing what it used to say.
             'wasEdited' => $this->edited_at !== null,
             'reportedByMe' => $this->when(array_key_exists('reported_by_me', $this->resource->getAttributes()), fn () => (bool) $this->reported_by_me),
+            'report' => $this->when($this->resource->relationLoaded('reports'), fn () => $this->myReport()),
+        ];
+    }
+
+    /**
+     * @return array{id: string, status: string}|null
+     */
+    private function myReport(): ?array
+    {
+        $report = $this->reports->first();
+
+        if ($report === null) {
+            return null;
+        }
+
+        return [
+            'id' => (string) $report->id,
+            'status' => strtoupper($report->status->value),
         ];
     }
 

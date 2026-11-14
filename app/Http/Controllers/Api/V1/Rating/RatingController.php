@@ -227,6 +227,7 @@ final class RatingController extends Controller
             ->when($kind !== null, fn ($query) => $query->where('kind', $kind->value))
             ->with('tags')
             ->withExists(['reports as reported_by_me' => fn ($reports) => $reports->where('reporter_id', $request->user()->id)])
+            ->with(['reports' => fn ($reports) => $reports->where('reporter_id', $request->user()->id)->latest()->orderByDesc('id')])
             ->latest('visible_at')
             ->orderByDesc('id')
             ->paginate(ApiResponse::perPage($request));

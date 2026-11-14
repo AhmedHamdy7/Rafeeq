@@ -179,6 +179,12 @@ Route::prefix('v1')->group(function (): void {
         Route::post('reliability/events/{event}/evidence', [ReliabilityController::class, 'attachEvidence'])
             ->middleware('throttle:safety-reports');
 
+        Route::post('reliability/groups/{groupId}/appeal', [ReliabilityController::class, 'appealGroup'])
+            ->middleware('throttle:safety-reports');
+
+        Route::post('reliability/groups/{groupId}/evidence', [ReliabilityController::class, 'attachGroupEvidence'])
+            ->middleware('throttle:safety-reports');
+
         /*
          * The escalating warnings, and her answer to one (Feature 03 v5 §239).
          *

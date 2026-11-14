@@ -14,7 +14,7 @@
 >
 > **Base URL:** `{host}/api/v1` · **Auth:** bearer token · **Format:** JSON only.
 
-**Last updated:** 2026-11-14 · **232 endpoints live** · Phases 0–7, 9 and 11 complete · 10, 12 and 13 all but a decision each
+**Last updated:** 2026-11-14 · **234 endpoints live** · Phases 0–7, 9 and 11 complete · 10, 12 and 13 all but a decision each
 
 ---
 
@@ -22,7 +22,7 @@
 
 ### What is ready
 
-**232 endpoints live** and tested, across the 47 designed screens:
+**234 endpoints live** and tested, across the 47 designed screens:
 
 | | Count | Covers |
 |---|---|---|
@@ -694,6 +694,8 @@ fails if this list and the running routes ever disagree in either direction.
 | `GET /account/stats` | 4.2 Account, devices, consents |
 | `GET /account/reliability` | 4.2 Account, devices, consents |
 | `POST /account/reliability/events/{event}/appeal` | 4.2 Account, devices, consents |
+| `POST /account/reliability/groups/{groupId}/appeal` | 4.2 Account, devices, consents |
+| `POST /account/reliability/groups/{groupId}/evidence` | 4.2 Account, devices, consents |
 | `POST /account/suspension/appeal` | 4.2 Account, devices, consents |
 | `GET /account/warnings` | 4.2 Account, devices, consents |
 | `POST /account/warnings/{warning}/dispute` | 4.2 Account, devices, consents |
@@ -1343,6 +1345,7 @@ the event keeps counting until a reviewer reverses it.
 | Somebody else's event | `404`, never `403`. |
 | The answer | `appeal_approved` or `appeal_declined` notification with `data.reliabilityEventId`. Re-read `GET /account/reliability` for `appeal.status`, `decidedAt` and `declineReasonCode`. An approved appeal leaves the event readable with `counts: false`. |
 | 🔒 The reviewer's note | Never sent. She gets the outcome and a `declineReasonCode`. |
+| An event with a `groupId` | Appealed with its whole group: filing here files the same appeal on every event in the group that can still be appealed. See the group calls below. |
 
 #### `POST /account/reliability/events/{event}/evidence` — signed-in · multipart
 
@@ -1354,6 +1357,26 @@ most 5 files per event (`422 INCIDENT_EVIDENCE_LIMIT_REACHED`). Accepted only wh
 still be filed; otherwise `422` with `error.fields.appeal` naming why. What is attached comes back
 in `events[].evidence` — there is no separate list call. Images only for now; audio is not accepted
 here or on incident evidence.
+
+#### `POST /account/reliability/groups/{groupId}/appeal` — signed-in
+
+🔴 **A grouped act is appealed once.** Pausing a commute, deleting one or replacing the car cancels several
+bookings and writes one event per passenger, all with the same `groupId`. Show them as one row and appeal them
+here, with the same body as the single appeal: `{ "reason": "..." }`.
+
+- It files the appeal on every event in the group that can still be appealed. One staff decision then applies to
+  all of them: approved reverses every event and every fee, declined declines every one and opens the second round
+  for all of them. One `appeal_approved` or `appeal_declined` notification, not one per event.
+- Answers `{ groupId, events: [...] }`, the group's events as rows of `events[]`, each with its `appeal`.
+- Refusals as for one event (`422` with `error.fields.appeal`), from the first event in the group. Read `canAppeal`
+  and `appealRefusal` on any event of the group: they agree across the group.
+- `groupId` in either case. A group that is not the caller's answers `404`.
+
+#### `POST /account/reliability/groups/{groupId}/evidence` — signed-in · multipart
+
+Same body and answer as the single evidence call. The file is added to every event in the group that still takes
+evidence, so the second round's `NEW_EVIDENCE_REQUIRED` clears on all of them at once. Uploading to one event of a
+group through `events/{event}/evidence` does the same.
 
 **`cancellationRate` has been removed from `GET /account/stats`** — **if you read it, stop.** It was
 published before anything computed it and answered `null` for every account from the day it shipped.
@@ -1699,7 +1722,7 @@ approved car stay locked (`409 VEHICLE_LOCKED`).
 | `rejectionReason` | Why the reviewer rejected this car, or `null`. Use it in the draft banner for `vehicle_rejected`. |
 | `isActive` | Only one vehicle per driver may be active at a time. |
 | `status` | `PENDING` · `APPROVED` · `REJECTED` · `SUSPENDED`. A commute can only be published on an approved, active vehicle. A deactivated car keeps `APPROVED` and can be activated again with no new review. |
-| `suspensionReason` · `registrationRenewalSubmittedAt` | Why a `SUSPENDED` car is suspended (`registration_expired` or after a report), and when she last sent a renewal. |
+| `suspensionReason` · `registrationRenewalSubmittedAt` | Why a `SUSPENDED` car is suspended, as a code, and when she last sent a renewal. The codes are `registration_expired` (its registration date passed) and `report` (staff suspended it after reviewing a report, PROF-35). Show a fixed sentence per code. 🔒 The text staff type is never sent: it is written for the audit log and can name the report it came from. |
 | `documents[]` | `id`, `type`, `status`, `expiresAt`. **No path and no URL** — a document's storage path never appears in any payload. |
 
 #### `GET /driver/vehicles/replace-preview?vehicle={id}` — active, profile complete
@@ -4575,7 +4598,10 @@ reviewer block, make it an anonymous one.
 
 #### `GET /ratings/about-me` — paginated · what was said about you
 
-Each item now has `kind` (`completed_ride` · `canceled_booking`) and `reportedByMe`. Pass
+Each item now has `kind` (`completed_ride` · `canceled_booking`), `reportedByMe` and `report`: the caller's
+report on that review, `{ id, status }` or `null`. `status` is `PENDING` · `DISMISSED` (kept), and `UNDER_REVIEW`,
+which nothing sets today (treat it as `PENDING`). A
+review whose report was upheld is hidden, so it is no longer listed. Pass
 `?kind=completed_ride` or `?kind=canceled_booking` to page each section on its own. `meta.byKind`
 gives `{ completed_ride: { count, average }, canceled_booking: { count, average } }` whatever the
 filter — use `canceled_booking.average` for the Reliability row. `average` is `null` with no ratings.
@@ -5191,7 +5217,8 @@ reviewVisible}`. `409 REVIEW_REPORT_NOT_PENDING` once decided; `404` for somebod
 
 Removes one of the caller's cars that isn't the active one, whatever its status, with its documents and their
 files. Answers `{vehicleId, deleted: true}`. `409 VEHICLE_IS_ACTIVE` for the active car; `409 VEHICLE_IN_USE`
-(`fields.commuteIds`) while a commute, even an archived one, still names it; `404` for somebody else's.
+(`fields.commuteIds`) while a draft, published or paused commute still names it; `404` for somebody else's.
+Archived commutes don't block it: they keep no car (`vehicle_id` null) once it is deleted.
 
 ---
 
@@ -5403,6 +5430,7 @@ exist, and every live endpoint must be named here.
 
 | Date | Change |
 |---|---|
+| 2026-11-14 | 🧾 **Vehicle and reliability findings.** **2 new endpoints:** `POST /account/reliability/groups/{groupId}/appeal` and `/evidence`. 🔴 **A grouped act is appealed once:** appealing or adding evidence to any event with a `groupId` applies to every event in the group, and one staff decision decides them all. `GET /ratings/about-me` rows gain `report: { id, status } \| null`. `DELETE /testing/driver/vehicles/{vehicle}` no longer counts archived commutes. A vehicle's `suspensionReason` stays a code (`registration_expired` · `report`); the staff's text is never sent. |
 | 2026-11-13 | 📄 **New: `GET /content/{key}` (4.18).** Help, support contact, terms and guidelines as staff write them on the dashboard, in Arabic and English, with a `version` that goes up on every save. |
 | 2026-11-13 | 📣 **Two new inbox notification types, no new endpoint.** `announcement` (staff to everyone, passengers or drivers; may carry `data.link`) and `staff_message` (staff to one member). Both arrive through `GET /notifications` like any other row, already in the member's language, and are never pushed. Show them with the generic inbox card. |
 | 2026-11-13 | 🔎 **Place search.** `GET /places?q=` now finds a place wherever it is: with `lat`/`lng` it is ranked (name starts with `q` → contains `q` → area only, nearest first in each, then most used) instead of cut to 5 km. `radiusMetres` with `q` still limits by distance when you send it. New `limit` (1–20). `city` and `district` now follow `Accept-Language`. `q` also matches the city, English area names and Arabic spelling variants. |

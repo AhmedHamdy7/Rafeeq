@@ -41,6 +41,24 @@ final readonly class AttachAppealEvidenceAction
             'reliabilityEventId' => (string) $event->getKey(),
         ]);
 
+        $evidence = $this->record($event, $stored, $kind);
+
+        $siblings = AppealReliabilityEventAction::siblings($event, lock: false)
+            ->filter(fn (ReliabilityEvent $sibling) => ReliabilityAppeals::acceptsEvidence($sibling)
+                && $sibling->evidence()->count() < $limit);
+
+        foreach ($siblings as $sibling) {
+            $this->record($sibling, $stored, $kind);
+        }
+
+        return $evidence;
+    }
+
+    /**
+     * @param  array{path: string, hash: string, mime: string, size: int}  $stored
+     */
+    private function record(ReliabilityEvent $event, array $stored, EvidenceKind $kind): ReliabilityAppealEvidence
+    {
         $evidence = new ReliabilityAppealEvidence;
 
         $evidence->fill([

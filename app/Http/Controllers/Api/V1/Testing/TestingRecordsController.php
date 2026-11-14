@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Api\V1\Testing;
 
 use App\Domains\Admin\Models\AdminUser;
 use App\Domains\Booking\Models\Booking;
+use App\Domains\Commute\Enums\CommuteOfferStatus;
 use App\Domains\Commute\Models\CommuteOffer;
 use App\Domains\Driver\Enums\DriverProfileStatus;
 use App\Domains\Driver\Models\DriverProfile;
@@ -239,7 +240,10 @@ final class TestingRecordsController extends Controller
             throw DomainException::of(ErrorCode::VehicleIsActive);
         }
 
-        $commutes = CommuteOffer::query()->where('vehicle_id', $car->id)->pluck('id');
+        $commutes = CommuteOffer::query()
+            ->where('vehicle_id', $car->id)
+            ->where('status', '!=', CommuteOfferStatus::Archived->value)
+            ->pluck('id');
 
         if ($commutes->isNotEmpty()) {
             throw DomainException::of(ErrorCode::VehicleInUse, fields: ['commuteIds' => $commutes->all()]);
@@ -248,6 +252,10 @@ final class TestingRecordsController extends Controller
         $paths = VehicleDocument::query()->where('vehicle_id', $car->id)->pluck('file_path');
 
         DB::transaction(function () use ($car): void {
+            CommuteOffer::query()
+                ->where('vehicle_id', $car->id)
+                ->where('status', CommuteOfferStatus::Archived->value)
+                ->update(['vehicle_id' => null]);
             VehicleDocument::query()->where('vehicle_id', $car->id)->delete();
             Vehicle::query()->whereKey($car->id)->delete();
         });

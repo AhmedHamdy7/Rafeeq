@@ -2,6 +2,8 @@
 
 use App\Domains\Admin\Models\AdminUser;
 use App\Domains\Booking\Models\Booking;
+use App\Domains\Commute\Enums\CommuteOfferStatus;
+use App\Domains\Commute\Models\CommuteOffer;
 use App\Domains\Commute\Models\ScheduledTrip;
 use App\Domains\Driver\Models\Vehicle;
 use App\Domains\Identity\Models\User;
@@ -259,6 +261,11 @@ it('removes a reported review the way a moderator would', function () {
 it('keeps a reported review, and it still reads as reported by her', function () {
     [$token, $reportId, $ratingId] = reportedReview();
 
+    test()->withToken($token)->getJson('/api/v1/ratings/about-me')
+        ->assertOk()
+        ->assertJsonPath('data.0.report.id', $reportId)
+        ->assertJsonPath('data.0.report.status', 'PENDING');
+
     test()->withToken($token)->postJson("/api/v1/testing/ratings/reports/{$reportId}/decide", ['decision' => 'kept'])
         ->assertOk()
         ->assertJsonPath('data.status', 'DISMISSED')
@@ -267,7 +274,31 @@ it('keeps a reported review, and it still reads as reported by her', function ()
     test()->withToken($token)->getJson('/api/v1/ratings/about-me')
         ->assertOk()
         ->assertJsonPath('data.0.id', $ratingId)
-        ->assertJsonPath('data.0.reportedByMe', true);
+        ->assertJsonPath('data.0.reportedByMe', true)
+        ->assertJsonPath('data.0.report.id', $reportId)
+        ->assertJsonPath('data.0.report.status', 'DISMISSED');
+});
+
+it('answers report null on a review nobody reported', function () {
+    [$driverToken, , $bookingId] = cancelledByDriver();
+    $driver = User::query()->where('phone_e164', '+201012345678')->sole();
+    $passenger = User::query()->where('phone_e164', '+201112223344')->sole();
+
+    $rating = new Rating;
+    $rating->forceFill([
+        'booking_id' => $bookingId,
+        'reviewer_user_id' => $passenger->id,
+        'reviewed_user_id' => $driver->id,
+        'direction' => RatingDirection::PassengerToDriver->value,
+        'kind' => RatingKind::CompletedRide->value,
+        'stars' => 5,
+        'visible_at' => now(),
+    ])->save();
+
+    test()->withToken($driverToken)->getJson('/api/v1/ratings/about-me')
+        ->assertOk()
+        ->assertJsonPath('data.0.reportedByMe', false)
+        ->assertJsonPath('data.0.report', null);
 });
 
 function replacementCar(string $token, int $seats = 5, string $plate = 'XYZ 4321'): string
@@ -321,6 +352,33 @@ it('deletes a spare test car, never the active one or one a commute uses', funct
     test()->withToken($token)->deleteJson("/api/v1/testing/driver/vehicles/{$movedFrom}")->assertOk();
 });
 
+it('deletes a car that only archived commutes name, and refuses while one is not archived', function () {
+    $token = approvedDriver();
+    $oldId = Vehicle::sole()->id;
+    $archivedId = readyCommute($token, $oldId);
+    $pausedId = readyCommute($token, $oldId);
+
+    $newId = replacementCar($token, plate: 'XYZ 7777');
+    test()->withToken($token)->postJson("/api/v1/testing/driver/vehicles/{$newId}/approve", ['approvedSeats' => 3])->assertOk();
+    test()->withToken($token)->postJson("/api/v1/driver/vehicles/{$newId}/activate")->assertOk();
+
+    CommuteOffer::query()->whereKey($archivedId)->update(['vehicle_id' => $oldId, 'status' => CommuteOfferStatus::Archived->value]);
+    CommuteOffer::query()->whereKey($pausedId)->update(['vehicle_id' => $oldId, 'status' => CommuteOfferStatus::Paused->value]);
+
+    test()->withToken($token)->deleteJson("/api/v1/testing/driver/vehicles/{$oldId}")
+        ->assertStatus(409)
+        ->assertJsonPath('error.code', 'VEHICLE_IN_USE')
+        ->assertJsonPath('error.fields.commuteIds', [$pausedId]);
+
+    CommuteOffer::query()->whereKey($pausedId)->update(['status' => CommuteOfferStatus::Archived->value]);
+
+    test()->withToken($token)->deleteJson("/api/v1/testing/driver/vehicles/{$oldId}")
+        ->assertOk()->assertJsonPath('data.deleted', true);
+
+    expect(Vehicle::query()->whereKey($oldId)->exists())->toBeFalse()
+        ->and(CommuteOffer::query()->whereKey([$archivedId, $pausedId])->whereNull('vehicle_id')->count())->toBe(2);
+});
+
 it('says in the replace preview when the switch would be refused for seats', function () {
     $token = approvedDriver();
     $smallId = Vehicle::sole()->id;
@@ -361,4 +419,93 @@ it('sets a car\'s approval date through the registration expiry call', function 
         ->assertJsonPath('data.0.id', $carId)
         ->assertJsonPath('data.0.status', 'SUSPENDED')
         ->assertJsonPath('data.0.suspensionReason', 'registration_expired');
+});
+
+function groupedEvents(string $token, int $count = 3): array
+{
+    test()->withToken($token)->postJson('/api/v1/testing/reliability/reset')->assertOk();
+
+    $written = test()->withToken($token)->postJson('/api/v1/testing/reliability/events', [
+        'kind' => 'DRIVER_LATE', 'count' => $count, 'grouped' => true,
+    ])->assertStatus(201)->json('data');
+
+    return [$written[0]['groupId'], collect($written)->pluck('id')->all()];
+}
+
+function groupEvidence(string $token, string $groupId): void
+{
+    test()->flushHeaders()->withToken($token)
+        ->post("/api/v1/account/reliability/groups/{$groupId}/evidence", [
+            'kind' => 'photo',
+            'file' => UploadedFile::fake()->image('receipt.jpg', 800, 600),
+        ], ['Accept' => 'application/json'])->assertStatus(201);
+}
+
+it('appeals a grouped act once, and one decision applies to every event in it', function () {
+    [$token] = cancelledByDriver();
+    [$groupId, $eventIds] = groupedEvents($token);
+
+    groupEvidence($token, strtolower($groupId));
+
+    $rows = test()->flushHeaders()->withToken($token)
+        ->postJson('/api/v1/account/reliability/groups/'.strtolower($groupId).'/appeal', ['reason' => 'The car broke down.'])
+        ->assertOk()
+        ->assertJsonPath('data.groupId', $groupId)
+        ->assertJsonCount(3, 'data.events')
+        ->json('data.events');
+
+    foreach ($rows as $row) {
+        expect($row['appeal']['status'])->toBe('pending')
+            ->and($row['appeal']['round'])->toBe(1)
+            ->and($row['canAppeal'])->toBeFalse()
+            ->and($row['appealRefusal'])->toBe('ALREADY_APPEALED')
+            ->and($row['evidence'])->toHaveCount(1);
+    }
+
+    test()->withToken($token)->postJson("/api/v1/account/reliability/groups/{$groupId}/appeal", ['reason' => 'Again.'])
+        ->assertStatus(422)->assertJsonPath('error.fields.appeal.0', 'ALREADY_APPEALED');
+
+    test()->withToken($token)->postJson("/api/v1/testing/reliability/appeals/{$rows[1]['appeal']['id']}/decide", ['decision' => 'declined'])
+        ->assertOk();
+
+    $events = collect(test()->withToken($token)->getJson('/api/v1/account/reliability')->json('data.asDriver.events'))
+        ->whereIn('id', $eventIds);
+
+    expect($events)->toHaveCount(3)
+        ->and($events->pluck('appeal.status')->unique()->all())->toBe(['declined'])
+        ->and($events->pluck('appealRefusal')->unique()->all())->toBe(['NEW_EVIDENCE_REQUIRED'])
+        ->and($events->pluck('appealsLeft')->unique()->all())->toBe([1]);
+
+    groupEvidence($token, $groupId);
+
+    $second = test()->withToken($token)
+        ->postJson("/api/v1/account/reliability/groups/{$groupId}/appeal", ['reason' => 'Here is the garage receipt.'])
+        ->assertOk()
+        ->json('data.events');
+
+    expect(collect($second)->pluck('appeal.round')->unique()->all())->toBe([2]);
+
+    test()->withToken($token)->postJson("/api/v1/testing/reliability/appeals/{$second[2]['appeal']['id']}/decide", ['decision' => 'approved'])
+        ->assertOk();
+
+    expect(ReliabilityEvent::query()->whereKey($eventIds)->whereNotNull('reversed_at')->count())->toBe(3);
+    test()->withToken($token)->getJson('/api/v1/account/reliability')->assertJsonPath('data.asDriver.score', 100);
+});
+
+it('appeals the whole group when one of its events is appealed on its own', function () {
+    [$token] = cancelledByDriver();
+    [, $eventIds] = groupedEvents($token, 2);
+
+    fileAppeal($token, $eventIds[0]);
+
+    expect(ReliabilityEvent::query()->whereKey($eventIds)->whereNotNull('appealed_at')->count())->toBe(2);
+});
+
+it('answers 404 for a group that is not the caller\'s', function () {
+    [$token] = cancelledByDriver();
+    [$groupId] = groupedEvents($token);
+
+    test()->flushHeaders()->withToken(verifiedPassenger('01112229999', device: 'other'))
+        ->postJson("/api/v1/account/reliability/groups/{$groupId}/appeal", ['reason' => 'Not mine.'])
+        ->assertStatus(404);
 });
