@@ -7,7 +7,7 @@ wrong calls from the app. The fixes reach the test server with the next deploy.
 |---|---|
 | Q-1 | 16 job names, all in guide §4.17. An unknown name answers `404 NOT_FOUND` |
 | Q-2 | The server runs in staging mode under a production name. ⏳ Turning it off and adding a staging URL are not decided yet |
-| Q-3 | Already done: §4.17 now documents all 18 calls |
+| Q-3 | Already done: §4.17 now documents all 17 calls |
 | Q-4 | `PUT /testing/instapay` was not built. Take it out of your notes |
 | Q-5 | A placed point counts exactly like a real one |
 | Q-6 | ⏳ Not built. Keep it a manual check for now |
@@ -78,7 +78,7 @@ Any other name answers `404`:
 
 ## Q-3 · All the testing calls in the guide
 
-§4.17 now documents all 18 calls: `driver/approve`, `DELETE account`, `departure`, `position`, the car
+§4.17 now documents all 17 calls (your 18 counted `instapay`, which doesn't exist): `driver/approve`, `DELETE account`, `departure`, `position`, the car
 approve/reject, the payment confirm/reject, `wait-timers/expire`, `debt/deadline` and `debt/age`, `suspend` and
 `reinstate`, `documents/{key}/expiry`, `bookings/{booking}/age`, `jobs/{name}/run` and `attendance`. Each entry
 gives its body, what it answers and its errors. The intro line still said "All three", and it now says "All of

@@ -45,6 +45,7 @@ use App\Http\Controllers\Api\V1\Search\RecentSearchController;
 use App\Http\Controllers\Api\V1\Search\SavedSearchController;
 use App\Http\Controllers\Api\V1\Search\SearchController;
 use App\Http\Controllers\Api\V1\Testing\TestingController;
+use App\Http\Controllers\Api\V1\Testing\TestingRecordsController;
 use App\Http\Controllers\Api\V1\Testing\TestingScenarioController;
 use App\Http\Controllers\Api\V1\Trip\AttendanceController;
 use App\Http\Controllers\Api\V1\Trip\DriverTripController;
@@ -92,7 +93,7 @@ Route::prefix('v1')->group(function (): void {
         });
     });
 
-    Route::prefix('testing')->middleware('auth:sanctum')->group(function (): void {
+    Route::prefix('testing')->middleware(['testing.api', 'auth:sanctum'])->group(function (): void {
         Route::post('driver/approve', [TestingController::class, 'approveDriver']);
         Route::delete('account', [TestingController::class, 'destroyAccount']);
         Route::post('trips/{trip}/departure', [TestingController::class, 'moveDeparture']);
@@ -110,6 +111,12 @@ Route::prefix('v1')->group(function (): void {
         Route::post('bookings/{booking}/age', [TestingScenarioController::class, 'ageBooking']);
         Route::post('jobs/{name}/run', [TestingScenarioController::class, 'runJob']);
         Route::post('attendance', [TestingScenarioController::class, 'seedHistory']);
+        Route::post('reliability/appeals/{appeal}/decide', [TestingRecordsController::class, 'decideAppeal']);
+        Route::post('reliability/reset', [TestingRecordsController::class, 'resetReliability']);
+        Route::post('reliability/events/{event}/age', [TestingRecordsController::class, 'ageEvent']);
+        Route::post('reliability/events', [TestingRecordsController::class, 'writeEvents']);
+        Route::post('ratings/reports/{report}/decide', [TestingRecordsController::class, 'decideReport']);
+        Route::delete('driver/vehicles/{vehicle}', [TestingRecordsController::class, 'deleteVehicle']);
     });
 
     Route::prefix('account')->middleware('auth:sanctum')->group(function (): void {

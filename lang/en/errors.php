@@ -197,4 +197,8 @@ return [
     'DEBT_NOTHING_OWED' => 'You do not owe anything right now, so there is nothing to pay.',
     'DEBT_PAYMENT_NOT_PENDING' => 'This payment has already been confirmed or rejected.',
     'COUPON_NOT_ALLOWED' => 'A coupon needs a fee that was actually collected from the other person on the ride, and only one coupon per fee.',
+    'APPEAL_NOT_PENDING' => 'This appeal has already been decided.',
+    'REVIEW_REPORT_NOT_PENDING' => 'This report has already been reviewed.',
+    'VEHICLE_IS_ACTIVE' => 'This is the car you drive now. Switch to another car before removing it.',
+    'VEHICLE_IN_USE' => 'A commute still uses this car, so it cannot be removed.',
 ];

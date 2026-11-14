@@ -14,7 +14,7 @@
 >
 > **Base URL:** `{host}/api/v1` · **Auth:** bearer token · **Format:** JSON only.
 
-**Last updated:** 2026-11-13 · **224 endpoints live** · Phases 0–7, 9 and 11 complete · 10, 12 and 13 all but a decision each
+**Last updated:** 2026-11-14 · **232 endpoints live** · Phases 0–7, 9 and 11 complete · 10, 12 and 13 all but a decision each
 
 ---
 
@@ -22,7 +22,7 @@
 
 ### What is ready
 
-**224 endpoints live** and tested, across the 47 designed screens:
+**232 endpoints live** and tested, across the 47 designed screens:
 
 | | Count | Covers |
 |---|---|---|
@@ -717,6 +717,7 @@ fails if this list and the running routes ever disagree in either direction.
 | `POST /driver/vehicles` | 4.4 Driver application and vehicles |
 | `PATCH /driver/vehicles/{vehicle}` | 4.4 Driver application and vehicles |
 | `POST /driver/vehicles/{vehicle}/activate` | 4.4 Driver application and vehicles |
+| `GET /driver/vehicles/replace-preview` | 4.4 Driver application and vehicles |
 | `POST /driver/vehicles/{vehicle}/documents` | 4.4 Driver application and vehicles |
 | `GET /commutes` | 4.5 Commutes (driver) |
 | `POST /commutes` | 4.5 Commutes (driver) |
@@ -879,6 +880,12 @@ fails if this list and the running routes ever disagree in either direction.
 | `POST /testing/bookings/{booking}/age` | 4.17 Testing (staging only) |
 | `POST /testing/jobs/{name}/run` | 4.17 Testing (staging only) |
 | `POST /testing/attendance` | 4.17 Testing (staging only) |
+| `POST /testing/reliability/appeals/{appeal}/decide` | 4.17 Testing (staging only) |
+| `POST /testing/reliability/reset` | 4.17 Testing (staging only) |
+| `POST /testing/reliability/events/{event}/age` | 4.17 Testing (staging only) |
+| `POST /testing/reliability/events` | 4.17 Testing (staging only) |
+| `POST /testing/ratings/reports/{report}/decide` | 4.17 Testing (staging only) |
+| `DELETE /testing/driver/vehicles/{vehicle}` | 4.17 Testing (staging only) |
 | `DELETE /safety/live-shares/{share}` | 4.12 Safety |
 | `POST /trips/{trip}/live-share` | 4.12 Safety |
 | `POST /sos` | 4.12 Safety |
@@ -1700,9 +1707,21 @@ approved car stay locked (`409 VEHICLE_LOCKED`).
 What activating another car would cancel, across the **whole account** — no commute id needed.
 `vehicle` is the car she is about to activate (the new one, or the old one when switching back).
 
-`{ affectedBookings, affectedCommutes, affectedSeats, feePiastres, reason, perTrip[] }` — the last
-four exactly as in `GET /commutes/{commute}/cancel-preview`. All zeros when nothing would be
+`{ affectedBookings, affectedCommutes, affectedSeats, feePiastres, reason, perTrip[], blocked }` — the
+middle four exactly as in `GET /commutes/{commute}/cancel-preview`. All zeros when nothing would be
 cancelled. Show it before `activate`: two confirmations, the fee on the second (COM-23, COM-25).
+
+`blocked` says whether `activate` would refuse this car, with the same checks in the same order. `null`
+when the switch would go through (and always `null` without `vehicle`). Otherwise
+`{ code, commuteIds[], approvedSeats }`:
+
+| `code` | Means |
+|---|---|
+| `VEHICLE_NOT_ALLOWED` | The car isn't approved yet. `commuteIds` is empty. |
+| `VEHICLE_SEATS_NOT_APPROVED` | The car has no approved seat count. |
+| `COMMUTE_SEATS_EXCEED_APPROVED` | These commutes offer more seats than the car's `approvedSeats`. |
+
+When `blocked` is set, say why instead of offering the confirm.
 
 #### `POST /driver/vehicles/{vehicle}/activate` — active, profile complete
 
@@ -1723,10 +1742,12 @@ cancelled. Show it before `activate`: two confirmations, the fee on the second (
 > **`booking_vehicle_changed` no longer exists.** Nothing produces it: there is no surviving booking
 > to tell about. Remove any handling for it.
 
-**It can still be refused for seats.** If a live commute advertises more seats than the replacement
-has, the whole swap answers `422` and nothing moves — the seat count is published and people search
-on it, so a commute selling four seats cannot run in a three-seater. Re-price or re-size the commute
-first, or use a bigger car.
+**It can still be refused for seats.** If any of her commutes that isn't archived advertises more
+seats than the replacement has, the whole swap answers `422` and nothing moves. **A paused commute
+counts too:** it moves to the new car with the others and resumes on it, selling the seats it
+advertises. The seat count is published and people search on it, so a commute selling four seats
+cannot run in a three-seater. Re-size the commute first, or use a bigger car. `replace-preview` →
+`blocked` says so before she confirms.
 
 **The old vehicle is kept**, inactive, with its documents. It is what carried every completed
 journey and the evidence that it was allowed to.
@@ -5050,8 +5071,12 @@ A reviewer's decision on the caller's own **replacement car** (an approved drive
 Approve sets it `APPROVED` with approved seats; then `POST /driver/vehicles/{vehicle}/activate` swaps it in as for a
 real approval. Reject takes optional `item` (`vehicle_details` · `vehicle_registration`) and `reason`; her driver
 status is unchanged. Both send `driver_item_approved` / `driver_item_rejected` with `vehicleId`. Answers `{id,
-verificationStatus, approvedSeats, isActive, rejectedItem, rejectionReason}`. `422 VEHICLE_NOT_ALLOWED` if the car
-isn't pending or the driver isn't approved.
+verificationStatus, approvedSeats, tier, hasAc, declaredAc, isActive, rejectedItem, rejectionReason}`.
+`422 VEHICLE_NOT_ALLOWED` if the car isn't pending or the driver isn't approved.
+
+Approve takes the reviewer's three values, each optional: `approvedSeats` (the dashboard's range, 3 to 7 today;
+default: the seats she typed, up to 7), `tier` (`standard` · `comfort`, default `comfort`) and `hasAc` (default: what
+she declared). Outside the range: `422 VALIDATION_FAILED` with `fields.approvedSeats`.
 
 #### `POST /testing/debt/payments/{payment}/confirm` · `POST /testing/debt/payments/{payment}/reject`
 
@@ -5086,7 +5111,9 @@ caller's account (commutes paused with `account_suspended`); `vehicle` the given
 
 `key` is `licence` or `vehicle_registration`; body `{expiresAt: "YYYY-MM-DD", vehicleId?}`. Sets the date, then
 runs that document's "expiring soon" and "expired" checks. A past date stops the licence (`EXPIRED_DOCUMENTS`)
-or suspends the car; a date within the warning window sends the warning. Answers `{key, expiresAt}`.
+or suspends the car; a date within the warning window sends the warning. Answers `{key, expiresAt}`. For
+`vehicle_registration` the date is also the car's `approvalValidUntil` in `GET /driver/vehicles`; a past date
+makes the car `SUSPENDED` with `suspensionReason: registration_expired`.
 
 #### `POST /testing/bookings/{booking}/age`
 
@@ -5106,6 +5133,65 @@ schedule does. `name`: `generate-trips`, `roll-memberships`, `match-demands`, `e
 `{kind: "no_show" | "late_boarding" | "late_cancel", count}` (1–10). Adds that many past offences to the
 caller's history, one per day before today, so the next real one lands on the next rung of the fee ladder.
 Answers `{kind, standing, nextRung}`.
+
+#### `POST /testing/reliability/appeals/{appeal}/decide`
+
+`{decision: "approved" | "declined", declineReasonCode?, note?}`. Staff's decision on the caller's own pending
+appeal (`appeal.id` from `GET /account/reliability`), made the same way as on the dashboard:
+
+- **approved:** the event stops counting (`counts: false`, `reversedAt`), its fee is credited back
+  (`fee.reversed: true`), the score is recomputed, and `appeal_approved` is sent.
+- **declined:** `appeal.status: declined` with `declineReasonCode` (`not_enough_evidence` ·
+  `evidence_does_not_match` · `within_member_control` · `other`, default `other`), and `appeal_declined` is sent.
+  While a round is left, a new 48-hour window opens from the decision and the next appeal needs new evidence
+  (`appealRefusal: NEW_EVIDENCE_REQUIRED` until a file is added).
+
+Answers the event as `GET /account/reliability` lists it. `409 APPEAL_NOT_PENDING` once decided; `404` for
+somebody else's appeal.
+
+#### `POST /testing/reliability/reset`
+
+Removes every reliability event on the caller (driver and passenger sides), with their appeals and evidence
+files, and takes off any fee those events wrote (a credit, so the debt ledger still adds up). The score is
+`perfectScore` again. Nothing else changes: a suspension for debt stays until `driver/reinstate`. Answers the
+record as `GET /account/reliability` does.
+
+#### `POST /testing/reliability/events/{event}/age`
+
+`{hours}` (1–2400). Moves one of the caller's events back: when it happened and was recorded, its appeals and
+their decisions, and its fee line. The appeal window is measured from the new times. 49 hours closes the window
+(`appealRefusal: APPEAL_WINDOW_CLOSED`, `appealBy: null`), also after a declined first round. 2400 hours (100
+days) takes the event out of the 90-day score; it stays in the list. Answers the event.
+
+#### `POST /testing/reliability/events`
+
+Writes events on the caller: `{kind, cause?, count?, minutesAgo?, grouped?, bookingId?, withFee?, feePercent?}`.
+
+| Field | |
+|---|---|
+| `kind` | Any documented kind, upper or lower case. Driver kinds need an approved driver (`422`, `fields.kind: DRIVER_NOT_APPROVED`). |
+| `cause` | Any documented cause, or leave it out for an event with no cause (the shape of events written before causes existed). |
+| `count` | 1–10, default 1. |
+| `minutesAgo` | When it happened, default now. The appeal window runs from then. |
+| `grouped` | One shared `groupId` for all of them. Default: no group. |
+| `bookingId` | A booking on the caller's commute (driver kinds) or her own seat (passenger kinds); fills `person` and the ids. Only with `count: 1`. |
+| `withFee` · `feePercent` | A fee line on that booking, `feePercent` (1–100, default 50) of its price. Needs `bookingId` and a kind that carries a fee. |
+
+The weight is the one in force now. Answers `201` with the written events, as `GET /account/reliability` lists
+them.
+
+#### `POST /testing/ratings/reports/{report}/decide`
+
+`{decision: "removed" | "kept"}`, on a report the caller made (`id` from `POST /ratings/{rating}/report`). As the
+moderator does: **removed** hides the review (it leaves `GET /ratings/about-me` and `meta.byKind`); **kept** closes
+the report and the review stays, still with `reportedByMe: true`. Answers `{id, status: "UPHELD" | "DISMISSED",
+reviewVisible}`. `409 REVIEW_REPORT_NOT_PENDING` once decided; `404` for somebody else's report.
+
+#### `DELETE /testing/driver/vehicles/{vehicle}`
+
+Removes one of the caller's cars that isn't the active one, whatever its status, with its documents and their
+files. Answers `{vehicleId, deleted: true}`. `409 VEHICLE_IS_ACTIVE` for the active car; `409 VEHICLE_IN_USE`
+(`fields.commuteIds`) while a commute, even an archived one, still names it; `404` for somebody else's.
 
 ---
 

@@ -34,6 +34,7 @@ use App\Domains\Verification\Enums\VerificationType;
 use App\Domains\Verification\Models\UserVerification;
 use App\Http\Controllers\Controller;
 use App\Http\OpenApi\ApiErrors;
+use App\Http\Requests\Testing\ApproveTestVehicleRequest;
 use App\Http\Requests\Testing\MoveDepartureRequest;
 use App\Http\Requests\Testing\PlaceCarRequest;
 use App\Http\Requests\Testing\RejectTestVehicleRequest;
@@ -218,12 +219,20 @@ final class TestingController extends Controller
         ScheduledTrip::query()->whereKey($trip->id)->increment('itinerary_version');
     }
 
-    #[ApiErrors(ErrorCode::VehicleNotAllowed, ErrorCode::ServiceUnavailable, ErrorCode::NotFound)]
-    public function approveVehicle(Request $request, string $vehicle, ReviewReplacementVehicleAction $action): JsonResponse
+    #[ApiErrors(ErrorCode::VehicleNotAllowed, ErrorCode::ValidationFailed, ErrorCode::ServiceUnavailable, ErrorCode::NotFound)]
+    public function approveVehicle(ApproveTestVehicleRequest $request, string $vehicle, ReviewReplacementVehicleAction $action): JsonResponse
     {
         $user = TestAccounts::assertAllowed($request->user());
+        $tier = $request->validated('tier');
+        $hasAc = $request->validated('hasAc');
 
-        return ApiResponse::success($this->vehicleState($action->approve($this->ownVehicle($user->id, $vehicle), $this->reviewer())));
+        return ApiResponse::success($this->vehicleState($action->approve(
+            $this->ownVehicle($user->id, $vehicle),
+            $this->reviewer(),
+            $request->validated('approvedSeats') === null ? null : (int) $request->validated('approvedSeats'),
+            $tier === null ? VehicleTier::Comfort : VehicleTier::from((string) $tier),
+            $hasAc === null ? null : (bool) $hasAc,
+        )));
     }
 
     #[ApiErrors(ErrorCode::VehicleNotAllowed, ErrorCode::ServiceUnavailable, ErrorCode::NotFound)]
@@ -347,6 +356,9 @@ final class TestingController extends Controller
             'id' => $vehicle->id,
             'verificationStatus' => strtoupper($vehicle->verification_status->value),
             'approvedSeats' => $vehicle->approved_seats,
+            'tier' => strtoupper($vehicle->tierOrDefault()->value),
+            'hasAc' => (bool) $vehicle->has_ac,
+            'declaredAc' => $vehicle->declared_ac,
             'isActive' => (bool) $vehicle->is_active,
             'rejectedItem' => $vehicle->rejected_item,
             'rejectionReason' => $vehicle->rejection_reason,

@@ -4,6 +4,7 @@ use App\Http\Middleware\EnsureAccountIsActive;
 use App\Http\Middleware\EnsureAdminMfaIsConfirmed;
 use App\Http\Middleware\EnsureAdminSessionIsFresh;
 use App\Http\Middleware\EnsureProfileIsComplete;
+use App\Http\Middleware\EnsureTestingApiIsOn;
 use App\Http\Middleware\RequiresVerification;
 use App\Http\Middleware\SetLocaleFromHeader;
 use App\Http\Responses\ApiExceptionHandler;
@@ -104,6 +105,7 @@ return Application::configure(basePath: dirname(__DIR__))
             // pendingIntent pattern. Its refusal names the missing levels so
             // the app can send the person to verify and bring them back.
             'verified' => RequiresVerification::class,
+            'testing.api' => EnsureTestingApiIsOn::class,
 
             // The admin dashboard's two session guards (decision D4, Chapter 12
             // §Security). Applied per route group in routes/web.php.

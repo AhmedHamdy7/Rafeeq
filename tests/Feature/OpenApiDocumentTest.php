@@ -253,6 +253,12 @@ it('generates a document describing every /v1 route', function () {
         'POST /v1/testing/bookings/{booking}/age',
         'POST /v1/testing/jobs/{name}/run',
         'POST /v1/testing/attendance',
+        'POST /v1/testing/reliability/appeals/{appeal}/decide',
+        'POST /v1/testing/reliability/reset',
+        'POST /v1/testing/reliability/events/{event}/age',
+        'POST /v1/testing/reliability/events',
+        'POST /v1/testing/ratings/reports/{report}/decide',
+        'DELETE /v1/testing/driver/vehicles/{vehicle}',
         'DELETE /v1/safety/live-shares/{share}',
         // Ratings (Phase 10). Nothing here returns somebody else's rating — see RatingController.
         'GET /v1/ratings/pending',
