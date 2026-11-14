@@ -38,7 +38,32 @@ wrong calls from the app. The fixes reach the test server with the next deploy.
 | `warn-licences` / `stop-licences` | Licence "expiring soon" push / stops expired licences |
 | `warn-registrations` / `stop-registrations` | The same for car registrations |
 
-Any other name answers `404 NOT_FOUND`. The call answers `{job, command, exitCode, output}`.
+The call answers `{job, command, exitCode, output}`. `output` is the job's own one-line summary:
+
+```json
+{
+  "success": true,
+  "data": {
+    "job": "expire-requests",
+    "command": "requests:expire",
+    "exitCode": 0,
+    "output": "Expired 0 seat request(s); closed 0 whose day passed; closed 0 unreachable offer(s)."
+  }
+}
+```
+
+Any other name answers `404`:
+
+```json
+{
+  "success": false,
+  "error": {
+    "code": "NOT_FOUND",
+    "message": "The requested resource was not found.",
+    "fields": null
+  }
+}
+```
 
 ## Q-2 · Production or staging
 
@@ -94,7 +119,50 @@ The test numbers can't skip the lock. These are the rules on the test server:
 | 45-second resend wait, 3 resends at most | **Off** | `AUTH_OTP_RESEND_COOLDOWN` / `AUTH_OTP_MAX_RESENDS` |
 | **3 wrong codes → that number is locked for 5 minutes** (for that purpose) | **On** | `AUTH_OTP_LOCKED` |
 
-All three answer `429`. With the first two off, the `429` you see should be `AUTH_OTP_LOCKED`, which means a
+All three answer `429` with a `Retry-After` header in seconds.
+
+The lock, with `Retry-After: 300`. `fields.lockedUntil` says when the number opens again:
+
+```json
+{
+  "success": false,
+  "error": {
+    "code": "AUTH_OTP_LOCKED",
+    "message": "Too many incorrect codes. You can try again in a few minutes.",
+    "fields": {
+      "lockedUntil": ["2026-11-15T05:05:00Z"]
+    }
+  }
+}
+```
+
+The hourly limit, with `Retry-After: 3600` (or the seconds left in the hour):
+
+```json
+{
+  "success": false,
+  "error": {
+    "code": "TOO_MANY_REQUESTS",
+    "message": "Too many requests. Please try again later.",
+    "fields": null
+  }
+}
+```
+
+The resend wait, with `Retry-After: 45` (or the seconds left):
+
+```json
+{
+  "success": false,
+  "error": {
+    "code": "AUTH_OTP_RESEND_COOLDOWN",
+    "message": "Please wait a moment before requesting another code.",
+    "fields": null
+  }
+}
+```
+
+With the first two off, the `429` you see should be `AUTH_OTP_LOCKED`, which means a
 test typed a wrong code 3 times. To stay under it, always type the right code. If a test checks the wrong-code
 error, use one throwaway number for it, apart from the cast. If you see `TOO_MANY_REQUESTS` instead, tell us:
 it would mean the limits are on again on that server.
@@ -127,7 +195,26 @@ before submit, so it never hit this. The app's order (all five items sent, then 
 correct and is what a real driver does.
 
 **Fixed.** The call now approves the driver from exactly the state you described. The call itself is unchanged:
-same body, same answer.
+no body, and this answer:
+
+```json
+{
+  "success": true,
+  "data": {
+    "driverStatus": "APPROVED",
+    "vehicles": [
+      {
+        "id": "01m7c6prpv0bp68emjfxgg36yd",
+        "approvedSeats": 5,
+        "tier": "COMFORT",
+        "verificationStatus": "APPROVED"
+      }
+    ]
+  }
+}
+```
+
+`approvedSeats` is the seats the driver typed, up to the server's maximum.
 
 ## Q-11 · Driver Home answered `500` after a deleted passenger
 
@@ -138,7 +225,74 @@ thing.
 **Fixed** for every list that shows the other person. That includes `GET /driver/home` (`notices`),
 `GET /driver/seat-requests`, bookings, wait timers and attendance, and the passenger's view of a deleted driver.
 A deleted member now appears with `publicFirstName: null`. Show them as "Deleted account" or your usual
-fallback. Nothing else about them is sent.
+fallback.
+
+Only the name is removed. The rest of the person summary is still sent, as for any member: `trustLevel`,
+`verifiedLevels`, `rating`, `ratingCount`, `completedTrips` and `onTimeRate`. Her verifications are kept on
+record, so `verifiedLevels` can still list `phone` and `government_id`. There is no "deleted" flag. The null
+name is the only sign.
+
+`GET /driver/home` → `data.notices`, after a passenger with a confirmed seat was deleted:
+
+```json
+[
+  {
+    "kind": "seat_opened",
+    "rejoinedWaitlist": false,
+    "bookingId": "01m7c6qmeanhnbpgr0hwdpaaxc",
+    "tripId": "01m7c6qm1wym847q9393re4b8d",
+    "commuteId": "01m7c6qkxym7cses8tsgx3ww56",
+    "person": {
+      "publicFirstName": null,
+      "trustLevel": 2,
+      "verifiedLevels": ["phone", "government_id"],
+      "sameOrganisation": false,
+      "rating": null,
+      "ratingCount": 0,
+      "completedTrips": 0,
+      "onTimeRate": null
+    },
+    "seatsReleased": 1,
+    "seatsOpen": 3,
+    "departureAt": "2026-11-16T04:12:00+00:00",
+    "departureLocal": "2026-11-16 07:12:00",
+    "at": "2026-11-15T05:00:00+00:00"
+  }
+]
+```
+
+`GET /driver/seat-requests`, the same passenger's request (other fields as usual, shortened here):
+
+```json
+{
+  "success": true,
+  "data": [
+    {
+      "id": "01m7c6qmcrjw5x7c43fmm0b3ve",
+      "commuteId": "01m7c6qkxym7cses8tsgx3ww56",
+      "tripId": "01m7c6qm1wym847q9393re4b8d",
+      "status": "APPROVED",
+      "kind": "seat_request",
+      "seats": 1,
+      "respondedAt": "2026-11-15T05:00:00+00:00",
+      "createdAt": "2026-11-15T05:00:00+00:00",
+      "passenger": {
+        "publicFirstName": null,
+        "trustLevel": 2,
+        "verifiedLevels": ["phone", "government_id"],
+        "sameOrganisation": false,
+        "rating": null,
+        "ratingCount": 0,
+        "completedTrips": 0,
+        "onTimeRate": null
+      }
+    }
+  ],
+  "meta": { "page": 1, "perPage": 20, "total": 1, "lastPage": 1, "hasMore": false }
+}
+```
+
+A request still pending when she deleted her account comes back the same way with `"status": "WITHDRAWN"`.
 
 **Karim (`+20 10 5550 1001`):** his data was never damaged. Only reading it failed. His Home and requests load
 again after the deploy, with no repair.
