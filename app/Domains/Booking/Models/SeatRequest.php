@@ -114,7 +114,7 @@ class SeatRequest extends Model
 
     public function passenger(): BelongsTo
     {
-        return $this->belongsTo(User::class, 'passenger_user_id');
+        return $this->belongsTo(User::class, 'passenger_user_id')->withTrashed();
     }
 
     public function commuteOffer(): BelongsTo

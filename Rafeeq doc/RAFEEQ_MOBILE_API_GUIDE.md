@@ -5001,7 +5001,7 @@ neither is distinguishable from the other.
 
 ## 4.17 Testing (staging only)
 
-For the automated tests. **All three answer `404`** unless the server has `RAFEEQ_TESTING_API=true`
+For the automated tests. **All of them answer `404`** unless the server has `RAFEEQ_TESTING_API=true`
 and is not production. When on, any signed-in account can call them, and each acts only on the
 caller's own account and commutes.
 
@@ -5018,6 +5018,8 @@ must have been sent to review first; otherwise `409 DRIVER_APPLICATION_LOCKED` o
 Deletes the caller's account the way `DELETE /account` does (commutes archived, seats cancelled,
 requests withdrawn, demands cancelled, sessions ended, the number freed), **without** the checks that
 block a real deletion. End a live run first with `POST /trips/{trip}/cancel-active`.
+Other members still see her past seats and requests in their lists, with `person.publicFirstName: null`,
+as after a real `DELETE /account`.
 
 #### `POST /testing/trips/{trip}/departure`
 

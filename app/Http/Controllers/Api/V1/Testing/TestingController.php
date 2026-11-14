@@ -64,6 +64,7 @@ final class TestingController extends Controller
             ->where('user_id', $user->id)
             ->where('status', VerificationStatus::Pending->value)
             ->where('type', '!=', VerificationType::DrivingLicence->value)
+            ->with('user')
             ->get()
             ->each(fn (UserVerification $verification) => $verifications->approve($verification, $reviewer, notify: false));
 
