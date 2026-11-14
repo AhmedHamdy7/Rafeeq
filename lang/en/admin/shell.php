@@ -55,6 +55,23 @@ return [
     'search' => [
         'label' => 'Search users',
         'placeholder' => 'Search phone, name, plate, case or booking reference',
+        'groups' => [
+            'members' => 'Members',
+            'vehicles' => 'Cars',
+            'references' => 'References',
+            'pages' => 'Pages',
+        ],
+        'kinds' => [
+            'booking' => 'Booking',
+            'report' => 'Report',
+            'sos' => 'SOS',
+            'support' => 'Support case',
+            'commute' => 'Commute',
+            'trip_day' => 'Trip day',
+        ],
+        'none' => 'Nothing matches. Try a full phone number, a plate or a reference code.',
+        'all_members' => 'Search Users for “:q”',
+        'keys' => '↑ ↓ to move · Enter to open · Esc to close',
     ],
 
     'sos' => [

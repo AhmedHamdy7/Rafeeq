@@ -56,7 +56,7 @@
                 @if ($warnings->isEmpty() && ($entries === null || $entries->isEmpty()))
                     <x-admin.state kind="empty" :title="__('admin/records.booking.no_fees')" />
                 @else
-                    <table class="ad-table ad-table--dense"><tbody>
+                    <div class="ad-table-wrap"><table class="ad-table ad-table--dense"><tbody>
                     @foreach ($warnings as $warning)
                         <tr wire:key="w-{{ $warning->id }}">
                             <td>{{ __('admin/records.warnings.'.$warning->kind->value) }} <span class="ad-muted">#{{ $warning->ordinal }}</span></td>
@@ -71,7 +71,7 @@
                             <td class="ad-muted ad-num">{{ $entry->created_at?->timezone('Africa/Cairo')->format('j M H:i') }}</td>
                         </tr>
                     @endforeach
-                    </tbody></table>
+                    </tbody></table></div>
                 @endif
             </x-admin.card>
         </div>

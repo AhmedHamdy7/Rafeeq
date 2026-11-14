@@ -62,7 +62,7 @@
                 @if ($days->isEmpty())
                     <x-admin.state kind="empty" :title="__('admin/records.none')" />
                 @else
-                    <table class="ad-table ad-table--dense"><tbody>
+                    <div class="ad-table-wrap"><table class="ad-table ad-table--dense"><tbody>
                     @foreach ($days as $day)
                         <tr wire:key="cd-{{ $day->id }}">
                             <td><a class="ad-link ad-num" href="{{ route('admin.trip-days.show', $day->id) }}" wire:navigate>{{ $day->trip_date?->format('D j M') }}</a></td>
@@ -70,7 +70,7 @@
                             <td><span class="ad-chip ad-chip--{{ DirectoryPage::tone($day->status->value) }}">{{ __('admin/directory.statuses.'.$day->status->value) }}</span></td>
                         </tr>
                     @endforeach
-                    </tbody></table>
+                    </tbody></table></div>
                 @endif
             </x-admin.card>
 

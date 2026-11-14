@@ -29,7 +29,7 @@
                             <span class="ad-muted">{{ __('admin.drivers.car.entered_seats', ['count' => $vehicle->seats]) }}</span>
                         </div>
 
-                        <table class="ad-table ad-table--dense" style="margin-block-start:8px">
+                        <div class="ad-table-wrap"><table class="ad-table ad-table--dense" style="margin-block-start:8px">
                             <tbody>
                             @forelse ($vehicle->documents as $document)
                                 <tr wire:key="replacement-document-{{ $document->id }}">
@@ -48,7 +48,7 @@
                                 <tr><td class="ad-hint">{{ __('admin.details.no_car_documents') }}</td></tr>
                             @endforelse
                             </tbody>
-                        </table>
+                        </table></div>
 
                         @if ($mayDecide)
                             <div class="ad-fields-inline" style="margin-block-start:10px">

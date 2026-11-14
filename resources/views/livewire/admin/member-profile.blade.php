@@ -335,7 +335,7 @@
                 @if ($events->isEmpty())
                     <x-admin.state kind="empty" :title="__('admin/profile.none')" />
                 @else
-                    <table class="ad-table ad-table--dense"><tbody>
+                    <div class="ad-table-wrap"><table class="ad-table ad-table--dense"><tbody>
                     @foreach ($events as $event)
                         <tr wire:key="r-{{ $event->id }}" @if ($event->reversed_at) style="opacity:.55" @endif>
                             <td><span class="ad-code">{{ $event->kind->value }}</span></td>
@@ -365,14 +365,14 @@
                             <tr wire:key="ra-{{ $event->id }}"><td colspan="5" class="ad-muted" style="font-size:12.5px" dir="auto">{{ __('admin/profile.appeal_says') }}: {{ $event->appeal_reason }}</td></tr>
                         @endif
                     @endforeach
-                    </tbody></table>
+                    </tbody></table></div>
                 @endif
             </x-admin.card>
             <x-admin.card flush :title="__('admin/profile.ratings')" bar>
                 @if ($ratings->isEmpty())
                     <x-admin.state kind="empty" :title="__('admin/profile.none')" />
                 @else
-                    <table class="ad-table ad-table--dense"><tbody>
+                    <div class="ad-table-wrap"><table class="ad-table ad-table--dense"><tbody>
                     @foreach ($ratings as $rating)
                         <tr wire:key="rt-{{ $rating->id }}">
                             <td class="ad-num" style="white-space:nowrap">{{ str_repeat('★', (int) $rating->stars) }}</td>
@@ -399,7 +399,7 @@
                             @endcan
                         </tr>
                     @endforeach
-                    </tbody></table>
+                    </tbody></table></div>
                 @endif
             </x-admin.card>
         </div>
@@ -497,7 +497,7 @@
                 @if ($activity->isEmpty())
                     <x-admin.state kind="empty" :title="__('admin/profile.none')" />
                 @else
-                    <table class="ad-table ad-table--dense"><tbody>
+                    <div class="ad-table-wrap"><table class="ad-table ad-table--dense"><tbody>
                     @foreach ($activity as $entry)
                         @php($label = 'admin.audit.actions.'.str_replace('.', '__', $entry->action))
                         <tr wire:key="a-{{ $entry->id }}">
@@ -506,7 +506,7 @@
                             <td class="ad-muted ad-num">{{ $entry->created_at?->timezone('Africa/Cairo')->format('j M H:i') }}</td>
                         </tr>
                     @endforeach
-                    </tbody></table>
+                    </tbody></table></div>
                 @endif
             </x-admin.card>
         </div>
