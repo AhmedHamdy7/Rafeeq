@@ -7,6 +7,7 @@ use App\Domains\Geo\Support\Polyline;
 use App\Domains\Geo\ValueObjects\Route;
 use App\Domains\Shared\Exceptions\DomainException;
 use App\Domains\Shared\Support\ErrorCode;
+use App\Domains\Shared\Testing\LocationFreeze;
 use App\Domains\Shared\ValueObjects\Coordinate;
 use App\Domains\Shared\ValueObjects\Distance;
 use App\Domains\Trip\Enums\TripSessionStatus;
@@ -54,6 +55,10 @@ final readonly class RecordTripLocationAction
             throw DomainException::of(ErrorCode::TripNotStarted, fields: [
                 'tripStatus' => [strtoupper($session->current_status->value)],
             ]);
+        }
+
+        if (LocationFreeze::active($session->id)) {
+            return [];
         }
 
         $accepted = $this->plausible($session, $reported);

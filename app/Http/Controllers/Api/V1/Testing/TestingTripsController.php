@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Api\V1\Testing;
 use App\Domains\Booking\Enums\SeatOfferClosedReason;
 use App\Domains\Booking\Enums\SeatOfferStatus;
 use App\Domains\Booking\Models\Booking;
+use App\Domains\Booking\Models\PickupPointRequest;
 use App\Domains\Booking\Models\SeatOffer;
 use App\Domains\Booking\Models\SeatRequest;
 use App\Domains\Booking\Support\SeatOfferClosure;
@@ -14,7 +15,10 @@ use App\Domains\Commute\Models\ScheduledTrip;
 use App\Domains\Matching\Actions\SaveCommuteDemandAction;
 use App\Domains\Matching\Enums\CommuteDemandStatus;
 use App\Domains\Matching\Models\CommuteDemand;
+use App\Domains\Notification\Enums\NotificationChannel;
 use App\Domains\Notification\Enums\NotificationType;
+use App\Domains\Notification\Jobs\DeliverPushNotification;
+use App\Domains\Notification\Models\Notification;
 use App\Domains\Notification\Support\Notifier;
 use App\Domains\Shared\Exceptions\DomainException;
 use App\Domains\Shared\Support\ErrorCode;
@@ -137,6 +141,50 @@ final class TestingTripsController extends Controller
         return ApiResponse::success($notification === null ? null : new NotificationResource($notification), status: 201);
     }
 
+    #[ApiErrors(ErrorCode::NotFound, ErrorCode::ValidationFailed)]
+    public function push(Request $request): JsonResponse
+    {
+        $user = TestAccounts::assertAllowed($request->user());
+
+        $data = $request->validate([
+            'type' => ['required', 'string', Rule::enum(NotificationType::class)],
+            'data' => ['sometimes', 'array'],
+            'data.*' => ['nullable', 'string', 'max:64'],
+            'params' => ['sometimes', 'array'],
+            'params.*' => ['nullable', 'string', 'max:120'],
+        ]);
+
+        $payload = array_filter($data['data'] ?? [], fn ($value): bool => $value !== null && $value !== '');
+
+        $this->assertOwnIds($user->id, $payload);
+
+        $type = NotificationType::from($data['type']);
+        $locale = $user->preferred_language ?: config('app.locale');
+        $params = [...['name' => 'Nour', 'date' => now()->format('j/n'), 'days' => '3'], ...($data['params'] ?? [])];
+
+        $devices = $user->devices()->whereNull('revoked_at')->whereNotNull('push_token')->get(['id']);
+
+        foreach ($devices as $device) {
+            $push = Notification::query()->create([
+                'user_id' => $user->id,
+                'type' => $type->value,
+                'title' => __("notifications.{$type->value}.title", $params, $locale),
+                'body' => __("notifications.{$type->value}.body", $params, $locale),
+                'data' => array_map('strval', $payload),
+                'channel' => NotificationChannel::Push->value,
+                'category' => $type->category()->value,
+            ]);
+
+            DeliverPushNotification::dispatch($push->id, $device->id, null)->afterCommit();
+        }
+
+        return ApiResponse::success([
+            'type' => $type->value,
+            'sent' => $devices->isEmpty() ? 0 : 1,
+            'tokens' => $devices->count(),
+        ], status: 202);
+    }
+
     /**
      * @param  array<string, string>  $payload
      */
@@ -151,6 +199,9 @@ final class TestingTripsController extends Controller
             'changeProposalId' => fn (string $id): bool => ChangeProposal::query()->whereKey($id)->exists(),
             'commuteId' => fn (string $id): bool => CommuteOffer::query()->whereKey($id)->exists(),
             'tripId' => fn (string $id): bool => ScheduledTrip::query()->whereKey($id)->exists(),
+            'pickupChangeId' => fn (string $id): bool => PickupPointRequest::query()->whereKey($id)->exists(),
+            'requestId' => fn (string $id): bool => PickupPointRequest::query()->whereKey($id)->exists()
+                || SeatRequest::query()->whereKey($id)->where('passenger_user_id', $userId)->exists(),
         ];
 
         foreach ($payload as $key => $id) {

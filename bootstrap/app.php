@@ -5,6 +5,7 @@ use App\Http\Middleware\EnsureAdminMfaIsConfirmed;
 use App\Http\Middleware\EnsureAdminSessionIsFresh;
 use App\Http\Middleware\EnsureProfileIsComplete;
 use App\Http\Middleware\EnsureTestingApiIsOn;
+use App\Http\Middleware\InjectTestingFaults;
 use App\Http\Middleware\RequiresVerification;
 use App\Http\Middleware\SetLocaleFromHeader;
 use App\Http\Responses\ApiExceptionHandler;
@@ -65,6 +66,7 @@ return Application::configure(basePath: dirname(__DIR__))
 
         $middleware->api(append: [
             SetLocaleFromHeader::class,
+            InjectTestingFaults::class,
         ]);
 
         /*

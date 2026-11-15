@@ -205,4 +205,13 @@ return [
     'REVIEW_REPORT_NOT_PENDING' => 'This report has already been reviewed.',
     'VEHICLE_IS_ACTIVE' => 'This is the car you drive now. Switch to another car before removing it.',
     'VEHICLE_IN_USE' => 'A commute still uses this car, so it cannot be removed.',
+
+    // Testing API (staging only).
+    'TEST_NUMBER_ONLY' => 'This testing call only works on a test phone number.',
+    'OTP_NOT_REQUESTED' => 'No code is open for this number. Request one first.',
+    'FAULT_LIMIT_REACHED' => 'You already have 10 open fault rules. Clear some first.',
+    'TRIP_IN_PROGRESS' => 'A run with a real member aboard is under way, so it cannot be reset now.',
+    'REQUEST_STILL_PENDING' => 'This request is still waiting for an answer, and moving it back that far would not end it.',
+    'BOOKING_NOT_CANCELLED' => 'This booking is not cancelled, so it has no cancellation reason to change.',
+    'DRIVER_NOT_APPROVED' => 'This account is not an approved driver yet.',
 ];

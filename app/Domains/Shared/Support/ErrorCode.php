@@ -345,6 +345,14 @@ enum ErrorCode: string
     case EscortAlreadyArmed = 'ESCORT_ALREADY_ARMED';
     case EscortNotActive = 'ESCORT_NOT_ACTIVE';
 
+    case TestNumberOnly = 'TEST_NUMBER_ONLY';
+    case OtpNotRequested = 'OTP_NOT_REQUESTED';
+    case FaultLimitReached = 'FAULT_LIMIT_REACHED';
+    case TestTripInProgress = 'TRIP_IN_PROGRESS';
+    case RequestStillPending = 'REQUEST_STILL_PENDING';
+    case BookingNotCancelled = 'BOOKING_NOT_CANCELLED';
+    case DriverNotApproved = 'DRIVER_NOT_APPROVED';
+
     public function defaultStatus(): int
     {
         return match ($this) {
@@ -632,6 +640,14 @@ enum ErrorCode: string
             self::VehicleIsActive,
             self::VehicleInUse,
             self::EarlyDropNotAsked => 409,
+
+            self::TestNumberOnly,
+            self::DriverNotApproved => 403,
+            self::OtpNotRequested,
+            self::FaultLimitReached,
+            self::TestTripInProgress,
+            self::RequestStillPending,
+            self::BookingNotCancelled => 409,
         };
     }
 

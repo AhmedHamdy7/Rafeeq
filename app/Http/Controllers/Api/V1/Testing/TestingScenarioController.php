@@ -202,7 +202,10 @@ final class TestingScenarioController extends Controller
                 ->update(['expires_at' => $expiresAt, 'expiry_warned_for' => null]);
 
             if ($updated === 0) {
-                throw DomainException::of(ErrorCode::NotFound);
+                throw DomainException::of(ErrorCode::NotFound, fields: [
+                    'vehicleId' => [(string) $vehicle->id],
+                    'missing' => ['registration'],
+                ]);
             }
 
             Artisan::call('registrations:warn-expiring');

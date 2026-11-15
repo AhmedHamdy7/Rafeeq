@@ -1390,6 +1390,9 @@ return [
 
     'testing' => [
         'api' => (bool) env('RAFEEQ_TESTING_API', false),
+        'phone_prefixes' => array_values(array_filter(array_map('trim', explode(',', (string) env('RAFEEQ_TESTING_PHONE_PREFIXES', '+20102000,+2010555'))))),
+        'fault_limit' => 10,
+        'fault_ttl_seconds' => 300,
     ],
 
 ];

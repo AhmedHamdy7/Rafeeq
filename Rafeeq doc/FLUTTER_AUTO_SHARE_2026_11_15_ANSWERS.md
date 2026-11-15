@@ -83,7 +83,7 @@ Patrol step:
 
 1. Add a contact. `PUT /safety/auto-share {enabled: true}`.
 2. The driver starts the run and moves it to `EN_ROUTE`.
-3. `GET /testing/safety/auto-share/messages`: one `SENT` row per contact. Open `url`.
+3. `GET /testing/safety/auto-share/messages`: one `SENT` row per contact. Open `url`. The messages are sent by a queued job, so they arrive **a few seconds after** `EN_ROUTE`: poll every second for up to 15 seconds until `data` is not empty.
 4. `GET /safety/live-shares`: rows with `source: "AUTO"`. Stop one with `DELETE`.
 
 ## What changed for the app

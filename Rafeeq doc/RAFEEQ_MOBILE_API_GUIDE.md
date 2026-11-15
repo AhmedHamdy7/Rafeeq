@@ -14,7 +14,7 @@
 >
 > **Base URL:** `{host}/api/v1` · **Auth:** bearer token · **Format:** JSON only.
 
-**Last updated:** 2026-11-15 · **249 endpoints live** · Phases 0–7, 9 and 11 complete · 10, 12 and 13 all but a decision each
+**Last updated:** 2026-11-15 · **266 endpoints live** · Phases 0–7, 9 and 11 complete · 10, 12 and 13 all but a decision each
 
 ---
 
@@ -22,7 +22,7 @@
 
 ### What is ready
 
-**249 endpoints live** and tested, across the 47 designed screens:
+**266 endpoints live** and tested, across the 47 designed screens:
 
 | | Count | Covers |
 |---|---|---|
@@ -902,6 +902,23 @@ fails if this list and the running routes ever disagree in either direction.
 | `POST /testing/account/suspension/age` | 4.17 Testing (staging only) |
 | `POST /testing/account/ban` | 4.17 Testing (staging only) |
 | `GET /testing/safety/auto-share/messages` | 4.17 Testing (staging only) |
+| `POST /testing/faults` | 4.17 Testing (staging only) |
+| `GET /testing/faults` | 4.17 Testing (staging only) |
+| `DELETE /testing/faults` | 4.17 Testing (staging only) |
+| `POST /testing/rate-limit` | 4.17 Testing (staging only) |
+| `POST /testing/otp/expire` | 4.17 Testing (staging only) |
+| `POST /testing/otp/unlock` | 4.17 Testing (staging only) |
+| `POST /testing/session/revoke` | 4.17 Testing (staging only) |
+| `POST /testing/reset` | 4.17 Testing (staging only) |
+| `POST /testing/seed/past-bookings` | 4.17 Testing (staging only) |
+| `POST /testing/seat-requests/{seatRequest}/age` | 4.17 Testing (staging only) |
+| `POST /testing/debt/seed` | 4.17 Testing (staging only) |
+| `POST /testing/credits` | 4.17 Testing (staging only) |
+| `POST /testing/bookings/{booking}/fields` | 4.17 Testing (staging only) |
+| `PUT /testing/content/{key}` | 4.17 Testing (staging only) |
+| `DELETE /testing/content/{key}` | 4.17 Testing (staging only) |
+| `POST /testing/trips/{trip}/location/age` | 4.17 Testing (staging only) |
+| `POST /testing/push` | 4.17 Testing (staging only) |
 | `POST /testing/notifications` | 4.17 Testing (staging only) |
 | `DELETE /safety/live-shares/{share}` | 4.12 Safety |
 | `POST /trips/{trip}/live-share` | 4.12 Safety |
@@ -5495,6 +5512,97 @@ The auto-share messages for the caller's latest trip that sent any:
 `meta: {tripId, tripSessionId}`. `status` is `SENT` or `FAILED`; `url` is the link the contact got
 (staging only, where messages are recorded rather than sent). Empty `data` when nothing was sent.
 
+#### `POST /testing/faults` · `GET /testing/faults` · `DELETE /testing/faults`
+
+The caller's next requests to a path are slow or fail. Only requests carrying **the caller's own
+token** are matched, so one test can't break another test or a person using staging.
+
+```
+POST /testing/faults
+{ "path": "/bookings", "method": "GET", "mode": "delay" | "error",
+  "delayMs": 4000, "status": 500, "code": "SERVER_ERROR", "retryAfterSeconds": 30, "count": 1 }
+→ 201 { id, path, method, mode, delayMs, status, code, retryAfterSeconds, phone, remaining, expiresAt }
+GET    /testing/faults → [ …open rules… ]
+DELETE /testing/faults → { cleared }
+```
+
+- `path` is a prefix after `/api/v1`, matched on whole segments (`/bookings` matches `/bookings/01J…/cancel`, not `/bookingsx`). `method` optional (any when left out).
+- `delay`: `delayMs` 500–15000, then the real answer. `error`: `status` one of 404, 409, 422, 429, 500, 503; the body is the normal error envelope with `code` (defaults to the status's own code). A `429` carries `Retry-After` (`retryAfterSeconds`, default 30). Every faked answer has the header `X-Testing-Fault: <id>`.
+- Used up after `count` matches (1–10), and gone by itself 5 minutes after it was made.
+- `/testing/*` and `/auth/*` are never matched, except `/auth/otp/request` and `/auth/otp/verify` named exactly. Those two have no token, so the rule matches by **phone**: the caller's own number, or `phone` in the body if it is a test number.
+- Refusals: `422 VALIDATION_FAILED` (path, mode, status, delay or count), `409 FAULT_LIMIT_REACHED` (10 open rules), `403 TEST_NUMBER_ONLY`.
+
+#### `POST /testing/rate-limit`
+
+`{ path, method?, retryAfterSeconds?, count? }` → `201`, the same rule as `POST /testing/faults` with `mode: error, status: 429, code: TOO_MANY_REQUESTS`. A shortcut; either call does the same.
+
+#### `POST /testing/otp/expire` · `POST /testing/otp/unlock`
+
+**No token.** `{ "phone": "+201055501234" }`. Test numbers only: `+20 10 2000 xxxx` and `+20 10 555x xxxx` (`RAFEEQ_TESTING_PHONE_PREFIXES`); any other number answers `403 TEST_NUMBER_ONLY`.
+
+- `expire` → `{ phone, challengeId, expired: true, expiresAt }`. The last open code for that number is now past its 5 minutes; verifying it answers `401 AUTH_OTP_EXPIRED`. `409 OTP_NOT_REQUESTED` when no code is open.
+- `unlock` → `{ phone, attempts: 0, lockedUntil: null, resendAvailableAt: null }`. Clears the wrong-attempt count, the 5-minute lock and the resend wait.
+
+#### `POST /testing/session/revoke`
+
+`{ "refresh": true }` → `{ revoked: 1, sessionId, refreshRevoked }`. The caller's access token stops working at once (next call `401`). `refresh: true` (default) also ends the refresh token, so `POST /auth/session/refresh` answers `401`; `refresh: false` leaves it, so the app can renew silently.
+
+#### `POST /testing/reset`
+
+Deletes the caller's own commutes and their days, requests, bookings, waiting-list places, offers, demands, change proposals, pickup changes, group places, chats, live shares, reports, notifications, debt and reliability events, so every chapter starts clean.
+
+```
+{ "keep": ["verification", "vehicles", "contacts"] }   // optional; default ["verification"]
+→ 200 { commutes, trips, seatRequests, bookings, waitlist, offers, demands, proposals, pickupChanges,
+        groups, vehicles, contacts, liveShares, incidents, conversations, notifications, debtLines,
+        reliabilityEvents, warnings, faults, kept: [...] }
+```
+
+- `keep` may name `verification`, `vehicles` (spare cars too), `contacts`, `notifications`, `debt`, `reliability`. Leaving out `verification` removes it.
+- Always kept: the account, profile, role, active mode and the **active car**. Spare cars go unless `vehicles` is kept.
+- Others' seats on the caller's commutes go with them, with no fee, no reliability event and no push. The caller's seats on someone else's run are freed on that run.
+- Lifts a debt suspension once the debt is gone.
+- `409 TRIP_IN_PROGRESS` only when a run under way has a real (non-test-number) member aboard with the caller.
+
+#### `POST /testing/seed/past-bookings`
+
+`{ "count": 25, "ending": "COMPLETED" }` → `201 { bookingIds, count }`. Finished bookings for the caller as a passenger, one per day back from yesterday, on a new archived commute (never in Discover) driven by the shared test driver `+201020009999`. `count` 1–60. `ending` one of `COMPLETED`, `CANCELLED_BY_PASSENGER`, `CANCELLED_BY_DRIVER`, `NO_SHOW`, `EXPIRED`, `ENDED_EARLY`, `EXITED_DUE_TO_DRIVER_DELAY`; left out, they rotate through all seven. `paymentStatus`: `PAID` for completed and ended early, `WAIVED` for exited, `NOT_DUE` otherwise. No reliability events, no debt, no pushes.
+
+#### `POST /testing/seat-requests/{seatRequest}/age`
+
+`{ "days": 8 }` (1–60) → `{ id, status, createdAt, decidedAt, expiresAt }`. The caller's own request as a passenger; moves every time on it back. A pending one that `days` takes past its expiry is expired on the spot; `409 REQUEST_STILL_PENDING` when it is pending and `days` would not expire it.
+
+#### `POST /testing/debt/seed` · `POST /testing/credits`
+
+```
+POST /testing/debt/seed
+{ "side": "driver" | "passenger", "kind": "commission" | "no_show_fee" | "late_cancel_fee" | "late_fee",
+  "amountPiastres": 11000, "count": 1, "bookingId": "01J…", "disputed": false }
+→ 201 { lineIds, side, owedPiastres, balancePiastres, overduePiastres, lateFeePiastres, dueAt, blocked,
+        suspended, suspendedAt, oldestUnpaidAt, openDisputes, suspensionOnHold }
+```
+
+- Real ledger lines: on the statement, in `GET /account/debt`, on the next ride's fee line, in the sweep. `count` 1–10, one per day back (the last one today). Combine with `debt/age` and `debt/deadline` for overdue, +10 % and suspension.
+- `commission` is driver side only (`422`). `side: driver` needs an approved driver (`403 DRIVER_NOT_APPROVED`). `bookingId` must be the caller's upcoming booking (`404`); a passenger's whole balance still rides on her **next** ride, as in real life.
+- `disputed: true` opens a dispute on each line, so it never suspends (`openDisputes` lists them).
+- `POST /testing/credits` `{ amountPiastres, reason?, side? }` (side defaults to passenger) → `201 { creditId, side, creditPiastres, balancePiastres }`. `balancePiastres` is signed: a credit is **negative**; `creditPiastres` is the positive credit left after any debt it paid off.
+
+#### `POST /testing/bookings/{booking}/fields`
+
+`{ "paymentStatus": "WAIVED", "cancellationReason": "day_cancelled", "cancelledNote": "…", "pickupLabel": null, "dropoffLabel": null }` → the booking as `GET /bookings/{booking}` returns it. Only the keys sent change. The caller must be the passenger. `cancellationReason` is any value `cancelledReason` can take (the server never sends any other, so an unknown one can't be made); it and `cancelledNote` need a cancelled booking (`409 BOOKING_NOT_CANCELLED`). Labels are shown only on a confirmed booking, as always.
+
+#### `PUT /testing/content/{key}` · `DELETE /testing/content/{key}`
+
+`key`: `support_contact` or `guidelines` (`community_guidelines` is accepted for it). `PUT { en, ar }` → the page as `GET /content/{key}` returns it. `DELETE` → `{ key, removed, restoredStaffVersion }`: puts back what staff had before the test's first `PUT`; when there was nothing, the page is gone and `GET` answers `404`. The one call not limited to the caller: the page is shared.
+
+#### `POST /testing/trips/{trip}/location/age`
+
+`{ "minutes": 3 }` (1–30) → `{ tripId, recordedAt, ageSeconds, isStale, ignoringNewPointsUntil }`. The driver of a started run, or a confirmed passenger on it. Moves the last position back and **ignores the driver's new points for 60 seconds**, so the app's own GPS doesn't undo it. `isStale` is `ageSeconds` ≥ the 2-minute GPS silence rule. `409 TRIP_NOT_STARTED` before the run starts.
+
+#### `POST /testing/push`
+
+`{ "type": "pickup_change_requested", "data": { "bookingId": "01J…" }, "params": {} }` → `202 { type, sent, tokens }`. A push to the caller's own devices with **no inbox row**. Any notification type; ids in `data` must be the caller's own (`422`). Simulators get no APNs push; Android emulators do.
+
 Cancel Active Trip needs no testing call: the real `POST /trips/{trip}/cancel-active` on a started
 test run gives `active_trip_cancelled`. Check one in first (`POST /trips/{trip}/check-in`) to get
 `wasAboard: true`. A cleared waiting list needs none either: publish → waitlist someone → propose an
@@ -5710,6 +5818,7 @@ exist, and every live endpoint must be named here.
 
 | Date | Change |
 |---|---|
+| 2026-11-15 | 🧪 **Testing calls for Patrol (staging only, 4.17).** New `POST/GET/DELETE /testing/faults` and `POST /testing/rate-limit` (slow or failing answers for the caller's own token), `POST /testing/otp/expire` and `/otp/unlock` (no token, test numbers only), `POST /testing/session/revoke`, `POST /testing/reset`, `POST /testing/seed/past-bookings`, `POST /testing/seat-requests/{seatRequest}/age`, `POST /testing/debt/seed`, `POST /testing/credits`, `POST /testing/bookings/{booking}/fields`, `PUT/DELETE /testing/content/{key}`, `POST /testing/trips/{trip}/location/age`, `POST /testing/push`. New codes `TEST_NUMBER_ONLY`, `OTP_NOT_REQUESTED`, `FAULT_LIMIT_REACHED`, `TRIP_IN_PROGRESS`, `REQUEST_STILL_PENDING`, `BOOKING_NOT_CANCELLED`, `DRIVER_NOT_APPROVED`. |
 | 2026-11-15 | 📲 **Auto-share live trip (SAFE-14).** New **`PUT /safety/auto-share`** `{enabled}` → `{enabled, available}`, one switch per account. `GET /safety/emergency-contacts` adds **`meta.autoShare`** and **`meta.autoShareAvailable`**. When it is on, each trusted contact gets an SMS with a live link as her trip leaves; the shares carry **`source: "AUTO"`** in `GET /safety/live-shares` (manual ones `MANUAL`). New inbox and push types **`live_trip_auto_shared`** and **`live_trip_auto_share_failed`**. Removing a contact ends that contact's links. `autoShareTrips` on a contact is ignored. New staging-only **`GET /testing/safety/auto-share/messages`** (4.17). |
 | 2026-11-15 | 🛡️ **Safety leftovers.** The home journey (`GET /home`, `nextJourney`) carries **`noShow`**, the same object as on the booking (4.11). `GET /safety/emergency-contacts` answers **`meta: {limit, canAdd}`** (4.12). A bad phone number on a trusted contact now answers **`422 VALIDATION_FAILED`** with `error.fields.phone` (it answered `500`); her own number is refused with **`422 EMERGENCY_CONTACT_SELF`**. New staging-only **`POST /testing/account/suspension/appeal/decide`**, **`POST /testing/account/suspension/age`** and **`POST /testing/account/ban`** (4.17); `POST /testing/driver/suspend` with `scope: "account"` is documented as working for any account. 4.2 now lists what stays open for a permanent ban. |
 | 2026-11-15 | ⚖️ **No-show dispute, report case numbers, push taps.** Her booking carries **`noShow`** `{confirmedAt, disputableUntil, dispute {status, reason, disputedAt, resolution, resolvedAt, note}}` on `GET /bookings/{booking}` and `GET /my-bookings` (4.7). **`POST /bookings/{booking}/dispute` now answers `201` with the booking** (it answered the attendance row), and its refusals have one code each: `409 ATTENDANCE_NOT_DISPUTABLE` (was `ATTENDANCE_NOT_CONFIRMABLE`), `409 ATTENDANCE_ALREADY_DISPUTED` (was `ATTENDANCE_NOT_CONFIRMABLE` with `fields.dispute`), `422 ATTENDANCE_DISPUTE_WINDOW_CLOSED` (unchanged); a booking with no attendance row is now `409 ATTENDANCE_NOT_DISPUTABLE`, not `404`. Staff decide no-show disputes on the dashboard; the passenger gets **`no_show_dispute_decided`** (`bookingId`, `tripId`, `resolution`). Reports carry **`caseNumber`** (`RP-` + six digits). Every push now carries **`notificationId`**, the inbox row's id; its other keys already matched the row. New staging-only **`POST /testing/bookings/{booking}/dispute/decide`**, **`POST /testing/incidents/{incident}/decide`** and **`POST /testing/incidents/{incident}/age`** (4.17). |

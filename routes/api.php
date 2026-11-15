@@ -46,10 +46,12 @@ use App\Http\Controllers\Api\V1\Search\SavedSearchController;
 use App\Http\Controllers\Api\V1\Search\SearchController;
 use App\Http\Controllers\Api\V1\Testing\TestingCasesController;
 use App\Http\Controllers\Api\V1\Testing\TestingController;
+use App\Http\Controllers\Api\V1\Testing\TestingDataController;
 use App\Http\Controllers\Api\V1\Testing\TestingRecordsController;
 use App\Http\Controllers\Api\V1\Testing\TestingSafetyController;
 use App\Http\Controllers\Api\V1\Testing\TestingScenarioController;
 use App\Http\Controllers\Api\V1\Testing\TestingSuspensionController;
+use App\Http\Controllers\Api\V1\Testing\TestingToolsController;
 use App\Http\Controllers\Api\V1\Testing\TestingTripsController;
 use App\Http\Controllers\Api\V1\Trip\AttendanceController;
 use App\Http\Controllers\Api\V1\Trip\DriverTripController;
@@ -131,6 +133,26 @@ Route::prefix('v1')->group(function (): void {
         Route::post('account/suspension/age', [TestingSuspensionController::class, 'age']);
         Route::post('account/ban', [TestingSuspensionController::class, 'ban']);
         Route::get('safety/auto-share/messages', [TestingSafetyController::class, 'autoShareMessages']);
+        Route::post('faults', [TestingToolsController::class, 'addFault']);
+        Route::get('faults', [TestingToolsController::class, 'listFaults']);
+        Route::delete('faults', [TestingToolsController::class, 'clearFaults']);
+        Route::post('rate-limit', [TestingToolsController::class, 'rateLimit']);
+        Route::post('session/revoke', [TestingToolsController::class, 'revokeSession']);
+        Route::put('content/{key}', [TestingToolsController::class, 'writeContent']);
+        Route::delete('content/{key}', [TestingToolsController::class, 'removeContent']);
+        Route::post('push', [TestingTripsController::class, 'push']);
+        Route::post('reset', [TestingDataController::class, 'reset']);
+        Route::post('seed/past-bookings', [TestingDataController::class, 'seedHistory']);
+        Route::post('seat-requests/{seatRequest}/age', [TestingDataController::class, 'ageSeatRequest']);
+        Route::post('debt/seed', [TestingDataController::class, 'seedDebt']);
+        Route::post('credits', [TestingDataController::class, 'credit']);
+        Route::post('bookings/{booking}/fields', [TestingDataController::class, 'bookingFields']);
+        Route::post('trips/{trip}/location/age', [TestingDataController::class, 'ageLocation']);
+    });
+
+    Route::prefix('testing')->middleware('testing.api')->group(function (): void {
+        Route::post('otp/expire', [TestingToolsController::class, 'expireOtp']);
+        Route::post('otp/unlock', [TestingToolsController::class, 'unlockOtp']);
     });
 
     Route::prefix('account')->middleware('auth:sanctum')->group(function (): void {
