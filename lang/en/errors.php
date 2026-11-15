@@ -161,6 +161,7 @@ return [
     'SOS_ALREADY_RESOLVED' => 'This emergency has already been dealt with.',
     'EMERGENCY_CONTACT_LIMIT_REACHED' => 'You have as many emergency contacts as we allow. Remove one to add another.',
     'EMERGENCY_CONTACT_DUPLICATE' => 'That number is already one of your emergency contacts.',
+    'EMERGENCY_CONTACT_SELF' => 'That is your own number. Add somebody else you trust.',
     'CANNOT_BLOCK_SELF' => 'You cannot block yourself.',
     'ALREADY_BLOCKED' => 'You have already blocked this person.',
     'INCIDENT_NOT_REPORTABLE' => 'That trip cannot be reported.',

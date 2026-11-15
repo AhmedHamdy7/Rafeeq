@@ -48,6 +48,7 @@ use App\Http\Controllers\Api\V1\Testing\TestingCasesController;
 use App\Http\Controllers\Api\V1\Testing\TestingController;
 use App\Http\Controllers\Api\V1\Testing\TestingRecordsController;
 use App\Http\Controllers\Api\V1\Testing\TestingScenarioController;
+use App\Http\Controllers\Api\V1\Testing\TestingSuspensionController;
 use App\Http\Controllers\Api\V1\Testing\TestingTripsController;
 use App\Http\Controllers\Api\V1\Trip\AttendanceController;
 use App\Http\Controllers\Api\V1\Trip\DriverTripController;
@@ -125,6 +126,9 @@ Route::prefix('v1')->group(function (): void {
         Route::post('bookings/{booking}/dispute/decide', [TestingCasesController::class, 'decideDispute']);
         Route::post('incidents/{incident}/decide', [TestingCasesController::class, 'decideIncident']);
         Route::post('incidents/{incident}/age', [TestingCasesController::class, 'ageIncident']);
+        Route::post('account/suspension/appeal/decide', [TestingSuspensionController::class, 'decideAppeal']);
+        Route::post('account/suspension/age', [TestingSuspensionController::class, 'age']);
+        Route::post('account/ban', [TestingSuspensionController::class, 'ban']);
     });
 
     Route::prefix('account')->middleware('auth:sanctum')->group(function (): void {

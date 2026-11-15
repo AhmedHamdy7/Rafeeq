@@ -89,6 +89,25 @@ it('shows the no-show record on her own booking and not on the driver\'s view', 
         ->not->toHaveKey('noShow');
 });
 
+it('carries the no-show on the home journey, and the dispute once she sends it', function () {
+    expect(asCaseTester($this->paxToken)->getJson('/api/v1/home')->assertOk()->json('data.nextJourney.noShow'))->toBeNull();
+
+    markNoShow();
+
+    $noShow = asCaseTester($this->paxToken)->getJson('/api/v1/home')->assertOk()->json('data.nextJourney.noShow');
+
+    expect($noShow['confirmedAt'])->toBe(Attendance::sole()->confirmed_at->toIso8601String())
+        ->and($noShow['disputableUntil'])->not->toBeNull()
+        ->and($noShow['dispute'])->toBeNull();
+
+    disputeNoShow();
+
+    $noShow = asCaseTester($this->paxToken)->getJson('/api/v1/home')->assertOk()->json('data.nextJourney.noShow');
+
+    expect($noShow['disputableUntil'])->toBeNull()
+        ->and($noShow['dispute']['status'])->toBe('OPEN');
+});
+
 it('stops offering the dispute once the window has passed', function () {
     markNoShow();
 

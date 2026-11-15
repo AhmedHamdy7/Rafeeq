@@ -747,3 +747,61 @@ it('never deletes a safety event', function () {
 
     expect(SafetyEvent::count())->toBe(1);
 });
+
+it('sends the limit with the list, and whether another fits', function () {
+    test()->withToken($this->token)->getJson('/api/v1/safety/emergency-contacts')
+        ->assertOk()
+        ->assertJsonPath('meta.limit', 3)
+        ->assertJsonPath('meta.canAdd', true);
+
+    foreach (range(1, 3) as $i) {
+        test()->withToken($this->token)->postJson('/api/v1/safety/emergency-contacts', [
+            'name' => "Contact {$i}",
+            'phone' => '0109876543'.$i,
+        ])->assertStatus(201);
+    }
+
+    test()->withToken($this->token)->getJson('/api/v1/safety/emergency-contacts')
+        ->assertOk()
+        ->assertJsonCount(3, 'data')
+        ->assertJsonPath('meta.limit', 3)
+        ->assertJsonPath('meta.canAdd', false);
+});
+
+it('refuses a number that is not an Egyptian mobile as a validation error', function () {
+    test()->withToken($this->token)->postJson('/api/v1/safety/emergency-contacts', [
+        'name' => 'Bad',
+        'phone' => '12345',
+    ])->assertStatus(422)
+        ->assertJsonPath('error.code', 'VALIDATION_FAILED')
+        ->assertJsonValidationErrorFor('phone', 'error.fields');
+
+    $id = test()->withToken($this->token)->postJson('/api/v1/safety/emergency-contacts', [
+        'name' => 'Good',
+        'phone' => '01098765432',
+    ])->assertStatus(201)->json('data.id');
+
+    test()->withToken($this->token)->patchJson("/api/v1/safety/emergency-contacts/{$id}", ['phone' => '12345'])
+        ->assertStatus(422)
+        ->assertJsonPath('error.code', 'VALIDATION_FAILED');
+});
+
+it('refuses her own number as a trusted contact', function () {
+    test()->withToken($this->token)->postJson('/api/v1/safety/emergency-contacts', [
+        'name' => 'Me',
+        'phone' => '+20 111 222 3344',
+    ])->assertStatus(422)
+        ->assertJsonPath('error.code', 'EMERGENCY_CONTACT_SELF')
+        ->assertJsonStructure(['error' => ['fields' => ['phone']]]);
+
+    $id = test()->withToken($this->token)->postJson('/api/v1/safety/emergency-contacts', [
+        'name' => 'Sister',
+        'phone' => '01098765432',
+    ])->assertStatus(201)->json('data.id');
+
+    test()->withToken($this->token)->patchJson("/api/v1/safety/emergency-contacts/{$id}", ['phone' => '01112223344'])
+        ->assertStatus(422)
+        ->assertJsonPath('error.code', 'EMERGENCY_CONTACT_SELF');
+
+    expect(EmergencyContact::count())->toBe(1);
+});

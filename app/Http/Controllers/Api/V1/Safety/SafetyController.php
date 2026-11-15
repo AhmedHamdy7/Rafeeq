@@ -14,6 +14,7 @@ use App\Domains\Safety\Models\EmergencyContact;
 use App\Domains\Safety\Models\Incident;
 use App\Domains\Safety\Models\LiveShare;
 use App\Domains\Safety\Models\SosEvent;
+use App\Domains\Safety\Support\SafetySettings;
 use App\Domains\Shared\Exceptions\DomainException;
 use App\Domains\Shared\Support\ErrorCode;
 use App\Domains\Shared\ValueObjects\Coordinate;
@@ -104,7 +105,12 @@ final class SafetyController extends Controller
             ->orderBy('id')
             ->get();
 
-        return ApiResponse::success(EmergencyContactResource::collection($contacts));
+        $limit = SafetySettings::maxEmergencyContacts();
+
+        return ApiResponse::success(EmergencyContactResource::collection($contacts), meta: [
+            'limit' => $limit,
+            'canAdd' => $contacts->count() < $limit,
+        ]);
     }
 
     /**
@@ -113,7 +119,8 @@ final class SafetyController extends Controller
     #[ApiErrors(
         ErrorCode::EmergencyContactLimitReached,
         ErrorCode::EmergencyContactDuplicate,
-        ErrorCode::PhoneInvalid,
+        ErrorCode::EmergencyContactSelf,
+        ErrorCode::ValidationFailed,
     )]
     public function addContact(StoreEmergencyContactRequest $request, ManageEmergencyContactsAction $action): JsonResponse
     {
@@ -127,7 +134,8 @@ final class SafetyController extends Controller
      */
     #[ApiErrors(
         ErrorCode::EmergencyContactDuplicate,
-        ErrorCode::PhoneInvalid,
+        ErrorCode::EmergencyContactSelf,
+        ErrorCode::ValidationFailed,
         ErrorCode::NotFound,
     )]
     public function updateContact(

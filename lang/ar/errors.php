@@ -159,6 +159,7 @@ return [
     'SOS_ALREADY_RESOLVED' => 'الاستغاثة دي اتعامل معاها خلاص.',
     'EMERGENCY_CONTACT_LIMIT_REACHED' => 'وصلت لأقصى عدد جهات طوارئ. امسح واحدة قبل ما تضيف تانية.',
     'EMERGENCY_CONTACT_DUPLICATE' => 'الرقم ده موجود بالفعل في جهات الطوارئ بتاعتك.',
+    'EMERGENCY_CONTACT_SELF' => 'ده رقمك انت. ضيف حد تاني بتثق فيه.',
     'CANNOT_BLOCK_SELF' => 'مش ممكن تحظر نفسك.',
     'ALREADY_BLOCKED' => 'الشخص ده محظور بالفعل.',
     'INCIDENT_NOT_REPORTABLE' => 'مش ممكن تبلّغ عن الرحلة دي.',

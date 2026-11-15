@@ -14,7 +14,7 @@
 >
 > **Base URL:** `{host}/api/v1` · **Auth:** bearer token · **Format:** JSON only.
 
-**Last updated:** 2026-11-15 · **244 endpoints live** · Phases 0–7, 9 and 11 complete · 10, 12 and 13 all but a decision each
+**Last updated:** 2026-11-15 · **247 endpoints live** · Phases 0–7, 9 and 11 complete · 10, 12 and 13 all but a decision each
 
 ---
 
@@ -22,7 +22,7 @@
 
 ### What is ready
 
-**244 endpoints live** and tested, across the 47 designed screens:
+**247 endpoints live** and tested, across the 47 designed screens:
 
 | | Count | Covers |
 |---|---|---|
@@ -897,6 +897,9 @@ fails if this list and the running routes ever disagree in either direction.
 | `POST /testing/bookings/{booking}/dispute/decide` | 4.17 Testing (staging only) |
 | `POST /testing/incidents/{incident}/decide` | 4.17 Testing (staging only) |
 | `POST /testing/incidents/{incident}/age` | 4.17 Testing (staging only) |
+| `POST /testing/account/suspension/appeal/decide` | 4.17 Testing (staging only) |
+| `POST /testing/account/suspension/age` | 4.17 Testing (staging only) |
+| `POST /testing/account/ban` | 4.17 Testing (staging only) |
 | `POST /testing/notifications` | 4.17 Testing (staging only) |
 | `DELETE /safety/live-shares/{share}` | 4.12 Safety |
 | `POST /trips/{trip}/live-share` | 4.12 Safety |
@@ -1403,7 +1406,10 @@ seat was cancelled** when staff suspended her — inside the 12-hour lock too, n
 As a driver, every published commute was paused (`pausedReason: account_suspended`); lifting the
 hold gives none of it back, she resumes herself. Only a **permanent ban** keeps the full Account
 restricted screen (`RESTRICTED_ACCOUNT`, `permanent: true`), with every endpoint behind
-`account.active` closed, reads included.
+`account.active` closed, reads included. What stays open for a ban is what never needed an active
+account: `GET /auth/me`, sign-out, devices, notifications, **reports** (`POST /incidents` and the rest
+of 4.12's report routes), trusted contacts and **`GET /content/support_contact`** (4.18). The Restricted
+screen's **Contact safety** can open the report form or show the support text from that page.
 
 **Request:** `message` (required, 10–1000 characters, her side of it) and `evidence` (optional,
 ≤ 2000 — a description, a reference number). **Answer `201`:**
@@ -4161,7 +4167,7 @@ they explain.
 | `greetingName` | Their public first name. |
 | `verification` | `{level, of, percentage, isComplete}` — the same numbers as the Verification Centre, so the banner cannot disagree with the screen behind it. 🔴 **`null` for a passenger-only account** (PROF-12, F2-8): passengers never verify, so hide the banner. It appears once the account has the driver capability. |
 | `unreadNotifications` | The bell badge: the same number as `GET /notifications` → `meta.unreadCount`, so Home is one request. |
-| `nextJourney` | The journey the card is about, or **`null`** (F3P-01). Contains the full booking (4.7) plus `originLabel`, `destinationLabel`, `departureAt`, `departureLocal`, `departsInMinutes`, `isToday`, `attendance`, `isTrial`, `driver` (5.1), `vehicle`, and the state fields below. **Which journey**, the first that exists: ① the one **happening now** (run started, or departure passed and the driver has not started — today only); ② one that **ended and she has not seen** — cancelled by the driver, expired, she left for a driver delay, or completed and not yet rated — until you send `POST /bookings/{booking}/seen`, for up to 7 days; ③ the **soonest upcoming confirmed** one — a `PENDING` request is never on the card (TRIP-01); ④ a **completed ride still waiting for her stars**, inside the rating window, only when nothing is upcoming. A ride she cancelled herself is not shown. |
+| `nextJourney` | The journey the card is about, or **`null`** (F3P-01). Contains the full booking (4.7) plus `originLabel`, `destinationLabel`, `departureAt`, `departureLocal`, `departsInMinutes`, `isToday`, `attendance`, `noShow` (the same object and rules as on the booking, 4.7: `null` unless the driver marked her a no-show), `isTrial`, `driver` (5.1), `vehicle`, and the state fields below. **Which journey**, the first that exists: ① the one **happening now** (run started, or departure passed and the driver has not started — today only); ② one that **ended and she has not seen** — cancelled by the driver, expired, she left for a driver delay, or completed and not yet rated — until you send `POST /bookings/{booking}/seen`, for up to 7 days; ③ the **soonest upcoming confirmed** one — a `PENDING` request is never on the card (TRIP-01); ④ a **completed ride still waiting for her stars**, inside the rating window, only when nothing is upcoming. A ride she cancelled herself is not shown. |
 | `nextJourney.phase` | **The state the card switches on**, decided by the server: `scheduled` (F3P-02/03) · `driver_en_route` (F3P-04, the run has started) · `driver_arrived` (F3P-05, the driver's GPS-checked "I've arrived" for her) · `on_board` (F3P-06, she is checked in and not yet dropped off) · `driver_delayed` (F3P-07: 5 min after departure with the run not started, or the run started but the driver has not arrived 5 min after her pickup time, or the car passed her stop) · `cancelled_by_driver` (F3P-08) · `expired` (F3P-09, the driver never started and the day was closed) · `exited` (F3P-10, she pressed Leave Without Fee) · `completed` (F3P-11). `status` and `trip.status` are unchanged — switch on `phase`, not on them. |
 | `nextJourney.daysMask` | The days she rides — her requested days, or the commute's days. Sat 1 … Fri 64. |
 | `nextJourney.pickup` | `{label, at, local, lat, lng, isExact}` — "Your agreed pickup · Rehab Gate 2 · 07:05". `label`/`lat`/`lng`/`isExact` are `meetingPoint`'s (fuzzed, label `null`, until confirmed). **`at` is her pickup time** — departure plus the drive to her stop — and is the same instant her arrival grace counts from. `meetingPoint` stays. |
@@ -4293,6 +4299,10 @@ it" and "somebody is calling me" are different situations to be in.
 
 Trusted contacts. **Request:** `name`, `phone`, `relationship`, `autoShareTrips`, `isGuardian`.
 
+**The list** answers `meta: {limit, canAdd}` next to `data`: `limit` is the cap (3 today, a setting),
+`canAdd` is whether another contact fits right now. Show "{count} of {limit}" and hide **Add** when
+`canAdd` is `false`. Somebody who kept 4 or 5 from before has `canAdd: false`.
+
 | Response field | Meaning |
 |---|---|
 | `id`, `name`, `relationship` | As entered. |
@@ -4309,6 +4319,10 @@ Rules you will hit:
   cannot add another until she is below 3.
 - **The number is normalised**, so the same contact cannot be added twice in two formats
   (`EMERGENCY_CONTACT_DUPLICATE`, 409).
+- **A number that is not an Egyptian mobile** answers `422 VALIDATION_FAILED` with `error.fields.phone`,
+  on add and on edit.
+- **Her own number is refused**: `422 EMERGENCY_CONTACT_SELF`, with `error.fields.phone`, on add and on
+  edit. A trusted contact who is herself would receive her own location and nobody else would.
 - **Changing the number clears `verifiedAt`.** Carrying it across would mean a "verified" badge on a
   number nobody ever reached.
 - **Removal is immediate and unconditional.** Do not add a confirmation dialog: somebody removing a
@@ -5294,6 +5308,8 @@ Both answer the side as in `GET /account/debt` (`driver` / `passenger` object).
 caller's account (commutes paused with `account_suspended`); `vehicle` the given car, or the active one
 (`vehicle_suspended` / `vehicle_reinstated`). Answers `{accountStatus, vehicle {id, verificationStatus}}`.
 `409 MEMBER_NOT_ACTIVE` / `MEMBER_NOT_SUSPENDED` when the account is already in that state.
+`scope: "account"` works for **any** account, passenger-only included, despite the `driver/` in the path.
+`reinstate` with `scope: "account"` also lifts a permanent ban.
 
 #### `POST /testing/driver/documents/{key}/expiry`
 
@@ -5434,6 +5450,31 @@ and not appealed; `404` for somebody else's.
 
 `{ "hours": 1–200 }`. Moves the caller's report's `resolvedAt` back. 49 hours closes the appeal
 window (`appeal.appealableUntil: null`). Answers the report.
+
+#### `POST /testing/account/suspension/appeal/decide`
+
+`{ "decision": "upheld" | "overturned", "note"?: "…" }` (`note` up to 255). Staff's decision on the
+caller's pending suspension appeal, made the same way as on the dashboard: `overturned` lifts the hold
+and sends `account_reinstated`; `upheld` keeps it and opens the second 48-hour window
+(`needsNewEvidence: true`). `409 SUSPENSION_APPEAL_NOT_OPEN` when no appeal is pending;
+`409 MEMBER_NOT_SUSPENDED` when she is not suspended. Both appeals decided `upheld` gives
+`ALREADY_APPEALED` on the next `POST /account/suspension/appeal`.
+
+#### `POST /testing/account/suspension/age`
+
+`{ "hours": 1–200 }`. Moves the caller's hold back: `suspendedAt`, `reviewDueAt`, and each appeal's
+`createdAt` and `resolvedAt`. 49 hours closes whichever appeal window is open (`canAppeal: false`,
+then `APPEAL_WINDOW_CLOSED`). `409 MEMBER_NOT_SUSPENDED` when she is not suspended.
+
+#### `POST /testing/account/ban`
+
+`{ "reason"?: "…" }` (up to 255). A permanent ban on the caller, as staff make one on the Members page:
+`nextStep: RESTRICTED_ACCOUNT`, `suspension.permanent: true`, `PERMANENT_BAN` on appeal, every upcoming
+seat cancelled. `409 MEMBER_NOT_ACTIVE` when the account is already on hold. Lift it with
+`POST /testing/driver/reinstate` `{scope: "account"}`, or delete the account with `DELETE /testing/account`.
+
+All three answer `{ accountStatus, nextStep, suspension }`: `suspension` is `user.suspension` as
+`GET /auth/me` returns it, or `null` once the hold is lifted.
 
 Cancel Active Trip needs no testing call: the real `POST /trips/{trip}/cancel-active` on a started
 test run gives `active_trip_cancelled`. Check one in first (`POST /trips/{trip}/check-in`) to get
@@ -5650,6 +5691,7 @@ exist, and every live endpoint must be named here.
 
 | Date | Change |
 |---|---|
+| 2026-11-15 | 🛡️ **Safety leftovers.** The home journey (`GET /home`, `nextJourney`) carries **`noShow`**, the same object as on the booking (4.11). `GET /safety/emergency-contacts` answers **`meta: {limit, canAdd}`** (4.12). A bad phone number on a trusted contact now answers **`422 VALIDATION_FAILED`** with `error.fields.phone` (it answered `500`); her own number is refused with **`422 EMERGENCY_CONTACT_SELF`**. New staging-only **`POST /testing/account/suspension/appeal/decide`**, **`POST /testing/account/suspension/age`** and **`POST /testing/account/ban`** (4.17); `POST /testing/driver/suspend` with `scope: "account"` is documented as working for any account. 4.2 now lists what stays open for a permanent ban. |
 | 2026-11-15 | ⚖️ **No-show dispute, report case numbers, push taps.** Her booking carries **`noShow`** `{confirmedAt, disputableUntil, dispute {status, reason, disputedAt, resolution, resolvedAt, note}}` on `GET /bookings/{booking}` and `GET /my-bookings` (4.7). **`POST /bookings/{booking}/dispute` now answers `201` with the booking** (it answered the attendance row), and its refusals have one code each: `409 ATTENDANCE_NOT_DISPUTABLE` (was `ATTENDANCE_NOT_CONFIRMABLE`), `409 ATTENDANCE_ALREADY_DISPUTED` (was `ATTENDANCE_NOT_CONFIRMABLE` with `fields.dispute`), `422 ATTENDANCE_DISPUTE_WINDOW_CLOSED` (unchanged); a booking with no attendance row is now `409 ATTENDANCE_NOT_DISPUTABLE`, not `404`. Staff decide no-show disputes on the dashboard; the passenger gets **`no_show_dispute_decided`** (`bookingId`, `tripId`, `resolution`). Reports carry **`caseNumber`** (`RP-` + six digits). Every push now carries **`notificationId`**, the inbox row's id; its other keys already matched the row. New staging-only **`POST /testing/bookings/{booking}/dispute/decide`**, **`POST /testing/incidents/{incident}/decide`** and **`POST /testing/incidents/{incident}/age`** (4.17). |
 | 2026-11-15 | 🧾 **History order.** `GET /my-bookings?scope=past` now sorts a cancelled seat by `cancelledAt` and every other seat by its trip's departure, newest first. Seats cancelled today for later dates no longer push today's finished ride off the first page. Same fields, same `meta` paging. |
 | 2026-11-15 | 🧪 **New staging-only `POST /testing/commute-demands/{demand}/expire`** (4.17): an active saved ride request becomes `EXPIRED` now, as the nightly job leaves it. **Cancel Active Trip (4.9)** now says when a passenger who was aboard pays for the part she rode (breakdown, accident or emergency past 25 % of her route: `PAID`, `price.totalPiastres` is the reduced amount) and when she doesn't (`WAIVED`, price stays the full seat). No behaviour changed. |

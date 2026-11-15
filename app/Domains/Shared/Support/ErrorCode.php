@@ -285,6 +285,7 @@ enum ErrorCode: string
     case SosAlreadyResolved = 'SOS_ALREADY_RESOLVED';
     case EmergencyContactLimitReached = 'EMERGENCY_CONTACT_LIMIT_REACHED';
     case EmergencyContactDuplicate = 'EMERGENCY_CONTACT_DUPLICATE';
+    case EmergencyContactSelf = 'EMERGENCY_CONTACT_SELF';
     case CannotBlockSelf = 'CANNOT_BLOCK_SELF';
     case AlreadyBlocked = 'ALREADY_BLOCKED';
     case IncidentNotReportable = 'INCIDENT_NOT_REPORTABLE';
@@ -573,6 +574,7 @@ enum ErrorCode: string
 
             // 422: about what was sent. The list is full, or the report has nothing to attach to.
             self::EmergencyContactLimitReached,
+            self::EmergencyContactSelf,
             self::IncidentEvidenceLimitReached,
             self::IncidentNotReportable,
             // 422: the journey itself cannot be rated — it was cancelled, or it has not happened.
