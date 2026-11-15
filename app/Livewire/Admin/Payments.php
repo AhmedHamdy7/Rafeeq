@@ -3,9 +3,11 @@
 namespace App\Livewire\Admin;
 
 use App\Domains\Admin\Actions\ManageDebtAction;
+use App\Domains\Admin\Actions\ResolveAttendanceDisputeAction;
 use App\Domains\Admin\Actions\ResolveFeeAppealAction;
 use App\Domains\Admin\Enums\AdminPermission;
 use App\Domains\Admin\Models\AdminUser;
+use App\Domains\Booking\Models\Booking;
 use App\Domains\Identity\Models\User;
 use App\Domains\Payment\Enums\DebtPaymentStatus;
 use App\Domains\Payment\Enums\DebtSide;
@@ -14,6 +16,9 @@ use App\Domains\Payment\Models\DebtPayment;
 use App\Domains\Payment\Models\FeeAppeal;
 use App\Domains\Payment\Support\DebtStanding;
 use App\Domains\Shared\Exceptions\DomainException;
+use App\Domains\Trip\Enums\AttendanceStatus;
+use App\Domains\Trip\Enums\DisputeResolution;
+use App\Domains\Trip\Models\Attendance;
 use App\Domains\Trip\Models\MemberWarning;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Validation\Rule;
@@ -61,6 +66,8 @@ class Payments extends Component
     public ?string $deciding = null;
 
     public string $appealNote = '';
+
+    public string $memberNote = '';
 
     public function mount(): void
     {
@@ -175,6 +182,34 @@ class Payments extends Component
         $this->resetValidation();
         $this->deciding = $warningId;
         $this->appealNote = '';
+        $this->memberNote = '';
+    }
+
+    public function decideDispute(string $bookingId, string $resolution, ResolveAttendanceDisputeAction $action): void
+    {
+        $this->authorizeTo(AdminPermission::DebtManage);
+
+        $this->validate([
+            'appealNote' => ['required', 'string', 'min:10', 'max:255'],
+            'memberNote' => ['nullable', 'string', 'max:255'],
+        ], attributes: [
+            'appealNote' => __('admin.payments.note'),
+            'memberNote' => __('admin.payments.member_note'),
+        ]);
+
+        $decision = DisputeResolution::tryFrom($resolution) ?? abort(422);
+        $booking = Booking::query()->whereKey($bookingId)->first() ?? abort(404);
+
+        try {
+            $action->execute($booking, $this->admin(), $decision, $this->memberNote, $this->appealNote);
+        } catch (DomainException $e) {
+            $this->addError('appealNote', __('errors.'.$e->errorCode->value));
+
+            return;
+        }
+
+        $this->reset('deciding', 'appealNote', 'memberNote');
+        session()->flash('status', __('admin.payments.dispute_'.$decision->value));
     }
 
     /**
@@ -274,6 +309,15 @@ class Payments extends Component
             ->limit(50)
             ->get();
 
+        $disputes = Attendance::query()
+            ->where('status', AttendanceStatus::PassengerNoShow->value)
+            ->whereNotNull('disputed_at')
+            ->whereNull('dispute_resolution')
+            ->with(['booking.passenger', 'booking.scheduledTrip'])
+            ->orderBy('disputed_at')
+            ->limit(50)
+            ->get();
+
         $history = $this->view === 'history'
             ? DebtPayment::query()
                 ->whereIn('status', [DebtPaymentStatus::Confirmed->value, DebtPaymentStatus::Rejected->value])
@@ -288,6 +332,7 @@ class Payments extends Component
             'pending' => $pending,
             'appeals' => $appeals,
             'driverAppeals' => $driverAppeals,
+            'disputes' => $disputes,
             'owed' => $owed,
             'mayAct' => $this->admin()?->can(AdminPermission::DebtManage->value) === true,
         ])->title(__('admin.payments.title'));

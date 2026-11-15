@@ -26,6 +26,7 @@ final class IncidentResource extends JsonResource
     {
         return [
             'id' => $this->id,
+            'caseNumber' => $this->case_number,
             'category' => $this->category->value,
 
             /*

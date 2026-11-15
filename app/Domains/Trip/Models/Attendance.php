@@ -50,6 +50,7 @@ class Attendance extends Model
             'gps_confidence' => 'decimal:2',
             'disputed_at' => 'datetime',
             'dispute_resolution' => DisputeResolution::class,
+            'dispute_resolved_at' => 'datetime',
         ];
     }
 

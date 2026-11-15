@@ -259,6 +259,9 @@ enum ErrorCode: string
     case TripTooEarlyToStart = 'TRIP_TOO_EARLY_TO_START';
     case AttendanceNotConfirmable = 'ATTENDANCE_NOT_CONFIRMABLE';
     case AttendanceDisputeWindowClosed = 'ATTENDANCE_DISPUTE_WINDOW_CLOSED';
+    case AttendanceNotDisputable = 'ATTENDANCE_NOT_DISPUTABLE';
+    case AttendanceAlreadyDisputed = 'ATTENDANCE_ALREADY_DISPUTED';
+    case AttendanceDisputeNotOpen = 'ATTENDANCE_DISPUTE_NOT_OPEN';
     case WaitTimerAlreadyRunning = 'WAIT_TIMER_ALREADY_RUNNING';
     case WaitTimerNotRunning = 'WAIT_TIMER_NOT_RUNNING';
     case NoShowTooEarly = 'NO_SHOW_TOO_EARLY';
@@ -521,6 +524,9 @@ enum ErrorCode: string
             self::TripNotCancellable,
             self::TripDayTaken,
             self::AttendanceNotConfirmable,
+            self::AttendanceNotDisputable,
+            self::AttendanceAlreadyDisputed,
+            self::AttendanceDisputeNotOpen,
             self::WaitTimerAlreadyRunning,
             self::WaitTimerNotRunning,
             self::NoShowTooEarly,

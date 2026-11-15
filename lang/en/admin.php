@@ -679,6 +679,16 @@ return [
         'uphold' => 'Uphold — it stands',
         'appeal_overturned' => 'Appeal accepted. The fee is off her debt.',
         'appeal_upheld' => 'Appeal refused. The fee stands.',
+        'disputes_title' => 'No-show disputes',
+        'no_disputes' => 'No no-show dispute waiting.',
+        'dispute_marked' => 'Marked a no-show :at · GPS confidence :gps',
+        'member_note' => 'message to her',
+        'member_note_placeholder' => 'Optional: one sentence she will read in the app.',
+        'dispute_overturn' => 'Remove the no-show and its fee',
+        'dispute_uphold' => 'Keep the no-show',
+        'dispute_upheld' => 'Dispute refused. The no-show stands.',
+        'dispute_overturned' => 'Dispute accepted. The no-show and its fee are removed.',
+        'dispute_refunded' => 'Dispute accepted and refunded. The no-show and its fee are removed.',
     ],
 
     'files' => [

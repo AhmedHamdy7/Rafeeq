@@ -27,6 +27,7 @@ final class DeliverPushNotification implements ShouldQueue
     public function __construct(
         public readonly string $notificationId,
         public readonly string $deviceId,
+        public readonly ?string $inboxNotificationId = null,
     ) {}
 
     public function handle(PushSender $sender): void
@@ -61,6 +62,7 @@ final class DeliverPushNotification implements ShouldQueue
                 ...($push->data ?? []),
                 'type' => (string) $push->type,
                 'category' => (string) $push->category?->value,
+                ...($this->inboxNotificationId === null ? [] : ['notificationId' => $this->inboxNotificationId]),
             ]);
         } catch (PushTokenRejected $e) {
             /*

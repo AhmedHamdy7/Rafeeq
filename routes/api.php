@@ -44,6 +44,7 @@ use App\Http\Controllers\Api\V1\Search\MatchOpenedController;
 use App\Http\Controllers\Api\V1\Search\RecentSearchController;
 use App\Http\Controllers\Api\V1\Search\SavedSearchController;
 use App\Http\Controllers\Api\V1\Search\SearchController;
+use App\Http\Controllers\Api\V1\Testing\TestingCasesController;
 use App\Http\Controllers\Api\V1\Testing\TestingController;
 use App\Http\Controllers\Api\V1\Testing\TestingRecordsController;
 use App\Http\Controllers\Api\V1\Testing\TestingScenarioController;
@@ -121,6 +122,9 @@ Route::prefix('v1')->group(function (): void {
         Route::post('seat-offers/{offer}/close', [TestingTripsController::class, 'closeOffer']);
         Route::post('commute-demands/{demand}/expire', [TestingTripsController::class, 'expireDemand']);
         Route::post('notifications', [TestingTripsController::class, 'writeNotification']);
+        Route::post('bookings/{booking}/dispute/decide', [TestingCasesController::class, 'decideDispute']);
+        Route::post('incidents/{incident}/decide', [TestingCasesController::class, 'decideIncident']);
+        Route::post('incidents/{incident}/age', [TestingCasesController::class, 'ageIncident']);
     });
 
     Route::prefix('account')->middleware('auth:sanctum')->group(function (): void {

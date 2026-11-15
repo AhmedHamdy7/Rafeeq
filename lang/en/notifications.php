@@ -301,6 +301,10 @@ return [
         'title' => 'No fee for your cancellation',
         'body' => 'Somebody from the waiting list took your seat on :date, so your late cancellation costs nothing.',
     ],
+    'no_show_dispute_decided' => [
+        'title' => 'Your no-show dispute was decided',
+        'body' => 'We reviewed your dispute about :date. Open the trip to read the decision.',
+    ],
     'driver_cancel_fee' => [
         'title' => 'Cancellation fee: EGP :amount',
         'body' => 'Cancelling confirmed seats close to departure adds EGP :amount to this week’s commission. Had an emergency? Appeal with evidence within :hours hours.',

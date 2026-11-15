@@ -15,6 +15,7 @@ use App\Domains\Group\Models\GroupMember;
 use App\Domains\Identity\Models\User;
 use App\Domains\Rating\Models\Rating;
 use App\Domains\Safety\Support\OtherParty;
+use App\Domains\Trip\Support\AttendanceDisputes;
 use App\Domains\Trip\Support\DriverDelay;
 use Carbon\CarbonImmutable;
 use Illuminate\Http\Request;
@@ -212,6 +213,12 @@ final class BookingResource extends JsonResource
             // What it is for, as a stable code (`no_show`, `late_cancel`, `credit`, …), or null.
             'feeLineReason' => $this->fee_line_reason,
 
+            'noShow' => $this->when(
+                $this->resource->relationLoaded('attendance')
+                    && $request->user()?->id === $this->passenger_user_id,
+                fn (): ?array => AttendanceDisputes::noShowFor($this->attendance),
+            ),
+
             /*
              * TRIP-20: set down more than 1 km before her drop-off without asking → `askedAt` is
              * set and she answers `POST /bookings/{booking}/early-drop`. `answer`: null, `yes`, `no`.
@@ -383,6 +390,7 @@ final class BookingResource extends JsonResource
         return [
             'scheduledTrip.commuteOffer.locations',
             'seatRequest',
+            'attendance',
             'driverProfile.user.stats',
             'driverProfile.user.verifications',
             'ratings' => fn ($query) => $query->where('reviewer_user_id', $viewer->id)->with('tags'),

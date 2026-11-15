@@ -200,6 +200,54 @@
         @endforeach
     </div>
 
+    <div class="ad-section-label">{{ __('admin.payments.disputes_title') }}</div>
+    <div class="ad-stack">
+        @if ($disputes->isEmpty())
+            <x-admin.card flush><x-admin.state kind="empty" :title="__('admin.payments.no_disputes')" /></x-admin.card>
+        @endif
+
+        @foreach ($disputes as $dispute)
+            <x-admin.card flush wire:key="dispute-{{ $dispute->booking_id }}">
+                <div class="ad-card__body">
+                    <div style="font-weight:700">
+                        <bdi>{{ $dispute->booking?->passenger?->public_first_name ?? '—' }}</bdi>
+                        · {{ __('admin.payments.kind_no_show') }}
+                        · <span class="ad-num">{{ $dispute->booking?->scheduledTrip?->trip_date?->toDateString() }}</span>
+                    </div>
+                    <div class="ad-muted" style="font-size:12.5px">{{ __('admin.payments.dispute_marked', ['at' => $dispute->confirmed_at?->toDayDateTimeString() ?? '—', 'gps' => $dispute->gps_confidence === null ? '—' : $dispute->gps_confidence]) }}</div>
+                    <p style="margin:8px 0 0;white-space:pre-line" dir="auto">{{ $dispute->dispute_reason }}</p>
+                    @if ($mayAct)
+                        @if ($deciding === $dispute->booking_id)
+                            <div class="ad-confirm">
+                                <div class="ad-field">
+                                    <textarea class="ad-textarea" wire:model="appealNote" rows="2" required
+                                              aria-label="{{ __('admin.payments.note_placeholder') }}"
+                                              placeholder="{{ __('admin.payments.note_placeholder') }}"></textarea>
+                                    @error('appealNote') <span class="ad-error">{{ $message }}</span> @enderror
+                                </div>
+                                <div class="ad-field">
+                                    <textarea class="ad-textarea" wire:model="memberNote" rows="2"
+                                              aria-label="{{ __('admin.payments.member_note_placeholder') }}"
+                                              placeholder="{{ __('admin.payments.member_note_placeholder') }}"></textarea>
+                                    @error('memberNote') <span class="ad-error">{{ $message }}</span> @enderror
+                                </div>
+                                <div class="ad-row">
+                                    <button type="button" class="ad-btn ad-btn--primary" wire:click="decideDispute('{{ $dispute->booking_id }}', 'overturned')">{{ __('admin.payments.dispute_overturn') }}</button>
+                                    <button type="button" class="ad-btn" wire:click="decideDispute('{{ $dispute->booking_id }}', 'upheld')">{{ __('admin.payments.dispute_uphold') }}</button>
+                                    <button type="button" class="ad-btn ad-btn--quiet" wire:click="$set('deciding', null)">{{ __('admin.queue.cancel') }}</button>
+                                </div>
+                            </div>
+                        @else
+                            <div class="ad-row" style="margin-block-start:12px">
+                                <button type="button" class="ad-btn ad-btn--sm" wire:click="openAppeal('{{ $dispute->booking_id }}')">{{ __('admin.payments.decide') }}</button>
+                            </div>
+                        @endif
+                    @endif
+                </div>
+            </x-admin.card>
+        @endforeach
+    </div>
+
     @if ($mayAct)
         <div class="ad-grid ad-grid--2" style="align-items:start;margin-block-start:20px">
             {{-- ─────────── Coupon (K) ─────────── --}}

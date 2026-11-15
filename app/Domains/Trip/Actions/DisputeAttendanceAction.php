@@ -10,7 +10,7 @@ use App\Domains\Booking\Support\BookingEventLog;
 use App\Domains\Shared\Exceptions\DomainException;
 use App\Domains\Shared\Support\ErrorCode;
 use App\Domains\Trip\Models\Attendance;
-use App\Domains\Trip\Support\TripSettings;
+use App\Domains\Trip\Support\AttendanceDisputes;
 use Illuminate\Support\Facades\DB;
 
 /**
@@ -37,7 +37,9 @@ final readonly class DisputeAttendanceAction
     public function execute(Booking $booking, string $reason): Attendance
     {
         $attendance = Attendance::query()->whereKey($booking->id)->first()
-            ?? throw DomainException::of(ErrorCode::NotFound);
+            ?? throw DomainException::of(ErrorCode::AttendanceNotDisputable, fields: [
+                'currentStatus' => ['NONE'],
+            ]);
 
         /*
          * Nothing to dispute on a row nobody decided. A `pending` row already means "not
@@ -46,7 +48,7 @@ final readonly class DisputeAttendanceAction
          * were on.
          */
         if ($attendance->status->isTerminal() === false) {
-            throw DomainException::of(ErrorCode::AttendanceNotConfirmable, fields: [
+            throw DomainException::of(ErrorCode::AttendanceNotDisputable, fields: [
                 'currentStatus' => [strtoupper($attendance->status->value)],
             ]);
         }
@@ -59,7 +61,7 @@ final readonly class DisputeAttendanceAction
              * because a second reason arriving after a reviewer has started reading the
              * first would quietly replace the thing they are deciding about.
              */
-            throw DomainException::of(ErrorCode::AttendanceNotConfirmable, fields: [
+            throw DomainException::of(ErrorCode::AttendanceAlreadyDisputed, fields: [
                 'dispute' => ['ALREADY_RAISED'],
             ]);
         }
@@ -102,9 +104,7 @@ final readonly class DisputeAttendanceAction
      */
     private function assertWithinWindow(Attendance $attendance): void
     {
-        $decidedAt = $attendance->confirmed_at ?? $attendance->updated_at;
-
-        $closesAt = $decidedAt->copy()->addHours(TripSettings::disputeWindowHours());
+        $closesAt = AttendanceDisputes::closesAt($attendance);
 
         if (now()->greaterThan($closesAt)) {
             throw DomainException::of(ErrorCode::AttendanceDisputeWindowClosed, fields: [

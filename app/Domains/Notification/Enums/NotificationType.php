@@ -172,6 +172,8 @@ enum NotificationType: string
     /** Somebody from the waiting list took the seat: the late-cancel fee is dropped (R-8). */
     case LateCancelFeeWaived = 'late_cancel_fee_waived';
 
+    case NoShowDisputeDecided = 'no_show_dispute_decided';
+
     // ---- Driver fees (PAY-23 → PAY-29) — one message per act, the total of its seats ---------
 
     /** He cancelled seats — one passenger, a day, a pause, a delete, a new car, a block (PAY-23). */
@@ -542,6 +544,7 @@ enum NotificationType: string
             self::LateCancelFee,
             self::LateCancelFeeCharged,
             self::LateCancelFeeWaived,
+            self::NoShowDisputeDecided,
             self::DriverCancelFee,
             self::DriverEndedTripFee,
             self::DriverNoShowFee,

@@ -222,7 +222,7 @@ function patrolDisputedNoShow(string $driverToken, string $paxToken, string $tri
     underway($driverToken, $tripId);
     arrivedAndWaited($driverToken, $tripId, $bookingId);
     patrolAs($driverToken)->postJson("/api/v1/trips/{$tripId}/no-show", ['bookingId' => $bookingId])->assertOk();
-    patrolAs($paxToken)->postJson("/api/v1/bookings/{$bookingId}/dispute", ['reason' => 'I was at the gate.'])->assertOk();
+    patrolAs($paxToken)->postJson("/api/v1/bookings/{$bookingId}/dispute", ['reason' => 'I was at the gate.'])->assertCreated();
 }
 
 it('B-13: a dispute on a run he drove does not hold his passenger debt suspension', function () {
