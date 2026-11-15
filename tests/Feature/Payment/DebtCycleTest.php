@@ -131,7 +131,7 @@ it('never suspends while a dispute of hers is open', function () {
     checkIn($this->driverToken, $this->tripId, ['bookingId' => $this->bookingId])->assertOk();
     $this->withToken($this->paxToken)->postJson("/api/v1/bookings/{$this->bookingId}/dispute", [
         'reason' => 'العربية مشيت قبل ما أوصل.',
-    ])->assertOk();
+    ])->assertCreated();
 
     $this->artisan('payments:sweep-debts')->assertSuccessful();
 

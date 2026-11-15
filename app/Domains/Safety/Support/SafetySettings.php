@@ -116,6 +116,11 @@ final class SafetySettings
         return max(1, (int) self::get('safety.live_share_max_minutes'));
     }
 
+    public static function autoShareEnabled(): bool
+    {
+        return (int) self::get('safety.auto_share_enabled') === 1;
+    }
+
     private static function get(string $key): mixed
     {
         return PlatformSetting::value($key, config("rafeeq.{$key}"));

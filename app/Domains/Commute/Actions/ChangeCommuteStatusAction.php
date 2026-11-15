@@ -4,7 +4,9 @@ namespace App\Domains\Commute\Actions;
 
 use App\Domains\Booking\Actions\DisplaceConfirmedBookingsAction;
 use App\Domains\Booking\Actions\OfferSeatsToWaitlistMembersAction;
+use App\Domains\Booking\Enums\CancelCode;
 use App\Domains\Booking\Enums\DisplacementReason;
+use App\Domains\Booking\Enums\SeatOfferClosedReason;
 use App\Domains\Booking\Enums\SeatOfferStatus;
 use App\Domains\Booking\Enums\SeatRequestStatus;
 use App\Domains\Booking\Models\SeatOffer;
@@ -80,6 +82,7 @@ final readonly class ChangeCommuteStatusAction
                 DisplacementReason::CommutePaused,
                 // PAY-23 (C-7): his choice costs the fee by timing; an automatic pause does not.
                 chargeDriver: $reason === CommutePausedReason::ByDriver,
+                code: $reason === CommutePausedReason::ByDriver ? CancelCode::CommutePaused : CancelCode::CommuteStopped,
             );
 
             return $offer;
@@ -133,6 +136,7 @@ final readonly class ChangeCommuteStatusAction
                 DisplacementReason::CommuteDeleted,
                 // PAY-23 (C-8): deleting it is his choice; a schedule that simply ended is not.
                 chargeDriver: $reason === null,
+                code: $reason === 'schedule_ended' ? CancelCode::CommuteEnded : CancelCode::CommuteDeleted,
             );
 
             // 2. Then every upcoming day, which now has nobody on it.
@@ -242,6 +246,7 @@ final readonly class ChangeCommuteStatusAction
                 ->update([
                     'status' => SeatOfferStatus::Closed->value,
                     'closed_at' => now(),
+                    'closed_reason' => SeatOfferClosedReason::CommuteDeleted->value,
                 ]);
         }
     }

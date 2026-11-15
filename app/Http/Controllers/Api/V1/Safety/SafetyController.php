@@ -14,6 +14,8 @@ use App\Domains\Safety\Models\EmergencyContact;
 use App\Domains\Safety\Models\Incident;
 use App\Domains\Safety\Models\LiveShare;
 use App\Domains\Safety\Models\SosEvent;
+use App\Domains\Safety\Support\AutoShare;
+use App\Domains\Safety\Support\SafetySettings;
 use App\Domains\Shared\Exceptions\DomainException;
 use App\Domains\Shared\Support\ErrorCode;
 use App\Domains\Shared\ValueObjects\Coordinate;
@@ -26,6 +28,7 @@ use App\Http\Requests\Safety\BlockPreviewRequest;
 use App\Http\Requests\Safety\BlockUserRequest;
 use App\Http\Requests\Safety\ListIncidentsRequest;
 use App\Http\Requests\Safety\ReportIncidentRequest;
+use App\Http\Requests\Safety\SetAutoShareRequest;
 use App\Http\Requests\Safety\ShareLiveTripRequest;
 use App\Http\Requests\Safety\StoreEmergencyContactRequest;
 use App\Http\Requests\Safety\TriggerSosRequest;
@@ -104,7 +107,25 @@ final class SafetyController extends Controller
             ->orderBy('id')
             ->get();
 
-        return ApiResponse::success(EmergencyContactResource::collection($contacts));
+        $limit = SafetySettings::maxEmergencyContacts();
+
+        return ApiResponse::success(EmergencyContactResource::collection($contacts), meta: [
+            'limit' => $limit,
+            'canAdd' => $contacts->count() < $limit,
+            'autoShare' => (bool) $request->user()->auto_share_trips,
+            'autoShareAvailable' => AutoShare::available(),
+        ]);
+    }
+
+    #[ApiErrors(ErrorCode::ValidationFailed)]
+    public function setAutoShare(SetAutoShareRequest $request, ManageEmergencyContactsAction $action): JsonResponse
+    {
+        $user = $action->setAutoShare($request->user(), $request->boolean('enabled'));
+
+        return ApiResponse::success([
+            'enabled' => (bool) $user->auto_share_trips,
+            'available' => AutoShare::available(),
+        ]);
     }
 
     /**
@@ -113,7 +134,8 @@ final class SafetyController extends Controller
     #[ApiErrors(
         ErrorCode::EmergencyContactLimitReached,
         ErrorCode::EmergencyContactDuplicate,
-        ErrorCode::PhoneInvalid,
+        ErrorCode::EmergencyContactSelf,
+        ErrorCode::ValidationFailed,
     )]
     public function addContact(StoreEmergencyContactRequest $request, ManageEmergencyContactsAction $action): JsonResponse
     {
@@ -127,7 +149,8 @@ final class SafetyController extends Controller
      */
     #[ApiErrors(
         ErrorCode::EmergencyContactDuplicate,
-        ErrorCode::PhoneInvalid,
+        ErrorCode::EmergencyContactSelf,
+        ErrorCode::ValidationFailed,
         ErrorCode::NotFound,
     )]
     public function updateContact(

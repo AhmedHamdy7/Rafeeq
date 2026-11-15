@@ -3,7 +3,9 @@
 namespace App\Domains\Booking\Actions;
 
 use App\Domains\Booking\Enums\BookingStatus;
+use App\Domains\Booking\Enums\CancelCode;
 use App\Domains\Booking\Enums\DisplacementReason;
+use App\Domains\Booking\Enums\SeatOfferClosedReason;
 use App\Domains\Booking\Enums\SeatOfferStatus;
 use App\Domains\Booking\Enums\SeatRequestStatus;
 use App\Domains\Booking\Models\Booking;
@@ -65,9 +67,9 @@ final readonly class DisplaceConfirmedBookingsAction
      *                              fee by timing per seat (PAY-23). Not when the platform did it.
      * @return int how many bookings were cancelled
      */
-    public function forCommute(CommuteOffer $offer, DisplacementReason $reason, bool $chargeDriver = false): int
+    public function forCommute(CommuteOffer $offer, DisplacementReason $reason, bool $chargeDriver = false, ?CancelCode $code = null): int
     {
-        return ReliabilityLedger::grouped(fn () => DB::transaction(function () use ($offer, $reason, $chargeDriver): int {
+        return ReliabilityLedger::grouped(fn () => DB::transaction(function () use ($offer, $reason, $chargeDriver, $code): int {
             $bookings = self::futureConfirmedBookings($offer);
 
             if ($bookings->isEmpty()) {
@@ -75,7 +77,7 @@ final readonly class DisplaceConfirmedBookingsAction
             }
 
             foreach ($bookings as $booking) {
-                $this->cancel->byDisplacement($booking, $offer->driver_profile_id, $reason, $chargeDriver);
+                $this->cancel->byDisplacement($booking, $offer->driver_profile_id, $reason, $chargeDriver, $code);
             }
 
             /*
@@ -95,7 +97,7 @@ final readonly class DisplaceConfirmedBookingsAction
              * that has stopped running, and an untouched one would let somebody accept her way into
              * a seat seconds after everybody else lost theirs.
              */
-            $this->closeOpenOffers($bookings->pluck('scheduled_trip_id')->unique());
+            $this->closeOpenOffers($bookings->pluck('scheduled_trip_id')->unique(), $reason);
 
             $this->tellThem($offer, $bookings, $reason);
 
@@ -216,7 +218,7 @@ final readonly class DisplaceConfirmedBookingsAction
     /**
      * @param  Collection<int, string>  $tripIds
      */
-    private function closeOpenOffers($tripIds): void
+    private function closeOpenOffers($tripIds, DisplacementReason $reason): void
     {
         if ($tripIds->isEmpty()) {
             return;
@@ -231,6 +233,7 @@ final readonly class DisplaceConfirmedBookingsAction
             ->update([
                 'status' => SeatOfferStatus::Closed->value,
                 'closed_at' => now(),
+                'closed_reason' => SeatOfferClosedReason::forDisplacement($reason)->value,
             ]);
     }
 

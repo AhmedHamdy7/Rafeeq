@@ -172,6 +172,8 @@ enum NotificationType: string
     /** Somebody from the waiting list took the seat: the late-cancel fee is dropped (R-8). */
     case LateCancelFeeWaived = 'late_cancel_fee_waived';
 
+    case NoShowDisputeDecided = 'no_show_dispute_decided';
+
     // ---- Driver fees (PAY-23 → PAY-29) — one message per act, the total of its seats ---------
 
     /** He cancelled seats — one passenger, a day, a pause, a delete, a new car, a block (PAY-23). */
@@ -461,6 +463,10 @@ enum NotificationType: string
     /** Staff to one member, from their profile (D19). Inbox only. */
     case StaffMessage = 'staff_message';
 
+    case LiveTripAutoShared = 'live_trip_auto_shared';
+
+    case LiveTripAutoShareFailed = 'live_trip_auto_share_failed';
+
     public function category(): NotificationCategory
     {
         return match ($this) {
@@ -479,7 +485,9 @@ enum NotificationType: string
             self::DriverLicenceExpired,
             self::DriverSuspended,
             // About her account, from a person on the team: she cannot switch it off.
-            self::StaffMessage => NotificationCategory::Safety,
+            self::StaffMessage,
+            self::LiveTripAutoShared,
+            self::LiveTripAutoShareFailed => NotificationCategory::Safety,
 
             self::DebtDueTomorrow,
             self::DebtOverdue,
@@ -542,6 +550,7 @@ enum NotificationType: string
             self::LateCancelFee,
             self::LateCancelFeeCharged,
             self::LateCancelFeeWaived,
+            self::NoShowDisputeDecided,
             self::DriverCancelFee,
             self::DriverEndedTripFee,
             self::DriverNoShowFee,

@@ -259,6 +259,9 @@ enum ErrorCode: string
     case TripTooEarlyToStart = 'TRIP_TOO_EARLY_TO_START';
     case AttendanceNotConfirmable = 'ATTENDANCE_NOT_CONFIRMABLE';
     case AttendanceDisputeWindowClosed = 'ATTENDANCE_DISPUTE_WINDOW_CLOSED';
+    case AttendanceNotDisputable = 'ATTENDANCE_NOT_DISPUTABLE';
+    case AttendanceAlreadyDisputed = 'ATTENDANCE_ALREADY_DISPUTED';
+    case AttendanceDisputeNotOpen = 'ATTENDANCE_DISPUTE_NOT_OPEN';
     case WaitTimerAlreadyRunning = 'WAIT_TIMER_ALREADY_RUNNING';
     case WaitTimerNotRunning = 'WAIT_TIMER_NOT_RUNNING';
     case NoShowTooEarly = 'NO_SHOW_TOO_EARLY';
@@ -282,6 +285,7 @@ enum ErrorCode: string
     case SosAlreadyResolved = 'SOS_ALREADY_RESOLVED';
     case EmergencyContactLimitReached = 'EMERGENCY_CONTACT_LIMIT_REACHED';
     case EmergencyContactDuplicate = 'EMERGENCY_CONTACT_DUPLICATE';
+    case EmergencyContactSelf = 'EMERGENCY_CONTACT_SELF';
     case CannotBlockSelf = 'CANNOT_BLOCK_SELF';
     case AlreadyBlocked = 'ALREADY_BLOCKED';
     case IncidentNotReportable = 'INCIDENT_NOT_REPORTABLE';
@@ -521,6 +525,9 @@ enum ErrorCode: string
             self::TripNotCancellable,
             self::TripDayTaken,
             self::AttendanceNotConfirmable,
+            self::AttendanceNotDisputable,
+            self::AttendanceAlreadyDisputed,
+            self::AttendanceDisputeNotOpen,
             self::WaitTimerAlreadyRunning,
             self::WaitTimerNotRunning,
             self::NoShowTooEarly,
@@ -567,6 +574,7 @@ enum ErrorCode: string
 
             // 422: about what was sent. The list is full, or the report has nothing to attach to.
             self::EmergencyContactLimitReached,
+            self::EmergencyContactSelf,
             self::IncidentEvidenceLimitReached,
             self::IncidentNotReportable,
             // 422: the journey itself cannot be rated — it was cancelled, or it has not happened.

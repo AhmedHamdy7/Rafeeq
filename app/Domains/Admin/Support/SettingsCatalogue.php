@@ -117,6 +117,7 @@ final class SettingsCatalogue
         'safety.evidence_retention_days' => ['group' => 'safety', 'min' => 90, 'max' => 3_650, 'unit' => 'days'],
         'safety.live_share_grace_minutes' => ['group' => 'safety', 'min' => 0, 'max' => 120, 'unit' => 'minutes'],
         'safety.live_share_max_minutes' => ['group' => 'safety', 'min' => 30, 'max' => 720, 'unit' => 'minutes'],
+        'safety.auto_share_enabled' => ['group' => 'safety', 'min' => 0, 'max' => 1, 'unit' => 'switch'],
 
         // ---- Reliability score (Feature 03 files X-3, D3/D4) -------------
         // Points lost per event. Only a number for now: it gates nothing (D4).

@@ -2,8 +2,11 @@
 
 namespace App\Domains\Booking\Actions;
 
+use App\Domains\Booking\Enums\SeatOfferClosedReason;
+use App\Domains\Booking\Enums\SeatOfferSource;
 use App\Domains\Booking\Enums\SeatOfferStatus;
 use App\Domains\Booking\Models\SeatOffer;
+use App\Domains\Booking\Support\SeatOfferClosure;
 use App\Domains\Booking\Support\WaitlistEligibility;
 use App\Domains\Commute\Models\ScheduledTrip;
 use App\Domains\Notification\Enums\NotificationType;
@@ -97,7 +100,10 @@ final readonly class OfferSeatToWaitlistAction
             $offer->forceFill([
                 'status' => SeatOfferStatus::Ineligible->value,
                 'closed_at' => now(),
+                'closed_reason' => SeatOfferClosedReason::CarPassed->value,
             ])->save();
+
+            SeatOfferClosure::announce($offer);
 
             $closed++;
         }
@@ -191,6 +197,7 @@ final readonly class OfferSeatToWaitlistAction
                 'scheduled_trip_id' => $trip->id,
                 'seat_request_id' => $request->id,
                 'status' => SeatOfferStatus::Open->value,
+                'source' => SeatOfferSource::SeatFreed->value,
                 'release_event_id' => $releaseEventId,
                 'created_at' => now(),
                 'updated_at' => now(),

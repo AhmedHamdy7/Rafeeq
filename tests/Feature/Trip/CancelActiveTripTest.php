@@ -355,3 +355,40 @@ it('does not list cancelling among the steps a run could take next', function ()
         ->assertStatus(409)
         ->assertJsonMissing(['CANCELLED']);
 });
+
+it('charges a passenger aboard for the part she rode past 25 % after a breakdown (PAY-24)', function () {
+    setOff($this->driverToken, $this->trip->id);
+    board($this->driverToken, $this->trip->id, $this->bookingId);
+
+    $booking = Booking::query()->findOrFail($this->bookingId);
+    $fullPrice = $booking->price_snapshot_piastres;
+    $lat = (float) $booking->pickup_lat + 0.6 * ((float) $booking->dropoff_lat - (float) $booking->pickup_lat);
+    $lng = (float) $booking->pickup_lng + 0.6 * ((float) $booking->dropoff_lng - (float) $booking->pickup_lng);
+
+    reportPosition($this->driverToken, $this->trip->id, [position($lat, $lng)])->assertSuccessful();
+
+    cancelActive($this->driverToken, $this->trip->id)->assertOk();
+
+    $seen = test()->flushHeaders()->withToken($this->paxToken)->getJson("/api/v1/bookings/{$this->bookingId}")
+        ->assertOk()
+        ->assertJsonPath('data.paymentStatus', 'PAID');
+
+    expect($seen->json('data.price.totalPiastres'))->toBeGreaterThan(0)->toBeLessThan($fullPrice)
+        ->and(abs($seen->json('data.price.totalPiastres') - (int) round($fullPrice * 0.6)))->toBeLessThanOrEqual((int) ceil($fullPrice * 0.02));
+});
+
+it('waives the fare of a passenger aboard under 25 % of her route, keeping the full price on the booking', function () {
+    setOff($this->driverToken, $this->trip->id);
+    board($this->driverToken, $this->trip->id, $this->bookingId);
+
+    $booking = Booking::query()->findOrFail($this->bookingId);
+
+    reportPosition($this->driverToken, $this->trip->id, [position((float) $booking->pickup_lat, (float) $booking->pickup_lng)])->assertSuccessful();
+
+    cancelActive($this->driverToken, $this->trip->id)->assertOk();
+
+    test()->flushHeaders()->withToken($this->paxToken)->getJson("/api/v1/bookings/{$this->bookingId}")
+        ->assertOk()
+        ->assertJsonPath('data.paymentStatus', 'WAIVED')
+        ->assertJsonPath('data.price.totalPiastres', $booking->price_snapshot_piastres);
+});

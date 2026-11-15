@@ -4,6 +4,7 @@ namespace App\Domains\Group\Actions;
 
 use App\Domains\Booking\Actions\CancelBookingAction;
 use App\Domains\Booking\Enums\BookingStatus;
+use App\Domains\Booking\Enums\CancelCode;
 use App\Domains\Booking\Models\Booking;
 use App\Domains\Commute\Models\ScheduledTrip;
 use App\Domains\Group\Enums\GroupMemberRole;
@@ -103,7 +104,7 @@ final readonly class LeaveGroupAction
             ->get();
 
         foreach ($bookings as $booking) {
-            $this->cancel->byPassenger($booking, $reason ?? __('commute.group.left'), notify: false);
+            $this->cancel->byPassenger($booking, $reason ?? __('commute.group.left'), notify: false, code: CancelCode::LeftGroup);
         }
     }
 }

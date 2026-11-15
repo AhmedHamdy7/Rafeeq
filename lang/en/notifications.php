@@ -301,6 +301,10 @@ return [
         'title' => 'No fee for your cancellation',
         'body' => 'Somebody from the waiting list took your seat on :date, so your late cancellation costs nothing.',
     ],
+    'no_show_dispute_decided' => [
+        'title' => 'Your no-show dispute was decided',
+        'body' => 'We reviewed your dispute about :date. Open the trip to read the decision.',
+    ],
     'driver_cancel_fee' => [
         'title' => 'Cancellation fee: EGP :amount',
         'body' => 'Cancelling confirmed seats close to departure adds EGP :amount to this week’s commission. Had an emergency? Appeal with evidence within :hours hours.',
@@ -457,5 +461,13 @@ return [
     'staff_message' => [
         'title' => ':title',
         'body' => ':body',
+    ],
+    'live_trip_auto_shared' => [
+        'title' => 'Your trip was shared',
+        'body' => 'Your live trip link went to :count trusted contact(s).',
+    ],
+    'live_trip_auto_share_failed' => [
+        'title' => 'Your trip wasn’t shared',
+        'body' => 'We couldn’t send your live trip link. Share it from the trip if you need to.',
     ],
 ];

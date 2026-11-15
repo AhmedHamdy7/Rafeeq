@@ -44,9 +44,13 @@ use App\Http\Controllers\Api\V1\Search\MatchOpenedController;
 use App\Http\Controllers\Api\V1\Search\RecentSearchController;
 use App\Http\Controllers\Api\V1\Search\SavedSearchController;
 use App\Http\Controllers\Api\V1\Search\SearchController;
+use App\Http\Controllers\Api\V1\Testing\TestingCasesController;
 use App\Http\Controllers\Api\V1\Testing\TestingController;
 use App\Http\Controllers\Api\V1\Testing\TestingRecordsController;
+use App\Http\Controllers\Api\V1\Testing\TestingSafetyController;
 use App\Http\Controllers\Api\V1\Testing\TestingScenarioController;
+use App\Http\Controllers\Api\V1\Testing\TestingSuspensionController;
+use App\Http\Controllers\Api\V1\Testing\TestingTripsController;
 use App\Http\Controllers\Api\V1\Trip\AttendanceController;
 use App\Http\Controllers\Api\V1\Trip\DriverTripController;
 use App\Http\Controllers\Api\V1\Trip\NavigationRouteController;
@@ -117,6 +121,16 @@ Route::prefix('v1')->group(function (): void {
         Route::post('reliability/events', [TestingRecordsController::class, 'writeEvents']);
         Route::post('ratings/reports/{report}/decide', [TestingRecordsController::class, 'decideReport']);
         Route::delete('driver/vehicles/{vehicle}', [TestingRecordsController::class, 'deleteVehicle']);
+        Route::post('seat-offers/{offer}/close', [TestingTripsController::class, 'closeOffer']);
+        Route::post('commute-demands/{demand}/expire', [TestingTripsController::class, 'expireDemand']);
+        Route::post('notifications', [TestingTripsController::class, 'writeNotification']);
+        Route::post('bookings/{booking}/dispute/decide', [TestingCasesController::class, 'decideDispute']);
+        Route::post('incidents/{incident}/decide', [TestingCasesController::class, 'decideIncident']);
+        Route::post('incidents/{incident}/age', [TestingCasesController::class, 'ageIncident']);
+        Route::post('account/suspension/appeal/decide', [TestingSuspensionController::class, 'decideAppeal']);
+        Route::post('account/suspension/age', [TestingSuspensionController::class, 'age']);
+        Route::post('account/ban', [TestingSuspensionController::class, 'ban']);
+        Route::get('safety/auto-share/messages', [TestingSafetyController::class, 'autoShareMessages']);
     });
 
     Route::prefix('account')->middleware('auth:sanctum')->group(function (): void {
@@ -425,6 +439,7 @@ Route::prefix('v1')->group(function (): void {
         Route::post('safety/emergency-contacts', [SafetyController::class, 'addContact']);
         Route::patch('safety/emergency-contacts/{contact}', [SafetyController::class, 'updateContact']);
         Route::delete('safety/emergency-contacts/{contact}', [SafetyController::class, 'removeContact']);
+        Route::put('safety/auto-share', [SafetyController::class, 'setAutoShare']);
 
         /*
          * "Share Live Trip" — a temporary tokenised link a trusted contact opens.
@@ -632,6 +647,9 @@ Route::prefix('v1')->group(function (): void {
          * which commute.
          */
         Route::get('seat-offers', [SeatOfferController::class, 'index']);
+        Route::get('seat-offers/{offer}', [SeatOfferController::class, 'show']);
+        Route::post('seat-offers/groups/{group}/accept', [SeatOfferController::class, 'acceptGroup']);
+        Route::post('seat-offers/groups/{group}/decline', [SeatOfferController::class, 'declineGroup']);
         Route::post('seat-offers/{offer}/accept', [SeatOfferController::class, 'accept']);
 
         /*
@@ -776,6 +794,7 @@ Route::prefix('v1')->group(function (): void {
         Route::delete('driver/change-proposals/{proposal}', [ChangeProposalController::class, 'destroy']);
 
         Route::get('change-proposals', [ChangeProposalController::class, 'mine']);
+        Route::get('change-proposals/{proposal}', [ChangeProposalController::class, 'show']);
         Route::post('change-proposals/{proposal}/respond', [ChangeProposalController::class, 'respond']);
 
         /*

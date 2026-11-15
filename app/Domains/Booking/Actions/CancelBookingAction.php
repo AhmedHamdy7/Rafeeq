@@ -5,7 +5,9 @@ namespace App\Domains\Booking\Actions;
 use App\Domains\Booking\Enums\BookingActorType;
 use App\Domains\Booking\Enums\BookingEventType;
 use App\Domains\Booking\Enums\BookingStatus;
+use App\Domains\Booking\Enums\CancelCode;
 use App\Domains\Booking\Enums\DisplacementReason;
+use App\Domains\Booking\Enums\SeatOfferClosedReason;
 use App\Domains\Booking\Enums\SeatOfferStatus;
 use App\Domains\Booking\Enums\SwitchReason;
 use App\Domains\Booking\Models\Booking;
@@ -60,7 +62,7 @@ final readonly class CancelBookingAction
      * @param  bool  $notify  false for the bulk paths (a planned absence, leaving a group), which
      *                        cancel many days in a loop — see tellTheOtherSide()
      */
-    public function byPassenger(Booking $booking, ?string $reason = null, bool $notify = true): Booking
+    public function byPassenger(Booking $booking, ?string $reason = null, bool $notify = true, ?CancelCode $code = null): Booking
     {
         return $this->cancel(
             $booking,
@@ -69,6 +71,7 @@ final readonly class CancelBookingAction
             $booking->passenger_user_id,
             $reason,
             $notify,
+            code: $code ?? CancelCode::fromLegacy(BookingStatus::CancelledByPassenger, $reason),
         );
     }
 
@@ -77,15 +80,16 @@ final readonly class CancelBookingAction
      * different operation — it belongs with the trip lifecycle, and every
      * passenger on it has to be told.
      */
-    public function byDriver(Booking $booking, string $driverUserId, ?string $reason = null): Booking
+    public function byDriver(Booking $booking, string $driverUserId, ?string $reason = null, ?CancelCode $code = null): Booking
     {
-        return DB::transaction(function () use ($booking, $driverUserId, $reason): Booking {
+        return DB::transaction(function () use ($booking, $driverUserId, $reason, $code): Booking {
             $cancelled = $this->cancel(
                 $booking,
                 BookingStatus::CancelledByDriver,
                 BookingActorType::Driver,
                 $driverUserId,
                 $reason,
+                code: $code ?? CancelCode::RemovedByDriver,
             );
 
             // PAY-23 (C-5): the driver-cancel fee by the notice he gave, on his side.
@@ -105,6 +109,7 @@ final readonly class CancelBookingAction
                 $driverUserId,
                 'driver_replaced',
                 offerToWaitlist: false,
+                code: CancelCode::Replaced,
             );
 
             DriverFees::chargeCancellation($cancelled);
@@ -132,9 +137,9 @@ final readonly class CancelBookingAction
      *                                      Tuesday disappear" without reconstructing it
      * @param  bool  $chargeDriver  whether the driver chose it, and so pays the fee by timing
      */
-    public function byDisplacement(Booking $booking, string $driverUserId, DisplacementReason $reason, bool $chargeDriver = false): Booking
+    public function byDisplacement(Booking $booking, string $driverUserId, DisplacementReason $reason, bool $chargeDriver = false, ?CancelCode $code = null): Booking
     {
-        return DB::transaction(function () use ($booking, $driverUserId, $reason, $chargeDriver): Booking {
+        return DB::transaction(function () use ($booking, $driverUserId, $reason, $chargeDriver, $code): Booking {
             $cancelled = $this->cancel(
                 $booking,
                 BookingStatus::CancelledByDriver,
@@ -143,6 +148,7 @@ final readonly class CancelBookingAction
                 $reason->value,
                 notify: false,
                 offerToWaitlist: false,
+                code: $code ?? CancelCode::forDisplacement($reason),
             );
 
             /*
@@ -177,6 +183,7 @@ final readonly class CancelBookingAction
             BookingActorType::System,
             null,
             $reason,
+            code: CancelCode::fromLegacy(BookingStatus::CancelledByPassenger, $reason),
         );
     }
 
@@ -312,6 +319,7 @@ final readonly class CancelBookingAction
         ?string $reason,
         bool $notify = true,
         bool $offerToWaitlist = true,
+        ?CancelCode $code = null,
     ): Booking {
         // The state machine decides, not this method: a completed or already
         // cancelled booking has no transition to cancelled, and asking the enum
@@ -322,7 +330,7 @@ final readonly class CancelBookingAction
             ]);
         }
 
-        return DB::transaction(function () use ($booking, $to, $actorType, $actorId, $reason, $notify, $offerToWaitlist): Booking {
+        return DB::transaction(function () use ($booking, $to, $actorType, $actorId, $reason, $notify, $offerToWaitlist, $code): Booking {
             $from = $booking->status;
 
             // Locked for the same reason as taking a seat: the count must not be
@@ -333,6 +341,7 @@ final readonly class CancelBookingAction
                 'status' => $to->value,
                 'cancelled_at' => now(),
                 'cancelled_reason' => $reason,
+                'cancel_code' => ($code ?? CancelCode::fromLegacy($to, $reason))?->value,
                 /*
                  * 🔴 Charged only when SHE cancelled. This line used to write the configured fee
                  * whoever cancelled and for whatever reason, which is a bug that was harmless only
@@ -357,7 +366,7 @@ final readonly class CancelBookingAction
             SeatOffer::query()
                 ->where('replaces_booking_id', $booking->getKey())
                 ->open()
-                ->update(['status' => SeatOfferStatus::Closed->value, 'closed_at' => now()]);
+                ->update(['status' => SeatOfferStatus::Closed->value, 'closed_at' => now(), 'closed_reason' => SeatOfferClosedReason::ReplacedBookingCancelled->value]);
 
             // Never below zero, however the data got there: a negative seat count
             // would make the trip look bookable past its capacity.

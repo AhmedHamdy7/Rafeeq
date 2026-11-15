@@ -5,6 +5,7 @@ namespace App\Domains\Trip\Actions;
 use App\Domains\Booking\Enums\BookingActorType;
 use App\Domains\Booking\Enums\BookingEventType;
 use App\Domains\Booking\Enums\BookingStatus;
+use App\Domains\Booking\Enums\CancelCode;
 use App\Domains\Booking\Models\Booking;
 use App\Domains\Booking\Support\BookingEventLog;
 use App\Domains\Commute\Models\ScheduledTrip;
@@ -91,6 +92,7 @@ final readonly class ExitForDriverDelayAction
                 'cancelled_at' => now(),
                 // The server's finding, not her words: `not_started`, `passed_your_stop` or `late_for_pickup`.
                 'cancelled_reason' => $reason ?? $entitlement,
+                'cancel_code' => CancelCode::fromLegacy(BookingStatus::ExitedDueToDriverDelay, $reason ?? $entitlement)?->value,
                 // 🔴 Nothing. This is the whole feature.
                 'cancellation_fee_piastres' => 0,
             ])->save();

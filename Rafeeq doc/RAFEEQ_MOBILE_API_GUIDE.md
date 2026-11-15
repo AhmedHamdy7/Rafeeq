@@ -14,7 +14,7 @@
 >
 > **Base URL:** `{host}/api/v1` · **Auth:** bearer token · **Format:** JSON only.
 
-**Last updated:** 2026-11-14 · **234 endpoints live** · Phases 0–7, 9 and 11 complete · 10, 12 and 13 all but a decision each
+**Last updated:** 2026-11-15 · **249 endpoints live** · Phases 0–7, 9 and 11 complete · 10, 12 and 13 all but a decision each
 
 ---
 
@@ -22,7 +22,7 @@
 
 ### What is ready
 
-**234 endpoints live** and tested, across the 47 designed screens:
+**249 endpoints live** and tested, across the 47 designed screens:
 
 | | Count | Covers |
 |---|---|---|
@@ -471,7 +471,7 @@ to open.
 19 POST /trips/{trip}/check-in   { bookingId }      (driver)  → 200
    POST /trips/{trip}/no-show    { bookingId }      (driver)  → 200
    POST /trips/{trip}/wait-timers { bookingId, lat, lng }  (driver, within 150 m of her pickup)  → 201
-   POST /bookings/{booking}/dispute { reason }      (passenger, 24 hours)  → 201
+   POST /bookings/{booking}/dispute { reason }      (passenger, 24 hours)  → 201 booking
 ```
 
 🔴 The driver confirms attendance (decision D18) **and the passenger has 24 hours to contest it**.
@@ -646,8 +646,8 @@ Status: ✅ fully served · ⚠️ served, something named missing · ⛔ no API
 | # | Screen | Phase |
 |---|---|---|
 | 37 | Rating | ✅ `GET /ratings/pending` · `POST /bookings/{booking}/rating` · `PATCH /ratings/{rating}` · `GET /ratings/mine`. 🔴 **Double-blind** — nothing tells you whether the other person has rated. Section 4.13. |
-| 16 · 44 | **Safety centre · discreet alert** | ✅ `POST /sos` (with `isDiscreet`) · `POST /sos/{sos}/cancel` · `GET`/`POST /safety/emergency-contacts` · **Share Live Trip**: `POST /trips/{trip}/live-share` · `GET /safety/live-shares` · `DELETE /safety/live-shares/{share}`. Missing: Contact Support — section 7. |
-| 32 | **Support / incident** | ⚠️ `POST /incidents` · `GET /incidents` · `GET /incidents/{incident}`. **Missing: evidence upload** — section 7. |
+| 16 · 44 | **Safety centre · discreet alert** | ✅ `POST /sos` (with `isDiscreet`) · `POST /sos/{sos}/cancel` · `GET`/`POST /safety/emergency-contacts` · `PUT /safety/auto-share` · **Share Live Trip**: `POST /trips/{trip}/live-share` · `GET /safety/live-shares` · `DELETE /safety/live-shares/{share}`. Missing: Contact Support — section 7. |
+| 32 | **Support / incident** | ✅ `POST /incidents` · `GET /incidents` · `GET /incidents/{incident}` (with `caseNumber`) · `POST /incidents/{incident}/evidence`. |
 | 34 | Payment failed | ⛔ **8** — payments |
 | 33 · 38 | Offline · location denied | 🚫 Device states |
 
@@ -790,10 +790,14 @@ fails if this list and the running routes ever disagree in either direction.
 | `PATCH /driver/change-proposals/{proposal}` | 4.7 Seat requests and bookings |
 | `DELETE /driver/change-proposals/{proposal}` | 4.7 Seat requests and bookings |
 | `GET /change-proposals` | 4.7 Seat requests and bookings |
+| `GET /change-proposals/{proposal}` | 4.7 Seat requests and bookings |
 | `POST /change-proposals/{proposal}/respond` | 4.7 Seat requests and bookings |
 | `GET /driver/seat-requests/{seatRequest}/route-preview` | 4.7 Seat requests and bookings |
 | `GET /my-bookings` | 4.7 Seat requests and bookings |
 | `GET /seat-offers` | 4.7 Seat requests and bookings |
+| `GET /seat-offers/{offer}` | 4.7 Seat requests and bookings |
+| `POST /seat-offers/groups/{group}/accept` | 4.7 Seat requests and bookings |
+| `POST /seat-offers/groups/{group}/decline` | 4.7 Seat requests and bookings |
 | `POST /seat-offers/{offer}/accept` | 4.7 Seat requests and bookings |
 | `POST /seat-offers/{offer}/decline` | 4.7 Seat requests and bookings |
 | `GET /seat-requests` | 4.7 Seat requests and bookings |
@@ -864,6 +868,7 @@ fails if this list and the running routes ever disagree in either direction.
 | `POST /safety/emergency-contacts` | 4.12 Safety |
 | `PATCH /safety/emergency-contacts/{contact}` | 4.12 Safety |
 | `DELETE /safety/emergency-contacts/{contact}` | 4.12 Safety |
+| `PUT /safety/auto-share` | 4.12 Safety |
 | `GET /safety/live-shares` | 4.12 Safety |
 | `POST /testing/driver/approve` | 4.17 Testing (staging only) |
 | `DELETE /testing/account` | 4.17 Testing (staging only) |
@@ -888,6 +893,16 @@ fails if this list and the running routes ever disagree in either direction.
 | `POST /testing/reliability/events` | 4.17 Testing (staging only) |
 | `POST /testing/ratings/reports/{report}/decide` | 4.17 Testing (staging only) |
 | `DELETE /testing/driver/vehicles/{vehicle}` | 4.17 Testing (staging only) |
+| `POST /testing/seat-offers/{offer}/close` | 4.17 Testing (staging only) |
+| `POST /testing/commute-demands/{demand}/expire` | 4.17 Testing (staging only) |
+| `POST /testing/bookings/{booking}/dispute/decide` | 4.17 Testing (staging only) |
+| `POST /testing/incidents/{incident}/decide` | 4.17 Testing (staging only) |
+| `POST /testing/incidents/{incident}/age` | 4.17 Testing (staging only) |
+| `POST /testing/account/suspension/appeal/decide` | 4.17 Testing (staging only) |
+| `POST /testing/account/suspension/age` | 4.17 Testing (staging only) |
+| `POST /testing/account/ban` | 4.17 Testing (staging only) |
+| `GET /testing/safety/auto-share/messages` | 4.17 Testing (staging only) |
+| `POST /testing/notifications` | 4.17 Testing (staging only) |
 | `DELETE /safety/live-shares/{share}` | 4.12 Safety |
 | `POST /trips/{trip}/live-share` | 4.12 Safety |
 | `POST /sos` | 4.12 Safety |
@@ -1393,7 +1408,10 @@ seat was cancelled** when staff suspended her — inside the 12-hour lock too, n
 As a driver, every published commute was paused (`pausedReason: account_suspended`); lifting the
 hold gives none of it back, she resumes herself. Only a **permanent ban** keeps the full Account
 restricted screen (`RESTRICTED_ACCOUNT`, `permanent: true`), with every endpoint behind
-`account.active` closed, reads included.
+`account.active` closed, reads included. What stays open for a ban is what never needed an active
+account: `GET /auth/me`, sign-out, devices, notifications, **reports** (`POST /incidents` and the rest
+of 4.12's report routes), trusted contacts and **`GET /content/support_contact`** (4.18). The Restricted
+screen's **Contact safety** can open the report form or show the support text from that page.
 
 **Request:** `message` (required, 10–1000 characters, her side of it) and `evidence` (optional,
 ≤ 2000 — a description, a reference number). **Answer `201`:**
@@ -2363,7 +2381,15 @@ deserves to see *why* one ranked above the other:
 `requestedDaysMask` (**required for recurring**), `seats` (1–4), **`pickup` (required)**,
 **`dropoff` (required)**, `meetingPreference` (`gate`/`street`/`landmark`/`custom`; **optional** — left out, it is `landmark` when `pickup.suggestionId` is a driver's suggested point and `custom` for her own pin),
 `customPickupPlaceId`, `introMessage` (max 500), `paymentType` (`cash`/`online`), `agreedToRules`
-(**must be true**).
+(**must be true**), `alternativeForBookingId` (optional).
+
+**From Alternatives (T-6):** send `alternativeForBookingId` with the booking she lost and leave
+`pickup` and `dropoff` out. The server fills them: the pickup is the same origin
+`GET /bookings/{booking}/alternatives` searched from (`meta.origin`), the drop-off is that booking's
+agreed drop-off. A point you do send wins over the filled one. The booking must be hers and not
+`COMPLETED`, and must have a recorded pickup and drop-off; otherwise `422` with
+`error.fields.alternativeForBookingId`. Everything else is the ordinary request with the ordinary
+refusals.
 
 🔴 **`pickup` and `dropoff` are new and both are required.** This is the biggest change to this
 endpoint. A request used to carry only `meetingPreference` — a hint about what *kind* of place she
@@ -2660,7 +2686,13 @@ every answer**, including ones already given.
 **`DELETE /driver/change-proposals/{proposal}`** — take it back.
 
 **`GET /change-proposals`** — what the caller is being asked to agree to, with `changes` against
-`previous` for the highlighted comparison, her own `bookingId`, and `myResponse`.
+`previous` for the highlighted comparison, her own `bookingId`, and `myResponse`. **`?bookingId=`**
+keeps only the ones about that booking of hers, with that `bookingId`.
+
+**`GET /change-proposals/{proposal}`** — one proposal in the same shape, **whatever its status**
+(`PENDING` · `APPLIED` · `REJECTED` · `EXPIRED` · `WITHDRAWN`), so the `change_proposal_*` pushes
+always open something. Readable by a passenger who answered it or who holds a booking on one of its
+days; `404` for anybody else. Same privacy as the list: nothing about how the others answered.
 
 **`POST /change-proposals/{proposal}/respond`** — **Request:** `response` of `accepted` ·
 `rejected` · `withdrawn` (take an acceptance back before it applies). `404` if she has no confirmed
@@ -2770,6 +2802,20 @@ paged with `perPage`, and an unknown status → `422`.
 | `pickup.label` · `dropoff.label` | The points on her waiting request. |
 | `promisedArrivalLocal` | The arrival the driver promised that day (`HH:MM`), or `null`. |
 | `conflictingBookingId` | Her own booking that overlaps this seat in time (R-3), the one **Switch Commute** replaces, or `null`. Only on an `OPEN` offer. |
+| `pickup.estimatedLocal` | `HH:MM`, when the car should pass her pickup that day, along the published route. `null` when the route can't be read. |
+| `dropoff.estimatedLocal` | `HH:MM`, the promised arrival (`promisedArrivalLocal` as a clock). |
+| `source` | `seat_freed` (a seat came free, everybody waiting was offered it) · `driver_resume` (the driver chose her on resume, COM-33) · `replacement` (the driver offered her a named passenger's seat). |
+| `isPreviousPassenger` | She has held a seat on this commute before. "Previous passenger". |
+| `commitment` | `trial` · `recurring`, from her waiting request. |
+| `offerGroupId` | Only on `driver_resume`: every row of one resume offer to her shares it. Draw them as one card. `null` otherwise. |
+| `daysMask` | Only on `driver_resume`: the weekdays of that group, same bits as `requestedDaysMask` (Sat 1, Sun 2, Mon 4, Tue 8, Wed 16, Thu 32, Fri 64). `null` otherwise. |
+| `closedReason` | `null` while `OPEN` or `ACCEPTED`. Else `car_passed` · `already_booked` · `seat_taken` · `declined` · `withdrawn_by_driver` · `request_withdrawn` · `day_cancelled` · `commute_paused` · `commute_deleted` · `vehicle_replaced` · `replaced_booking_cancelled`. |
+| `passedPointLabel` | Only with `car_passed`: her pickup label, for "{name}'s trip is already past **Rehab Gate 2**". `null` otherwise. |
+| `stillWaiting` | Her waiting request is still `WAITLISTED`, so "You're still on the waiting list for future dates" is true. |
+
+Offers from a resume are **one row per day** (BOOK-16: each day is its own seat), first to accept
+wins **each day**, and there is **no timer** (BOOK-22). She may accept one day with
+`POST /seat-offers/{offer}/accept`, or every open day of the card with the group call below.
 
 🔴 **`TAKEN_BY_OTHER` and `CLOSED` are different and the wording matters.** The first means somebody
 was quicker; the second that the seat stopped existing (the day was cancelled, or the driver filled
@@ -2779,6 +2825,25 @@ ran.
 > 🔒 There is **no** field here for her position, how many others were offered it, or who they are.
 > A waiting list is a set of people who all want the same commute, and telling each of them who they
 > are racing would turn a seat into a social problem.
+
+#### `GET /seat-offers/{offer}` — active, profile complete
+
+One offer, exactly as a row of `GET /seat-offers`, **in any status** — so a push opened late shows
+"Somebody was quicker" or "No longer available" and not an error. `404` for somebody else's.
+
+#### `POST /seat-offers/groups/{group}/accept` — active, profile complete
+
+`{group}` is an `offerGroupId`. Accepts every **open** day of that resume offer, one day at a time,
+earliest first, each by the ordinary accept rules (first to accept wins that day). Answers the
+bookings it made, plus `meta.offers[]` with one row per day: `{offerId, status, bookingId, error}` —
+`status` `ACCEPTED`, or the offer's status when that day was lost or already ended, with the error
+code that lost it (`SEAT_OFFER_CLOSED`, `BOOKING_ALREADY_BOOKED`, …). Some days can be lost while
+others are won; show which. `409 SEAT_OFFER_CLOSED` (with `fields.offers`) when **no** day could be
+taken. `403 RIDING_SUSPENDED_FOR_DEBT` stops the whole call. `404` for a group that isn't hers.
+
+#### `POST /seat-offers/groups/{group}/decline` — active, profile complete
+
+Declines every open day of the group. Answers all the group's rows. She stays on the waiting list.
 
 #### `POST /seat-offers/{offer}/accept` — active, profile complete
 
@@ -3069,7 +3134,7 @@ you show:
 
 | Request | Returns | Order |
 |---|---|---|
-| `?scope=past` | Only `COMPLETED` · `CANCELLED_BY_PASSENGER` · `CANCELLED_BY_DRIVER` · `NO_SHOW` · `EXPIRED` · `ENDED_EARLY` · `EXITED_DUE_TO_DRIVER_DELAY` | **Newest journey first** (by departure, not by when the booking was made) |
+| `?scope=past` | Only `COMPLETED` · `CANCELLED_BY_PASSENGER` · `CANCELLED_BY_DRIVER` · `NO_SHOW` · `EXPIRED` · `ENDED_EARLY` · `EXITED_DUE_TO_DRIVER_DELAY` | **Newest first by when the seat ended**: a cancelled seat by `cancelledAt`, every other one by its trip's departure. Since 2026-11-15; before, a cancelled seat sorted by its own day, so weeks of seats cancelled by a pause sat above the ride she finished today |
 | `?scope=upcoming` | Only `PENDING` · `CONFIRMED` on journeys not yet departed, or departed and still on the road | **Soonest journey first** |
 | no `scope` | Everything, as before | Newest booking first |
 
@@ -3179,6 +3244,61 @@ seat goes to the waiting list, and he pays the driver-cancel fee by notice (16h+
 "That's not right" on the trip receipt. See 4.9 — this is the safeguard that makes the driver's
 attendance decision acceptable, and it is the passenger's only move.
 
+**Answer:** `201` with the booking, as `GET /bookings/{booking}` returns it: `paymentStatus: DISPUTED`
+and, on a no-show, `noShow.dispute` filled. No second call needed.
+
+| Refusal | When |
+|---|---|
+| `409 ATTENDANCE_NOT_DISPUTABLE` | Nobody recorded her yet. `error.fields.currentStatus`: `PENDING`, or `NONE` when the booking has no attendance row (never on a run). |
+| `422 ATTENDANCE_DISPUTE_WINDOW_CLOSED` | More than 24 hours (the `trip.dispute_window_hours` setting) since `confirmedAt`. `error.fields.closedAt` says when it closed. |
+| `409 ATTENDANCE_ALREADY_DISPUTED` | She already disputed it (`error.fields.dispute: ALREADY_RAISED`). |
+| `422 VALIDATION_FAILED` | `reason` under 10 or over 255 characters, in `error.fields.reason`. |
+| `404` | Not her booking (the driver included). |
+
+#### `noShow` on her booking
+
+On `GET /bookings/{booking}` and every row of `GET /my-bookings`, **to the passenger only** (the
+driver's view has no `noShow` key; he has the attendance list). `null` unless the driver marked her a
+no-show. It is set as soon as he marks her, while the booking is still `CONFIRMED` on Live trip, and
+stays once the booking is `NO_SHOW`.
+
+```json
+"noShow": {
+  "confirmedAt": "2026-11-15T05:12:00+00:00",
+  "disputableUntil": "2026-11-16T05:12:00+00:00",
+  "dispute": {
+    "status": "OPEN",
+    "reason": "I was at the gate from 7:00. The car never came to Gate 2.",
+    "disputedAt": "2026-11-15T06:01:00+00:00",
+    "resolution": null,
+    "resolvedAt": null,
+    "note": null
+  }
+}
+```
+
+| Field | |
+|---|---|
+| `confirmedAt` | When the driver marked her. |
+| `disputableUntil` | Show **Dispute** while this is set. `null` once the window has passed or she already disputed. The window is the server's setting; don't compute it. |
+| `dispute` | `null` until she disputes. |
+| `dispute.status` | `OPEN` · `DECIDED`. |
+| `dispute.reason` · `dispute.disputedAt` | Her words, and when she sent them. |
+| `dispute.resolution` | `upheld` (the no-show stays) · `overturned` (removed) · `refunded` (removed, and the seat is marked refunded). `null` while open. |
+| `dispute.resolvedAt` | When staff decided. |
+| `dispute.note` | Up to 255 characters from staff to her, or `null`. Show it as a message from the team, `dir="auto"`. |
+
+What a decision moves:
+
+- **upheld:** `paymentStatus` goes back to `NOT_DUE` (a no-show never owes the fare). The no-show fee stays on her debt.
+- **overturned / refunded:** the no-show stops counting on her fee ladder, its fee comes off her debt
+  (dropped if not yet charged, credited back if it was), and its reliability event is reversed.
+  `paymentStatus` becomes `NOT_DUE` (overturned) or `REFUNDED` (refunded).
+- The fee is never on this booking's `feeLinePiastres`: it rides on her **next** ride, so that line
+  is where you see it drop.
+- She gets `no_show_dispute_decided` (4.14). The booking `status` and the attendance `status` stay
+  as they were; read the decision from `noShow.dispute`.
+
 ---
 
 
@@ -3242,11 +3362,45 @@ attendance decision acceptable, and it is the passenger's only move.
 | `paymentStatus` | `NOT_DUE` (nothing recorded yet) · `PENDING` · `PAID` · `FAILED` · `REFUNDED` · `DISPUTED`. **Cash:** the passenger pays in the car; the booking turns `PAID` about **two hours after the driver confirms they travelled** (the delay lets a wrong tap be noticed). A no-show stays `NOT_DUE`. `DISPUTED` as soon as the passenger contests the attendance record, until staff decide. |
 | `meetingPoint` | Her **pickup**: `{lat, lng, label, isExact}`, or **`null` for the standard point** — which is the run's origin. 🔒 Fuzzed to ~110m with `label: null` and `isExact: false` unless the booking is `CONFIRMED`, `COMPLETED`, `ENDED_EARLY` or `EXITED_DUE_TO_DRIVER_DELAY` — so a pending, expired or cancelled booking in History shows the area only. |
 | `dropoffPoint` | Her **drop-off**, same shape and same rule; `null` = the destination. |
-| `cancelledAt`, `cancelledReason`, `cancellationFeePiastres` | `cancellationFeePiastres` stays `0`: the real fees are charged to the debt ledger, not here — show `feeLinePiastres` / `feeLineReason` on the booking and the debt screen (4.16). |
+| `cancelledAt`, `cancellationFeePiastres` | `cancellationFeePiastres` stays `0`: the real fees are charged to the debt ledger, not here — show `feeLinePiastres` / `feeLineReason` on the booking and the debt screen (4.16). |
+| `cancelledReason` | **Always a code, never anybody's words** (BOOK-41), on every booking that ended early. `null` while it hasn't. The list is in the table below. |
+| `cancelledNote` | 🔒 The text the person typed, **only to the person who wrote it**: the driver sees his own note on `removed_by_driver` and `active_trip_cancelled`; the passenger sees her own on `passenger_cancelled` · `left_group` · `absence_planned`. Absent for everybody else. Support reads it on the dashboard. |
+| `tripCancelReason` | Only with `active_trip_cancelled`: the category the driver picked on `cancel-active` — `breakdown` · `accident` · `emergency` · `other`. `null` otherwise. Never his note. |
+| `wasAboard` | Only with `active_trip_cancelled`: `true` when she was in the car (the booking ends `ENDED_EARLY`), `false` when she was never collected (`CANCELLED_BY_DRIVER`). `null` otherwise. |
+| `commitment` | `trial` · `recurring`, from the request that made the booking. Never `null`, also after she left the group. On every booking, so `nextJourney` too. |
 | `otherPartyUserId` | 🔒 **The other person's user id — the driver's to the passenger, the passenger's to the driver — only once the journey is over** (`COMPLETED` · `ENDED_EARLY` · `NO_SHOW` · `EXITED_DUE_TO_DRIVER_DELAY`); `null` before. It is what the trip summary's **Block** sends (`POST /safety/blocked-users`). Before the trip there is no reason for either of you to hold a handle on the other, so don't cache it from anywhere else. |
 | `pickupEta` / `pickupEtaLocal` | "Pickup around 7:55" (DISCOVER-14): when the car should reach her pickup that day. Once the day's itinerary is built it is the departure plus the legs up to her stop — **the same time her wait grace starts from**, and frozen with the itinerary at the 12h lock; before that, an estimate along the route. Present wherever `trip` is. |
 | `myRating` | **Your own** rating of this journey — the same shape `POST /bookings/{booking}/rating` answers with (`id`, `stars`, `comment`, `tags`, `kind`, `isVisible`, `editableUntil`, …) — or `null` if you have not rated (HISTORY-4). 🔒 Never the other person's, and `null` says nothing about whether they rated. Show **Edit** only while `editableUntil` is set. On `GET /my-bookings` and `GET /bookings/{booking}`. |
 | `trip` | The scheduled trip above, when loaded. |
+
+**`cancelledReason` codes.** The list does not change silently; a new code is announced in the change log.
+
+| Code | When | Status |
+|---|---|---|
+| `removed_by_driver` | `POST /driver/bookings/{booking}/cancel` | `CANCELLED_BY_DRIVER` |
+| `day_cancelled` | The driver cancelled that day (`POST /trips/{trip}/cancel`) | `CANCELLED_BY_DRIVER` |
+| `commute_paused` | The driver paused the commute | `CANCELLED_BY_DRIVER` |
+| `commute_deleted` | The driver deleted the commute, or the driver's account was deleted | `CANCELLED_BY_DRIVER` |
+| `commute_ended` | The commute's schedule ended | `CANCELLED_BY_DRIVER` |
+| `commute_stopped` | The platform stopped the commute: licence expired (COM-26), car suspended (COM-47), driver suspended (COM-37), unpaid commission, a review. One code on purpose: the passenger is not told which. "This trip can't run" | `CANCELLED_BY_DRIVER` |
+| `vehicle_replaced` | The driver replaced the car | `CANCELLED_BY_DRIVER` |
+| `replaced` | Her seat went to another passenger (`replacement-offer` accepted) | `CANCELLED_BY_DRIVER` |
+| `active_trip_cancelled` | The run was stopped after it set off (`cancel-active`); read `wasAboard` and `tripCancelReason` | `ENDED_EARLY` or `CANCELLED_BY_DRIVER` |
+| `trip_expired` | The driver never started (+20 min) | `EXITED_DUE_TO_DRIVER_DELAY` |
+| `not_started` · `passed_your_stop` · `late_for_pickup` | She left with no fee because the driver let her down (`exit-without-fee`), the same values as `driverDelay` | `EXITED_DUE_TO_DRIVER_DELAY` |
+| `passenger_cancelled` | She cancelled | `CANCELLED_BY_PASSENGER` |
+| `left_group` · `absence_planned` · `declared_away` | She left the group, planned an absence, or said she won't come | `CANCELLED_BY_PASSENGER` |
+| `ended_early` | She ended her own ride early (`end-early`) | `ENDED_EARLY` |
+| `switched` | Switch Commute | either |
+| `blocked` | One of them blocked the other | either |
+| `account_suspended` · `account_deleted` | Her account was suspended (conduct or debt) or deleted | `CANCELLED_BY_PASSENGER` |
+
+Money on the driver-side codes: no cancellation fee and no fee line is ever charged to her
+(`cancellationFeePiastres` and her fee lines stay `0`). One exception to "You won't be charged":
+`active_trip_cancelled` with `wasAboard: true` and `tripCancelReason` `breakdown` · `accident` ·
+`emergency` — if she rode more than 25 % of her route she pays that share of the fare (PAY-24), and
+`price.totalPiastres` is already the reduced figure. 25 % or less, or reason `other`, she pays 0
+(`paymentStatus: WAIVED`).
 
 🔒 **All three money figures are frozen at approval and never recomputed.** A driver raising her
 price, or the platform changing its percentage, moves nothing here. And the meeting point is
@@ -3468,6 +3622,13 @@ stopping the journey rather than cancelling a booking, and never behind the same
 - A passenger who was aboard **keeps her attendance** (`PRESENT`/`LATE`): the part she rode still
   happened, and her booking is `ENDED_EARLY`, not cancelled. Do not show it as a cancellation.
 - Nobody is charged a cancellation fee either way — the fee and the record fall on the driver.
+- **What a passenger who was aboard pays** (PAY-24, PAY-25). Only after `breakdown`, `accident` or
+  `emergency`, and only when the car had carried her **more than 25 %** of her own route (pickup →
+  drop-off, measured from the car's last known position when it stopped): she pays that share of the
+  fare by distance. Her booking then has `paymentStatus: PAID` (cash, settled at once) and
+  `price.totalPiastres` **is** the reduced amount. In every other case (`other`, 25 % or less, or no
+  known position) she pays nothing: `paymentStatus: WAIVED`, and `price.totalPiastres` stays the full
+  seat price, so read `WAIVED` first and don't show the price as owed.
 - Neither the reason nor the note is **ever** sent to passengers. Support reads them on the booking.
 - Freed seats are offered to **nobody**: a seat on a run that has stopped is not a seat.
 - A passenger the driver already marked as a no-show keeps `NO_SHOW` and is not counted in `meta`.
@@ -3767,7 +3928,7 @@ moments.
 | `gpsCorroborated` | Whether the driver's position **agreed** with the meeting point — not whether a reading was supplied. |
 | `gpsConfidence` | `0.00`–`1.00`, or `null` when no reading was taken. `0.00` means we measured and it disagrees, which is a different fact from no reading at all. |
 | `disputedAt` / `disputeReason` | Set when the passenger contested it. The status does **not** change — a dispute records that a record is contested and holds the money. |
-| `disputeResolution` | `upheld` · `overturned` · `refunded`, once a reviewer decides. `null` while open. |
+| `disputeResolution` | `upheld` · `overturned` · `refunded`, once a reviewer decides. `null` while open. Staff decide no-show disputes on the dashboard's Payments page; the passenger reads the decision in `noShow` on her booking (4.7). |
 | `person` | The passenger (5.1), on the driver's list. |
 | `passengerUserId` | 🔒 Her user id, **only once her booking's journey is over** (the same rule as `otherPartyUserId` on the booking); `null` before. For the driver's trip summary: Block and Report. |
 
@@ -4008,7 +4169,7 @@ they explain.
 | `greetingName` | Their public first name. |
 | `verification` | `{level, of, percentage, isComplete}` — the same numbers as the Verification Centre, so the banner cannot disagree with the screen behind it. 🔴 **`null` for a passenger-only account** (PROF-12, F2-8): passengers never verify, so hide the banner. It appears once the account has the driver capability. |
 | `unreadNotifications` | The bell badge: the same number as `GET /notifications` → `meta.unreadCount`, so Home is one request. |
-| `nextJourney` | The journey the card is about, or **`null`** (F3P-01). Contains the full booking (4.7) plus `originLabel`, `destinationLabel`, `departureAt`, `departureLocal`, `departsInMinutes`, `isToday`, `attendance`, `isTrial`, `driver` (5.1), `vehicle`, and the state fields below. **Which journey**, the first that exists: ① the one **happening now** (run started, or departure passed and the driver has not started — today only); ② one that **ended and she has not seen** — cancelled by the driver, expired, she left for a driver delay, or completed and not yet rated — until you send `POST /bookings/{booking}/seen`, for up to 7 days; ③ the **soonest upcoming confirmed** one — a `PENDING` request is never on the card (TRIP-01); ④ a **completed ride still waiting for her stars**, inside the rating window, only when nothing is upcoming. A ride she cancelled herself is not shown. |
+| `nextJourney` | The journey the card is about, or **`null`** (F3P-01). Contains the full booking (4.7) plus `originLabel`, `destinationLabel`, `departureAt`, `departureLocal`, `departsInMinutes`, `isToday`, `attendance`, `noShow` (the same object and rules as on the booking, 4.7: `null` unless the driver marked her a no-show), `isTrial`, `driver` (5.1), `vehicle`, and the state fields below. **Which journey**, the first that exists: ① the one **happening now** (run started, or departure passed and the driver has not started — today only); ② one that **ended and she has not seen** — cancelled by the driver, expired, she left for a driver delay, or completed and not yet rated — until you send `POST /bookings/{booking}/seen`, for up to 7 days; ③ the **soonest upcoming confirmed** one — a `PENDING` request is never on the card (TRIP-01); ④ a **completed ride still waiting for her stars**, inside the rating window, only when nothing is upcoming. A ride she cancelled herself is not shown. |
 | `nextJourney.phase` | **The state the card switches on**, decided by the server: `scheduled` (F3P-02/03) · `driver_en_route` (F3P-04, the run has started) · `driver_arrived` (F3P-05, the driver's GPS-checked "I've arrived" for her) · `on_board` (F3P-06, she is checked in and not yet dropped off) · `driver_delayed` (F3P-07: 5 min after departure with the run not started, or the run started but the driver has not arrived 5 min after her pickup time, or the car passed her stop) · `cancelled_by_driver` (F3P-08) · `expired` (F3P-09, the driver never started and the day was closed) · `exited` (F3P-10, she pressed Leave Without Fee) · `completed` (F3P-11). `status` and `trip.status` are unchanged — switch on `phase`, not on them. |
 | `nextJourney.daysMask` | The days she rides — her requested days, or the commute's days. Sat 1 … Fri 64. |
 | `nextJourney.pickup` | `{label, at, local, lat, lng, isExact}` — "Your agreed pickup · Rehab Gate 2 · 07:05". `label`/`lat`/`lng`/`isExact` are `meetingPoint`'s (fuzzed, label `null`, until confirmed). **`at` is her pickup time** — departure plus the drive to her stop — and is the same instant her arrival grace counts from. `meetingPoint` stays. |
@@ -4140,11 +4301,17 @@ it" and "somebody is calling me" are different situations to be in.
 
 Trusted contacts. **Request:** `name`, `phone`, `relationship`, `autoShareTrips`, `isGuardian`.
 
+**The list** answers `meta: {limit, canAdd, autoShare, autoShareAvailable}` next to `data`: `limit` is
+the cap (3 today, a setting), `canAdd` is whether another contact fits right now. Show
+"{count} of {limit}" and hide **Add** when `canAdd` is `false`. Somebody who kept 4 or 5 from before
+has `canAdd: false`. `autoShare` is her account switch (below); `autoShareAvailable` says whether the
+server can deliver the link at all. Show the switch only when it is `true`.
+
 | Response field | Meaning |
 |---|---|
 | `id`, `name`, `relationship` | As entered. |
 | `phone` | The **full** number, because this is the owner reading their own list and a masked number cannot be checked for a typo. |
-| `autoShareTrips` | 🔴 **Stored, and nothing acts on it yet. Do not label it as working.** See the note below — this corrects an earlier version of this table, which said it already shared every trip. |
+| `autoShareTrips` | Ignored. Auto-share is one switch for the whole account: `PUT /safety/auto-share`. Send `false` or leave it out. |
 | `isGuardian` | Elevated access during an emergency. |
 | `verifiedAt` | Whether the number has been confirmed to actually receive messages. **`null` for everybody today** — confirming it needs an OTP to that number (Phase 12). Say "unconfirmed" rather than implying the contact works. |
 
@@ -4156,6 +4323,10 @@ Rules you will hit:
   cannot add another until she is below 3.
 - **The number is normalised**, so the same contact cannot be added twice in two formats
   (`EMERGENCY_CONTACT_DUPLICATE`, 409).
+- **A number that is not an Egyptian mobile** answers `422 VALIDATION_FAILED` with `error.fields.phone`,
+  on add and on edit.
+- **Her own number is refused**: `422 EMERGENCY_CONTACT_SELF`, with `error.fields.phone`, on add and on
+  edit. A trusted contact who is herself would receive her own location and nobody else would.
 - **Changing the number clears `verifiedAt`.** Carrying it across would mean a "verified" badge on a
   number nobody ever reached.
 - **Removal is immediate and unconditional.** Do not add a confirmation dialog: somebody removing a
@@ -4165,21 +4336,27 @@ Rules you will hit:
 🔒 There is no endpoint that returns anybody else's contacts. Another person's list is a 404, and an
 empty list for a stranger is genuinely empty.
 
-> 🔴 **`autoShareTrips` does not yet do anything, and this is the one field in the API where that
-> gap could hurt somebody.** A person who switches it on believes their sister will see every trip.
-> Nobody will, until an outbound SMS/WhatsApp provider is chosen (2026-10-05: the notification inbox
-> now exists, but it only reaches people with the app — a trusted contact usually has neither the
-> app nor an account, so the link has to go to their phone number).
->
-> The reason it cannot be built first is in the live-share design, two subsections down: an auto-made
-> share link has to be **delivered at the moment it is created**, because the token is returned once
-> and is unrecoverable afterwards. Creating the share now and delivering it later is not an option —
-> it would write links nobody on earth can open. So the feature needs Phase 12's SMS or push, and
-> the flag is stored meanwhile so that nobody's stated intent is lost when it lands.
->
-> **What this means for your screen:** keep the switch, keep what it is called, and say plainly that
-> it starts when automatic sharing is available — do not write copy in the present tense. If you
-> would rather hide it until then, that is a reasonable choice and we will tell you when it works.
+#### `PUT /safety/auto-share`
+
+`{ "enabled": true | false }` → `{ "enabled": true, "available": true }`. The **Share live trip
+automatically** switch, one for the whole account (SAFE-14). Off by default.
+
+When it is on and `available` is `true`, each time a trip of hers leaves (the run goes from
+`PREPARING` to `EN_ROUTE`, as passenger or as driver):
+
+- The server makes one live share **per trusted contact**, `source: "AUTO"`, and sends each contact
+  one SMS with the link, in her app language. It ends with the trip like a manual one.
+- They appear in `GET /safety/live-shares`, so she can stop each one there.
+- Once per trip: nothing is sent again at a later pickup.
+- Unconfirmed numbers (`verifiedAt: null`) **are** sent the link.
+- A message that could not be delivered has its link ended at once.
+- She gets `live_trip_auto_shared` (4.14), or `live_trip_auto_share_failed` when no message went out.
+- Removing a contact ends that contact's links at once.
+
+It never alerts anybody in an SOS: auto-share only sends the live-trip link.
+
+`available` is `false` when staff turned the feature off or no SMS gateway is set up. Then the switch
+is stored and nothing is sent.
 
 
 
@@ -4199,6 +4376,9 @@ arrived and was not there · `dropped_early` — put out of the car before the d
 `women_only_misuse` · `abusive_review`. ⚠️ Today each is a report a person reads; what it then does
 to a fee (freezing a no-show fee, F-9, F-12) arrives with the fee work. **Audio evidence is not
 accepted** — Q-007 is still open.
+
+A **suspended** account can still file, read and appeal reports: these routes don't need an active
+account. `POST /account/suspension/appeal` is the appeal against the suspension itself.
 
 **`safety_concern`** (HISTORY-9, 2026-11-01) is the report form's "Safety concern" — send it instead
 of `other`, which ranks **medium**; this one is **high** (4-hour deadline), with unsafe driving. Map
@@ -4234,7 +4414,8 @@ and let the server have the last word.
 |---|---|
 | `category`, `description` | As filed. |
 | `severity` | The platform's judgement. See above. |
-| `id` · `createdAt` | ✅ On every report, in the `POST` answer and in the list (HISTORY-11): `id` is the 26-character report number, `createdAt` when it was filed. |
+| `id` · `createdAt` | ✅ On every report, in the `POST` answer and in the list (HISTORY-11): `id` is the 26-character report id, `createdAt` when it was filed. |
+| `caseNumber` | The short reference she reads out to support, e.g. `RP-308712` (`RP-` and six digits). On the `POST` answer, the list and the single report. Show this, not `id`. |
 | `status` | `OPEN` · `UNDER_REVIEW` · `ESCALATED` · `RESOLVED` · `CLOSED` · **`APPEALED`** (she appealed the decision and the team is looking again — show it as "under review"; HISTORY-10). |
 | `slaDueAt` | When the platform has undertaken to respond by, written when the report was filed. Fixed rather than recomputed — a deadline that can be recalculated is one that can be quietly moved. |
 | `resolution` / `resolvedAt` | Set when the safety team resolves or closes the report — `null` before that, including while it is `ESCALATED`. `resolution` is **free text written by a member of staff to the reporter** (up to 255 characters, in whatever language they wrote it), so render it as a message from Rafeeq, not as a status label, and with `dir="auto"`. The reason for an escalation is internal and never appears here. |
@@ -4413,7 +4594,8 @@ this run: only the driver, or a passenger holding a live seat, may share it.
 
 #### `GET /safety/live-shares` — paginated · `DELETE /safety/live-shares/{share}`
 
-The caller's own links, newest first. `?tripSessionId=` keeps one run's links. 🔒 **Without tokens, and that is not an oversight** — being able to re-read
+The caller's own links, newest first. `?tripSessionId=` keeps one run's links. Each has
+`source`: `MANUAL` (Share live trip) or `AUTO` (auto-share). 🔒 **Without tokens, and that is not an oversight** — being able to re-read
 them would mean a stolen access token could harvest every link a person ever made. The list gives
 `isActive`, `expiresAt`, `viewCount` and `lastViewedAt`.
 
@@ -4671,7 +4853,11 @@ What the platform tells a member on its own initiative. Every message lands in t
 > ⚠️ **Push: FCM is built (D-0023), and switched on per server.** With `RAFEEQ_PUSH_DRIVER=fcm` and
 > the Firebase service account installed, every push goes through FCM HTTP v1 — `notification`
 > (title/body) plus `data`: the ids below **and `type` + `category`** (the same values the inbox
-> returns), all strings — route a tap on `data.type`, e.g. `{"type":"seat_requested","category":"booking","seatRequestId":"…"}`.
+> returns), all strings — route a tap on `data.type`, e.g. `{"type":"seat_requested","category":"booking","seatRequestId":"…","notificationId":"…"}`.
+> The other keys are **exactly the inbox row's `data`**, same names and values, for every type: the
+> push and the row are written from one array, so one mapper serves both. **`notificationId`** is the
+> inbox row's `id`, so a tap can mark it read; it is missing only when her in-app setting for that
+> category is off (then there is no row).
 > **The staging server is switched on (2026-11-11).** Until a server is switched over it records
 > each push as `no_push_provider` and nothing reaches the phone. **Send the device's FCM token** at
 > sign-in (`device.pushToken`) and refresh it through `PATCH /account/devices/current/security`
@@ -4708,14 +4894,14 @@ hold must still be able to read the notice that says so.
 | `pickup_change_requested` | driver | the pickup request (4.8) | `pickupRequestId`, `commuteId` (+ `commuteGroupId` or `seatRequestId`) |
 | `pickup_change_approved` · `pickup_change_alternative` · `pickup_change_rejected` | passenger | the pickup request (4.8) | `pickupRequestId`, `commuteId` (+ `bookingId`, `commuteGroupId` for a member, or `seatRequestId`) |
 | `pickup_change_alternative_accepted` | driver | the pickup request (4.8) | `pickupRequestId`, `commuteId` (+ `commuteGroupId`) |
-| `seat_offered` | passenger on a waiting list | the offer (`GET /seat-offers`) | `offerId`, `tripId`, `commuteId` |
+| `seat_offered` | passenger on a waiting list | the offer (`GET /seat-offers/{offer}` with the `offerId`) | `offerId`, `tripId`, `commuteId` |
 | `seats_offered_by_driver` | passenger on a waiting list | her offers | `commuteId`, `seatRequestId` |
 | `booking_cancelled` | the other side | the booking | `bookingId` |
 | `trip_day_cancelled` | passenger | the booking | `tripId`, `bookingId` |
 | `commute_paused_seat_cancelled` · `vehicle_replaced_seat_cancelled` | passenger (back on the waiting list) | the commute | `commuteId`, `bookingId` |
 | `commute_deleted_seat_cancelled` | passenger (**not** on any list) | her bookings | `commuteId`, `bookingId` |
-| `change_proposal_received` · `_revised` · `_applied` · `_rejected` | passenger / driver | the proposal (4.7) | `changeProposalId` (+ `bookingId` / `commuteId`) |
-| `waitlist_cleared_by_change` | passenger | the commute | `commuteId` |
+| `change_proposal_received` · `_revised` · `_applied` · `_rejected` | passenger / driver | the proposal (`GET /change-proposals/{proposal}` with the `changeProposalId`, for a passenger) | `changeProposalId` (+ `bookingId` / `commuteId`) |
+| `waitlist_cleared_by_change` | passenger | the commute; **Reapply** fills the form from `GET /seat-requests/{seatRequest}` with the `seatRequestId` (status `TERMS_CHANGED`) and `GET /commutes/{commute}/public` | `commuteId`, `seatRequestId`, `changeProposalId` |
 | `departure_time_changed` | driver | that day | `scheduledTripId`, `commuteId` |
 | `match_found` | passenger | the match | `commuteId`, `demandId` |
 | `trip_starts_in_hour` · `trip_starts_soon` | driver and each confirmed passenger | the trip | `tripId` + `bookingId` (passenger) or `commuteId` (driver) |
@@ -4730,6 +4916,7 @@ hold must still be able to read the notice that says so.
 | `early_drop_check` | passenger | "Did you ask to get off here?" (4.9) | `bookingId` |
 | `late_boarding_warning` · `missed_commitment_warning` | passenger | warnings (4.2) | `warningId`, `bookingId` |
 | `no_show_fee` · `late_boarding_fee` · `late_cancel_fee` · `late_cancel_fee_charged` · `late_cancel_fee_waived` | passenger | warnings (4.2), with the 48-hour appeal | `warningId`, `bookingId` |
+| `no_show_dispute_decided` | passenger | Past trip for `bookingId`; the decision is in `noShow.dispute` | `bookingId`, `tripId`, `resolution` (`upheld` · `overturned` · `refunded`) |
 | `driver_cancel_fee` · `driver_ended_trip_fee` · `driver_no_show_fee` · `driver_late_fee` | driver, one per act | the debt screen (4.16), with the 48-hour appeal | *no ids* |
 | `appeal_approved` · `appeal_declined` | the one who appealed | the debt screen / reliability | as relevant (`reliabilityEventId`) |
 | ⭐ `debt_due_tomorrow` | driver, **Thursday** from the reminder hour, when this week's commission is unpaid — "commission due tomorrow" | the debt screen (4.16) | *no ids* |
@@ -4742,6 +4929,7 @@ hold must still be able to read the notice that says so.
 | `chat_message` | the other side | the thread | as the thread (4.15) |
 | `announcement` | everyone, passengers or drivers — written by staff, **inbox only, never a push** | the screen in `data.link` if present (`home`, `driver_home`, `trips`, `payments`, `profile`, `help`), else the inbox | `announcementId`, `link` (optional) |
 | `staff_message` | one member, written by staff (**safety** — cannot be switched off), **inbox only** | the inbox | *no ids* |
+| `live_trip_auto_shared` · `live_trip_auto_share_failed` | her, when auto-share ran as her trip left (**safety**) | Shared links | `tripId`, `tripSessionId`, `sentTo` (contact ids, comma-separated; not on `_failed`), `failedTo` (contact ids, comma-separated, may be empty) |
 | `rating_due` · `rating_due_riders` · `rating_reminder` | passenger / driver | rate (4.13) | `bookingId` or `tripId` (+ `riderCount` on `rating_due_riders`). `rating_due` goes to each passenger at her drop-off (or at completion if still aboard), never on a `NO_SHOW`. `rating_due_riders` goes to the driver once when the run completes, if anybody rode. |
 | `sos_picked_up` · `report_resolved` · `report_closed` | the reporter | the SOS / report | `sosId` / `incidentId` |
 | `account_on_hold` · `account_reinstated` | the member (safety) | — | *no ids* |
@@ -5132,6 +5320,8 @@ Both answer the side as in `GET /account/debt` (`driver` / `passenger` object).
 caller's account (commutes paused with `account_suspended`); `vehicle` the given car, or the active one
 (`vehicle_suspended` / `vehicle_reinstated`). Answers `{accountStatus, vehicle {id, verificationStatus}}`.
 `409 MEMBER_NOT_ACTIVE` / `MEMBER_NOT_SUSPENDED` when the account is already in that state.
+`scope: "account"` works for **any** account, passenger-only included, despite the `driver/` in the path.
+`reinstate` with `scope: "account"` also lifts a permanent ban.
 
 #### `POST /testing/driver/documents/{key}/expiry`
 
@@ -5219,6 +5409,96 @@ Removes one of the caller's cars that isn't the active one, whatever its status,
 files. Answers `{vehicleId, deleted: true}`. `409 VEHICLE_IS_ACTIVE` for the active car; `409 VEHICLE_IN_USE`
 (`fields.commuteIds`) while a draft, published or paused commute still names it; `404` for somebody else's.
 Archived commutes don't block it: they keep no car (`vehicle_id` null) once it is deleted.
+
+#### `POST /testing/seat-offers/{offer}/close`
+
+`{ "status": "INELIGIBLE" | "CLOSED" | "TAKEN_BY_OTHER", "closedReason"?: "…" }`. Ends the caller's
+**open** offer the way the server would, with the `offer.closed` socket event. Without
+`closedReason`: `INELIGIBLE` → `car_passed`, `TAKEN_BY_OTHER` → `seat_taken`, `CLOSED` →
+`day_cancelled`. Answers the offer as `GET /seat-offers/{offer}`. `404` for somebody else's,
+`409 SEAT_OFFER_CLOSED` if it already ended.
+
+#### `POST /testing/commute-demands/{demand}/expire`
+
+No body. Moves the caller's **active** saved ride request's `expiresAt` into the past and runs the
+`expire-demands` job on it, so it comes back `EXPIRED` the way the nightly sweep leaves it. The job
+sends no push or inbox row, so neither does this. Answers the demand as `GET /commute-demands/{demand}`.
+Resume it with `PATCH /commute-demands/{demand}` `{paused: false}`: `ACTIVE` with a fresh `expiresAt`.
+`404` for somebody else's or a cancelled one; `409 COMMUTE_DEMAND_NOT_EDITABLE` (`fields.status`) if
+it is not `ACTIVE`: the job never expires a `PAUSED` one either, so resume it first.
+
+#### `POST /testing/notifications`
+
+`{ "type": "…", "data"?: { … }, "params"?: { … } }`. Writes one inbox row for the caller, and the
+push, exactly as the server would. `type` is one of `waitlist_cleared_by_change` · `seat_offered` ·
+`seats_offered_by_driver` · `change_proposal_received` · `change_proposal_revised` ·
+`change_proposal_applied` · `change_proposal_rejected` · `booking_cancelled`. `data` keys are
+`offerId` · `seatRequestId` · `bookingId` · `changeProposalId` · `commuteId` · `tripId`, and the first
+three must be the caller's own (`422` with `fields.data.<key>` otherwise). `params` fills the text
+(`name`, `date`, `days`; defaults `Nour`, today, `3`). Answers the notification, or `null` when her
+in-app setting for that category is off.
+
+#### `POST /testing/bookings/{booking}/dispute/decide`
+
+`{ "resolution": "upheld" | "overturned" | "refunded", "note"?: "…" }` (`note` up to 255). Staff's
+decision on the caller's own **open no-show dispute**, made the same way as on the dashboard: the
+fee, the reliability event and `paymentStatus` move as 4.7 says, and `no_show_dispute_decided` is
+sent. Answers the booking as `GET /bookings/{booking}`. `409 ATTENDANCE_DISPUTE_NOT_OPEN` when there
+is no open no-show dispute on it; `404` if it isn't hers. Reach the no-show with
+`POST /testing/trips/{trip}/wait-timers/expire` then `POST /trips/{trip}/no-show`; for a no-show
+with a fee, first `POST /testing/attendance` `{kind: "no_show", count: 2}`.
+
+#### `POST /testing/incidents/{incident}/decide`
+
+`{ "status": "UNDER_REVIEW" | "RESOLVED" | "CLOSED", "resolution"?: "…" }` (`resolution` up to 255,
+default `Decided by the test run.`). The safety desk's step on the caller's own report, as on the
+dashboard: `UNDER_REVIEW` takes it (from `OPEN` or `APPEALED`); `RESOLVED` / `CLOSED` write
+`resolution` and `resolvedAt`, open the 48-hour appeal (`appeal.appealableUntil`) and send
+`report_resolved` / `report_closed`. Works again after an appeal, so both rounds can be played.
+Answers the report as `GET /incidents/{incident}`. `409 INCIDENT_CLOSED` on a report already decided
+and not appealed; `404` for somebody else's.
+
+#### `POST /testing/incidents/{incident}/age`
+
+`{ "hours": 1–200 }`. Moves the caller's report's `resolvedAt` back. 49 hours closes the appeal
+window (`appeal.appealableUntil: null`). Answers the report.
+
+#### `POST /testing/account/suspension/appeal/decide`
+
+`{ "decision": "upheld" | "overturned", "note"?: "…" }` (`note` up to 255). Staff's decision on the
+caller's pending suspension appeal, made the same way as on the dashboard: `overturned` lifts the hold
+and sends `account_reinstated`; `upheld` keeps it and opens the second 48-hour window
+(`needsNewEvidence: true`). `409 SUSPENSION_APPEAL_NOT_OPEN` when no appeal is pending;
+`409 MEMBER_NOT_SUSPENDED` when she is not suspended. Both appeals decided `upheld` gives
+`ALREADY_APPEALED` on the next `POST /account/suspension/appeal`.
+
+#### `POST /testing/account/suspension/age`
+
+`{ "hours": 1–200 }`. Moves the caller's hold back: `suspendedAt`, `reviewDueAt`, and each appeal's
+`createdAt` and `resolvedAt`. 49 hours closes whichever appeal window is open (`canAppeal: false`,
+then `APPEAL_WINDOW_CLOSED`). `409 MEMBER_NOT_SUSPENDED` when she is not suspended.
+
+#### `POST /testing/account/ban`
+
+`{ "reason"?: "…" }` (up to 255). A permanent ban on the caller, as staff make one on the Members page:
+`nextStep: RESTRICTED_ACCOUNT`, `suspension.permanent: true`, `PERMANENT_BAN` on appeal, every upcoming
+seat cancelled. `409 MEMBER_NOT_ACTIVE` when the account is already on hold. Lift it with
+`POST /testing/driver/reinstate` `{scope: "account"}`, or delete the account with `DELETE /testing/account`.
+
+All three answer `{ accountStatus, nextStep, suspension }`: `suspension` is `user.suspension` as
+`GET /auth/me` returns it, or `null` once the hold is lifted.
+
+#### `GET /testing/safety/auto-share/messages`
+
+The auto-share messages for the caller's latest trip that sent any:
+`[{ contactId, liveShareId, channel, to, status, failureReason, url, sentAt }]`, with
+`meta: {tripId, tripSessionId}`. `status` is `SENT` or `FAILED`; `url` is the link the contact got
+(staging only, where messages are recorded rather than sent). Empty `data` when nothing was sent.
+
+Cancel Active Trip needs no testing call: the real `POST /trips/{trip}/cancel-active` on a started
+test run gives `active_trip_cancelled`. Check one in first (`POST /trips/{trip}/check-in`) to get
+`wasAboard: true`. A cleared waiting list needs none either: publish → waitlist someone → propose an
+`all_future_on_this_weekday` change → every rider accepts.
 
 ---
 
@@ -5314,7 +5594,7 @@ Every message has the same envelope:
 |---|---|---|---|
 | `seat.opened` | `private-occurrence.{scheduledTripId}` | `{occurrenceId, commuteId, seatCount, releaseEventId}` | A seat came free on this day and **everybody waiting was offered it at once**. Refresh `GET /seat-offers`. The `releaseEventId` is also on every offer the release produced, so you can tie an offer to the opening it came from. |
 | `offer.accepted` | `private-occurrence.{scheduledTripId}` | `{occurrenceId, offerId, releaseEventId, seatsRemaining}` | Somebody took it. `seatsRemaining` is the live figure read under the seat lock. |
-| `offer.closed` | `private-user.{userId}` | `{offerId, occurrenceId, reason}` | **Your** offer is no longer live. `reason` says which — today the only value that arrives on the socket is `taken_by_other`, because somebody was quicker. Show that, not "something went wrong": she lost a race, the seat did not evaporate. An offer that expires or that the driver withdraws changes `GET /seat-offers` but is **not** broadcast yet. |
+| `offer.closed` | `private-user.{userId}` | `{offerId, occurrenceId, reason, closedReason, stillWaiting}` | **Your** offer is no longer live. `reason` is the offer's new status (`taken_by_other` · `ineligible` · `closed`), `closedReason` the code as on `GET /seat-offers`. Sent when somebody was quicker, when the car passed her pickup, when the day was cancelled or the run stopped, and when she left the waiting list. A pause, a deleted commute or a driver withdrawing changes `GET /seat-offers` but is **not** broadcast yet. |
 | `booking.cancelled` | `private-occurrence.{scheduledTripId}` | `{occurrenceId, bookingId, status, seatsReleased}` | A confirmed seat ended. `status` distinguishes `cancelled_by_passenger` from `cancelled_by_driver`. |
 
 🔒 **Who may subscribe to `private-occurrence.{scheduledTripId}`:** the driver, anybody holding a
@@ -5398,7 +5678,7 @@ Nothing below exists. Build the screen shells if you like, but there is no endpo
 | **Payments and wallet** | 34, group `payments` tab | **8** | **In progress.** Cash is now recorded (`paymentStatus` → `PAID`, see 4.7) and the driver's fee debt is tracked, with a publishing cap. Still to come: the driver's balance screen, the group's weekly statement, then — once a payment provider is chosen — payment methods, online capture, payouts and refunds. Cancellation fees wait on the cancellation policy. |
 | **Driver cancelling one day** | 43, 45, 46 | **9** | A driver cancelling a single day and the backup search that follows. **Blocked on an open decision** — refunds and reliability, section 8 #3. Route deviation itself is now detected and reported (see `deviationDetectedAt`); the ops ALERT it should trigger needs Phase 12/13. |
 | **Public trust tier** | badge on 12 and 21 | **10** | 🔴 **Ratings and reviews are both done** — section 4.13. Rating, the double-blind reveal, the anonymous review list on a commute, "what was said about me", reporting an abusive review and the `minRating` search filter are all live, and the `rating` in every public summary carries a number once a rating is revealed. The only piece left is the **public trust tier** (`new` / `trusted` / `highly_trusted`), which needs a product decision on its thresholds. The score behind it is deliberately internal and will never be returned. |
-| **Auto-share trips** | 26 | **12** | 🔴 **`autoShareTrips` on an emergency contact is stored and nothing acts on it yet.** See 4.12 — read that before you build the toggle. |
+| **Auto-share trips** | 26 | **12** | ✅ `PUT /safety/auto-share`, shown when `meta.autoShareAvailable` is `true` (4.12). Delivery is by SMS through the OTP gateway. |
 | **Night escort mode** | none | **13** | Not a mobile feature at all, and this corrects an earlier line in this file. It is a **corridor-level night window armed by the ops team** (or automatically, 9pm–5am) with staff monitoring — a dashboard control, not something an app shows or calls. There will be no endpoint for it. |
 | **Push delivery** | all | **12** | ✅ **Live on staging (FCM, 2026-11-11).** Send the FCM token as `device.pushToken`; route taps on `data.type` (4.14). iPhone also needs the APNs key in Firebase. |
 
@@ -5430,6 +5710,12 @@ exist, and every live endpoint must be named here.
 
 | Date | Change |
 |---|---|
+| 2026-11-15 | 📲 **Auto-share live trip (SAFE-14).** New **`PUT /safety/auto-share`** `{enabled}` → `{enabled, available}`, one switch per account. `GET /safety/emergency-contacts` adds **`meta.autoShare`** and **`meta.autoShareAvailable`**. When it is on, each trusted contact gets an SMS with a live link as her trip leaves; the shares carry **`source: "AUTO"`** in `GET /safety/live-shares` (manual ones `MANUAL`). New inbox and push types **`live_trip_auto_shared`** and **`live_trip_auto_share_failed`**. Removing a contact ends that contact's links. `autoShareTrips` on a contact is ignored. New staging-only **`GET /testing/safety/auto-share/messages`** (4.17). |
+| 2026-11-15 | 🛡️ **Safety leftovers.** The home journey (`GET /home`, `nextJourney`) carries **`noShow`**, the same object as on the booking (4.11). `GET /safety/emergency-contacts` answers **`meta: {limit, canAdd}`** (4.12). A bad phone number on a trusted contact now answers **`422 VALIDATION_FAILED`** with `error.fields.phone` (it answered `500`); her own number is refused with **`422 EMERGENCY_CONTACT_SELF`**. New staging-only **`POST /testing/account/suspension/appeal/decide`**, **`POST /testing/account/suspension/age`** and **`POST /testing/account/ban`** (4.17); `POST /testing/driver/suspend` with `scope: "account"` is documented as working for any account. 4.2 now lists what stays open for a permanent ban. |
+| 2026-11-15 | ⚖️ **No-show dispute, report case numbers, push taps.** Her booking carries **`noShow`** `{confirmedAt, disputableUntil, dispute {status, reason, disputedAt, resolution, resolvedAt, note}}` on `GET /bookings/{booking}` and `GET /my-bookings` (4.7). **`POST /bookings/{booking}/dispute` now answers `201` with the booking** (it answered the attendance row), and its refusals have one code each: `409 ATTENDANCE_NOT_DISPUTABLE` (was `ATTENDANCE_NOT_CONFIRMABLE`), `409 ATTENDANCE_ALREADY_DISPUTED` (was `ATTENDANCE_NOT_CONFIRMABLE` with `fields.dispute`), `422 ATTENDANCE_DISPUTE_WINDOW_CLOSED` (unchanged); a booking with no attendance row is now `409 ATTENDANCE_NOT_DISPUTABLE`, not `404`. Staff decide no-show disputes on the dashboard; the passenger gets **`no_show_dispute_decided`** (`bookingId`, `tripId`, `resolution`). Reports carry **`caseNumber`** (`RP-` + six digits). Every push now carries **`notificationId`**, the inbox row's id; its other keys already matched the row. New staging-only **`POST /testing/bookings/{booking}/dispute/decide`**, **`POST /testing/incidents/{incident}/decide`** and **`POST /testing/incidents/{incident}/age`** (4.17). |
+| 2026-11-15 | 🧾 **History order.** `GET /my-bookings?scope=past` now sorts a cancelled seat by `cancelledAt` and every other seat by its trip's departure, newest first. Seats cancelled today for later dates no longer push today's finished ride off the first page. Same fields, same `meta` paging. |
+| 2026-11-15 | 🧪 **New staging-only `POST /testing/commute-demands/{demand}/expire`** (4.17): an active saved ride request becomes `EXPIRED` now, as the nightly job leaves it. **Cancel Active Trip (4.9)** now says when a passenger who was aboard pays for the part she rode (breakdown, accident or emergency past 25 % of her route: `PAID`, `price.totalPiastres` is the reduced amount) and when she doesn't (`WAIVED`, price stays the full seat). No behaviour changed. |
+| 2026-11-14 | 🧳 **Trips (passenger) asks.** 🔴 **Privacy fix:** `cancelledReason` is now **always a code** (table in 4.7); the driver's typed reason never reaches the passenger. The author reads their own text in `cancelledNote`. Bookings gain `commitment`, `tripCancelReason`, `wasAboard`. **6 new endpoints:** `GET /seat-offers/{offer}`, `POST /seat-offers/groups/{group}/accept` and `/decline`, `GET /change-proposals/{proposal}`, and the staging-only `POST /testing/seat-offers/{offer}/close` and `POST /testing/notifications`. Offers gain `source`, `isPreviousPassenger`, `commitment`, `offerGroupId`, `daysMask`, `closedReason`, `passedPointLabel`, `stillWaiting`, `pickup.estimatedLocal`, `dropoff.estimatedLocal`; `offer.closed` carries `closedReason` and `stillWaiting` and is sent in more cases. An open offer now closes when its day is cancelled, its run is stopped, or she leaves the waiting list. `GET /change-proposals?bookingId=`. `waitlist_cleared_by_change` carries `seatRequestId` and `changeProposalId`, and its text names the driver (it showed `:name`). `POST /commutes/{commute}/seat-requests` takes `alternativeForBookingId` and fills the points. |
 | 2026-11-14 | 🧾 **Vehicle and reliability findings.** **2 new endpoints:** `POST /account/reliability/groups/{groupId}/appeal` and `/evidence`. 🔴 **A grouped act is appealed once:** appealing or adding evidence to any event with a `groupId` applies to every event in the group, and one staff decision decides them all. `GET /ratings/about-me` rows gain `report: { id, status } \| null`. `DELETE /testing/driver/vehicles/{vehicle}` no longer counts archived commutes. A vehicle's `suspensionReason` stays a code (`registration_expired` · `report`); the staff's text is never sent. |
 | 2026-11-13 | 📄 **New: `GET /content/{key}` (4.18).** Help, support contact, terms and guidelines as staff write them on the dashboard, in Arabic and English, with a `version` that goes up on every save. |
 | 2026-11-13 | 📣 **Two new inbox notification types, no new endpoint.** `announcement` (staff to everyone, passengers or drivers; may carry `data.link`) and `staff_message` (staff to one member). Both arrive through `GET /notifications` like any other row, already in the member's language, and are never pushed. Show them with the generic inbox card. |

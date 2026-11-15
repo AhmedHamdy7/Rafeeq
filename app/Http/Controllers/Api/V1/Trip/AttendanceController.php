@@ -18,6 +18,7 @@ use App\Http\OpenApi\ApiErrors;
 use App\Http\Requests\Trip\CheckInPassengerRequest;
 use App\Http\Requests\Trip\DisputeAttendanceRequest;
 use App\Http\Resources\AttendanceResource;
+use App\Http\Resources\BookingResource;
 use App\Http\Responses\ApiResponse;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -158,7 +159,8 @@ final class AttendanceController extends Controller
      * theirs.
      */
     #[ApiErrors(
-        ErrorCode::AttendanceNotConfirmable,
+        ErrorCode::AttendanceNotDisputable,
+        ErrorCode::AttendanceAlreadyDisputed,
         ErrorCode::AttendanceDisputeWindowClosed,
         ErrorCode::NotFound,
     )]
@@ -170,9 +172,12 @@ final class AttendanceController extends Controller
             ->first()
             ?? throw DomainException::of(ErrorCode::NotFound);
 
-        return ApiResponse::success(new AttendanceResource(
-            $action->execute($own, $request->string('reason')->value())
-        ));
+        $action->execute($own, $request->string('reason')->value());
+
+        return ApiResponse::success(
+            new BookingResource($own->refresh()->load(['scheduledTrip', 'scheduledTrip.commuteOffer.vehicle', ...BookingResource::historyRelations($request->user()), ...BookingResource::pickupEtaRelations()])),
+            status: 201,
+        );
     }
 
     /**

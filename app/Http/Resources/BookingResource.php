@@ -3,6 +3,8 @@
 namespace App\Http\Resources;
 
 use App\Domains\Booking\Enums\BookingStatus;
+use App\Domains\Booking\Enums\CancelCode;
+use App\Domains\Booking\Enums\SeatRequestCommitment;
 use App\Domains\Booking\Models\Booking;
 use App\Domains\Booking\Support\PickupEta;
 use App\Domains\Geo\Contracts\GeoQueryEngine;
@@ -13,6 +15,7 @@ use App\Domains\Group\Models\GroupMember;
 use App\Domains\Identity\Models\User;
 use App\Domains\Rating\Models\Rating;
 use App\Domains\Safety\Support\OtherParty;
+use App\Domains\Trip\Support\AttendanceDisputes;
 use App\Domains\Trip\Support\DriverDelay;
 use Carbon\CarbonImmutable;
 use Illuminate\Http\Request;
@@ -61,6 +64,7 @@ final class BookingResource extends JsonResource
              * one-off seat or once she has left the group.
              */
             'membership' => $this->membershipSummary(),
+            'commitment' => $this->commitment(),
 
             /*
              * HISTORY-1: where the journey went and who drove, on every booking of the passenger's
@@ -184,7 +188,17 @@ final class BookingResource extends JsonResource
             'otherPartyUserId' => OtherParty::idFor($this->resource, $request->user()),
 
             'cancelledAt' => $this->cancelled_at?->toIso8601String(),
-            'cancelledReason' => $this->cancelled_reason,
+            'cancelledReason' => $this->cancelCode()?->value,
+            'cancelledNote' => $this->when(
+                $this->cancelledNoteVisibleTo($request),
+                fn (): ?string => $this->cancelled_reason,
+            ),
+            'tripCancelReason' => $this->cancelCode() === CancelCode::ActiveTripCancelled
+                ? CancelCode::activeTripCategory($this->cancelled_reason)?->value
+                : null,
+            'wasAboard' => $this->cancelCode() === CancelCode::ActiveTripCancelled
+                ? $this->status === BookingStatus::EndedEarly
+                : null,
             'outcomeSeenAt' => $this->outcome_seen_at?->toIso8601String(),
             // TRIPS-17: her note to her driver about where she waits, or null. Both sides read it.
             'pickupNote' => $this->pickup_note,
@@ -198,6 +212,12 @@ final class BookingResource extends JsonResource
             'feeLinePiastres' => (int) $this->fee_line_piastres,
             // What it is for, as a stable code (`no_show`, `late_cancel`, `credit`, …), or null.
             'feeLineReason' => $this->fee_line_reason,
+
+            'noShow' => $this->when(
+                $this->resource->relationLoaded('attendance')
+                    && $request->user()?->id === $this->passenger_user_id,
+                fn (): ?array => AttendanceDisputes::noShowFor($this->attendance),
+            ),
 
             /*
              * TRIP-20: set down more than 1 km before her drop-off without asking → `askedAt` is
@@ -271,6 +291,39 @@ final class BookingResource extends JsonResource
      * Worked out once per row, from what the caller loaded: the day's stops when they came with
      * the trip (a list loads them for the page), the route fallback only when the commute did.
      */
+    private function cancelCode(): ?CancelCode
+    {
+        return CancelCode::of($this->resource);
+    }
+
+    private function cancelledNoteVisibleTo(Request $request): bool
+    {
+        $code = $this->cancelCode();
+
+        if ($code === null || $this->cancelled_reason === null) {
+            return false;
+        }
+
+        if (SeatPriceView::viewerDrives($request, $this->driver_profile_id)) {
+            return $code->writtenByDriver();
+        }
+
+        return $request->user()?->id === $this->passenger_user_id
+            && $this->status === BookingStatus::CancelledByPassenger
+            && in_array($code, [CancelCode::PassengerCancelled, CancelCode::LeftGroup, CancelCode::AbsencePlanned], true);
+    }
+
+    private function commitment(): string
+    {
+        $commitment = $this->resource->loadMissing('seatRequest')->seatRequest?->commitment;
+
+        if ($commitment instanceof SeatRequestCommitment) {
+            return $commitment->value;
+        }
+
+        return $this->membershipSummary()['commitment'] ?? SeatRequestCommitment::Trial->value;
+    }
+
     private function replacementOffer(): ?array
     {
         $offer = $this->latestReplacementOffer;
@@ -336,6 +389,8 @@ final class BookingResource extends JsonResource
     {
         return [
             'scheduledTrip.commuteOffer.locations',
+            'seatRequest',
+            'attendance',
             'driverProfile.user.stats',
             'driverProfile.user.verifications',
             'ratings' => fn ($query) => $query->where('reviewer_user_id', $viewer->id)->with('tags'),

@@ -223,19 +223,20 @@ it('lets a passenger say the record is wrong', function () {
     underway($this->driverToken, $this->tripId);
     checkIn($this->driverToken, $this->tripId, ['bookingId' => $this->bookingId])->assertOk();
 
-    $row = test()->withToken($this->paxToken)
+    $booking = test()->withToken($this->paxToken)
         ->postJson("/api/v1/bookings/{$this->bookingId}/dispute", [
             'reason' => 'أنا ملحقتش أركب، العربية مشيت قبل ما أوصل.',
-        ])->assertOk()->json('data');
+        ])->assertCreated()->json('data');
 
-    expect($row['disputedAt'])->not->toBeNull()
-        ->and($row['disputeReason'])->toContain('ملحقتش')
-        // 🔴 The status does NOT change. A dispute records that a record is contested;
-        // letting the passenger set the value would move the same unchecked power to the
-        // other side.
-        ->and($row['status'])->toBe('PRESENT')
-        // And nobody has decided it yet.
-        ->and($row['disputeResolution'])->toBeNull();
+    $row = Attendance::sole();
+
+    expect($booking['id'])->toBe($this->bookingId)
+        ->and($booking['paymentStatus'])->toBe('DISPUTED')
+        ->and($booking['noShow'])->toBeNull()
+        ->and($row->disputed_at)->not->toBeNull()
+        ->and($row->dispute_reason)->toContain('ملحقتش')
+        ->and($row->status)->toBe(AttendanceStatus::Present)
+        ->and($row->dispute_resolution)->toBeNull();
 });
 
 it('lets a passenger contest a no-show recorded against them', function () {
@@ -245,13 +246,17 @@ it('lets a passenger contest a no-show recorded against them', function () {
     test()->withToken($this->driverToken)
         ->postJson("/api/v1/trips/{$this->tripId}/no-show", ['bookingId' => $this->bookingId])->assertOk();
 
-    // The case that matters most: a mark on somebody's record that they say is wrong.
     test()->withToken($this->paxToken)
         ->postJson("/api/v1/bookings/{$this->bookingId}/dispute", [
             'reason' => 'كنت واقفة عند البوابة وهي ما جاتش.',
-        ])->assertOk()
-        ->assertJsonPath('data.status', 'PASSENGER_NO_SHOW')
-        ->assertJsonPath('data.disputedAt', fn ($value) => $value !== null);
+        ])->assertCreated()
+        ->assertJsonPath('data.paymentStatus', 'DISPUTED')
+        ->assertJsonPath('data.noShow.disputableUntil', null)
+        ->assertJsonPath('data.noShow.dispute.status', 'OPEN')
+        ->assertJsonPath('data.noShow.dispute.reason', 'كنت واقفة عند البوابة وهي ما جاتش.')
+        ->assertJsonPath('data.noShow.dispute.resolution', null);
+
+    expect(Attendance::sole()->status)->toBe(AttendanceStatus::PassengerNoShow);
 });
 
 /**
@@ -274,7 +279,7 @@ it('still accepts a dispute ten minutes before the window closes', function () {
 
     test()->withToken($this->paxToken)
         ->postJson("/api/v1/bookings/{$this->bookingId}/dispute", ['reason' => 'ده مش صح خالص.'])
-        ->assertOk();
+        ->assertCreated();
 });
 
 it('refuses a dispute once the window has closed', function () {
@@ -310,7 +315,7 @@ it('follows the window length from settings rather than from code', function () 
 
     test()->withToken($this->paxToken)
         ->postJson("/api/v1/bookings/{$this->bookingId}/dispute", ['reason' => 'ده مش صح خالص.'])
-        ->assertOk();
+        ->assertCreated();
 });
 
 it('has nothing to dispute while the record says nobody decided', function () {
@@ -320,6 +325,7 @@ it('has nothing to dispute while the record says nobody decided', function () {
     test()->withToken($this->paxToken)
         ->postJson("/api/v1/bookings/{$this->bookingId}/dispute", ['reason' => 'ده مش صح خالص.'])
         ->assertStatus(409)
+        ->assertJsonPath('error.code', 'ATTENDANCE_NOT_DISPUTABLE')
         ->assertJsonPath('error.fields.currentStatus.0', 'PENDING');
 });
 
@@ -329,13 +335,14 @@ it('refuses a second dispute rather than quietly replacing the first', function 
 
     test()->withToken($this->paxToken)
         ->postJson("/api/v1/bookings/{$this->bookingId}/dispute", ['reason' => 'السبب الأول بالتفصيل.'])
-        ->assertOk();
+        ->assertCreated();
 
     // A second reason arriving after a reviewer has started reading the first would
     // replace the thing they are deciding about.
     test()->withToken($this->paxToken)
         ->postJson("/api/v1/bookings/{$this->bookingId}/dispute", ['reason' => 'سبب تاني مختلف خالص.'])
         ->assertStatus(409)
+        ->assertJsonPath('error.code', 'ATTENDANCE_ALREADY_DISPUTED')
         ->assertJsonPath('error.fields.dispute.0', 'ALREADY_RAISED');
 });
 

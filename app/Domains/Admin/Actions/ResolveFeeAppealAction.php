@@ -50,22 +50,8 @@ final readonly class ResolveFeeAppealAction
                 'dispute_resolved_at' => now(),
             ])->save();
 
-            if ($overturn && $warning->fee_status === WarningFeeStatus::Pending) {
-                $warning->forceFill(['fee_status' => WarningFeeStatus::Waived])->save();
-            }
-
-            if ($overturn && $warning->fee_status === WarningFeeStatus::Charged) {
-                DebtLedger::credit(
-                    User::query()->findOrFail($warning->user_id),
-                    DebtEntryType::Credit,
-                    (int) $warning->fee_piastres,
-                    'appeal_upheld',
-                    meta: ['rule' => 'PAY-10', 'warningId' => (string) $warning->getKey()],
-                    side: DebtSide::Passenger,
-                    idempotencyKey: "warning_fee_reversal:{$warning->getKey()}",
-                );
-
-                $warning->forceFill(['fee_status' => WarningFeeStatus::Reversed])->save();
+            if ($overturn) {
+                self::removeFee($warning);
             }
 
             AdminActionLog::record($admin, 'fee.appeal_decide', $warning,
@@ -76,6 +62,27 @@ final readonly class ResolveFeeAppealAction
 
             return $warning;
         });
+    }
+
+    public static function removeFee(MemberWarning $warning): void
+    {
+        if ($warning->fee_status === WarningFeeStatus::Pending) {
+            $warning->forceFill(['fee_status' => WarningFeeStatus::Waived])->save();
+        }
+
+        if ($warning->fee_status === WarningFeeStatus::Charged) {
+            DebtLedger::credit(
+                User::query()->findOrFail($warning->user_id),
+                DebtEntryType::Credit,
+                (int) $warning->fee_piastres,
+                'appeal_upheld',
+                meta: ['rule' => 'PAY-10', 'warningId' => (string) $warning->getKey()],
+                side: DebtSide::Passenger,
+                idempotencyKey: "warning_fee_reversal:{$warning->getKey()}",
+            );
+
+            $warning->forceFill(['fee_status' => WarningFeeStatus::Reversed])->save();
+        }
     }
 
     /**

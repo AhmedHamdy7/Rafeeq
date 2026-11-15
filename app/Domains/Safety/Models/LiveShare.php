@@ -3,6 +3,7 @@
 namespace App\Domains\Safety\Models;
 
 use App\Domains\Identity\Models\User;
+use App\Domains\Safety\Enums\LiveShareSource;
 use App\Domains\Trip\Models\TripSession;
 use Database\Factories\LiveShareFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
@@ -30,6 +31,7 @@ class LiveShare extends Model
             'revoked_at' => 'datetime',
             'view_count' => 'integer',
             'last_viewed_at' => 'datetime',
+            'source' => LiveShareSource::class,
         ];
     }
 

@@ -3,6 +3,7 @@
 namespace App\Domains\Booking\Actions;
 
 use App\Domains\Booking\Enums\BookingStatus;
+use App\Domains\Booking\Enums\SeatOfferSource;
 use App\Domains\Booking\Enums\SeatOfferStatus;
 use App\Domains\Booking\Enums\SeatRequestStatus;
 use App\Domains\Booking\Models\Booking;
@@ -60,6 +61,7 @@ final readonly class OfferReplacementAction
                 'seat_request_id' => $member->getKey(),
                 'replaces_booking_id' => $booking->getKey(),
                 'status' => SeatOfferStatus::Open->value,
+                'source' => SeatOfferSource::Replacement->value,
                 'release_event_id' => (string) Str::ulid(),
             ])->save();
 

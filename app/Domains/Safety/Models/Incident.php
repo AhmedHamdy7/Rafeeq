@@ -23,6 +23,22 @@ class Incident extends Model
     /** @use HasFactory<IncidentFactory> */
     use HasFactory, HasUlids;
 
+    protected static function booted(): void
+    {
+        static::creating(function (Incident $incident): void {
+            $incident->case_number ??= self::newCaseNumber();
+        });
+    }
+
+    public static function newCaseNumber(): string
+    {
+        do {
+            $number = sprintf('RP-%06d', random_int(0, 999_999));
+        } while (self::query()->where('case_number', $number)->exists());
+
+        return $number;
+    }
+
     protected function casts(): array
     {
         return [

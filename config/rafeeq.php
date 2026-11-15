@@ -947,6 +947,10 @@ return [
          * short enough that a forgotten run does not leave a live link open all evening.
          */
         'live_share_max_minutes' => 180,
+
+        'auto_share_enabled' => 1,
+
+        'auto_share_driver' => env('RAFEEQ_AUTO_SHARE_DRIVER', 'log'),
     ],
 
     /*

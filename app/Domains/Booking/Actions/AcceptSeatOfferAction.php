@@ -5,6 +5,8 @@ namespace App\Domains\Booking\Actions;
 use App\Domains\Booking\Enums\BookingActorType;
 use App\Domains\Booking\Enums\BookingEventType;
 use App\Domains\Booking\Enums\BookingStatus;
+use App\Domains\Booking\Enums\CancelCode;
+use App\Domains\Booking\Enums\SeatOfferClosedReason;
 use App\Domains\Booking\Enums\SeatOfferStatus;
 use App\Domains\Booking\Enums\SeatRequestStatus;
 use App\Domains\Booking\Enums\SwitchReason;
@@ -193,7 +195,7 @@ final readonly class AcceptSeatOfferAction
                 ->exists();
 
             if ($alreadyRiding) {
-                $this->close($offer, SeatOfferStatus::Ineligible);
+                $this->close($offer, SeatOfferStatus::Ineligible, SeatOfferClosedReason::AlreadyBooked);
 
                 throw DomainException::of(ErrorCode::AlreadyBooked);
             }
@@ -221,7 +223,7 @@ final readonly class AcceptSeatOfferAction
             }
 
             if ($trip->seats_taken + $request->seats > $trip->seats_total) {
-                $this->close($offer, SeatOfferStatus::TakenByOther);
+                $this->close($offer, SeatOfferStatus::TakenByOther, SeatOfferClosedReason::SeatTaken);
 
                 throw DomainException::of(ErrorCode::SeatOfferClosed, fields: [
                     'status' => [SeatOfferStatus::TakenByOther->value],
@@ -333,6 +335,7 @@ final readonly class AcceptSeatOfferAction
                 ->update([
                     'status' => SeatOfferStatus::TakenByOther->value,
                     'closed_at' => now(),
+                    'closed_reason' => SeatOfferClosedReason::SeatTaken->value,
                 ]);
 
             /*
@@ -360,6 +363,8 @@ final readonly class AcceptSeatOfferAction
                         // 🔴 Which kind of closure. Losing a race and the seat vanishing are
                         // different things to be told.
                         'reason' => SeatOfferStatus::TakenByOther->value,
+                        'closedReason' => SeatOfferClosedReason::SeatTaken->value,
+                        'stillWaiting' => true,
                     ],
                     dedupeKey: 'offer.closed:'.$loserOfferId,
                 );
@@ -482,6 +487,7 @@ final readonly class AcceptSeatOfferAction
                 : BookingStatus::CancelledByPassenger->value,
             'cancelled_at' => now(),
             'cancelled_reason' => $reason->value,
+            'cancel_code' => CancelCode::Switched->value,
             /*
              * v3: "`DRIVER_DELAY_SWITCH` and driver-fault exit carry **no passenger cancellation
              * fee**." Voluntary follows the normal policy, which is the same config figure every
@@ -635,11 +641,12 @@ final readonly class AcceptSeatOfferAction
         }
     }
 
-    private function close(SeatOffer $offer, SeatOfferStatus $status): void
+    private function close(SeatOffer $offer, SeatOfferStatus $status, ?SeatOfferClosedReason $reason = null): void
     {
         $offer->forceFill([
             'status' => $status->value,
             'closed_at' => now(),
+            'closed_reason' => $reason?->value,
         ])->save();
     }
 }

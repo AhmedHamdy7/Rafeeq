@@ -2,6 +2,7 @@
 
 namespace App\Domains\Booking\Actions;
 
+use App\Domains\Booking\Enums\SeatOfferClosedReason;
 use App\Domains\Booking\Enums\SeatOfferStatus;
 use App\Domains\Booking\Models\SeatOffer;
 use App\Domains\Notification\Enums\NotificationType;
@@ -58,6 +59,7 @@ final readonly class DeclineSeatOfferAction
             $offer->forceFill([
                 'status' => SeatOfferStatus::Declined->value,
                 'closed_at' => now(),
+                'closed_reason' => SeatOfferClosedReason::Declined->value,
             ])->save();
 
             if ($offer->replaces_booking_id !== null) {

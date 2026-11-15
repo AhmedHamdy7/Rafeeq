@@ -4,6 +4,7 @@ namespace App\Domains\Group\Actions;
 
 use App\Domains\Booking\Actions\CancelBookingAction;
 use App\Domains\Booking\Enums\BookingStatus;
+use App\Domains\Booking\Enums\CancelCode;
 use App\Domains\Booking\Enums\SeatRequestStatus;
 use App\Domains\Booking\Models\Booking;
 use App\Domains\Booking\Models\SeatRequest;
@@ -160,7 +161,7 @@ final readonly class PlanAbsenceAction
             ->get();
 
         foreach ($bookings as $booking) {
-            $this->cancel->byPassenger($booking, $reason ?? __('commute.absence.planned'), notify: false);
+            $this->cancel->byPassenger($booking, $reason ?? __('commute.absence.planned'), notify: false, code: CancelCode::AbsencePlanned);
         }
     }
 

@@ -7,6 +7,7 @@ use App\Domains\Booking\Models\Booking;
 use App\Domains\Commute\Models\CommuteOffer;
 use App\Domains\Commute\Models\ScheduledTrip;
 use App\Domains\Identity\Models\User;
+use App\Domains\Safety\Enums\LiveShareSource;
 use App\Domains\Safety\Enums\SafetyEventType;
 use App\Domains\Safety\Enums\SafetySeverity;
 use App\Domains\Safety\Models\EmergencyContact;
@@ -66,6 +67,16 @@ final readonly class ShareLiveTripAction
             throw DomainException::of(ErrorCode::NotFound);
         }
 
+        return $this->issue($user, $session, $contact, LiveShareSource::Manual);
+    }
+
+    public function createAutomatic(User $user, TripSession $session, EmergencyContact $contact): array
+    {
+        return $this->issue($user, $session, $contact, LiveShareSource::Auto);
+    }
+
+    private function issue(User $user, TripSession $session, ?EmergencyContact $contact, LiveShareSource $source): array
+    {
         /*
          * 32 bytes, URL-safe. `Str::random` uses `random_bytes` underneath, so this is the CSPRNG
          * and not `mt_rand` — a token a few observed samples could predict would make every share
@@ -73,7 +84,7 @@ final readonly class ShareLiveTripAction
          */
         $token = Str::random(43);
 
-        $share = DB::transaction(function () use ($user, $session, $contact, $token): LiveShare {
+        $share = DB::transaction(function () use ($user, $session, $contact, $token, $source): LiveShare {
             $share = new LiveShare;
 
             $share->fill([
@@ -92,6 +103,7 @@ final readonly class ShareLiveTripAction
              * number to tell somebody whether their contact looked.
              */
             $share->view_count = 0;
+            $share->source = $source;
 
             $share->save();
 
@@ -110,6 +122,7 @@ final readonly class ShareLiveTripAction
                 metadata: [
                     'liveShareId' => $share->id,
                     'sharedWithContact' => $contact !== null,
+                    'source' => $source->value,
                     // Deliberately not the contact's name or number — see SafetyEventLog.
                 ],
             );

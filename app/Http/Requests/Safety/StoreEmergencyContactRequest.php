@@ -2,7 +2,10 @@
 
 namespace App\Http\Requests\Safety;
 
+use App\Domains\Shared\ValueObjects\PhoneNumber;
 use Illuminate\Foundation\Http\FormRequest;
+use Illuminate\Validation\Validator;
+use InvalidArgumentException;
 
 /**
  * Adding or changing a trusted contact.
@@ -39,6 +42,23 @@ final class StoreEmergencyContactRequest extends FormRequest
 
             // Elevated access during an emergency.
             'isGuardian' => ['sometimes', 'boolean'],
+        ];
+    }
+
+    public function after(): array
+    {
+        return [
+            function (Validator $validator): void {
+                if ($validator->errors()->has('phone') || ! $this->has('phone')) {
+                    return;
+                }
+
+                try {
+                    PhoneNumber::fromRaw((string) $this->input('phone'));
+                } catch (InvalidArgumentException) {
+                    $validator->errors()->add('phone', __('errors.AUTH_PHONE_INVALID'));
+                }
+            },
         ];
     }
 }

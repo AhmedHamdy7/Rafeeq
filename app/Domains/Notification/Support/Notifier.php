@@ -62,7 +62,7 @@ final class Notifier
             foreach ($devices as $device) {
                 $push = self::row($user, $type, NotificationChannel::Push, $title, $body, $data);
 
-                DeliverPushNotification::dispatch($push->id, $device->id)->afterCommit();
+                DeliverPushNotification::dispatch($push->id, $device->id, $inbox?->id)->afterCommit();
             }
         }
 

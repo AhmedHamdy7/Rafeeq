@@ -8,12 +8,15 @@ use App\Domains\Booking\Actions\RequestSeatAction;
 use App\Domains\Booking\Actions\RespondToSeatRequestAction;
 use App\Domains\Booking\Actions\SetStandbyAvailabilityAction;
 use App\Domains\Booking\Actions\UpdateSeatRequestPointsAction;
+use App\Domains\Booking\Enums\BookingStatus;
 use App\Domains\Booking\Enums\SeatRequestStatus;
+use App\Domains\Booking\Models\Booking;
 use App\Domains\Booking\Models\SeatRequest;
 use App\Domains\Booking\Support\CounterofferOptions;
 use App\Domains\Booking\Support\OtherConfirmedCommutes;
 use App\Domains\Booking\Support\RequestRouteImpact;
 use App\Domains\Commute\Models\CommuteOffer;
+use App\Domains\Matching\Actions\SuggestAlternativesAction;
 use App\Domains\Shared\Exceptions\DomainException;
 use App\Domains\Shared\Support\ErrorCode;
 use App\Http\Controllers\Controller;
@@ -73,7 +76,7 @@ final class SeatRequestController extends Controller
         ErrorCode::PickupNotOnCommute,
         ErrorCode::NotFound,
     )]
-    public function store(RequestSeatRequest $request, string $commute, RequestSeatAction $action): JsonResponse
+    public function store(RequestSeatRequest $request, string $commute, RequestSeatAction $action, SuggestAlternativesAction $alternatives): JsonResponse
     {
         // Looked up without any ownership scope: anyone may ask about a published
         // commute. Whether THIS person may is decided by the Action, using the same
@@ -81,9 +84,39 @@ final class SeatRequestController extends Controller
         $offer = CommuteOffer::query()->whereKey($commute)->first()
             ?? throw DomainException::of(ErrorCode::NotFound);
 
-        $seatRequest = $action->execute($request->user(), $offer, $request->validated());
+        $data = $request->validated();
+
+        if (! empty($data['alternativeForBookingId'])) {
+            $data = [...$this->alternativePoints($request, (string) $data['alternativeForBookingId'], $alternatives), ...$data];
+        }
+
+        unset($data['alternativeForBookingId']);
+
+        $seatRequest = $action->execute($request->user(), $offer, $data);
 
         return ApiResponse::success(new SeatRequestResource($seatRequest), status: 201);
+    }
+
+    /**
+     * @return array{pickup: array<string, mixed>, dropoff: array<string, mixed>}
+     */
+    private function alternativePoints(Request $request, string $bookingId, SuggestAlternativesAction $alternatives): array
+    {
+        $booking = Booking::query()
+            ->whereKey($bookingId)
+            ->where('passenger_user_id', $request->user()->id)
+            ->whereNot('status', BookingStatus::Completed->value)
+            ->first();
+
+        $points = $booking === null ? null : $alternatives->requestPoints($booking);
+
+        if ($points === null) {
+            throw DomainException::of(ErrorCode::ValidationFailed, fields: [
+                'alternativeForBookingId' => [__('validation.exists', ['attribute' => 'alternativeForBookingId'])],
+            ]);
+        }
+
+        return $points;
     }
 
     /**

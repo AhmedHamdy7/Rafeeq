@@ -403,6 +403,7 @@ final class HomeController extends Controller
                 'scheduledTrip.commuteOffer.driverProfile.user.verifications',
                 'commuteGroup.activeMembers',
                 'commuteGroup.attendances',
+                'attendance',
                 'seatRequest',
                 'passenger',
             ]);

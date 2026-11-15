@@ -191,9 +191,10 @@ final readonly class SaveCommuteDemandAction
      * passenger's stale request stops being matched even if they never open the
      * app again.
      */
-    public static function expireOverdue(): int
+    public static function expireOverdue(?string $demandId = null): int
     {
         return CommuteDemand::query()
+            ->when($demandId !== null, fn ($query) => $query->whereKey($demandId))
             ->where('status', CommuteDemandStatus::Active->value)
             ->whereNotNull('expires_at')
             ->where('expires_at', '<=', now())
