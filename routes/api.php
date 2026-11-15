@@ -119,6 +119,7 @@ Route::prefix('v1')->group(function (): void {
         Route::post('ratings/reports/{report}/decide', [TestingRecordsController::class, 'decideReport']);
         Route::delete('driver/vehicles/{vehicle}', [TestingRecordsController::class, 'deleteVehicle']);
         Route::post('seat-offers/{offer}/close', [TestingTripsController::class, 'closeOffer']);
+        Route::post('commute-demands/{demand}/expire', [TestingTripsController::class, 'expireDemand']);
         Route::post('notifications', [TestingTripsController::class, 'writeNotification']);
     });
 

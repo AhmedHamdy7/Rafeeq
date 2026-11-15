@@ -11,6 +11,9 @@ use App\Domains\Booking\Support\SeatOfferClosure;
 use App\Domains\Commute\Models\ChangeProposal;
 use App\Domains\Commute\Models\CommuteOffer;
 use App\Domains\Commute\Models\ScheduledTrip;
+use App\Domains\Matching\Actions\SaveCommuteDemandAction;
+use App\Domains\Matching\Enums\CommuteDemandStatus;
+use App\Domains\Matching\Models\CommuteDemand;
 use App\Domains\Notification\Enums\NotificationType;
 use App\Domains\Notification\Support\Notifier;
 use App\Domains\Shared\Exceptions\DomainException;
@@ -18,6 +21,7 @@ use App\Domains\Shared\Support\ErrorCode;
 use App\Domains\Shared\Support\TestAccounts;
 use App\Http\Controllers\Controller;
 use App\Http\OpenApi\ApiErrors;
+use App\Http\Resources\CommuteDemandResource;
 use App\Http\Resources\NotificationResource;
 use App\Http\Resources\SeatOfferResource;
 use App\Http\Responses\ApiResponse;
@@ -79,6 +83,31 @@ final class TestingTripsController extends Controller
         SeatOfferClosure::close($target, $status, $reason);
 
         return ApiResponse::success(new SeatOfferResource($target->fresh()->load(SeatOfferResource::relations())));
+    }
+
+    #[ApiErrors(ErrorCode::NotFound, ErrorCode::CommuteDemandNotEditable, ErrorCode::ServiceUnavailable)]
+    public function expireDemand(Request $request, string $demand): JsonResponse
+    {
+        $user = TestAccounts::assertAllowed($request->user());
+
+        $target = CommuteDemand::query()
+            ->whereKey($demand)
+            ->where('passenger_user_id', $user->id)
+            ->where('status', '!=', CommuteDemandStatus::Cancelled->value)
+            ->first()
+            ?? throw DomainException::of(ErrorCode::NotFound);
+
+        if ($target->status !== CommuteDemandStatus::Active) {
+            throw DomainException::of(ErrorCode::CommuteDemandNotEditable, fields: [
+                'status' => [strtoupper($target->status->value)],
+            ]);
+        }
+
+        $target->forceFill(['expires_at' => now()->subMinute()])->save();
+
+        SaveCommuteDemandAction::expireOverdue($target->id);
+
+        return ApiResponse::success(new CommuteDemandResource($target->fresh()->load(CommuteDemandResource::relations())));
     }
 
     #[ApiErrors(ErrorCode::NotFound, ErrorCode::ValidationFailed, ErrorCode::ServiceUnavailable)]

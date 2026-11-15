@@ -14,7 +14,7 @@
 >
 > **Base URL:** `{host}/api/v1` · **Auth:** bearer token · **Format:** JSON only.
 
-**Last updated:** 2026-11-14 · **240 endpoints live** · Phases 0–7, 9 and 11 complete · 10, 12 and 13 all but a decision each
+**Last updated:** 2026-11-15 · **241 endpoints live** · Phases 0–7, 9 and 11 complete · 10, 12 and 13 all but a decision each
 
 ---
 
@@ -22,7 +22,7 @@
 
 ### What is ready
 
-**240 endpoints live** and tested, across the 47 designed screens:
+**241 endpoints live** and tested, across the 47 designed screens:
 
 | | Count | Covers |
 |---|---|---|
@@ -893,6 +893,7 @@ fails if this list and the running routes ever disagree in either direction.
 | `POST /testing/ratings/reports/{report}/decide` | 4.17 Testing (staging only) |
 | `DELETE /testing/driver/vehicles/{vehicle}` | 4.17 Testing (staging only) |
 | `POST /testing/seat-offers/{offer}/close` | 4.17 Testing (staging only) |
+| `POST /testing/commute-demands/{demand}/expire` | 4.17 Testing (staging only) |
 | `POST /testing/notifications` | 4.17 Testing (staging only) |
 | `DELETE /safety/live-shares/{share}` | 4.12 Safety |
 | `POST /trips/{trip}/live-share` | 4.12 Safety |
@@ -3555,6 +3556,13 @@ stopping the journey rather than cancelling a booking, and never behind the same
 - A passenger who was aboard **keeps her attendance** (`PRESENT`/`LATE`): the part she rode still
   happened, and her booking is `ENDED_EARLY`, not cancelled. Do not show it as a cancellation.
 - Nobody is charged a cancellation fee either way — the fee and the record fall on the driver.
+- **What a passenger who was aboard pays** (PAY-24, PAY-25). Only after `breakdown`, `accident` or
+  `emergency`, and only when the car had carried her **more than 25 %** of her own route (pickup →
+  drop-off, measured from the car's last known position when it stopped): she pays that share of the
+  fare by distance. Her booking then has `paymentStatus: PAID` (cash, settled at once) and
+  `price.totalPiastres` **is** the reduced amount. In every other case (`other`, 25 % or less, or no
+  known position) she pays nothing: `paymentStatus: WAIVED`, and `price.totalPiastres` stays the full
+  seat price, so read `WAIVED` first and don't show the price as owed.
 - Neither the reason nor the note is **ever** sent to passengers. Support reads them on the booking.
 - Freed seats are offered to **nobody**: a seat on a run that has stopped is not a seat.
 - A passenger the driver already marked as a no-show keeps `NO_SHOW` and is not counted in `meta`.
@@ -5315,6 +5323,15 @@ Archived commutes don't block it: they keep no car (`vehicle_id` null) once it i
 `day_cancelled`. Answers the offer as `GET /seat-offers/{offer}`. `404` for somebody else's,
 `409 SEAT_OFFER_CLOSED` if it already ended.
 
+#### `POST /testing/commute-demands/{demand}/expire`
+
+No body. Moves the caller's **active** saved ride request's `expiresAt` into the past and runs the
+`expire-demands` job on it, so it comes back `EXPIRED` the way the nightly sweep leaves it. The job
+sends no push or inbox row, so neither does this. Answers the demand as `GET /commute-demands/{demand}`.
+Resume it with `PATCH /commute-demands/{demand}` `{paused: false}`: `ACTIVE` with a fresh `expiresAt`.
+`404` for somebody else's or a cancelled one; `409 COMMUTE_DEMAND_NOT_EDITABLE` (`fields.status`) if
+it is not `ACTIVE`: the job never expires a `PAUSED` one either, so resume it first.
+
 #### `POST /testing/notifications`
 
 `{ "type": "…", "data"?: { … }, "params"?: { … } }`. Writes one inbox row for the caller, and the
@@ -5541,6 +5558,7 @@ exist, and every live endpoint must be named here.
 
 | Date | Change |
 |---|---|
+| 2026-11-15 | 🧪 **New staging-only `POST /testing/commute-demands/{demand}/expire`** (4.17): an active saved ride request becomes `EXPIRED` now, as the nightly job leaves it. **Cancel Active Trip (4.9)** now says when a passenger who was aboard pays for the part she rode (breakdown, accident or emergency past 25 % of her route: `PAID`, `price.totalPiastres` is the reduced amount) and when she doesn't (`WAIVED`, price stays the full seat). No behaviour changed. |
 | 2026-11-14 | 🧳 **Trips (passenger) asks.** 🔴 **Privacy fix:** `cancelledReason` is now **always a code** (table in 4.7); the driver's typed reason never reaches the passenger. The author reads their own text in `cancelledNote`. Bookings gain `commitment`, `tripCancelReason`, `wasAboard`. **6 new endpoints:** `GET /seat-offers/{offer}`, `POST /seat-offers/groups/{group}/accept` and `/decline`, `GET /change-proposals/{proposal}`, and the staging-only `POST /testing/seat-offers/{offer}/close` and `POST /testing/notifications`. Offers gain `source`, `isPreviousPassenger`, `commitment`, `offerGroupId`, `daysMask`, `closedReason`, `passedPointLabel`, `stillWaiting`, `pickup.estimatedLocal`, `dropoff.estimatedLocal`; `offer.closed` carries `closedReason` and `stillWaiting` and is sent in more cases. An open offer now closes when its day is cancelled, its run is stopped, or she leaves the waiting list. `GET /change-proposals?bookingId=`. `waitlist_cleared_by_change` carries `seatRequestId` and `changeProposalId`, and its text names the driver (it showed `:name`). `POST /commutes/{commute}/seat-requests` takes `alternativeForBookingId` and fills the points. |
 | 2026-11-14 | 🧾 **Vehicle and reliability findings.** **2 new endpoints:** `POST /account/reliability/groups/{groupId}/appeal` and `/evidence`. 🔴 **A grouped act is appealed once:** appealing or adding evidence to any event with a `groupId` applies to every event in the group, and one staff decision decides them all. `GET /ratings/about-me` rows gain `report: { id, status } \| null`. `DELETE /testing/driver/vehicles/{vehicle}` no longer counts archived commutes. A vehicle's `suspensionReason` stays a code (`registration_expired` · `report`); the staff's text is never sent. |
 | 2026-11-13 | 📄 **New: `GET /content/{key}` (4.18).** Help, support contact, terms and guidelines as staff write them on the dashboard, in Arabic and English, with a `version` that goes up on every save. |

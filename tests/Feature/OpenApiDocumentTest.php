@@ -258,6 +258,7 @@ it('generates a document describing every /v1 route', function () {
         'POST /v1/testing/reliability/appeals/{appeal}/decide',
         'POST /v1/testing/reliability/reset',
         'POST /v1/testing/seat-offers/{offer}/close',
+        'POST /v1/testing/commute-demands/{demand}/expire',
         'POST /v1/testing/notifications',
         'POST /v1/testing/reliability/events/{event}/age',
         'POST /v1/testing/reliability/events',
