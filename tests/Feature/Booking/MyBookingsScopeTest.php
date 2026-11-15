@@ -55,6 +55,17 @@ it('returns only finished bookings for past, newest journey first', function () 
     expect($ids)->toBe([$this->bookings[2], $this->bookings[1], $this->bookings[0]]);
 });
 
+it('sorts a cancelled seat in History by when it was cancelled, not by its day', function () {
+    Booking::query()->whereKey($this->bookings[4])->update([
+        'status' => 'cancelled_by_driver',
+        'cancelled_at' => now()->subDays(30),
+    ]);
+
+    $ids = myBookings($this->paxToken, '?scope=past')->assertOk()->json('data.*.id');
+
+    expect($ids)->toBe([$this->bookings[2], $this->bookings[1], $this->bookings[0], $this->bookings[4]]);
+});
+
 it('pages the filtered list, so hasMore describes History', function () {
     $first = myBookings($this->paxToken, '?scope=past&perPage=2')->assertOk();
 

@@ -36,8 +36,10 @@ final class PassengerBookingScope
 
         self::byJourney($query)
             ->whereIn('bookings.status', $finished)
-            ->orderByDesc('scheduled_trips.departure_at')
-            // A tiebreak, so paging is stable when two bookings share a departure.
+            ->orderByRaw(
+                'CASE WHEN bookings.status IN (?, ?) AND bookings.cancelled_at IS NOT NULL THEN bookings.cancelled_at ELSE scheduled_trips.departure_at END DESC',
+                [BookingStatus::CancelledByPassenger->value, BookingStatus::CancelledByDriver->value],
+            )
             ->orderByDesc('bookings.id');
     }
 
