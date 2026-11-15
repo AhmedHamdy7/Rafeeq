@@ -139,13 +139,19 @@ it('tells the phone what kind of notification it is, next to the ids', function 
     $user = User::factory()->create();
     Device::factory()->for($user)->create(['push_token' => 'live-token']);
 
-    Notifier::send($user, NotificationType::DriverArrived, params: ['name' => 'Omar'], data: ['tripId' => 't1']);
+    $inbox = Notifier::send($user, NotificationType::DriverArrived, params: ['name' => 'Omar'], data: ['tripId' => 't1']);
 
-    Http::assertSent(function (Request $request): bool {
+    // The push also names the inbox row it belongs to, so a tap can mark that one read.
+    Http::assertSent(function (Request $request) use ($inbox): bool {
         $data = json_decode($request->body(), true)['message']['data'] ?? [];
 
         return str_contains($request->url(), 'messages:send')
-            && $data === ['tripId' => 't1', 'type' => 'driver_arrived', 'category' => NotificationType::DriverArrived->category()->value];
+            && $data === [
+                'tripId' => 't1',
+                'type' => 'driver_arrived',
+                'category' => NotificationType::DriverArrived->category()->value,
+                'notificationId' => (string) $inbox?->id,
+            ];
     });
 });
 
