@@ -26,6 +26,14 @@
         'overdueHolds' => $overdueHolds ?? 0,
     ];
     $mayReadSafety = $admin?->can(AdminPermission::SafetyView->value) === true;
+    /*
+     * Pages that belong to a menu item without sharing its route name: the item stays lit on
+     * them. Detail pages need no entry — `admin.members.show` lights `admin.members` already.
+     */
+    $sectionAliases = [
+        'admin.bookings' => ['admin.seat-requests', 'admin.seat-offers', 'admin.change-proposals'],
+    ];
+
     // Everyone can search: pages for all, and each result group only for those who may open it.
     $maySearch = $admin !== null;
     $role = $admin?->getRoleNames()->first();
@@ -140,7 +148,7 @@
                         class="ad-nav"
                         title="{{ __('admin/shell.nav.'.$item['key']) }}"
                         x-on:click="drawer = false"
-                        @if (request()->routeIs($item['route'])) aria-current="page" @endif
+                        @if (request()->routeIs($item['route'], $item['route'].'.*', ...($sectionAliases[$item['route']] ?? []))) aria-current="page" @endif
                     >
                         <x-admin.icon :name="$item['icon']" />
                         <span class="ad-nav__label">{{ __('admin/shell.nav.'.$item['key']) }}</span>
