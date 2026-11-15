@@ -75,6 +75,7 @@ class User extends Authenticatable
             'initial_role_selected_at' => 'datetime',
             'org_type' => OrgType::class,
             'trust_level' => 'integer',
+            'auto_share_trips' => 'boolean',
         ];
     }
 

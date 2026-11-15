@@ -610,6 +610,7 @@ return [
             'safety__evidence_retention_days' => 'مدة الاحتفاظ بأدلة البلاغات',
             'safety__live_share_grace_minutes' => 'المشاركة المباشرة بعد نهاية الرحلة',
             'safety__live_share_max_minutes' => 'أطول مدة للمشاركة المباشرة',
+            'safety__auto_share_enabled' => 'جهات الثقة بيوصلها لينك الرحلة المباشرة تلقائي',
             'admin__suspension_review_hours' => 'ميعاد المراجعة الموعود للإيقاف',
             'admin__suspension_appeal_hours' => 'مهلة التظلّم من الإيقاف',
             'chat__opens_hours_before' => 'المحادثة بتفتح قبل القيام بـ',

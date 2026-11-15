@@ -462,4 +462,12 @@ return [
         'title' => ':title',
         'body' => ':body',
     ],
+    'live_trip_auto_shared' => [
+        'title' => 'Your trip was shared',
+        'body' => 'Your live trip link went to :count trusted contact(s).',
+    ],
+    'live_trip_auto_share_failed' => [
+        'title' => 'Your trip wasn’t shared',
+        'body' => 'We couldn’t send your live trip link. Share it from the trip if you need to.',
+    ],
 ];

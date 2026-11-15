@@ -613,6 +613,7 @@ return [
             'safety__evidence_retention_days' => 'How long report evidence is kept',
             'safety__live_share_grace_minutes' => 'Live share after the trip ends',
             'safety__live_share_max_minutes' => 'Longest a live share can last',
+            'safety__auto_share_enabled' => 'Trusted contacts get the live trip link automatically',
             'admin__suspension_review_hours' => 'Promised review time for a hold',
             'admin__suspension_appeal_hours' => 'Time to appeal a suspension',
             'chat__opens_hours_before' => 'Chat opens before departure',

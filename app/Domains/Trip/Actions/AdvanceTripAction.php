@@ -5,6 +5,7 @@ namespace App\Domains\Trip\Actions;
 use App\Domains\Commute\Enums\ScheduledTripStatus;
 use App\Domains\Commute\Enums\TripCancelledBy;
 use App\Domains\Commute\Models\ScheduledTrip;
+use App\Domains\Safety\Jobs\SendAutoShareLinks;
 use App\Domains\Shared\Exceptions\DomainException;
 use App\Domains\Shared\Support\ErrorCode;
 use App\Domains\Trip\Enums\TripSessionStatus;
@@ -70,6 +71,7 @@ final readonly class AdvanceTripAction
         $this->assertCanTransitionTo($session, $next);
 
         return DB::transaction(function () use ($session, $next): TripSession {
+            $leaving = $session->current_status === TripSessionStatus::Preparing && $next->isUnderway();
             $changes = ['current_status' => $next->value];
 
             /*
@@ -98,6 +100,10 @@ final readonly class AdvanceTripAction
 
             if ($tripStatus !== null) {
                 $session->scheduledTrip->forceFill(['status' => $tripStatus->value])->save();
+            }
+
+            if ($leaving) {
+                SendAutoShareLinks::dispatch($session->id)->afterCommit();
             }
 
             return $session;

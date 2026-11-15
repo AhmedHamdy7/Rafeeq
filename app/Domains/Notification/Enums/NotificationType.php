@@ -463,6 +463,10 @@ enum NotificationType: string
     /** Staff to one member, from their profile (D19). Inbox only. */
     case StaffMessage = 'staff_message';
 
+    case LiveTripAutoShared = 'live_trip_auto_shared';
+
+    case LiveTripAutoShareFailed = 'live_trip_auto_share_failed';
+
     public function category(): NotificationCategory
     {
         return match ($this) {
@@ -481,7 +485,9 @@ enum NotificationType: string
             self::DriverLicenceExpired,
             self::DriverSuspended,
             // About her account, from a person on the team: she cannot switch it off.
-            self::StaffMessage => NotificationCategory::Safety,
+            self::StaffMessage,
+            self::LiveTripAutoShared,
+            self::LiveTripAutoShareFailed => NotificationCategory::Safety,
 
             self::DebtDueTomorrow,
             self::DebtOverdue,

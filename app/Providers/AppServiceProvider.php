@@ -22,6 +22,10 @@ use App\Domains\Notification\Contracts\PushSender;
 use App\Domains\Notification\Support\ChatSettings;
 use App\Domains\Notification\Support\FcmPushSender;
 use App\Domains\Notification\Support\LogPushSender;
+use App\Domains\Safety\Contracts\ContactMessenger;
+use App\Domains\Safety\Support\AutoShare;
+use App\Domains\Safety\Support\HttpSmsContactMessenger;
+use App\Domains\Safety\Support\LogContactMessenger;
 use App\Domains\Safety\Support\SafetySettings;
 use App\Domains\Shared\Support\RateLimits;
 use App\Domains\Verification\Contracts\VirusScanner;
@@ -65,6 +69,12 @@ class AppServiceProvider extends ServiceProvider
         $this->app->bind(PushSender::class, fn () => match (config('rafeeq.notifications.push_driver')) {
             'fcm' => FcmPushSender::fromConfig(),
             default => new LogPushSender,
+        });
+
+        $this->app->bind(ContactMessenger::class, fn () => match (AutoShare::driver()) {
+            'http' => HttpSmsContactMessenger::fromConfig(),
+            'log' => new LogContactMessenger,
+            default => throw new InvalidArgumentException('Unsupported auto-share driver ['.AutoShare::driver().'].'),
         });
 
         $this->app->bind(OtpSender::class, fn () => match (config('rafeeq.auth.otp.driver')) {

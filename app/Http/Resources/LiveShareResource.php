@@ -2,6 +2,7 @@
 
 namespace App\Http\Resources;
 
+use App\Domains\Safety\Enums\LiveShareSource;
 use App\Domains\Safety\Models\LiveShare;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
@@ -33,6 +34,7 @@ final class LiveShareResource extends JsonResource
              * details live.
              */
             'sharedWithContactId' => $this->shared_with_contact_id,
+            'source' => strtoupper(($this->source ?? LiveShareSource::Manual)->value),
 
             'expiresAt' => $this->expires_at->toIso8601String(),
             'revokedAt' => $this->revoked_at?->toIso8601String(),

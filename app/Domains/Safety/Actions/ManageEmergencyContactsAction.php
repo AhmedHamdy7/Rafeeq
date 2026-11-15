@@ -4,10 +4,12 @@ namespace App\Domains\Safety\Actions;
 
 use App\Domains\Identity\Models\User;
 use App\Domains\Safety\Models\EmergencyContact;
+use App\Domains\Safety\Models\LiveShare;
 use App\Domains\Safety\Support\SafetySettings;
 use App\Domains\Shared\Exceptions\DomainException;
 use App\Domains\Shared\Support\ErrorCode;
 use App\Domains\Shared\ValueObjects\PhoneNumber;
+use Illuminate\Support\Facades\DB;
 
 /**
  * Trusted contacts — who gets told when something goes wrong (Chapter 10).
@@ -100,7 +102,21 @@ final readonly class ManageEmergencyContactsAction
      */
     public function remove(EmergencyContact $contact): void
     {
-        $contact->delete();
+        DB::transaction(function () use ($contact): void {
+            LiveShare::query()
+                ->where('shared_with_contact_id', $contact->id)
+                ->whereNull('revoked_at')
+                ->update(['revoked_at' => now()]);
+
+            $contact->delete();
+        });
+    }
+
+    public function setAutoShare(User $user, bool $enabled): User
+    {
+        $user->forceFill(['auto_share_trips' => $enabled])->save();
+
+        return $user;
     }
 
     private function assertNotOwnNumber(User $user, string $e164): void

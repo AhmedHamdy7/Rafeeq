@@ -14,7 +14,7 @@
 >
 > **Base URL:** `{host}/api/v1` · **Auth:** bearer token · **Format:** JSON only.
 
-**Last updated:** 2026-11-15 · **247 endpoints live** · Phases 0–7, 9 and 11 complete · 10, 12 and 13 all but a decision each
+**Last updated:** 2026-11-15 · **249 endpoints live** · Phases 0–7, 9 and 11 complete · 10, 12 and 13 all but a decision each
 
 ---
 
@@ -22,7 +22,7 @@
 
 ### What is ready
 
-**247 endpoints live** and tested, across the 47 designed screens:
+**249 endpoints live** and tested, across the 47 designed screens:
 
 | | Count | Covers |
 |---|---|---|
@@ -646,7 +646,7 @@ Status: ✅ fully served · ⚠️ served, something named missing · ⛔ no API
 | # | Screen | Phase |
 |---|---|---|
 | 37 | Rating | ✅ `GET /ratings/pending` · `POST /bookings/{booking}/rating` · `PATCH /ratings/{rating}` · `GET /ratings/mine`. 🔴 **Double-blind** — nothing tells you whether the other person has rated. Section 4.13. |
-| 16 · 44 | **Safety centre · discreet alert** | ✅ `POST /sos` (with `isDiscreet`) · `POST /sos/{sos}/cancel` · `GET`/`POST /safety/emergency-contacts` · **Share Live Trip**: `POST /trips/{trip}/live-share` · `GET /safety/live-shares` · `DELETE /safety/live-shares/{share}`. Missing: Contact Support — section 7. |
+| 16 · 44 | **Safety centre · discreet alert** | ✅ `POST /sos` (with `isDiscreet`) · `POST /sos/{sos}/cancel` · `GET`/`POST /safety/emergency-contacts` · `PUT /safety/auto-share` · **Share Live Trip**: `POST /trips/{trip}/live-share` · `GET /safety/live-shares` · `DELETE /safety/live-shares/{share}`. Missing: Contact Support — section 7. |
 | 32 | **Support / incident** | ✅ `POST /incidents` · `GET /incidents` · `GET /incidents/{incident}` (with `caseNumber`) · `POST /incidents/{incident}/evidence`. |
 | 34 | Payment failed | ⛔ **8** — payments |
 | 33 · 38 | Offline · location denied | 🚫 Device states |
@@ -868,6 +868,7 @@ fails if this list and the running routes ever disagree in either direction.
 | `POST /safety/emergency-contacts` | 4.12 Safety |
 | `PATCH /safety/emergency-contacts/{contact}` | 4.12 Safety |
 | `DELETE /safety/emergency-contacts/{contact}` | 4.12 Safety |
+| `PUT /safety/auto-share` | 4.12 Safety |
 | `GET /safety/live-shares` | 4.12 Safety |
 | `POST /testing/driver/approve` | 4.17 Testing (staging only) |
 | `DELETE /testing/account` | 4.17 Testing (staging only) |
@@ -900,6 +901,7 @@ fails if this list and the running routes ever disagree in either direction.
 | `POST /testing/account/suspension/appeal/decide` | 4.17 Testing (staging only) |
 | `POST /testing/account/suspension/age` | 4.17 Testing (staging only) |
 | `POST /testing/account/ban` | 4.17 Testing (staging only) |
+| `GET /testing/safety/auto-share/messages` | 4.17 Testing (staging only) |
 | `POST /testing/notifications` | 4.17 Testing (staging only) |
 | `DELETE /safety/live-shares/{share}` | 4.12 Safety |
 | `POST /trips/{trip}/live-share` | 4.12 Safety |
@@ -4299,15 +4301,17 @@ it" and "somebody is calling me" are different situations to be in.
 
 Trusted contacts. **Request:** `name`, `phone`, `relationship`, `autoShareTrips`, `isGuardian`.
 
-**The list** answers `meta: {limit, canAdd}` next to `data`: `limit` is the cap (3 today, a setting),
-`canAdd` is whether another contact fits right now. Show "{count} of {limit}" and hide **Add** when
-`canAdd` is `false`. Somebody who kept 4 or 5 from before has `canAdd: false`.
+**The list** answers `meta: {limit, canAdd, autoShare, autoShareAvailable}` next to `data`: `limit` is
+the cap (3 today, a setting), `canAdd` is whether another contact fits right now. Show
+"{count} of {limit}" and hide **Add** when `canAdd` is `false`. Somebody who kept 4 or 5 from before
+has `canAdd: false`. `autoShare` is her account switch (below); `autoShareAvailable` says whether the
+server can deliver the link at all. Show the switch only when it is `true`.
 
 | Response field | Meaning |
 |---|---|
 | `id`, `name`, `relationship` | As entered. |
 | `phone` | The **full** number, because this is the owner reading their own list and a masked number cannot be checked for a typo. |
-| `autoShareTrips` | 🔴 **Stored, and nothing acts on it yet. Do not label it as working.** See the note below — this corrects an earlier version of this table, which said it already shared every trip. |
+| `autoShareTrips` | Ignored. Auto-share is one switch for the whole account: `PUT /safety/auto-share`. Send `false` or leave it out. |
 | `isGuardian` | Elevated access during an emergency. |
 | `verifiedAt` | Whether the number has been confirmed to actually receive messages. **`null` for everybody today** — confirming it needs an OTP to that number (Phase 12). Say "unconfirmed" rather than implying the contact works. |
 
@@ -4332,21 +4336,27 @@ Rules you will hit:
 🔒 There is no endpoint that returns anybody else's contacts. Another person's list is a 404, and an
 empty list for a stranger is genuinely empty.
 
-> 🔴 **`autoShareTrips` does not yet do anything, and this is the one field in the API where that
-> gap could hurt somebody.** A person who switches it on believes their sister will see every trip.
-> Nobody will, until an outbound SMS/WhatsApp provider is chosen (2026-10-05: the notification inbox
-> now exists, but it only reaches people with the app — a trusted contact usually has neither the
-> app nor an account, so the link has to go to their phone number).
->
-> The reason it cannot be built first is in the live-share design, two subsections down: an auto-made
-> share link has to be **delivered at the moment it is created**, because the token is returned once
-> and is unrecoverable afterwards. Creating the share now and delivering it later is not an option —
-> it would write links nobody on earth can open. So the feature needs Phase 12's SMS or push, and
-> the flag is stored meanwhile so that nobody's stated intent is lost when it lands.
->
-> **What this means for your screen:** keep the switch, keep what it is called, and say plainly that
-> it starts when automatic sharing is available — do not write copy in the present tense. If you
-> would rather hide it until then, that is a reasonable choice and we will tell you when it works.
+#### `PUT /safety/auto-share`
+
+`{ "enabled": true | false }` → `{ "enabled": true, "available": true }`. The **Share live trip
+automatically** switch, one for the whole account (SAFE-14). Off by default.
+
+When it is on and `available` is `true`, each time a trip of hers leaves (the run goes from
+`PREPARING` to `EN_ROUTE`, as passenger or as driver):
+
+- The server makes one live share **per trusted contact**, `source: "AUTO"`, and sends each contact
+  one SMS with the link, in her app language. It ends with the trip like a manual one.
+- They appear in `GET /safety/live-shares`, so she can stop each one there.
+- Once per trip: nothing is sent again at a later pickup.
+- Unconfirmed numbers (`verifiedAt: null`) **are** sent the link.
+- A message that could not be delivered has its link ended at once.
+- She gets `live_trip_auto_shared` (4.14), or `live_trip_auto_share_failed` when no message went out.
+- Removing a contact ends that contact's links at once.
+
+It never alerts anybody in an SOS: auto-share only sends the live-trip link.
+
+`available` is `false` when staff turned the feature off or no SMS gateway is set up. Then the switch
+is stored and nothing is sent.
 
 
 
@@ -4584,7 +4594,8 @@ this run: only the driver, or a passenger holding a live seat, may share it.
 
 #### `GET /safety/live-shares` — paginated · `DELETE /safety/live-shares/{share}`
 
-The caller's own links, newest first. `?tripSessionId=` keeps one run's links. 🔒 **Without tokens, and that is not an oversight** — being able to re-read
+The caller's own links, newest first. `?tripSessionId=` keeps one run's links. Each has
+`source`: `MANUAL` (Share live trip) or `AUTO` (auto-share). 🔒 **Without tokens, and that is not an oversight** — being able to re-read
 them would mean a stolen access token could harvest every link a person ever made. The list gives
 `isActive`, `expiresAt`, `viewCount` and `lastViewedAt`.
 
@@ -4918,6 +4929,7 @@ hold must still be able to read the notice that says so.
 | `chat_message` | the other side | the thread | as the thread (4.15) |
 | `announcement` | everyone, passengers or drivers — written by staff, **inbox only, never a push** | the screen in `data.link` if present (`home`, `driver_home`, `trips`, `payments`, `profile`, `help`), else the inbox | `announcementId`, `link` (optional) |
 | `staff_message` | one member, written by staff (**safety** — cannot be switched off), **inbox only** | the inbox | *no ids* |
+| `live_trip_auto_shared` · `live_trip_auto_share_failed` | her, when auto-share ran as her trip left (**safety**) | Shared links | `tripId`, `tripSessionId`, `sentTo` (contact ids, comma-separated; not on `_failed`), `failedTo` (contact ids, comma-separated, may be empty) |
 | `rating_due` · `rating_due_riders` · `rating_reminder` | passenger / driver | rate (4.13) | `bookingId` or `tripId` (+ `riderCount` on `rating_due_riders`). `rating_due` goes to each passenger at her drop-off (or at completion if still aboard), never on a `NO_SHOW`. `rating_due_riders` goes to the driver once when the run completes, if anybody rode. |
 | `sos_picked_up` · `report_resolved` · `report_closed` | the reporter | the SOS / report | `sosId` / `incidentId` |
 | `account_on_hold` · `account_reinstated` | the member (safety) | — | *no ids* |
@@ -5476,6 +5488,13 @@ seat cancelled. `409 MEMBER_NOT_ACTIVE` when the account is already on hold. Lif
 All three answer `{ accountStatus, nextStep, suspension }`: `suspension` is `user.suspension` as
 `GET /auth/me` returns it, or `null` once the hold is lifted.
 
+#### `GET /testing/safety/auto-share/messages`
+
+The auto-share messages for the caller's latest trip that sent any:
+`[{ contactId, liveShareId, channel, to, status, failureReason, url, sentAt }]`, with
+`meta: {tripId, tripSessionId}`. `status` is `SENT` or `FAILED`; `url` is the link the contact got
+(staging only, where messages are recorded rather than sent). Empty `data` when nothing was sent.
+
 Cancel Active Trip needs no testing call: the real `POST /trips/{trip}/cancel-active` on a started
 test run gives `active_trip_cancelled`. Check one in first (`POST /trips/{trip}/check-in`) to get
 `wasAboard: true`. A cleared waiting list needs none either: publish → waitlist someone → propose an
@@ -5659,7 +5678,7 @@ Nothing below exists. Build the screen shells if you like, but there is no endpo
 | **Payments and wallet** | 34, group `payments` tab | **8** | **In progress.** Cash is now recorded (`paymentStatus` → `PAID`, see 4.7) and the driver's fee debt is tracked, with a publishing cap. Still to come: the driver's balance screen, the group's weekly statement, then — once a payment provider is chosen — payment methods, online capture, payouts and refunds. Cancellation fees wait on the cancellation policy. |
 | **Driver cancelling one day** | 43, 45, 46 | **9** | A driver cancelling a single day and the backup search that follows. **Blocked on an open decision** — refunds and reliability, section 8 #3. Route deviation itself is now detected and reported (see `deviationDetectedAt`); the ops ALERT it should trigger needs Phase 12/13. |
 | **Public trust tier** | badge on 12 and 21 | **10** | 🔴 **Ratings and reviews are both done** — section 4.13. Rating, the double-blind reveal, the anonymous review list on a commute, "what was said about me", reporting an abusive review and the `minRating` search filter are all live, and the `rating` in every public summary carries a number once a rating is revealed. The only piece left is the **public trust tier** (`new` / `trusted` / `highly_trusted`), which needs a product decision on its thresholds. The score behind it is deliberately internal and will never be returned. |
-| **Auto-share trips** | 26 | **12** | 🔴 **`autoShareTrips` on an emergency contact is stored and nothing acts on it yet.** See 4.12 — read that before you build the toggle. |
+| **Auto-share trips** | 26 | **12** | ✅ `PUT /safety/auto-share`, shown when `meta.autoShareAvailable` is `true` (4.12). Delivery is by SMS through the OTP gateway. |
 | **Night escort mode** | none | **13** | Not a mobile feature at all, and this corrects an earlier line in this file. It is a **corridor-level night window armed by the ops team** (or automatically, 9pm–5am) with staff monitoring — a dashboard control, not something an app shows or calls. There will be no endpoint for it. |
 | **Push delivery** | all | **12** | ✅ **Live on staging (FCM, 2026-11-11).** Send the FCM token as `device.pushToken`; route taps on `data.type` (4.14). iPhone also needs the APNs key in Firebase. |
 
@@ -5691,6 +5710,7 @@ exist, and every live endpoint must be named here.
 
 | Date | Change |
 |---|---|
+| 2026-11-15 | 📲 **Auto-share live trip (SAFE-14).** New **`PUT /safety/auto-share`** `{enabled}` → `{enabled, available}`, one switch per account. `GET /safety/emergency-contacts` adds **`meta.autoShare`** and **`meta.autoShareAvailable`**. When it is on, each trusted contact gets an SMS with a live link as her trip leaves; the shares carry **`source: "AUTO"`** in `GET /safety/live-shares` (manual ones `MANUAL`). New inbox and push types **`live_trip_auto_shared`** and **`live_trip_auto_share_failed`**. Removing a contact ends that contact's links. `autoShareTrips` on a contact is ignored. New staging-only **`GET /testing/safety/auto-share/messages`** (4.17). |
 | 2026-11-15 | 🛡️ **Safety leftovers.** The home journey (`GET /home`, `nextJourney`) carries **`noShow`**, the same object as on the booking (4.11). `GET /safety/emergency-contacts` answers **`meta: {limit, canAdd}`** (4.12). A bad phone number on a trusted contact now answers **`422 VALIDATION_FAILED`** with `error.fields.phone` (it answered `500`); her own number is refused with **`422 EMERGENCY_CONTACT_SELF`**. New staging-only **`POST /testing/account/suspension/appeal/decide`**, **`POST /testing/account/suspension/age`** and **`POST /testing/account/ban`** (4.17); `POST /testing/driver/suspend` with `scope: "account"` is documented as working for any account. 4.2 now lists what stays open for a permanent ban. |
 | 2026-11-15 | ⚖️ **No-show dispute, report case numbers, push taps.** Her booking carries **`noShow`** `{confirmedAt, disputableUntil, dispute {status, reason, disputedAt, resolution, resolvedAt, note}}` on `GET /bookings/{booking}` and `GET /my-bookings` (4.7). **`POST /bookings/{booking}/dispute` now answers `201` with the booking** (it answered the attendance row), and its refusals have one code each: `409 ATTENDANCE_NOT_DISPUTABLE` (was `ATTENDANCE_NOT_CONFIRMABLE`), `409 ATTENDANCE_ALREADY_DISPUTED` (was `ATTENDANCE_NOT_CONFIRMABLE` with `fields.dispute`), `422 ATTENDANCE_DISPUTE_WINDOW_CLOSED` (unchanged); a booking with no attendance row is now `409 ATTENDANCE_NOT_DISPUTABLE`, not `404`. Staff decide no-show disputes on the dashboard; the passenger gets **`no_show_dispute_decided`** (`bookingId`, `tripId`, `resolution`). Reports carry **`caseNumber`** (`RP-` + six digits). Every push now carries **`notificationId`**, the inbox row's id; its other keys already matched the row. New staging-only **`POST /testing/bookings/{booking}/dispute/decide`**, **`POST /testing/incidents/{incident}/decide`** and **`POST /testing/incidents/{incident}/age`** (4.17). |
 | 2026-11-15 | 🧾 **History order.** `GET /my-bookings?scope=past` now sorts a cancelled seat by `cancelledAt` and every other seat by its trip's departure, newest first. Seats cancelled today for later dates no longer push today's finished ride off the first page. Same fields, same `meta` paging. |
