@@ -342,6 +342,7 @@ enum ErrorCode: string
     case IncidentTransitionNotAllowed = 'INCIDENT_TRANSITION_NOT_ALLOWED';
     case MemberNotActive = 'MEMBER_NOT_ACTIVE';
     case MemberNotSuspended = 'MEMBER_NOT_SUSPENDED';
+    case BookingNotRateable = 'BOOKING_NOT_RATEABLE';
     case EscortAlreadyArmed = 'ESCORT_ALREADY_ARMED';
     case EscortNotActive = 'ESCORT_NOT_ACTIVE';
 
@@ -625,6 +626,7 @@ enum ErrorCode: string
             // Somebody else already put this account on hold, or already lifted it.
             self::MemberNotActive,
             self::MemberNotSuspended,
+            self::BookingNotRateable,
             // The corridor is already watched, or the watch already ended.
             self::EscortAlreadyArmed,
             self::EscortNotActive,

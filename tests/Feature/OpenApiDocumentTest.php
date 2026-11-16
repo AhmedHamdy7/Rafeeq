@@ -265,6 +265,8 @@ it('generates a document describing every /v1 route', function () {
         'POST /v1/testing/account/suspension/appeal/decide',
         'POST /v1/testing/account/suspension/age',
         'POST /v1/testing/account/ban',
+        'POST /v1/testing/bookings/{booking}/rating-prompt',
+        'POST /v1/testing/realtime/account-banned',
         'GET /v1/testing/safety/auto-share/messages',
         'GET /v1/testing/safety/contact-messages',
         'POST /v1/testing/bookings/{booking}/dispute/decide',

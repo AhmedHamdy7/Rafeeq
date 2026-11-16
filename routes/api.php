@@ -47,6 +47,7 @@ use App\Http\Controllers\Api\V1\Search\SearchController;
 use App\Http\Controllers\Api\V1\Testing\TestingCasesController;
 use App\Http\Controllers\Api\V1\Testing\TestingController;
 use App\Http\Controllers\Api\V1\Testing\TestingDataController;
+use App\Http\Controllers\Api\V1\Testing\TestingPromptsController;
 use App\Http\Controllers\Api\V1\Testing\TestingRecordsController;
 use App\Http\Controllers\Api\V1\Testing\TestingSafetyController;
 use App\Http\Controllers\Api\V1\Testing\TestingScenarioController;
@@ -132,6 +133,8 @@ Route::prefix('v1')->group(function (): void {
         Route::post('account/suspension/appeal/decide', [TestingSuspensionController::class, 'decideAppeal']);
         Route::post('account/suspension/age', [TestingSuspensionController::class, 'age']);
         Route::post('account/ban', [TestingSuspensionController::class, 'ban']);
+        Route::post('bookings/{booking}/rating-prompt', [TestingPromptsController::class, 'ratingPrompt']);
+        Route::post('realtime/account-banned', [TestingPromptsController::class, 'accountBanned']);
         Route::get('safety/auto-share/messages', [TestingSafetyController::class, 'autoShareMessages']);
         Route::get('safety/contact-messages', [TestingSafetyController::class, 'contactMessages']);
         Route::post('faults', [TestingToolsController::class, 'addFault']);

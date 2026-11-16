@@ -34,7 +34,26 @@ final class ListMyBookingsRequest extends FormRequest
              * filtered list.
              */
             'scope' => ['nullable', 'string', Rule::in([self::PAST, self::UPCOMING])],
+            /*
+             * Only the bookings of this commute group (`commuteGroupId` on each row).
+             */
+            'groupId' => ['nullable', 'string', 'max:64'],
+            /*
+             * With `scope=upcoming`: also her own day cancels (`CANCELLED_BY_PASSENGER`) whose
+             * journey is still ahead, in the same date order.
+             */
+            'includeCancelled' => ['nullable', 'boolean'],
         ];
+    }
+
+    public function groupId(): ?string
+    {
+        return $this->validated('groupId');
+    }
+
+    public function includeCancelled(): bool
+    {
+        return $this->boolean('includeCancelled');
     }
 
     public function scope(): ?string

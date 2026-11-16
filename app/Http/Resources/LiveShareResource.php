@@ -34,6 +34,9 @@ final class LiveShareResource extends JsonResource
              * details live.
              */
             'sharedWithContactId' => $this->shared_with_contact_id,
+            'sharedWithName' => $this->shared_with_contact_id === null
+                ? null
+                : $this->resource->loadMissing('sharedWithContact')->sharedWithContact?->name,
             'source' => strtoupper(($this->source ?? LiveShareSource::Manual)->value),
 
             'expiresAt' => $this->expires_at->toIso8601String(),

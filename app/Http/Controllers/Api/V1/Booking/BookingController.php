@@ -66,11 +66,12 @@ final class BookingController extends Controller
         $query = Booking::query()
             ->where('bookings.passenger_user_id', $request->user()->id)
             // The route, the driver and her own rating on every card (HISTORY-1, HISTORY-4).
+            ->when($request->groupId() !== null, fn ($inner) => $inner->where('bookings.commute_group_id', $request->groupId()))
             ->with(['scheduledTrip', ...BookingResource::historyRelations($request->user()), ...BookingResource::pickupEtaRelations()]);
 
         match ($request->scope()) {
             ListMyBookingsRequest::PAST => PassengerBookingScope::past($query),
-            ListMyBookingsRequest::UPCOMING => PassengerBookingScope::upcoming($query),
+            ListMyBookingsRequest::UPCOMING => PassengerBookingScope::upcoming($query, $request->includeCancelled()),
             // Unchanged for a client that sends no scope.
             default => $query->latest('bookings.created_at')->orderByDesc('bookings.id'),
         };

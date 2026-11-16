@@ -4,6 +4,7 @@ namespace App\Domains\Rating\Support;
 
 use App\Domains\Booking\Enums\BookingStatus;
 use App\Domains\Booking\Models\Booking;
+use App\Domains\Booking\Support\PickupEta;
 use App\Domains\Identity\Models\User;
 use App\Domains\Rating\Actions\SubmitRatingAction;
 use App\Domains\Rating\Models\Rating;
@@ -27,6 +28,16 @@ final readonly class RatingPrompts
 
     public const string UNUSUAL = 'unusual';
 
+    public const string KIND_DISPUTE = 'dispute';
+
+    public const string KIND_REPORT = 'report';
+
+    public const string KIND_LATE = 'late';
+
+    public const string KIND_ENDED_EARLY = 'ended_early';
+
+    public const array KINDS = [self::KIND_DISPUTE, self::KIND_REPORT, self::KIND_LATE, self::KIND_ENDED_EARLY];
+
     private const int WEEK_DAYS = 7;
 
     private const int CANDIDATES = 20;
@@ -43,6 +54,12 @@ final readonly class RatingPrompts
     public function for(User $user): ?array
     {
         $candidates = $this->candidates($user);
+
+        $forced = $candidates->first(fn (Booking $booking): bool => $booking->rating_prompt_reason !== null);
+
+        if ($forced !== null) {
+            return $this->present($forced, $forced->rating_prompt_reason);
+        }
 
         $unusual = $candidates->first(fn (Booking $booking): bool => $booking->rating_prompted_at === null && $this->wasUnusual($booking));
 
@@ -74,6 +91,24 @@ final readonly class RatingPrompts
         return $this->present($booking, $reason);
     }
 
+    public function force(Booking $booking, string $reason, ?string $unusualKind): array
+    {
+        Booking::query()
+            ->where('passenger_user_id', $booking->passenger_user_id)
+            ->whereKeyNot($booking->id)
+            ->whereNotNull('rating_prompt_reason')
+            ->update(['rating_prompt_reason' => null, 'rating_prompt_unusual_kind' => null]);
+
+        $booking->forceFill([
+            'rating_prompted_at' => now(),
+            'rating_prompt_dismissed_at' => null,
+            'rating_prompt_reason' => $reason,
+            'rating_prompt_unusual_kind' => $reason === self::UNUSUAL ? $unusualKind : null,
+        ])->save();
+
+        return $this->present($booking->loadMissing(['scheduledTrip', 'driverProfile.user']), $reason);
+    }
+
     public function dismiss(Booking $booking): void
     {
         if ($booking->rating_prompt_dismissed_at === null) {
@@ -86,6 +121,10 @@ final readonly class RatingPrompts
 
     public function reasonFor(Booking $booking, User $user): ?string
     {
+        if ($booking->rating_prompt_reason !== null) {
+            return $booking->rating_prompt_reason;
+        }
+
         if ($this->wasUnusual($booking)) {
             return self::UNUSUAL;
         }
@@ -105,9 +144,18 @@ final readonly class RatingPrompts
 
     public function wasUnusual(Booking $booking): bool
     {
-        return $booking->status === BookingStatus::EndedEarly
-            || $this->disputeOpened($booking)
-            || $this->driverWasLate($booking);
+        return $this->unusualKind($booking) !== null;
+    }
+
+    public function unusualKind(Booking $booking): ?string
+    {
+        return match (true) {
+            $this->disputeOpened($booking) => self::KIND_DISPUTE,
+            $this->reportOpened($booking) => self::KIND_REPORT,
+            $this->driverWasLate($booking) => self::KIND_LATE,
+            $booking->status === BookingStatus::EndedEarly => self::KIND_ENDED_EARLY,
+            default => null,
+        };
     }
 
     public function driverWasLate(Booking $booking): bool
@@ -152,8 +200,12 @@ final readonly class RatingPrompts
 
     private function disputeOpened(Booking $booking): bool
     {
-        return Attendance::query()->where('booking_id', $booking->id)->whereNotNull('disputed_at')->exists()
-            || Incident::query()->where('booking_id', $booking->id)->exists();
+        return Attendance::query()->where('booking_id', $booking->id)->whereNotNull('disputed_at')->exists();
+    }
+
+    private function reportOpened(Booking $booking): bool
+    {
+        return Incident::query()->where('booking_id', $booking->id)->exists();
     }
 
     private function isFirstWithDriver(Booking $booking, User $user): bool
@@ -192,6 +244,14 @@ final readonly class RatingPrompts
         return $times->isEmpty() ? null : $times->sort()->last();
     }
 
+    public function isRateable(Booking $booking): bool
+    {
+        return in_array($booking->status, self::RATEABLE, true)
+            && $booking->scheduledTrip->departure_at->greaterThanOrEqualTo(now()->subDays(31))
+            && ! $booking->ratings()->where('reviewer_user_id', $booking->passenger_user_id)->exists()
+            && ! $this->ratings->deadlineFor($booking)->isPast();
+    }
+
     private function candidates(User $user): Collection
     {
         return Booking::query()
@@ -220,7 +280,25 @@ final readonly class RatingPrompts
             'tripId' => $booking->scheduled_trip_id,
             'driverName' => $booking->driverProfile?->user?->public_first_name,
             'tripDate' => $trip->departure_local?->format('Y-m-d'),
+            'pickupLocal' => $this->pickupLocal($booking),
+            'pickupLabel' => $booking->status->grantsExactDetails() ? $booking->pickup_label : null,
             'reason' => $reason,
+            'unusualKind' => $reason === self::UNUSUAL
+                ? ($booking->rating_prompt_reason === self::UNUSUAL && $booking->rating_prompt_unusual_kind !== null
+                    ? $booking->rating_prompt_unusual_kind
+                    : $this->unusualKind($booking))
+                : null,
         ];
+    }
+
+    private function pickupLocal(Booking $booking): ?string
+    {
+        $at = $booking->agreed_pickup_at !== null
+            ? CarbonImmutable::instance($booking->agreed_pickup_at)
+            : PickupTime::for($booking);
+
+        $local = PickupEta::local($booking->scheduledTrip, $at);
+
+        return $local === null ? null : CarbonImmutable::parse($local)->format('H:i');
     }
 }

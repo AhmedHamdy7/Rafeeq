@@ -49,10 +49,14 @@ final class PassengerBookingScope
      *
      * @param  Builder<Booking>  $query
      */
-    public static function upcoming(Builder $query): void
+    public static function upcoming(Builder $query, bool $includeCancelled = false): void
     {
         self::byJourney($query)
-            ->whereIn('bookings.status', [BookingStatus::Pending->value, BookingStatus::Confirmed->value])
+            ->where(fn (Builder $inner) => $inner
+                ->whereIn('bookings.status', [BookingStatus::Pending->value, BookingStatus::Confirmed->value])
+                ->when($includeCancelled, fn (Builder $cancelled) => $cancelled->orWhere(fn (Builder $own) => $own
+                    ->where('bookings.status', BookingStatus::CancelledByPassenger->value)
+                    ->where('scheduled_trips.departure_at', '>=', now()))))
             ->where(fn (Builder $inner) => $inner
                 ->where('scheduled_trips.departure_at', '>=', now())
                 ->orWhereIn('scheduled_trips.status', [
