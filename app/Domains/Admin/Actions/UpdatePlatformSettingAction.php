@@ -6,6 +6,7 @@ use App\Domains\Admin\Models\AdminUser;
 use App\Domains\Admin\Models\PlatformSetting;
 use App\Domains\Admin\Support\AdminActionLog;
 use App\Domains\Admin\Support\SettingsCatalogue;
+use App\Domains\Admin\Support\SettingsLadders;
 use App\Domains\Shared\Exceptions\DomainException;
 use App\Domains\Shared\Support\ErrorCode;
 use Illuminate\Support\Facades\DB;
@@ -139,6 +140,49 @@ final readonly class UpdatePlatformSettingAction
         }
 
         return $entry;
+    }
+
+    /**
+     * F02 · a whole fee ladder at once: every rung within its bounds, none below the rung before
+     * it, all written together or none. Each rung that changed gets its own audit row, with the
+     * same reason, as if it had been edited on its own.
+     *
+     * @param  array<string, int>  $values  rung label => percent, as SettingsLadders::LADDERS names them
+     */
+    public function updateLadder(string $ladder, array $values, AdminUser $admin, string $reason): void
+    {
+        $rungs = SettingsLadders::ladder($ladder) ?? throw DomainException::of(ErrorCode::NotFound);
+
+        $previous = null;
+
+        foreach ($rungs as $rung => $key) {
+            $entry = $this->editable($key);
+            $value = (int) ($values[$rung] ?? $this->current($key));
+
+            if ($value < $entry['min'] || $value > $entry['max']) {
+                throw DomainException::of(ErrorCode::ValidationFailed, fields: [
+                    "ladder.{$rung}" => [__('admin.settings.out_of_range', ['min' => $entry['min'], 'max' => $entry['max']])],
+                ]);
+            }
+
+            if ($previous !== null && $value < $previous) {
+                throw DomainException::of(ErrorCode::ValidationFailed, fields: [
+                    "ladder.{$rung}" => [__('admin.settings.ladder_goes_down')],
+                ]);
+            }
+
+            $previous = $value;
+        }
+
+        DB::transaction(function () use ($rungs, $values, $admin, $reason): void {
+            foreach ($rungs as $rung => $key) {
+                $value = (int) ($values[$rung] ?? $this->current($key));
+
+                if ($value !== (int) $this->current($key)) {
+                    $this->update($key, $value, $admin, $reason);
+                }
+            }
+        });
     }
 
     private function assertStaysInOrder(string $key, int $value): void

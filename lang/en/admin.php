@@ -639,6 +639,41 @@ return [
         'history' => 'History',
         'no_history' => 'Never changed: it has always been the default.',
         'default_label' => 'default',
+        'ladder_goes_down' => 'A rung cannot be lower than the one before it.',
+        'ladder_saved' => ':name saved.',
+        'ladders' => [
+            'title' => 'Fee ladders',
+            'hint' => 'Each ladder is edited whole, and no rung may be lower than the one before. The right-hand column prices every rung on a :seat seat, the way the fee is charged.',
+            'names' => [
+                'no_show' => 'Passenger no-show (PAY-20)',
+                'lateness' => 'Passenger lateness (PAY-22)',
+                'driver_cancel' => 'Driver cancelling by notice (PAY-23)',
+            ],
+            'edit' => 'Edit the ladder',
+            'rung_col' => 'Rung',
+            'now' => 'Now',
+            'new' => 'New',
+            'on_seat' => 'On the example seat',
+            'rung' => 'rung :rung',
+            'save' => 'Save the ladder',
+            'rungs' => [
+                'no_show' => [
+                    '2' => '2nd no-show',
+                    '3' => '3rd',
+                    '4' => '4th',
+                    '5' => '5th and after',
+                ],
+                'lateness' => [
+                    '3' => '3rd lateness',
+                    '4' => '4th',
+                    '5' => '5th and after',
+                ],
+                'driver_cancel' => [
+                    'mid' => 'Short notice',
+                    'short' => 'Very short notice',
+                ],
+            ],
+        ],
     ],
 
     'payments' => [

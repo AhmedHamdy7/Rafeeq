@@ -1166,6 +1166,18 @@ a.ad-stat:hover {
   min-inline-size: 0;
 }
 
+/* ---------- Settings: the fee ladders (F02) ---------- */
+
+.ad-ladder {
+  padding-block: 10px;
+  border-block-start: 1px solid var(--border-default);
+}
+
+.ad-ladder:first-of-type {
+  border-block-start: none;
+  padding-block-start: 0;
+}
+
 /* ---------- Settings: one row per number ---------- */
 
 .ad-settings {
