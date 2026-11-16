@@ -149,22 +149,28 @@ it('excludes a commute whose driver licence has lapsed', function () {
     expect(search($token)->assertOk()->json('data'))->toBe([]);
 });
 
-it('excludes days with no seats left', function () {
+it('keeps a full commute in the results, marked full, so she can join its waiting list (BOOK-18, BOOK-33)', function () {
     $token = passenger('01112223344');
 
     ScheduledTrip::query()->update(['seats_taken' => 3]);
 
-    expect(search($token)->assertOk()->json('data'))->toBe([]);
+    $page = search($token)->assertOk();
+
+    expect($page->json('data'))->toHaveCount(1)
+        ->and($page->json('data.0.isFull'))->toBeTrue()
+        ->and($page->json('data.0.seatsAvailable'))->toBe(0);
 });
 
-it('excludes a commute that cannot seat the whole party', function () {
+it('keeps a commute that cannot seat the whole party, with the seats it has left', function () {
     $token = passenger('01112223344');
 
     ScheduledTrip::query()->update(['seats_taken' => 2]);
 
-    // One seat left, three needed.
-    expect(search($token, ['seatsNeeded' => 3])->assertOk()->json('data'))->toBe([])
-        ->and(search($token, ['seatsNeeded' => 1])->assertOk()->json('data'))->toHaveCount(1);
+    $page = search($token, ['seatsNeeded' => 3])->assertOk();
+
+    expect($page->json('data'))->toHaveCount(1)
+        ->and($page->json('data.0.seatsAvailable'))->toBe(1)
+        ->and($page->json('data.0.isFull'))->toBeFalse();
 });
 
 it('excludes a commute that does not run on the days asked for', function () {

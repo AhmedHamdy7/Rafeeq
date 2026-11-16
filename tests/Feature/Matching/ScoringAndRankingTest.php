@@ -235,12 +235,12 @@ it('keys the cache per person, since eligibility differs between them', function
  * Chapter 5's edge case: "commute becomes full after search". A cache hit must
  * not replay a day that filled up in the meantime.
  */
-it('stops offering a day that filled up after it was cached', function () {
-    search($this->paxToken)->assertOk();
+it('marks a day full when it filled up after it was cached', function () {
+    expect(search($this->paxToken)->assertOk()->json('data.0.isFull'))->toBeFalse();
 
     ScheduledTrip::query()->update(['seats_taken' => 3]);
 
-    expect(search($this->paxToken)->assertOk()->json('data'))->toBe([]);
+    expect(search($this->paxToken)->assertOk()->json('data.0.isFull'))->toBeTrue();
 });
 
 it('treats one time with a flexibility like the same range', function () {

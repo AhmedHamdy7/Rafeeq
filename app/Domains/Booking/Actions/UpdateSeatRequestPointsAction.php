@@ -20,7 +20,7 @@ final readonly class UpdateSeatRequestPointsAction
      */
     public function execute(SeatRequest $request, array $input): SeatRequest
     {
-        if ($request->status !== SeatRequestStatus::Pending || $request->requested_during_ride) {
+        if (! self::isEditable($request->status) || $request->requested_during_ride) {
             throw DomainException::of(ErrorCode::SeatRequestNotPending);
         }
 
@@ -31,7 +31,7 @@ final readonly class UpdateSeatRequestPointsAction
         return DB::transaction(function () use ($request, $input, $points): SeatRequest {
             $locked = SeatRequest::query()->whereKey($request->id)->lockForUpdate()->firstOrFail();
 
-            if ($locked->status !== SeatRequestStatus::Pending) {
+            if (! self::isEditable($locked->status)) {
                 throw DomainException::of(ErrorCode::SeatRequestNotPending);
             }
 
@@ -43,5 +43,10 @@ final readonly class UpdateSeatRequestPointsAction
 
             return $locked;
         });
+    }
+
+    private static function isEditable(SeatRequestStatus $status): bool
+    {
+        return $status === SeatRequestStatus::Pending || $status === SeatRequestStatus::Waitlisted;
     }
 }

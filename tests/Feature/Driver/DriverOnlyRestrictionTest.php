@@ -149,12 +149,9 @@ it('closes everything for a permanent ban, with a reference to quote', function 
     // Even the passenger side is closed now, which is the difference from the driver-only case.
     search($token)->assertStatus(403)->assertJsonPath('error.code', 'ACCOUNT_SUSPENDED');
 
-    /*
-     * ⚠️ `GET /home` stays open, and that is deliberate rather than a gap — it is the screen that
-     * TELLS her she is restricted, so gating it behind the thing it explains would leave her
-     * staring at a dead app with no reason given. Pinned here because it looks like a hole to
-     * anybody reading the route list, and because an "obvious" tightening of it would break
-     * screen 35.
-     */
-    test()->withToken($token)->getJson('/api/v1/home')->assertOk();
+    test()->withToken($token)->getJson('/api/v1/home')
+        ->assertStatus(403)
+        ->assertJsonPath('error.code', 'ACCOUNT_SUSPENDED')
+        ->assertJsonPath('error.fields.permanent.0', 'true')
+        ->assertJsonPath('error.fields.caseNumber.0', $hold->case_number);
 });

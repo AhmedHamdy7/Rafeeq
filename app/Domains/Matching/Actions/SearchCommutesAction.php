@@ -64,9 +64,9 @@ final readonly class SearchCommutesAction
     /**
      * @return array<int, MatchResult>
      */
-    public function execute(User $passenger, SearchCriteria $criteria): array
+    public function execute(User $passenger, SearchCriteria $criteria, bool $includeFull = false): array
     {
-        $candidates = $this->stageOneHardFilters($passenger, $criteria);
+        $candidates = $this->stageOneHardFilters($passenger, $criteria, $includeFull);
 
         if ($candidates->isEmpty()) {
             return [];
@@ -82,7 +82,7 @@ final readonly class SearchCommutesAction
 
         $this->cache($scored, $criteria->signature($passenger->id));
 
-        return $this->groupByCommute($scored);
+        return $this->groupByCommute($scored, $criteria->seatsNeeded);
     }
 
     /**
@@ -90,9 +90,9 @@ final readonly class SearchCommutesAction
      *
      * @return Collection<int, ScheduledTrip>
      */
-    private function stageOneHardFilters(User $passenger, SearchCriteria $criteria)
+    private function stageOneHardFilters(User $passenger, SearchCriteria $criteria, bool $includeFull = false)
     {
-        return HardFilters::apply(ScheduledTrip::query(), $passenger, $criteria)
+        return HardFilters::apply(ScheduledTrip::query(), $passenger, $criteria, $includeFull)
             // Eager-loaded because the next stages read all of it, and
             // `preventLazyLoading` would otherwise turn this into an exception —
             // which is exactly the N+1 it exists to catch.
@@ -469,31 +469,53 @@ final readonly class SearchCommutesAction
      * @param  array<int, MatchResult>  $results
      * @return array<int, MatchResult>
      */
-    private function groupByCommute(array $results): array
+    private function groupByCommute(array $results, int $seatsNeeded = 1): array
     {
         $byOffer = [];
 
         foreach ($results as $result) {
-            $offerId = $result->offer->id;
+            $byOffer[$result->offer->id][] = $result;
+        }
 
-            if (! array_key_exists($offerId, $byOffer)) {
-                // The first one wins: results are already sorted by score, and
-                // within one commute the earliest day comes first.
-                $byOffer[$offerId] = ['best' => $result, 'others' => []];
+        $open = [];
+        $full = [];
 
-                continue;
+        foreach ($byOffer as $days) {
+            $best = null;
+
+            foreach ($days as $day) {
+                if (self::seatsLeft($day->trip) >= $seatsNeeded) {
+                    $best = $day;
+
+                    break;
+                }
             }
 
-            $byOffer[$offerId]['others'][] = $result->trip;
+            $best ??= $days[0];
+
+            $others = [];
+
+            foreach ($days as $day) {
+                if ($day !== $best) {
+                    $others[] = $day->trip;
+                }
+            }
+
+            $card = $best->withOtherDays($others);
+
+            if (self::seatsLeft($best->trip) >= $seatsNeeded) {
+                $open[] = $card;
+            } else {
+                $full[] = $card;
+            }
         }
 
-        $cards = [];
+        return array_slice([...$open, ...$full], 0, self::RESULT_LIMIT);
+    }
 
-        foreach ($byOffer as $entry) {
-            $cards[] = $entry['best']->withOtherDays($entry['others']);
-        }
-
-        return array_slice($cards, 0, self::RESULT_LIMIT);
+    private static function seatsLeft(ScheduledTrip $trip): int
+    {
+        return max(0, (int) $trip->seats_total - (int) $trip->seats_taken);
     }
 
     /**

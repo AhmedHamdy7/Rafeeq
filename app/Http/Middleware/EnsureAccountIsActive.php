@@ -48,10 +48,13 @@ final class EnsureAccountIsActive
              * that meets this mid-flow can show screen 35 without another round trip.
              * Each value wrapped in a list, the envelope's shape for `fields`.
              */
-            throw DomainException::of(ErrorCode::AccountSuspended, fields: array_map(
-                fn (?string $value) => [$value],
-                SuspensionSummary::for($user),
-            ));
+            throw DomainException::of(ErrorCode::AccountSuspended, fields: [
+                ...array_map(
+                    fn (?string $value) => [$value],
+                    SuspensionSummary::for($user),
+                ),
+                'permanent' => [$user->isBanned() ? 'true' : 'false'],
+            ]);
         }
 
         return $next($request);

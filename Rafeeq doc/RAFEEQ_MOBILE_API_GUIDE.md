@@ -162,8 +162,10 @@ back from the driver surface.
 session is fine, so do not throw it away and restart at the phone screen.
 
 `ACCOUNT_SUSPENDED` carries screen 35's data in `error.fields`, each as a one-item list like
-every other field: `caseNumber`, `reasonCode`, `suspendedAt`, `reviewDueAt` — so a client that
-meets it in the middle of a flow can show the screen without another call.
+every other field: `caseNumber`, `reasonCode`, `suspendedAt`, `reviewDueAt`, and **`permanent`**
+(`"true"` for a ban, `"false"` for a suspension) — so a client that meets it in the middle of a flow
+can show the screen without another call. 🔴 `permanent: ["true"]` on **any** call, `GET /home`
+included, means open the Account restricted screen now; do not wait for the next sign-in.
 
 ### 1.3 Pagination
 
@@ -625,7 +627,7 @@ Status: ✅ fully served · ⚠️ served, something named missing · ⛔ no API
 | # | Screen | Endpoints | Status |
 |---|---|---|---|
 | 17 | **Active trip** | `GET /trips/{trip}` · `GET /trips/{trip}/location` · channel `private-trip.{sessionId}` | ✅ Status, timings, `isUnderway`, `lastLocationAt`, the live position, and **route deviation** (`deviationDetectedAt`). |
-| 36 | **Pre-trip check-in** | `GET`/`POST /groups/{group}/attendance` | ✅ This screen is the **declared** attendance, not boarding confirmation. `I'm coming` = `coming`, `Can't make it` = `away`. **Missing: `5 min late`** — a third declared state that does not exist yet. Section 8. |
+| 36 | **Pre-trip check-in** | `GET`/`POST /groups/{group}/attendance` | ✅ This screen is the **declared** attendance, not boarding confirmation. Pass `?tripId=` to get a `NO_RESPONSE` row for each member who has not answered. `I'm coming` = `coming`, `Can't make it` = `away`. **Missing: `5 min late`** — a third declared state that does not exist yet. Section 8. |
 | 40 | No-show | `POST /trips/{trip}/no-show` · `POST /bookings/{booking}/dispute` | ✅ The driver records it; the passenger has 24 hours to contest it. |
 | 41 | **Driver wait timer** | `GET`/`POST /trips/{trip}/wait-timers` (the POST is "I've arrived", GPS-checked; **no "+2 min" any more**) | ⚠️ **There is deliberately no endpoint that stops a timer** — "She's here" is the check-in and "Mark no-show & depart" is the no-show, and both close it. **Missing: `Stop 2 of 3`** (needs an ordered pickup sequence) and `notified twice`, Call, Message (Phase 12). |
 | 39 | **Route changed** | `GET /trips/{trip}` | ⚠️ The deviation is **detected and reported** on the trip session. **Missing: the push that tells you about it** (Phase 12) — today you learn of it by reading the trip. |
@@ -2355,6 +2357,7 @@ the places nearest that point, **closest first**, each with `distanceMetres`. Us
 | `promisedArrivalAt` / `promisedArrivalLocal` | "07:00 → arrive 08:10" (DISCOVER-2): the arrival the driver **promised at the end of his route** that day. `null` when none was promised — not "any time". Where *she* gets out is `dropOffPoint.estimatedArrival*`. |
 | `daysMask` | **The days the commute runs** (DISCOVER-3) — "Sun · Tue · Thu". Not the same as `tripDate` + `otherDays`, which are only the days that fit this search. |
 | `seatsAvailable` | On that day. |
+| `isFull` | `true` when that day has no seat left. 🔴 Search **keeps full commutes** (BOOK-18, BOOK-33): the action on such a card, or on any day where `seatsAvailable < seatsNeeded`, is **Request to Join Waiting List**. Cards whose day has room come first; a commute with any open day shows that day on the card. `otherDays[]` items carry `isFull` too. |
 | `seatPricePiastres` | Snapshotted on the day — a later price change does not move it. **The one name for the seat price everywhere** (DISCOVER-15); `pricePerSeatPiastres` is sent beside it with the same value, deprecated. |
 | `audience` · `womenOnly` | `women_only` · `any_verified`, and the same as a boolean. |
 | `originLabel` / `destinationLabel` | The commute's two ends, as on `/matches`. |
@@ -2545,10 +2548,11 @@ list. An unknown status → `422 VALIDATION_FAILED`. Left out: every request, as
 
 #### `PATCH /seat-requests/{seatRequest}` — active, profile complete
 
-Changes the points of **her own pending** request. **Request:** `pickup` and `dropoff`, the same
+Changes the points of **her own pending or waiting-list (`WAITLISTED`)** request. **Request:** `pickup` and `dropoff`, the same
 shape as on `POST /commutes/{commute}/seat-requests`, and optional `introMessage`. Checked the same
-way (tiers, travel order): `422 PICKUP_DETOUR_TOO_LONG` beyond the red tier. Refused with
-`409 SEAT_REQUEST_NOT_PENDING` once it is answered, and for a request sent during a live ride.
+way (tiers, travel order): `422 PICKUP_DETOUR_TOO_LONG` beyond the red tier. On a waiting-list place
+she **keeps her position**. Changing the days is still withdraw and apply again. Refused with
+`409 SEAT_REQUEST_NOT_PENDING` once it is approved, rejected or withdrawn, and for a request sent during a live ride.
 Answers the updated request.
 
 #### `GET /seat-requests/{seatRequest}` — active, profile complete
@@ -3582,6 +3586,10 @@ Closes the session, completes the bookings, updates the counters, and clears the
 **No money moves** — there is a two-hour delay before collection so a driver who tapped the wrong
 name can notice (and Phase 8 is not built).
 
+Normally from `IN_PROGRESS`. Also from `EN_ROUTE` or `AT_PICKUP` when **nobody is left to carry**:
+every passenger is a no-show or already dropped off (an all-no-show run). Otherwise
+`409 TRIP_INVALID_TRANSITION` with `currentStatus` and `allowed`.
+
 #### `GET /trips/{trip}/cancel-preview` — driver only
 
 What "Cancel today" would cost him, before he confirms (C-9): `affectedSeats`, `feePiastres`,
@@ -4118,6 +4126,11 @@ leave her own group** (`GROUP_DRIVER_CANNOT_LEAVE`, 403); she pauses or archives
 #### `GET` / `POST /groups/{group}/attendance` — active, profile complete, paginated
 
 Each row has **`isMe`** (TRIPS-23): `true` on the caller's own row, so her chip reads "You".
+
+🔴 **With `?tripId=`** the list has one row for **every member seated that day**: the answer she gave,
+or `status: "NO_RESPONSE"` with `id: null` and `markedAt: null` for somebody who has not answered.
+So the first person to answer sees her own `NO_RESPONSE` row and the **Coming** / **Away** buttons.
+Without `tripId` it lists only the answers given, as before.
 
 **This is screen 36.** The **declared** intention — "I'm coming tomorrow" — which is a different
 table from the boarding confirmation in 4.9, on purpose: only the check-in decides money.
@@ -5169,7 +5182,7 @@ it is paid (driver: nothing overdue; passenger: nothing owed).
 | `passenger` | Her passenger side. Always there. |
 | `payments[]` | Her last ten "I paid"s, newest first: `id`, `side`, `amountPiastres`, `instapayReference`, `status` (`pending_confirmation` · `confirmed` · `rejected`), `hasReceipt`, `decisionNote` (why staff refused it), `createdAt`, `decidedAt`. 🔒 The receipt itself is never returned. |
 | `coupons[]` | Her last ten coupons (PAY-34): `id`, `side`, `valuePiastres`, `bookingId`, `createdAt`. Already taken off her debt. |
-| `instapay` | Where to send the money: `{link, handle, displayName}`, set by staff on the dashboard (Settings → Debt). `null` while neither the link nor the handle is set. |
+| `instapay` | Where to send the money: `{link, handle, displayName}`, set by staff on the dashboard (Settings → Debt), else from the server's `RAFEEQ_INSTAPAY_LINK` / `_HANDLE` / `_NAME`. On a server with the testing API on and nothing set, a test payee (`rafeeq.test@instapay`). `null` while neither the link nor the handle is set. |
 
 Each side:
 
@@ -5260,8 +5273,10 @@ caller's own account and commutes.
 #### `POST /testing/driver/approve`
 
 Approves the caller's driver application as a reviewer would: every pending verification item,
-each car (Comfort, AC, approved seats = its seats, up to the maximum) and the application.
-Answers `{driverStatus, vehicles[{id, approvedSeats, tier, verificationStatus}]}`. The application
+each car and the application. Optional body `{approvedSeats?, tier?, hasAc?}` sets every car. Left
+out, a car already approved **keeps** its approved values; a car never reviewed gets Comfort, AC and
+approved seats = its seats (up to the maximum).
+Answers `{driverStatus, vehicles[{id, approvedSeats, tier, hasAc, verificationStatus}]}`. The application
 must have been sent to review first; otherwise `409 DRIVER_APPLICATION_LOCKED` or
 `422 DRIVER_APPLICATION_INCOMPLETE`.
 
@@ -5555,8 +5570,10 @@ Deletes the caller's own commutes and their days, requests, bookings, waiting-li
 { "keep": ["verification", "vehicles", "contacts"] }   // optional; default ["verification"]
 → 200 { commutes, trips, seatRequests, bookings, waitlist, offers, demands, proposals, pickupChanges,
         groups, vehicles, contacts, liveShares, incidents, conversations, notifications, debtLines,
-        reliabilityEvents, warnings, faults, kept: [...] }
+        reliabilityEvents, warnings, faults, kept: [...], castNameRestored }
 ```
+
+- On one of the eight cast numbers (`+20 10 2000 0001` … `0008`) it also gives the account its cast name back (Ahmed, Nour, Mariam, Karim, Laila, Salma, Hana, Omar, each "… Story"). `castNameRestored: true` when it had been changed.
 
 - `keep` may name `verification`, `vehicles` (spare cars too), `contacts`, `notifications`, `debt`, `reliability`. Leaving out `verification` removes it.
 - Always kept: the account, profile, role, active mode and the **active car**. Spare cars go unless `vehicles` is kept.
@@ -5818,6 +5835,7 @@ exist, and every live endpoint must be named here.
 
 | Date | Change |
 |---|---|
+| 2026-11-16 | 🧪 **Patrol findings of 2026-11-15.** 🔴 **Search keeps full commutes**, with `isFull` on the card and on `otherDays[]`, so a passenger can reach a full commute's waiting list (BOOK-18). `GET /groups/{group}/attendance?tripId=` lists every seated member, `NO_RESPONSE` for those who have not answered. 🔴 **A banned account gets `403 ACCOUNT_SUSPENDED` on `GET /home` and `GET /driver/home` too**, and the refusal carries `permanent`. `POST /trips/{trip}/complete` closes a run from `EN_ROUTE` / `AT_PICKUP` when every passenger is a no-show or already dropped off. `PATCH /seat-requests/{seatRequest}` works on `WAITLISTED` and keeps her position. `instapay` falls back to env values, and to a test payee on staging. Testing: `POST /testing/driver/approve` takes `{approvedSeats?, tier?, hasAc?}` and keeps an approved car's values; `POST /testing/reset` restores a cast account's name. |
 | 2026-11-15 | 🧪 **Testing calls for Patrol (staging only, 4.17).** New `POST/GET/DELETE /testing/faults` and `POST /testing/rate-limit` (slow or failing answers for the caller's own token), `POST /testing/otp/expire` and `/otp/unlock` (no token, test numbers only), `POST /testing/session/revoke`, `POST /testing/reset`, `POST /testing/seed/past-bookings`, `POST /testing/seat-requests/{seatRequest}/age`, `POST /testing/debt/seed`, `POST /testing/credits`, `POST /testing/bookings/{booking}/fields`, `PUT/DELETE /testing/content/{key}`, `POST /testing/trips/{trip}/location/age`, `POST /testing/push`. New codes `TEST_NUMBER_ONLY`, `OTP_NOT_REQUESTED`, `FAULT_LIMIT_REACHED`, `TRIP_IN_PROGRESS`, `REQUEST_STILL_PENDING`, `BOOKING_NOT_CANCELLED`, `DRIVER_NOT_APPROVED`. |
 | 2026-11-15 | 📲 **Auto-share live trip (SAFE-14).** New **`PUT /safety/auto-share`** `{enabled}` → `{enabled, available}`, one switch per account. `GET /safety/emergency-contacts` adds **`meta.autoShare`** and **`meta.autoShareAvailable`**. When it is on, each trusted contact gets an SMS with a live link as her trip leaves; the shares carry **`source: "AUTO"`** in `GET /safety/live-shares` (manual ones `MANUAL`). New inbox and push types **`live_trip_auto_shared`** and **`live_trip_auto_share_failed`**. Removing a contact ends that contact's links. `autoShareTrips` on a contact is ignored. New staging-only **`GET /testing/safety/auto-share/messages`** (4.17). |
 | 2026-11-15 | 🛡️ **Safety leftovers.** The home journey (`GET /home`, `nextJourney`) carries **`noShow`**, the same object as on the booking (4.11). `GET /safety/emergency-contacts` answers **`meta: {limit, canAdd}`** (4.12). A bad phone number on a trusted contact now answers **`422 VALIDATION_FAILED`** with `error.fields.phone` (it answered `500`); her own number is refused with **`422 EMERGENCY_CONTACT_SELF`**. New staging-only **`POST /testing/account/suspension/appeal/decide`**, **`POST /testing/account/suspension/age`** and **`POST /testing/account/ban`** (4.17); `POST /testing/driver/suspend` with `scope: "account"` is documented as working for any account. 4.2 now lists what stays open for a permanent ban. |

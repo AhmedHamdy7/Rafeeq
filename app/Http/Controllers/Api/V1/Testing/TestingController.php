@@ -48,7 +48,7 @@ final class TestingController extends Controller
 {
     #[ApiErrors(ErrorCode::ServiceUnavailable, ErrorCode::DriverApplicationLocked, ErrorCode::DriverApplicationIncomplete, ErrorCode::LicenceExpired, ErrorCode::NotFound)]
     public function approveDriver(
-        Request $request,
+        ApproveTestVehicleRequest $request,
         ReviewVerificationAction $verifications,
         ReviewVehicleAction $vehicles,
         ReviewDriverApplicationAction $drivers,
@@ -69,13 +69,27 @@ final class TestingController extends Controller
             ->get()
             ->each(fn (UserVerification $verification) => $verifications->approve($verification, $reviewer, notify: false));
 
-        $profile->vehicles()->get()->each(fn (Vehicle $vehicle) => $vehicles->execute(
-            $vehicle,
-            $reviewer,
-            max(1, min((int) ($vehicle->seats ?? 4), (int) config('rafeeq.driver.max_approved_seats'))),
-            VehicleTier::Comfort,
-            true,
-        ));
+        $seats = $request->validated('approvedSeats');
+        $tier = $request->validated('tier');
+        $hasAc = $request->validated('hasAc');
+
+        $profile->vehicles()->get()->each(function (Vehicle $vehicle) use ($vehicles, $reviewer, $seats, $tier, $hasAc): void {
+            $reviewed = $vehicle->isApproved();
+
+            $vehicles->execute(
+                $vehicle,
+                $reviewer,
+                $seats !== null
+                    ? (int) $seats
+                    : ($reviewed && $vehicle->approved_seats !== null
+                        ? (int) $vehicle->approved_seats
+                        : max(1, min((int) ($vehicle->seats ?? 4), (int) config('rafeeq.driver.max_approved_seats')))),
+                $tier !== null
+                    ? VehicleTier::from((string) $tier)
+                    : ($reviewed && $vehicle->tier !== null ? $vehicle->tier : VehicleTier::Comfort),
+                $hasAc !== null ? (bool) $hasAc : ($reviewed ? (bool) $vehicle->has_ac : true),
+            );
+        });
 
         $profile->refresh();
 
@@ -89,6 +103,7 @@ final class TestingController extends Controller
                 'id' => $vehicle->id,
                 'approvedSeats' => $vehicle->approved_seats,
                 'tier' => strtoupper($vehicle->tierOrDefault()->value),
+                'hasAc' => (bool) $vehicle->has_ac,
                 'verificationStatus' => strtoupper($vehicle->verification_status->value),
             ])->all(),
         ]);

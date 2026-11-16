@@ -111,6 +111,7 @@ final class MatchResultResource extends JsonResource
              */
             'daysMask' => (int) ($this->trip->commuteSchedule?->days_mask ?? 0),
             'seatsAvailable' => (int) max(0, $this->trip->seats_total - $this->trip->seats_taken),
+            'isFull' => $this->trip->seats_taken >= $this->trip->seats_total,
             // The seat price RAFEEQ computed for that day (P-1). The only money figure a
             // passenger is sent (P-3): never the driver's share, never the commission.
             'seatPricePiastres' => (int) $this->trip->seat_price_piastres,
@@ -227,7 +228,7 @@ final class MatchResultResource extends JsonResource
      * One `otherDays[]` item. Shared with `GET /matches` (DISCOVER-11), whose rows carry the same
      * list, so the two cannot describe a day differently.
      *
-     * @return array{id: string, tripDate: string, departureAt: string, departureLocal: string, promisedArrivalAt: string|null, promisedArrivalLocal: string|null, seatsAvailable: int, myStatus: array{kind: string, seatRequestId: string|null, bookingId: string|null}, overlapsBooking: array{bookingId: string, driverFirstName: string|null, departureLocal: string|null, arrivalLocal: string|null}|null}
+     * @return array{id: string, tripDate: string, departureAt: string, departureLocal: string, promisedArrivalAt: string|null, promisedArrivalLocal: string|null, seatsAvailable: int, isFull: bool, myStatus: array{kind: string, seatRequestId: string|null, bookingId: string|null}, overlapsBooking: array{bookingId: string, driverFirstName: string|null, departureLocal: string|null, arrivalLocal: string|null}|null}
      */
     public static function otherDay(ScheduledTrip $trip, PassengerStanding $standing): array
     {
@@ -240,6 +241,7 @@ final class MatchResultResource extends JsonResource
             'promisedArrivalAt' => $trip->promised_arrival_at?->toIso8601String(),
             'promisedArrivalLocal' => PassengerStanding::promisedArrivalLocal($trip),
             'seatsAvailable' => (int) max(0, $trip->seats_total - $trip->seats_taken),
+            'isFull' => $trip->seats_taken >= $trip->seats_total,
             // Per DATE, like the card's own: see `myStatus` and `overlapsBooking` on the card.
             'myStatus' => $standing->statusFor($trip),
             'overlapsBooking' => $standing->overlapFor($trip),

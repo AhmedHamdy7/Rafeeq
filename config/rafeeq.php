@@ -256,6 +256,10 @@ return [
     ],
 
     'debt' => [
+        'instapay_link' => env('RAFEEQ_INSTAPAY_LINK'),
+        'instapay_handle' => env('RAFEEQ_INSTAPAY_HANDLE'),
+        'instapay_name' => env('RAFEEQ_INSTAPAY_NAME'),
+
         // Paying a week's commission after its Friday adds this much, once (PAY-13: 180 → 198).
         'late_fee_percent' => 10,
 
@@ -1393,6 +1397,21 @@ return [
         'phone_prefixes' => array_values(array_filter(array_map('trim', explode(',', (string) env('RAFEEQ_TESTING_PHONE_PREFIXES', '+20102000,+2010555'))))),
         'fault_limit' => 10,
         'fault_ttl_seconds' => 300,
+        'instapay' => [
+            'link' => 'https://ipn.eg/S/rafeeq.test/instapay/0',
+            'handle' => 'rafeeq.test@instapay',
+            'displayName' => 'Rafeeq (test)',
+        ],
+        'cast' => [
+            '+201020000001' => ['fullName' => 'Ahmed Story', 'publicFirstName' => 'Ahmed'],
+            '+201020000002' => ['fullName' => 'Nour Story', 'publicFirstName' => 'Nour'],
+            '+201020000003' => ['fullName' => 'Mariam Story', 'publicFirstName' => 'Mariam'],
+            '+201020000004' => ['fullName' => 'Karim Story', 'publicFirstName' => 'Karim'],
+            '+201020000005' => ['fullName' => 'Laila Story', 'publicFirstName' => 'Laila'],
+            '+201020000006' => ['fullName' => 'Salma Story', 'publicFirstName' => 'Salma'],
+            '+201020000007' => ['fullName' => 'Hana Story', 'publicFirstName' => 'Hana'],
+            '+201020000008' => ['fullName' => 'Omar Story', 'publicFirstName' => 'Omar'],
+        ],
     ],
 
 ];

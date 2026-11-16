@@ -62,7 +62,9 @@ final readonly class CompleteTripAction
 
     public function execute(TripSession $session): TripSession
     {
-        AdvanceTripAction::assertCanTransitionTo($session, TripSessionStatus::Completed);
+        if (! self::endsWithNobodyToCarry($session)) {
+            AdvanceTripAction::assertCanTransitionTo($session, TripSessionStatus::Completed);
+        }
 
         return DB::transaction(function () use ($session): TripSession {
             $trip = $session->scheduledTrip;
@@ -108,6 +110,34 @@ final readonly class CompleteTripAction
 
             return $session;
         });
+    }
+
+    public static function endsWithNobodyToCarry(TripSession $session): bool
+    {
+        if (! in_array($session->current_status, [TripSessionStatus::EnRoute, TripSessionStatus::AtPickup], true)) {
+            return false;
+        }
+
+        $bookingIds = Booking::query()
+            ->where('scheduled_trip_id', $session->scheduled_trip_id)
+            ->where('status', BookingStatus::Confirmed->value)
+            ->pluck('id');
+
+        if ($bookingIds->isEmpty()) {
+            return false;
+        }
+
+        $resolved = Attendance::query()
+            ->whereIn('booking_id', $bookingIds->all())
+            ->where(fn ($query) => $query
+                ->whereIn('status', [AttendanceStatus::PassengerNoShow->value, AttendanceStatus::Cancelled->value])
+                ->orWhere(fn ($done) => $done
+                    ->whereIn('status', [AttendanceStatus::Present->value, AttendanceStatus::Late->value])
+                    ->whereNotNull('checked_out_at')))
+            ->distinct()
+            ->count('booking_id');
+
+        return $resolved === $bookingIds->count();
     }
 
     /**

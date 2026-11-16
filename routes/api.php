@@ -438,8 +438,8 @@ Route::prefix('v1')->group(function (): void {
          * reachable by anyone, because the role switch lives on it and a passenger who
          * taps "drive" needs an answer rather than a 403.
          */
-        Route::get('home', [HomeController::class, 'passenger']);
-        Route::get('driver/home', [HomeController::class, 'driver']);
+        Route::get('home', [HomeController::class, 'passenger'])->middleware('account.active');
+        Route::get('driver/home', [HomeController::class, 'driver'])->middleware('account.active');
 
         /*
          * The Safety Centre (Chapter 10).

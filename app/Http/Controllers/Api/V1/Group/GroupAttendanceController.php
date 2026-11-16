@@ -2,6 +2,8 @@
 
 namespace App\Http\Controllers\Api\V1\Group;
 
+use App\Domains\Booking\Enums\BookingStatus;
+use App\Domains\Booking\Models\Booking;
 use App\Domains\Commute\Models\ScheduledTrip;
 use App\Domains\Group\Actions\DeclareAttendanceAction;
 use App\Domains\Group\Enums\GroupAttendanceStatus;
@@ -17,6 +19,7 @@ use App\Http\Resources\GroupAttendanceResource;
 use App\Http\Responses\ApiResponse;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Pagination\LengthAwarePaginator;
 
 /**
  * Who is travelling tomorrow.
@@ -40,15 +43,59 @@ final class GroupAttendanceController extends Controller
 
         $tripId = $request->query('tripId');
 
+        if (is_string($tripId) && $tripId !== '') {
+            return $this->forOneDay($group, $tripId);
+        }
+
         $declarations = GroupAttendance::query()
             ->where('commute_group_id', $group)
-            ->when(is_string($tripId) && $tripId !== '', fn ($query) => $query->where('scheduled_trip_id', $tripId))
             ->with('user')
             ->orderBy('scheduled_trip_id')
             ->orderBy('id')
             ->paginate(ApiResponse::perPage($request));
 
         return ApiResponse::paginated($declarations, GroupAttendanceResource::collection($declarations->items()));
+    }
+
+    private function forOneDay(string $group, string $tripId): JsonResponse
+    {
+        $declarations = GroupAttendance::query()
+            ->where('commute_group_id', $group)
+            ->where('scheduled_trip_id', $tripId)
+            ->with('user')
+            ->orderBy('id')
+            ->get();
+
+        $memberIds = GroupMember::query()
+            ->where('commute_group_id', $group)
+            ->whereIn('status', [GroupMemberStatus::Active->value, GroupMemberStatus::NoticeGiven->value])
+            ->pluck('user_id');
+
+        $expected = Booking::query()
+            ->where('scheduled_trip_id', $tripId)
+            ->where('status', BookingStatus::Confirmed->value)
+            ->whereIn('passenger_user_id', $memberIds)
+            ->whereNotIn('passenger_user_id', $declarations->pluck('user_id'))
+            ->with('passenger')
+            ->orderBy('created_at')
+            ->get()
+            ->unique('passenger_user_id');
+
+        $rows = $declarations->all();
+
+        foreach ($expected as $booking) {
+            $placeholder = new GroupAttendance;
+            $placeholder->commute_group_id = $group;
+            $placeholder->scheduled_trip_id = $tripId;
+            $placeholder->user_id = $booking->passenger_user_id;
+            $placeholder->status = GroupAttendanceStatus::NoResponse;
+            $placeholder->setRelation('user', $booking->passenger);
+            $rows[] = $placeholder;
+        }
+
+        $page = new LengthAwarePaginator($rows, count($rows), max(1, count($rows)), 1);
+
+        return ApiResponse::paginated($page, GroupAttendanceResource::collection($rows));
     }
 
     /**

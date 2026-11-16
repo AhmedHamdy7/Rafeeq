@@ -201,7 +201,27 @@ final class TestingDataController extends Controller
             }
         }
 
-        return ApiResponse::success([...$counts, 'kept' => $keptNames]);
+        return ApiResponse::success([...$counts, 'kept' => $keptNames, 'castNameRestored' => $this->restoreCastName($user)]);
+    }
+
+    private function restoreCastName(User $user): bool
+    {
+        $cast = ((array) config('rafeeq.testing.cast', []))[(string) $user->phone_e164] ?? null;
+
+        if (! is_array($cast)) {
+            return false;
+        }
+
+        if ($user->full_name === $cast['fullName'] && $user->public_first_name === $cast['publicFirstName']) {
+            return false;
+        }
+
+        $user->forceFill([
+            'full_name' => $cast['fullName'],
+            'public_first_name' => $cast['publicFirstName'],
+        ])->save();
+
+        return true;
     }
 
     #[ApiErrors(ErrorCode::ValidationFailed, ErrorCode::NotFound)]

@@ -35,7 +35,7 @@ final class HardFilters
     /**
      * @return Builder<ScheduledTrip>
      */
-    public static function apply(Builder $query, User $passenger, SearchCriteria $criteria): Builder
+    public static function apply(Builder $query, User $passenger, SearchCriteria $criteria, bool $includeFull = false): Builder
     {
         return $query
             ->whereHas('commuteOffer', function (Builder $offer) use ($passenger, $criteria): void {
@@ -64,7 +64,8 @@ final class HardFilters
             ->where('departure_at', '>', now())
             // Seats the passenger actually needs, compared column to column so
             // the database does the arithmetic and the index still applies.
-            ->whereRaw('(seats_total - seats_taken) >= ?', [$criteria->seatsNeeded])
+            ->when(! $includeFull, fn (Builder $days) => $days
+                ->whereRaw('(seats_total - seats_taken) >= ?', [$criteria->seatsNeeded]))
             ->whereHas('commuteSchedule', fn (Builder $schedule) => $schedule
                 ->whereRaw('(days_mask & ?) > 0', [$criteria->days->value]));
     }

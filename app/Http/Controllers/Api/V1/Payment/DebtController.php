@@ -14,6 +14,7 @@ use App\Domains\Payment\Models\DebtPayment;
 use App\Domains\Payment\Support\DebtStanding;
 use App\Domains\Payment\Support\SettlementWeek;
 use App\Domains\Shared\Support\ErrorCode;
+use App\Domains\Shared\Support\TestAccounts;
 use App\Http\Controllers\Controller;
 use App\Http\OpenApi\ApiErrors;
 use App\Http\Requests\Payment\AppealFeeRequest;
@@ -73,12 +74,29 @@ final class DebtController extends Controller
     private function instapayPayee(): ?array
     {
         $payee = [
-            'link' => SettingsCatalogue::text('debt.instapay_link'),
-            'handle' => SettingsCatalogue::text('debt.instapay_handle'),
-            'displayName' => SettingsCatalogue::text('debt.instapay_name'),
+            'link' => SettingsCatalogue::text('debt.instapay_link') ?? self::configured('debt.instapay_link'),
+            'handle' => SettingsCatalogue::text('debt.instapay_handle') ?? self::configured('debt.instapay_handle'),
+            'displayName' => SettingsCatalogue::text('debt.instapay_name') ?? self::configured('debt.instapay_name'),
         ];
 
+        if ($payee['link'] === null && $payee['handle'] === null && TestAccounts::apiEnabled()) {
+            $test = (array) config('rafeeq.testing.instapay');
+
+            return [
+                'link' => (string) $test['link'],
+                'handle' => (string) $test['handle'],
+                'displayName' => $payee['displayName'] ?? (string) $test['displayName'],
+            ];
+        }
+
         return $payee['link'] === null && $payee['handle'] === null ? null : $payee;
+    }
+
+    private static function configured(string $key): ?string
+    {
+        $value = config("rafeeq.{$key}");
+
+        return is_string($value) && trim($value) !== '' ? $value : null;
     }
 
     /**

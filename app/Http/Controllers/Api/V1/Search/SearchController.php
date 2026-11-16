@@ -35,7 +35,7 @@ final class SearchController extends Controller
 
         $criteria = $request->criteria();
 
-        $results = $action->execute($request->user(), $criteria);
+        $results = $action->execute($request->user(), $criteria, includeFull: true);
 
         /*
          * Remembered here rather than inside the search engine, and the distinction is not
