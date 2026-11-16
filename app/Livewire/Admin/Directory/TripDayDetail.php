@@ -3,8 +3,11 @@
 namespace App\Livewire\Admin\Directory;
 
 use App\Domains\Admin\Enums\AdminPermission;
+use App\Domains\Admin\Support\AdminMaps;
 use App\Domains\Booking\Models\Booking;
 use App\Domains\Commute\Models\ScheduledTrip;
+use App\Domains\Trip\Models\TripLocation;
+use App\Domains\Trip\Models\TripSession;
 use Livewire\Attributes\Layout;
 use Livewire\Attributes\Locked;
 
@@ -48,6 +51,7 @@ class TripDayDetail extends RecordPage
 
         return view('livewire.admin.directory.trip-day-detail', [
             'trip' => $trip,
+            'trail' => $this->trail($session),
             'bookings' => $bookings,
             'timeline' => $timeline,
             'money' => [
@@ -58,5 +62,28 @@ class TripDayDetail extends RecordPage
             ],
             'mayOpenMembers' => $this->may(AdminPermission::MemberView),
         ])->title(__('admin/records.trip.title'));
+    }
+
+    /**
+     * Y02 · the GPS points the run sent, oldest first, for the map. Only while the maps are on,
+     * and at most 2,000 points: a long run is still drawn, a little coarser.
+     *
+     * @return list<array{0: float, 1: float}>
+     */
+    private function trail(?TripSession $session): array
+    {
+        if ($session === null || ! AdminMaps::enabled()) {
+            return [];
+        }
+
+        $query = TripLocation::query()->where('trip_session_id', $session->id);
+        $total = (clone $query)->count();
+        $step = max(1, (int) ceil($total / 2000));
+
+        return $query->orderBy('recorded_at')->orderBy('id')->get(['lat', 'lng'])
+            ->filter(fn ($point, int $i) => $i % $step === 0)
+            ->map(fn (TripLocation $point) => [(float) $point->lat, (float) $point->lng])
+            ->values()
+            ->all();
     }
 }

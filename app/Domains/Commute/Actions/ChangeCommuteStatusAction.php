@@ -58,15 +58,19 @@ final readonly class ChangeCommuteStatusAction
         private DisplaceConfirmedBookingsAction $displace,
     ) {}
 
-    public function pause(CommuteOffer $offer, CommutePausedReason $reason): CommuteOffer
+    /**
+     * @param  string|null  $message  what staff tell the driver, only with `ByStaff` (C04)
+     */
+    public function pause(CommuteOffer $offer, CommutePausedReason $reason, ?string $message = null): CommuteOffer
     {
         CommuteState::assertCanTransitionTo($offer, CommuteOfferStatus::Paused);
 
-        return DB::transaction(function () use ($offer, $reason): CommuteOffer {
+        return DB::transaction(function () use ($offer, $reason, $message): CommuteOffer {
             $offer->forceFill([
                 'status' => CommuteOfferStatus::Paused->value,
                 'paused_at' => now(),
                 'paused_reason' => $reason->value,
+                'paused_message' => $reason === CommutePausedReason::ByStaff && $message !== null ? trim($message) : null,
             ])->save();
 
             /*
@@ -107,6 +111,7 @@ final readonly class ChangeCommuteStatusAction
                 'status' => CommuteOfferStatus::Published->value,
                 'paused_at' => null,
                 'paused_reason' => null,
+                'paused_message' => null,
             ])->save();
 
             // Catch up on the days that went by while it was paused.

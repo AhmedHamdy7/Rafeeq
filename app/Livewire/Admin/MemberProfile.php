@@ -75,6 +75,9 @@ class MemberProfile extends Component
 
     public string $reason = '';
 
+    /** D20 · what the warning says to her; the internal reason goes in `reason`. */
+    public string $warningText = '';
+
     public string $fullName = '';
 
     public string $gender = '';
@@ -133,8 +136,8 @@ class MemberProfile extends Component
     public function startAction(string $action, string $target = ''): void
     {
         $this->resetValidation();
-        $this->reset('reason', 'amount', 'done', 'messageTitle');
-        $this->action = in_array($action, ['correct', 'write_off', 'credit', 'unlock', 'escalate', 'message', ...self::RECORD_ACTIONS], true) ? $action : '';
+        $this->reset('reason', 'amount', 'done', 'messageTitle', 'warningText');
+        $this->action = in_array($action, ['correct', 'write_off', 'credit', 'unlock', 'escalate', 'message', 'warn', ...self::RECORD_ACTIONS], true) ? $action : '';
         $this->target = in_array($this->action, self::RECORD_ACTIONS, true) ? $target : '';
 
         if ($this->action === 'correct') {
@@ -157,12 +160,13 @@ class MemberProfile extends Component
                 'dateOfBirth' => ['nullable', 'date', 'before:-15 years'],
             ],
             'write_off' => ['side' => ['required', 'string', Rule::enum(DebtSide::class)]],
+            'warn' => ['warningText' => ['required', 'string', 'min:10', 'max:1000']],
             'message' => ['messageTitle' => ['required', 'string', 'min:2', 'max:120'], 'reason' => ['required', 'string', 'min:2', 'max:1000']],
             'credit' => ['side' => ['required', 'string', Rule::enum(DebtSide::class)], 'amount' => ['required', 'numeric', 'min:0.01', 'max:100000']],
             default => [],
         } + $rules;
 
-        $this->validate($rules, attributes: ['reason' => __('admin/actions.reason')]);
+        $this->validate($rules, attributes: ['reason' => __('admin/actions.reason'), 'warningText' => __('admin/actions.warning_text')]);
 
         $user = $this->member();
         $admin = $this->admin();
@@ -190,6 +194,11 @@ class MemberProfile extends Component
 
                 return __('admin/actions.done.message');
             })(),
+            'warn' => (function () use ($members, $admin, $user) {
+                $members->warn($admin, $user, $this->warningText, $this->reason);
+
+                return __('admin/actions.done.warn');
+            })(),
             'escalate' => (function () use ($members, $admin, $user) {
                 $members->escalate($admin, $user, $this->reason);
 
@@ -214,7 +223,7 @@ class MemberProfile extends Component
             default => null,
         };
 
-        $this->reset('action', 'reason', 'amount', 'target', 'messageTitle');
+        $this->reset('action', 'reason', 'amount', 'target', 'messageTitle', 'warningText');
     }
 
     /** @return list<string> the tabs this staff member may open */

@@ -5,6 +5,8 @@
  * lang/ar/admin/{section}.php، ملف لكل قسم، ونفس الملف في lang/en.
  */
 return [
+    'map_failed' => 'الخريطة ماحمّلتش. باقي الصفحة سليم.',
+    'map_legend' => ['route' => 'الطريق المخطط', 'trail' => 'مسار الـ GPS', 'pickup' => 'نقط الركوب', 'dropoff' => 'النزول', 'car' => 'العربية دلوقتي'],
     'brand' => 'رفيق',
     'brand_sub' => 'العمليات',
 

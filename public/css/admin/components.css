@@ -1432,3 +1432,33 @@ a.ad-stat:hover {
     text-decoration: none;
   }
 }
+
+/* Maps (C02, Y02, L01): only drawn while AdminMaps is on. */
+.ad-map {
+  inline-size: 100%;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  background: var(--bg-sunken);
+  overflow: hidden;
+}
+.ad-map--failed {
+  display: grid;
+  place-items: center;
+  color: var(--fg-muted);
+  font-size: var(--fs-small);
+}
+.ad-map-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-block-start: 8px;
+  color: var(--fg-muted);
+  font-size: var(--fs-caption);
+}
+@media print {
+  .ad-map { display: none; }
+}
+.ad-map--inset {
+  inline-size: auto;
+  margin: 12px 16px 0;
+}

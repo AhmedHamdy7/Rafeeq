@@ -121,6 +121,9 @@
                                         <dt>{{ __('admin.trips.riders') }}</dt>
                                         <dd><bdi>{{ $riders->isEmpty() ? '—' : $riders->implode(', ') }}</bdi></dd>
                                     </dl>
+                                    <x-admin.map :height="280" :label="__('admin.trips.last_position')" style="margin-block-start:10px"
+                                        :markers="[...\App\Domains\Admin\Support\AdminMaps::stops($offer->locations), ...($position !== null ? [['lat' => (float) $position->lat, 'lng' => (float) $position->lng, 'title' => $offer->vehicle?->plate_number ?? '', 'kind' => 'car']] : [])]"
+                                        :lines="$offer->route_polyline ? [['encoded' => $offer->route_polyline, 'kind' => 'route']] : []" />
                                 </td>
                             </tr>
                         @endif

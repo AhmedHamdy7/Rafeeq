@@ -23,4 +23,11 @@ enum CommutePausedReason: string
     case DriverSuspended = 'driver_suspended';
 
     case GenderReview = 'gender_review';
+
+    /*
+     * Staff paused it from the dashboard (C04), with a message the driver reads on the commute
+     * (`pausedMessage`). Like the automatic reasons, upcoming seats are cancelled with no fee for
+     * anybody. Only staff resume it: the driver's Resume answers COMMUTE_INVALID_TRANSITION.
+     */
+    case ByStaff = 'by_staff';
 }

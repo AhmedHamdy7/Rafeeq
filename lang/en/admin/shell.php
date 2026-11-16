@@ -5,6 +5,8 @@
  * lang/en/admin/{section}.php, one file per section, mirrored in lang/ar.
  */
 return [
+    'map_failed' => 'The map could not load. Everything else on this page is still correct.',
+    'map_legend' => ['route' => 'Planned route', 'trail' => 'GPS trail', 'pickup' => 'Pickups', 'dropoff' => 'Drop-off', 'car' => 'Car now'],
     'brand' => 'RAFEEQ',
     'brand_sub' => 'Operations',
 
