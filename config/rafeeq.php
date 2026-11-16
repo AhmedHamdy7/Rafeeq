@@ -170,6 +170,12 @@ return [
     'admin_mfa_enabled' => filter_var(env('RAFEEQ_ADMIN_MFA_ENABLED', true), FILTER_VALIDATE_BOOLEAN),
 
     /*
+     * The dashboard's maps (Google Maps JavaScript API). Off by default; also needs
+     * `GOOGLE_MAPS_BROWSER_KEY` — see AdminMaps.
+     */
+    'admin_maps_enabled' => filter_var(env('RAFEEQ_ADMIN_MAPS_ENABLED', false), FILTER_VALIDATE_BOOLEAN),
+
+    /*
      * The debt-only ledger and the weekly settlement (PAY-08 → PAY-19, PAY-34, PAY-45, PAY-46;
      * decisions D-0004 → D-0007, D-0009, D-0017, D-0018). Every number here is an admin setting
      * (ADM-06) — see `DebtSettings`.

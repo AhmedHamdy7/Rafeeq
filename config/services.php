@@ -50,6 +50,9 @@ return [
      */
     'google_maps' => [
         'key' => env('GOOGLE_MAPS_API_KEY'),
+        // The dashboard's maps, in the browser. A separate key, restricted to the Maps
+        // JavaScript API and the dashboard's domain (HTTP referrer). See AdminMaps.
+        'browser_key' => env('GOOGLE_MAPS_BROWSER_KEY'),
     ],
 
     'slack' => [

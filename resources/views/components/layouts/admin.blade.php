@@ -340,5 +340,8 @@
     </div>
 </div>
 @livewireScripts
+@if (\App\Domains\Admin\Support\AdminMaps::enabled())
+    @include('components.admin.map-script')
+@endif
 </body>
 </html>

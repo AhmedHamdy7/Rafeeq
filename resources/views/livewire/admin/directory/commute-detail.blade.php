@@ -82,6 +82,9 @@
             </x-admin.card>
 
             <x-admin.card flush :title="__('admin/records.commute.stops')" bar>
+                <x-admin.map class="ad-map--inset" :height="300" :label="__('admin/records.commute.stops')"
+                    :markers="\App\Domains\Admin\Support\AdminMaps::stops($stops)"
+                    :lines="$commute->route_polyline ? [['encoded' => $commute->route_polyline, 'kind' => 'route']] : []" />
                 <ol class="ad-timeline" style="padding:12px 16px">
                     @foreach ($stops as $stop)
                         <li class="ad-timeline__item">

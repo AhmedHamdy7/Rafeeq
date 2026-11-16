@@ -127,6 +127,7 @@ return [
         'fri' => 'Fri',
     ],
     'trip' => [
+        'map' => 'Map',
         'title' => 'Trip day',
         'run' => 'The run',
         'commute' => 'Commute',

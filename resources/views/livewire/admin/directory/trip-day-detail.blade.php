@@ -38,6 +38,22 @@
                 </ol>
             </x-admin.card>
 
+            @if (\App\Domains\Admin\Support\AdminMaps::enabled())
+                <x-admin.card :title="__('admin/records.trip.map')" bar>
+                    <x-admin.map :height="320" :label="__('admin/records.trip.map')"
+                        :markers="\App\Domains\Admin\Support\AdminMaps::stops($offer?->locations ?? [])"
+                        :lines="array_values(array_filter([
+                            $offer?->route_polyline ? ['encoded' => $offer->route_polyline, 'kind' => 'route'] : null,
+                            $trail !== [] ? ['points' => $trail, 'kind' => 'trail'] : null,
+                        ]))" />
+                    <div class="ad-map-legend">
+                        <span>━ {{ __('admin/shell.map_legend.route') }}</span>
+                        @if ($trail !== [])<span>┅ {{ __('admin/shell.map_legend.trail') }}</span>@endif
+                        <span>A · 1 · B {{ __('admin/shell.map_legend.pickup') }} / {{ __('admin/shell.map_legend.dropoff') }}</span>
+                    </div>
+                </x-admin.card>
+            @endif
+
             <div class="ad-grid ad-grid--2">
                 <x-admin.card flush><x-admin.stat :label="__('admin/records.trip.seats')" :value="$money['seats']" /></x-admin.card>
                 <x-admin.card flush><x-admin.stat money :label="__('admin/records.trip.gross')" :value="$egp($money['gross'])" /></x-admin.card>
