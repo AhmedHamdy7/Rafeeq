@@ -434,6 +434,7 @@ return [
             'table__export' => 'صدّر جدول',
             'booking__cancel' => 'لغى مقعد بالنيابة عن عضو',
             'commute__resume_after_review' => 'شغّل رحلة بعد مراجعة النوع',
+            'vehicle__rereview' => 'أعاد مراجعة عربية (مقاعد، فئة، تكييف)',
             'member__correct' => 'صحّح بيانات عضو',
             'member__escalate' => 'صعّد عضو للأدمن',
             'debt__write_off' => 'أعفى من دين',
