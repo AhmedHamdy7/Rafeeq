@@ -79,6 +79,8 @@ final class AdminActionLog
         // A number every member is subject to. "Who changed the OTP lifetime, and why".
         'settings.update',
         'settings.reset',
+        // A car's seats, tier or AC changed after approval: it changes what passengers pay.
+        'vehicle.rereview',
     ];
 
     /**

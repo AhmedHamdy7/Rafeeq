@@ -14,6 +14,7 @@ return [
         'last_week' => 'Last settlement week',
         'this_month' => 'This month',
         'last_month' => 'Last month',
+        'custom' => 'Custom',
     ],
     'tabs' => [
         'revenue' => 'Revenue',
@@ -39,6 +40,12 @@ return [
         'fees_note' => 'A deterrent, not planned income.',
         'weekly_title' => 'Earned vs received, per settlement week',
         'weekly_sub' => 'Week starting Saturday (Cairo), EGP.',
+        'per_week_title' => 'Per settlement week',
+        'week' => 'Week',
+        'collection_rate' => 'Collected',
+        'fees_by_reason_title' => 'Fees by what they were for',
+        'setting_changes_title' => 'Money settings changed',
+        'no_setting_changes' => 'No price, fee or debt setting changed over these weeks.',
     ],
     'trips' => [
         'gross' => 'Gross booking value',
@@ -101,7 +108,8 @@ return [
             'standard' => 'Standard',
             'comfort' => 'Comfort',
         ],
-        'not_here' => 'Area and car tier change only Trips and seats, Supply and demand, and Quality and safety.',
+        'not_here' => 'Area, car tier and women-only change only Trips and seats, Supply and demand, and Quality and safety.',
+        'women_only' => 'Women-only',
     ],
     'supply' => [
         'published' => 'Published commutes',
@@ -161,4 +169,7 @@ return [
         'suspended' => 'Suspended for debt',
         'owes' => 'Owes',
     ],
+    'custom_from' => 'From',
+    'custom_to' => 'To',
+    'custom_invalid' => 'That range is not valid: the end must be after the start, and at most :days days. Showing this settlement week instead.',
 ];

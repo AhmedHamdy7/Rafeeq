@@ -35,6 +35,29 @@ final readonly class StatisticsPeriod
         };
     }
 
+    /** The longest custom range, so one click cannot ask the database for years of rows. */
+    public const int CUSTOM_MAX_DAYS = 366;
+
+    /**
+     * A range staff pick (Cairo days, both inclusive). Null when either date is not a date,
+     * the range runs backwards, or it is longer than CUSTOM_MAX_DAYS.
+     */
+    public static function custom(string $from, string $to): ?self
+    {
+        try {
+            $start = CarbonImmutable::parse($from, SettlementWeek::TIMEZONE)->startOfDay();
+            $end = CarbonImmutable::parse($to, SettlementWeek::TIMEZONE)->startOfDay()->addDay();
+        } catch (\Throwable) {
+            return null;
+        }
+
+        if ($end->lte($start) || $start->diffInDays($end) > self::CUSTOM_MAX_DAYS) {
+            return null;
+        }
+
+        return new self('custom', $start, $end);
+    }
+
     /** The period just before this one, the same length. */
     public function previous(): self
     {

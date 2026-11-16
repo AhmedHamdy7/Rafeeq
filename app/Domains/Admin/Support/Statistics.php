@@ -2,6 +2,7 @@
 
 namespace App\Domains\Admin\Support;
 
+use App\Domains\Admin\Models\AdminAction;
 use App\Domains\Booking\Enums\BookingStatus;
 use App\Domains\Booking\Models\Booking;
 use App\Domains\Commute\Enums\CommuteOfferStatus;
@@ -195,6 +196,56 @@ final class Statistics
         }
 
         return $out;
+    }
+
+    /**
+     * Fees recorded in the period by what they were for (`reason_code`), largest first — the
+     * deterrent side of the ledger, kept apart from commission (PAY-33).
+     *
+     * @return array<string, int> reason code => piastres
+     */
+    public static function feesByReason(StatisticsPeriod $period): array
+    {
+        return DebtEntry::query()
+            ->toBase()
+            ->whereIn('type', [DebtEntryType::Fee->value, DebtEntryType::FeeLine->value])
+            ->where('created_at', '>=', $period->fromUtc())
+            ->where('created_at', '<', $period->untilUtc())
+            ->selectRaw('reason_code, sum(amount_piastres) as total')
+            ->groupBy('reason_code')
+            ->orderByDesc('total')
+            ->limit(12)
+            ->pluck('total', 'reason_code')
+            ->map(fn ($total) => (int) $total)
+            ->all();
+    }
+
+    /**
+     * The money settings changed over the weeks the revenue chart shows, newest first, so a jump
+     * on the chart has an explanation next to it (T02).
+     *
+     * @return list<array{at: CarbonImmutable, key: string, from: mixed, to: mixed, by: ?string}>
+     */
+    public static function moneySettingChanges(int $weeks = 6): array
+    {
+        $since = CarbonImmutable::parse(SettlementWeek::shift(SettlementWeek::current(), -($weeks - 1)), SettlementWeek::TIMEZONE)->utc();
+
+        return AdminAction::query()
+            ->whereIn('action', ['settings.update', 'settings.reset'])
+            ->where('created_at', '>=', $since)
+            ->where(fn (Builder $query) => $query->where('entity_id', 'like', 'pricing.%')->orWhere('entity_id', 'like', 'fees.%')->orWhere('entity_id', 'like', 'debt.%'))
+            ->with('admin')
+            ->latest('created_at')
+            ->limit(10)
+            ->get()
+            ->map(fn (AdminAction $change) => [
+                'at' => CarbonImmutable::instance($change->created_at),
+                'key' => (string) $change->entity_id,
+                'from' => $change->old_value['value'] ?? null,
+                'to' => $change->new_value['value'] ?? null,
+                'by' => $change->admin?->name,
+            ])
+            ->all();
     }
 
     /** Change from the previous period, in percent, or null when there is nothing to compare with. */

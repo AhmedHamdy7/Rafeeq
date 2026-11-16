@@ -437,6 +437,7 @@ return [
             'table__export' => 'Exported a table',
             'booking__cancel' => 'Cancelled a seat for a member',
             'commute__resume_after_review' => 'Resumed a commute after a gender review',
+            'vehicle__rereview' => 'Re-reviewed a car (seats, tier, AC)',
             'member__correct' => 'Corrected a member’s details',
             'member__escalate' => 'Escalated a member to an Admin',
             'debt__write_off' => 'Wrote off a debt',

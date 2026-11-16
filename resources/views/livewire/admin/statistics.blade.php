@@ -20,10 +20,21 @@
 
     <div class="ad-toolbar">
         <div class="ad-seg" role="group" aria-label="{{ __('admin/stats.period') }}">
-            @foreach (\App\Domains\Admin\Support\StatisticsPeriod::KEYS as $key)
+            @foreach ([...\App\Domains\Admin\Support\StatisticsPeriod::KEYS, 'custom'] as $key)
                 <button type="button" wire:click="pickPeriod('{{ $key }}')" aria-pressed="{{ $period === $key ? 'true' : 'false' }}">{{ __('admin/stats.periods.'.$key) }}</button>
             @endforeach
         </div>
+
+        @if ($period === 'custom')
+            {{-- A range staff pick, Cairo days, both included. --}}
+            <div class="ad-row" style="gap:6px">
+                <label class="ad-sr" for="st-from">{{ __('admin/stats.custom_from') }}</label>
+                <input id="st-from" type="date" class="ad-input" style="inline-size:auto" wire:model.live="from" max="{{ now('Africa/Cairo')->toDateString() }}">
+                <span class="ad-muted">→</span>
+                <label class="ad-sr" for="st-to">{{ __('admin/stats.custom_to') }}</label>
+                <input id="st-to" type="date" class="ad-input" style="inline-size:auto" wire:model.live="to">
+            </div>
+        @endif
 
         {{-- Area and car tier: they narrow the figures that come from commutes. --}}
         <div class="ad-row" style="gap:6px">
@@ -41,6 +52,10 @@
                     <option value="{{ $option->value }}">{{ __('admin/stats.filters.tiers.'.$option->value) }}</option>
                 @endforeach
             </select>
+            <label class="ad-row" style="gap:4px;font-size:12.5px;cursor:pointer" @if (! $filtered) aria-disabled="true" @endif>
+                <input type="checkbox" wire:model.live="womenOnly" @disabled(! $filtered)>
+                {{ __('admin/stats.filters.women_only') }}
+            </label>
             @if ($mayExport && $tab !== 'definitions')
                 <button type="button" class="ad-btn ad-btn--sm" wire:click="export" title="{{ __('admin/tables.export_hint') }}"><x-admin.icon name="download" size="14" />{{ __('admin/tables.export_csv') }}</button>
                 <button type="button" class="ad-btn ad-btn--sm" x-data x-on:click="window.print()"><x-admin.icon name="file" size="14" />{{ __('admin/stats.export_pdf') }}</button>
@@ -48,7 +63,11 @@
         </div>
     </div>
 
-    @if (! $filtered && ($area !== '' || $tier !== '') && $tab !== 'definitions')
+    @if ($customInvalid)
+        <p class="ad-flash ad-flash--error" role="alert"><x-admin.icon name="alert" />{{ __('admin/stats.custom_invalid', ['days' => \App\Domains\Admin\Support\StatisticsPeriod::CUSTOM_MAX_DAYS]) }}</p>
+    @endif
+
+    @if (! $filtered && ($area !== '' || $tier !== '' || $womenOnly) && $tab !== 'definitions')
         <p class="ad-hint" style="margin:0 0 8px">{{ __('admin/stats.filters.not_here') }}</p>
     @endif
 
@@ -103,6 +122,67 @@
                 :format="fn ($v) => number_format($v / 100)"
             />
         </x-admin.card>
+
+        {{-- Per settlement week: earned, received and the share collected. --}}
+        <x-admin.card flush :title="__('admin/stats.revenue.per_week_title')" bar style="margin-block-start:12px">
+            <div class="ad-table-wrap"><table class="ad-table ad-table--cards">
+                <thead><tr>
+                    <th>{{ __('admin/stats.revenue.week') }}</th>
+                    <th class="ad-end">{{ __('admin/stats.revenue.commission') }}</th>
+                    <th class="ad-end">{{ __('admin/stats.revenue.received') }}</th>
+                    <th class="ad-end">{{ __('admin/stats.revenue.collection_rate') }}</th>
+                </tr></thead>
+                <tbody>
+                @foreach (array_reverse($data['weekly']) as $week)
+                    @php
+                        $start = \Carbon\CarbonImmutable::parse($week['week']);
+                    @endphp
+                    <tr>
+                        <td data-label="{{ __('admin/stats.revenue.week') }}" class="ad-num">{{ $start->format('D j M') }} – {{ $start->addDays(6)->format('D j M') }}</td>
+                        <td data-label="{{ __('admin/stats.revenue.commission') }}" class="ad-end ad-num">{{ $egp($week['earned']) }}</td>
+                        <td data-label="{{ __('admin/stats.revenue.received') }}" class="ad-end ad-num">{{ $egp($week['received']) }}</td>
+                        <td data-label="{{ __('admin/stats.revenue.collection_rate') }}" class="ad-end ad-num">{{ $week['earned'] > 0 ? round($week['received'] / $week['earned'] * 100).'%' : '—' }}</td>
+                    </tr>
+                @endforeach
+                </tbody>
+            </table></div>
+        </x-admin.card>
+
+        <div class="ad-grid ad-grid--2" style="margin-block-start:12px;align-items:start">
+            {{-- Fees by what they were for: a deterrent, not planned income (PAY-33). --}}
+            <x-admin.card :title="__('admin/stats.revenue.fees_by_reason_title')" bar>
+                @if ($data['feesByReason'] === [])
+                    <x-admin.state kind="empty" :title="__('admin/stats.no_data')" />
+                @else
+                    <x-admin.bar-chart
+                        :caption="__('admin/stats.revenue.fees_by_reason_title')"
+                        :labels="array_map(fn ($code) => \Illuminate\Support\Facades\Lang::has('admin/stats.fee_reasons.'.$code) ? __('admin/stats.fee_reasons.'.$code) : str_replace('_', ' ', $code), array_keys($data['feesByReason']))"
+                        :series="[['name' => __('admin/stats.revenue.fees'), 'values' => array_values($data['feesByReason'])]]"
+                        :format="fn ($v) => number_format($v / 100)"
+                    />
+                @endif
+            </x-admin.card>
+
+            {{-- Money settings changed over these weeks, so a jump on the chart has its reason next to it. --}}
+            <x-admin.card :title="__('admin/stats.revenue.setting_changes_title')" bar>
+                @if ($data['settingChanges'] === [])
+                    <p class="ad-hint" style="margin:0">{{ __('admin/stats.revenue.no_setting_changes') }}</p>
+                @else
+                    <ol class="ad-timeline">
+                        @foreach ($data['settingChanges'] as $change)
+                            <li class="ad-timeline__item">
+                                <span class="ad-timeline__time ad-num">{{ $change['at']->timezone('Africa/Cairo')->format('j M') }}</span>
+                                <span class="ad-timeline__body">
+                                    <strong>{{ \Illuminate\Support\Facades\Lang::has(\App\Domains\Admin\Support\SettingsCatalogue::labelKey($change['key'])) ? __(\App\Domains\Admin\Support\SettingsCatalogue::labelKey($change['key'])) : $change['key'] }}</strong>
+                                    <span class="ad-num">{{ is_scalar($change['from']) ? $change['from'] : '—' }} → {{ is_scalar($change['to']) ? $change['to'] : '—' }}</span>
+                                    <span class="ad-muted" style="font-size:12px"> · {{ $change['by'] ?? '—' }}</span>
+                                </span>
+                            </li>
+                        @endforeach
+                    </ol>
+                @endif
+            </x-admin.card>
+        </div>
 
     @elseif ($tab === 'trips')
         @php

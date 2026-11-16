@@ -17,6 +17,7 @@
     <x-admin.page-head :title="trim($vehicle->make.' '.$vehicle->model.' '.$vehicle->year)" :sub="$vehicle->plate_number">
         @if ($mayAct)
             @if ($status === 'approved')
+                <button type="button" class="ad-btn" wire:click="start('re_review')">{{ __('admin/records.vehicle.re_review') }}</button>
                 <button type="button" class="ad-btn ad-btn--dangerline" wire:click="start('suspend')">{{ __('admin/records.vehicle.suspend') }}</button>
             @elseif ($byReport)
                 <button type="button" class="ad-btn" wire:click="start('reinstate')">{{ __('admin/records.vehicle.reinstate') }}</button>
@@ -36,7 +37,46 @@
         <x-admin.card :title="__('admin/records.vehicle.'.$acting)" bar style="margin-block-end:12px">
             <form wire:submit="act">
                 <p class="ad-hint" style="margin:0 0 12px">{{ __('admin/records.vehicle.hints.'.$acting) }}</p>
-                @if ($acting === 'approve_renewal')
+                @error('reReview') <p class="ad-flash ad-flash--error"><x-admin.icon name="alert" />{{ $message }}</p> @enderror
+                @if ($acting === 're_review')
+                    <div class="ad-fields-inline">
+                        <div class="ad-field">
+                            <label class="ad-label" for="re-seats">{{ __('admin/records.vehicle.approved_seats') }}</label>
+                            <input id="re-seats" type="number" min="1" max="8" class="ad-input" wire:model.live.debounce.300ms="reSeats" required dir="ltr">
+                            @error('reSeats') <span class="ad-error">{{ $message }}</span> @enderror
+                        </div>
+                        <div class="ad-field">
+                            <label class="ad-label" for="re-tier">{{ __('admin/stats.filters.tier') }}</label>
+                            <select id="re-tier" class="ad-select" wire:model.live="reTier">
+                                @foreach (\App\Domains\Driver\Enums\VehicleTier::cases() as $option)
+                                    <option value="{{ $option->value }}">{{ __('admin/stats.filters.tiers.'.$option->value) }}</option>
+                                @endforeach
+                            </select>
+                        </div>
+                        <div class="ad-field">
+                            <span class="ad-label">{{ __('admin/records.vehicle.ac') }}</span>
+                            <label class="ad-row" style="gap:6px;cursor:pointer"><input type="checkbox" wire:model="reAc"> {{ __('admin/records.vehicle.ac_works') }}</label>
+                        </div>
+                    </div>
+                    @if ($rePreview !== [])
+                        <div class="ad-table-wrap" style="margin-block-end:10px"><table class="ad-table ad-table--dense">
+                            <thead><tr><th>{{ __('admin/records.vehicle.commutes') }}</th><th class="ad-end">{{ __('admin/records.commute.seat_price') }}</th></tr></thead>
+                            <tbody>
+                            @foreach ($rePreview as $line)
+                                <tr>
+                                    <td><bdi>{{ $line['commute']->locations->firstWhere('type', CommuteLocationType::Origin)?->address ?? '—' }}</bdi> → <bdi>{{ $line['commute']->locations->firstWhere('type', CommuteLocationType::Destination)?->address ?? '—' }}</bdi></td>
+                                    <td class="ad-end ad-num">@if ($line['from'] !== $line['to'])<span class="ad-muted"><s>{{ __('admin/home.egp', ['amount' => number_format($line['from'] / 100, 2)]) }}</s></span> → @endif<strong>{{ __('admin/home.egp', ['amount' => number_format($line['to'] / 100, 2)]) }}</strong></td>
+                                </tr>
+                            @endforeach
+                            </tbody>
+                        </table></div>
+                    @endif
+                    <div class="ad-field">
+                        <label class="ad-label" for="veh-reason">{{ __('admin/actions.reason') }}</label>
+                        <textarea id="veh-reason" class="ad-textarea" rows="2" dir="auto" wire:model="reason" required></textarea>
+                        @error('reason') <span class="ad-error">{{ $message }}</span> @enderror
+                    </div>
+                @elseif ($acting === 'approve_renewal')
                     <div class="ad-field">
                         <label class="ad-label" for="veh-date">{{ __('admin/records.vehicle.new_expiry') }}</label>
                         <input id="veh-date" type="date" class="ad-input" wire:model="renewalDate" required>

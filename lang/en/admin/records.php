@@ -10,6 +10,11 @@ return [
     'no' => 'No',
     'disputed' => 'Disputed',
     'vehicle' => [
+        're_review' => 'Re-review the car',
+        'approved_seats' => 'Approved seats',
+        'ac_works' => 'Air conditioning works',
+        'rereview_not_approved' => 'Only an approved car can be re-reviewed.',
+        'rereview_seats_taken' => 'A commute on this car sells :count seats. The driver lowers it first.',
         'car' => 'The car',
         'colour' => 'Colour',
         'ac' => 'Air conditioning',
@@ -26,18 +31,21 @@ return [
             'reinstate' => 'The car can run again. Its commutes stay paused until the driver resumes them.',
             'approve_renewal' => 'Set the date printed on the new registration. A car suspended for an expired registration runs again.',
             'reject_renewal' => 'The driver is asked to upload it again. Say what was wrong.',
+            're_review' => 'Seats, Comfort and AC set the price. Trip days created from now on use the new review; days already created keep their prices (PAY-44).',
         ],
         'confirm' => [
             'suspend' => 'Suspend',
             'reinstate' => 'Reinstate',
             'approve_renewal' => 'Approve',
             'reject_renewal' => 'Refuse',
+            're_review' => 'Save the re-review',
         ],
         'done' => [
             'suspend' => 'Car suspended. Its commutes are paused.',
             'reinstate' => 'Car reinstated.',
             'approve_renewal' => 'Renewal approved.',
             'reject_renewal' => 'Renewal refused. The driver is asked to send it again.',
+            're_review' => 'Car re-reviewed. New trip days use the new price.',
         ],
         'statuses' => [
             'pending' => 'Waiting for review',
