@@ -243,7 +243,7 @@ final class TestingScenarioController extends Controller
         DB::transaction(function () use ($trip, $days): void {
             $this->shift('scheduled_trips', ['departure_at', 'promised_arrival_at', 'departure_local'], fn ($q) => $q->where('id', $trip->id), $days);
             $this->shift('trip_sessions', ['started_at', 'departed_at', 'completed_at'], fn ($q) => $q->where('scheduled_trip_id', $trip->id), $days);
-            $this->shift('bookings', ['cancelled_at'], fn ($q) => $q->where('scheduled_trip_id', $trip->id), $days);
+            $this->shift('bookings', ['cancelled_at', 'rating_prompted_at', 'rating_prompt_dismissed_at'], fn ($q) => $q->where('scheduled_trip_id', $trip->id), $days);
             $this->shift('attendance', ['checked_in_at', 'checked_out_at', 'confirmed_at', 'updated_at'], fn ($q) => $q->whereIn('booking_id', Booking::query()->where('scheduled_trip_id', $trip->id)->select('id')), $days);
         });
 

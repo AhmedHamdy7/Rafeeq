@@ -32,7 +32,7 @@ final class FeeLines
 {
     public static function refresh(string $passengerUserId): void
     {
-        $balance = DebtLedger::balanceOf($passengerUserId, DebtSide::Passenger);
+        $balance = DebtLedger::balanceOf($passengerUserId, DebtSide::Passenger) - DisputedFees::heldPiastres($passengerUserId);
 
         $next = Booking::query()
             ->select('bookings.*')

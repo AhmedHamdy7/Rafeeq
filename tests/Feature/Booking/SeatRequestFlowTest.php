@@ -168,7 +168,7 @@ it('takes a request on a full day as a waiting-list application for the driver t
         ->postJson("/api/v1/driver/seat-requests/{$request['id']}/waitlist")
         ->assertOk()
         ->assertJsonPath('data.status', 'WAITLISTED')
-        ->assertJsonPath('data.waitlistPosition', 1)
+        ->assertJsonPath('data.waitlistPosition', null)
         ->assertJsonPath('data.expiresAt', null);
 });
 

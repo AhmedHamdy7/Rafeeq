@@ -65,7 +65,7 @@ function joinWaitlist(string $phone, string $device, string $commuteId, string $
         ->postJson("/api/v1/driver/seat-requests/{$data['id']}/waitlist")
         ->assertOk()->json('data');
 
-    return ['token' => $token, 'id' => $data['id'], 'position' => $data['waitlistPosition']];
+    return ['token' => $token, 'id' => $data['id'], 'position' => SeatRequest::query()->findOrFail($data['id'])->waitlist_position];
 }
 
 it('gives each waiting passenger their own place in the queue', function () {
@@ -434,8 +434,7 @@ it('lets the driver park a request instead of refusing it', function () {
         ->postJson("/api/v1/driver/seat-requests/{$requestId}/waitlist", ['note' => 'Full this week — first next week.'])
         ->assertOk()
         ->assertJsonPath('data.status', 'WAITLISTED')
-        // A place in the queue, not a null: the position is what the passenger is shown.
-        ->assertJsonPath('data.waitlistPosition', 1)
+        ->assertJsonPath('data.waitlistPosition', null)
         ->assertJsonPath('data.responseNote', 'Full this week — first next week.');
 
     // Parked, not booked.
@@ -505,11 +504,11 @@ it('refuses to park anybody once the queue is full', function () {
 });
 
 /**
- * The cap is the admin's (Feature 03 R-1 follow-up): 10 shipped, `booking.max_waitlist_size` on the
+ * The cap is the admin's (Feature 03 R-1 follow-up): none shipped (owner decision 2026-11-16), `booking.max_waitlist_size` on the
  * settings page — and the page's value wins over the shipped one.
  */
 it('takes the waiting-list cap from the admin setting', function () {
-    expect(config('rafeeq.booking.max_waitlist_size'))->toBe(10);
+    expect(config('rafeeq.booking.max_waitlist_size'))->toBe(0);
 
     PlatformSetting::query()->create([
         'setting_key' => 'booking.max_waitlist_size',

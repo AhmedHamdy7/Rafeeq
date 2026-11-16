@@ -207,8 +207,7 @@ final class SeatRequestResource extends JsonResource
             'paymentType' => $this->payment_type->value,
             // A moment, not a flag: in a dispute what matters is when they agreed.
             'agreedToRulesAt' => $this->agreed_to_rules_at->toIso8601String(),
-            // Set only while waiting for a seat to free up.
-            'waitlistPosition' => $this->waitlist_position,
+            'waitlistPosition' => null,
 
             /*
              * Whether she can ride today, on a waiting-list membership (Feature 03 v5 §8).

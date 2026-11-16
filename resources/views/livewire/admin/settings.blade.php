@@ -52,7 +52,7 @@
                                     <span class="ad-chip ad-chip--warn">{{ __('admin.settings.locked.'.$row['entry']['locked']) }}</span>
                                 @elseif ($editing !== $row['key'])
                                     <button type="button" class="ad-btn ad-btn--sm" wire:click="edit('{{ $row['key'] }}')">{{ __('admin.settings.change') }}</button>
-                                    @if ($row['override'])
+                                    @if ($row['override'] && empty($row['entry']['required']))
                                         <button type="button" class="ad-btn ad-btn--sm ad-btn--quiet" wire:click="edit('{{ $row['key'] }}', 'reset')">{{ __('admin.settings.reset') }}</button>
                                     @endif
                                     <button type="button" class="ad-btn ad-btn--sm ad-btn--quiet" wire:click="$set('historyFor', {{ $historyFor === $row['key'] ? 'null' : "'".$row['key']."'" }})" aria-expanded="{{ $historyFor === $row['key'] ? 'true' : 'false' }}">{{ __('admin.settings.history') }}</button>

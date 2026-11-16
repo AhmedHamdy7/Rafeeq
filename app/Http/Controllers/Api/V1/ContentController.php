@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Api\V1;
 
 use App\Domains\Admin\Models\ContentPage;
+use App\Domains\Admin\Support\SettingsCatalogue;
 use App\Domains\Shared\Exceptions\DomainException;
 use App\Domains\Shared\Support\ErrorCode;
 use App\Http\Controllers\Controller;
@@ -29,10 +30,35 @@ final class ContentController extends Controller
     {
         $page = in_array($key, ContentPage::KEYS, true) ? ContentPage::query()->find($key) : null;
 
-        if ($page === null) {
+        if ($page === null || (trim((string) $page->body_en) === '' && trim((string) $page->body_ar) === '')) {
             throw DomainException::of(ErrorCode::NotFound);
         }
 
         return ApiResponse::success(new ContentPageResource($page));
+    }
+
+    public function supportContact(): JsonResponse
+    {
+        return ApiResponse::success([
+            'email' => self::support('email'),
+            'workingHours' => self::localised('working_hours'),
+            'responseTime' => self::localised('response_time'),
+            'chat' => null,
+        ]);
+    }
+
+    private static function localised(string $name): ?array
+    {
+        $en = self::support("{$name}_en");
+        $ar = self::support("{$name}_ar");
+
+        return $en === null && $ar === null ? null : ['en' => $en, 'ar' => $ar];
+    }
+
+    private static function support(string $name): ?string
+    {
+        $value = SettingsCatalogue::text("support.{$name}") ?? config("rafeeq.support.{$name}");
+
+        return is_string($value) && trim($value) !== '' ? trim($value) : null;
     }
 }

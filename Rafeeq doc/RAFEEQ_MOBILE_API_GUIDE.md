@@ -14,7 +14,7 @@
 >
 > **Base URL:** `{host}/api/v1` · **Auth:** bearer token · **Format:** JSON only.
 
-**Last updated:** 2026-11-15 · **266 endpoints live** · Phases 0–7, 9 and 11 complete · 10, 12 and 13 all but a decision each
+**Last updated:** 2026-11-16 · **269 endpoints live** · Phases 0–7, 9 and 11 complete · 10, 12 and 13 all but a decision each
 
 ---
 
@@ -22,7 +22,7 @@
 
 ### What is ready
 
-**266 endpoints live** and tested, across the 47 designed screens:
+**269 endpoints live** and tested, across the 47 designed screens:
 
 | | Count | Covers |
 |---|---|---|
@@ -855,6 +855,7 @@ fails if this list and the running routes ever disagree in either direction.
 | `GET /commutes/{commute}/reviews` | 4.13 Ratings |
 | `GET /ratings/mine` | 4.13 Ratings |
 | `POST /bookings/{booking}/rating` | 4.13 Ratings |
+| `POST /bookings/{booking}/rating-prompt/dismiss` | 4.11 Home aggregates |
 | `PATCH /ratings/{rating}` | 4.13 Ratings |
 | `GET /incidents` | 4.12 Safety |
 | `POST /incidents` | 4.12 Safety |
@@ -904,6 +905,7 @@ fails if this list and the running routes ever disagree in either direction.
 | `POST /testing/account/suspension/age` | 4.17 Testing (staging only) |
 | `POST /testing/account/ban` | 4.17 Testing (staging only) |
 | `GET /testing/safety/auto-share/messages` | 4.17 Testing (staging only) |
+| `GET /testing/safety/contact-messages` | 4.17 Testing (staging only) |
 | `POST /testing/faults` | 4.17 Testing (staging only) |
 | `GET /testing/faults` | 4.17 Testing (staging only) |
 | `DELETE /testing/faults` | 4.17 Testing (staging only) |
@@ -927,6 +929,7 @@ fails if this list and the running routes ever disagree in either direction.
 | `POST /sos` | 4.12 Safety |
 | `POST /sos/{sos}/cancel` | 4.12 Safety |
 | `GET /content/{key}` | 4.18 Content |
+| `GET /support/contact` | 4.18 Content |
 | `GET /notifications` | 4.14 Notifications |
 | `PATCH /notifications/read` | 4.14 Notifications |
 | `GET /notifications/preferences` | 4.14 Notifications |
@@ -2548,10 +2551,11 @@ list. An unknown status → `422 VALIDATION_FAILED`. Left out: every request, as
 
 #### `PATCH /seat-requests/{seatRequest}` — active, profile complete
 
-Changes the points of **her own pending or waiting-list (`WAITLISTED`)** request. **Request:** `pickup` and `dropoff`, the same
-shape as on `POST /commutes/{commute}/seat-requests`, and optional `introMessage`. Checked the same
-way (tiers, travel order): `422 PICKUP_DETOUR_TOO_LONG` beyond the red tier. On a waiting-list place
-she **keeps her position**. Changing the days is still withdraw and apply again. Refused with
+Changes **her own pending or waiting-list (`WAITLISTED`)** request. **Request:** any of `pickup` + `dropoff` (together, the same
+shape as on `POST /commutes/{commute}/seat-requests`), `requestedDaysMask` (a recurring request only, days the commute runs) and `introMessage`. Points are checked the same
+way (tiers, travel order): `422 PICKUP_DETOUR_TOO_LONG` beyond the red tier. 🔴 **On a waiting-list place any change sends it back to the
+driver**: the answer is `status: PENDING`, `kind: waitlist_application`, she is off the list and her open seat offers close
+(`closedReason: request_changed`) until he accepts it again (owner decision 2026-11-16). Refused with
 `409 SEAT_REQUEST_NOT_PENDING` once it is approved, rejected or withdrawn, and for a request sent during a live ride.
 Answers the updated request.
 
@@ -2638,10 +2642,9 @@ eligible at once** and the **first acceptance wins** — because everybody on th
 driver-approved: she approved them when she waitlisted them. So there is no second decision to wait
 for, and "waitlist fills empty seats automatically" is now accurate.
 
-⚠️ **`waitlistPosition` is an ESTIMATE, not a queue.** Keep showing it — the design's
-"Position 1 of 2 · Est. seat within ~1 week" is deliberate — but **never tell her it entitles her to
-the next seat.** The person at position 2 can and does win; position only decides who is *notified*
-first. Nothing in the allocation path reads it.
+⚠️ **`waitlistPosition` is always `null` to the passenger** (owner decision 2026-11-16): show no position and no
+estimate. The driver's own list still has the order. There is no waiting-list cap unless staff set
+`booking.max_waitlist_size` (0 = no cap); keep handling `BOOKING_WAITLIST_FULL`.
 
 #### The 12-hour schedule lock
 
@@ -4199,6 +4202,8 @@ they explain.
 | `greetingName` | Their public first name. |
 | `verification` | `{level, of, percentage, isComplete}` — the same numbers as the Verification Centre, so the banner cannot disagree with the screen behind it. 🔴 **`null` for a passenger-only account** (PROF-12, F2-8): passengers never verify, so hide the banner. It appears once the account has the driver capability. |
 | `unreadNotifications` | The bell badge: the same number as `GET /notifications` → `meta.unreadCount`, so Home is one request. |
+| `suspension` | `null` unless the account is on hold; then the same object as `GET /auth/me` → `user.suspension`, with **`activeTripId`**. A banned member (`permanent: true`) reaches Home only while a run of hers is under way: `activeTripId` is that trip, the Live trip keeps working, and once it ends Home answers `403 ACCOUNT_SUSPENDED` and the app opens the hold screen. Also on `GET /driver/home`. |
+| `ratingPrompt` | `null`, or `{bookingId, tripId, driverName, tripDate, reason}` (owner decision 2026-11-16). `reason`: `first_ride` (her first finished ride with that driver), `weekly` (at most once a week per driver, counted from the last prompt, dismissal or rating), `unusual` (the driver was more than 5 minutes late at her pickup, she left early, or a dispute or report was opened; asked at once). It stays until she rates that booking or calls **`POST /bookings/{booking}/rating-prompt/dismiss`** → `{dismissed: true}`; a dismissed booking never comes back. |
 | `nextJourney` | The journey the card is about, or **`null`** (F3P-01). Contains the full booking (4.7) plus `originLabel`, `destinationLabel`, `departureAt`, `departureLocal`, `departsInMinutes`, `isToday`, `attendance`, `noShow` (the same object and rules as on the booking, 4.7: `null` unless the driver marked her a no-show), `isTrial`, `driver` (5.1), `vehicle`, and the state fields below. **Which journey**, the first that exists: ① the one **happening now** (run started, or departure passed and the driver has not started — today only); ② one that **ended and she has not seen** — cancelled by the driver, expired, she left for a driver delay, or completed and not yet rated — until you send `POST /bookings/{booking}/seen`, for up to 7 days; ③ the **soonest upcoming confirmed** one — a `PENDING` request is never on the card (TRIP-01); ④ a **completed ride still waiting for her stars**, inside the rating window, only when nothing is upcoming. A ride she cancelled herself is not shown. |
 | `nextJourney.phase` | **The state the card switches on**, decided by the server: `scheduled` (F3P-02/03) · `driver_en_route` (F3P-04, the run has started) · `driver_arrived` (F3P-05, the driver's GPS-checked "I've arrived" for her) · `on_board` (F3P-06, she is checked in and not yet dropped off) · `driver_delayed` (F3P-07: 5 min after departure with the run not started, or the run started but the driver has not arrived 5 min after her pickup time, or the car passed her stop) · `cancelled_by_driver` (F3P-08) · `expired` (F3P-09, the driver never started and the day was closed) · `exited` (F3P-10, she pressed Leave Without Fee) · `completed` (F3P-11). `status` and `trip.status` are unchanged — switch on `phase`, not on them. |
 | `nextJourney.daysMask` | The days she rides — her requested days, or the commute's days. Sat 1 … Fri 64. |
@@ -4331,7 +4336,7 @@ it" and "somebody is calling me" are different situations to be in.
 
 Trusted contacts. **Request:** `name`, `phone`, `relationship`, `autoShareTrips`, `isGuardian`.
 
-**The list** answers `meta: {limit, canAdd, autoShare, autoShareAvailable}` next to `data`: `limit` is
+**The list** answers `meta: {limit, canAdd, autoShare, autoShareContactId, autoShareAvailable}` next to `data`: `limit` is
 the cap (3 today, a setting), `canAdd` is whether another contact fits right now. Show
 "{count} of {limit}" and hide **Add** when `canAdd` is `false`. Somebody who kept 4 or 5 from before
 has `canAdd: false`. `autoShare` is her account switch (below); `autoShareAvailable` says whether the
@@ -4341,9 +4346,9 @@ server can deliver the link at all. Show the switch only when it is `true`.
 |---|---|
 | `id`, `name`, `relationship` | As entered. |
 | `phone` | The **full** number, because this is the owner reading their own list and a masked number cannot be checked for a typo. |
-| `autoShareTrips` | Ignored. Auto-share is one switch for the whole account: `PUT /safety/auto-share`. Send `false` or leave it out. |
+| `autoShareTrips` | `true` on the **one** contact who gets the auto-share link. `PATCH .../{contact} {autoShareTrips: true}` picks her and every other contact of hers becomes `false`. `meta.autoShareContactId` is the same id. |
 | `isGuardian` | Elevated access during an emergency. |
-| `verifiedAt` | Whether the number has been confirmed to actually receive messages. **`null` for everybody today** — confirming it needs an OTP to that number (Phase 12). Say "unconfirmed" rather than implying the contact works. |
+| `verifiedAt` | Always `null`; contacts are not confirmed (owner decision 2026-11-16). Ignore it and show no "unconfirmed" label. |
 
 Rules you will hit:
 
@@ -4359,6 +4364,7 @@ Rules you will hit:
   edit. A trusted contact who is herself would receive her own location and nobody else would.
 - **Changing the number clears `verifiedAt`.** Carrying it across would mean a "verified" badge on a
   number nobody ever reached.
+- **Adding a contact texts them once**: "<Name> added you as a trusted contact on YuGo", in her app language. Nothing else is asked of them. Staging records it: `GET /testing/safety/contact-messages`.
 - **Removal is immediate and unconditional.** Do not add a confirmation dialog: somebody removing a
   contact may be doing it quickly and quietly, and every extra step is a step taken while they may be
   watched.
@@ -4368,17 +4374,20 @@ empty list for a stranger is genuinely empty.
 
 #### `PUT /safety/auto-share`
 
-`{ "enabled": true | false }` → `{ "enabled": true, "available": true }`. The **Share live trip
-automatically** switch, one for the whole account (SAFE-14). Off by default.
+`{ "enabled": true | false, "contactId"?: "01…" }` → `{ "enabled": true, "available": true, "contactId": "01…" | null }`. The **Share live trip
+automatically** switch, one for the whole account (SAFE-14). Off by default. `contactId` picks the one
+contact at the same time. With the switch on and no contact picked, nothing is sent; when she has exactly
+one contact and turns the switch on, that contact is picked.
 
 When it is on and `available` is `true`, each time a trip of hers leaves (the run goes from
 `PREPARING` to `EN_ROUTE`, as passenger or as driver):
 
-- The server makes one live share **per trusted contact**, `source: "AUTO"`, and sends each contact
-  one SMS with the link, in her app language. It ends with the trip like a manual one.
+- The server makes one live share for **the chosen contact only**, `source: "AUTO"`, and sends that
+  contact one SMS with the link, in her app language. It ends with the trip like a manual one.
+- **Switched on, or a contact picked, while her run is already under way**: the link goes out at once
+  for that run (owner decision 2026-11-16).
 - They appear in `GET /safety/live-shares`, so she can stop each one there.
 - Once per trip: nothing is sent again at a later pickup.
-- Unconfirmed numbers (`verifiedAt: null`) **are** sent the link.
 - A message that could not be delivered has its link ended at once.
 - She gets `live_trip_auto_shared` (4.14), or `live_trip_auto_share_failed` when no message went out.
 - Removing a contact ends that contact's links at once.
@@ -5527,6 +5536,12 @@ The auto-share messages for the caller's latest trip that sent any:
 `meta: {tripId, tripSessionId}`. `status` is `SENT` or `FAILED`; `url` is the link the contact got
 (staging only, where messages are recorded rather than sent). Empty `data` when nothing was sent.
 
+#### `GET /testing/safety/contact-messages`
+
+The "added you as a trusted contact" texts the caller's contacts got, oldest first:
+`[{ contactId, channel, to, status, failureReason, text, sentAt }]`. `text` is the message as sent
+(staging only).
+
 #### `POST /testing/faults` · `GET /testing/faults` · `DELETE /testing/faults`
 
 The caller's next requests to a path are slow or fail. Only requests carrying **the caller's own
@@ -5648,7 +5663,18 @@ The texts staff write on the dashboard's **Content** page. Signed in, and readab
 
 - Both languages come back; show the one the app is in. Plain text with line breaks — render it as text, never as HTML.
 - `version` goes up by one on every save. Cache the text and refetch when you open the screen; if `version` changed, the text did.
-- `404 NOT_FOUND` until staff have written that text (and for any other `key`). Show your built-in fallback.
+- `404 NOT_FOUND` until staff have written that text, also while both languages are empty (and for any other `key`). Show your built-in fallback, or hide the button (guidelines).
+
+`GET /support/contact` — the support card, from the dashboard's **Settings → Support contact**. Readable by a banned member.
+
+```json
+{ "email": "sahla.aao007@gmail.com",
+  "workingHours": { "en": "Sun–Thu, 9:00–18:00", "ar": "…" },
+  "responseTime": { "en": "We reply within a day", "ar": "…" },
+  "chat": null }
+```
+
+Any field may be `null` (a language inside may be `null` too): hide that line. `chat` is `null`: there is no member support chat yet.
 
 ## 5. The one shape every feature shares
 
@@ -5750,6 +5776,7 @@ they are for, on the same channel and envelope as `offer.closed`. There is no ch
 | `chat.message` | The receiver, never the sender | `{bookingId, seatRequestId, message}`. One of the two ids is `null`. `message` has the same fields as `GET .../messages`, and `mine` is always `false`. |
 | `chat.read` | The person who wrote the messages | `{bookingId, seatRequestId, readAt}`. Every message you wrote in that thread is now read. |
 | `chat.event` | Both people on the booking | `{bookingId, seatRequestId: null, event: {event, at}}`. A ride moment just happened (`driver_arrived`, `picked_up`, `ride_completed`). The same item that `meta.events` will now return. |
+| `account.banned` | The member just banned | `{caseNumber, permanent: true, activeTripId}`. Open the hold screen now, or when `activeTripId` is not `null`, once that run ends. |
 | `chat.typing` | The other person in the thread | `{bookingId, seatRequestId}`. They are typing. Sent straight to the socket, not through the queue. Show the typing bubble for that thread, and hide it after 5 seconds with no new `chat.typing` or when their `chat.message` arrives. |
 
 ```json
@@ -5835,6 +5862,7 @@ exist, and every live endpoint must be named here.
 
 | Date | Change |
 |---|---|
+| 2026-11-16 | 🧭 **Owner decisions of 2026-11-16.** 🔴 **A banned member finishes the ride under way**: until it ends, Home, the trip, its location, check-in / no-show / drop-off / complete, wait timers, the booking and its chat keep answering; `suspension.activeTripId` on `GET /auth/me`, `GET /home` and `GET /driver/home` (new `suspension` key on both Homes), and `error.fields.activeTripId` on a refusal while riding. Reverb **`account.banned`** on `user.{id}`. New **`ratingPrompt`** on `GET /home` (`first_ride` / `weekly` / `unusual`) and **`POST /bookings/{booking}/rating-prompt/dismiss`**. A disputed no-show fee is left out of her next fee line while the dispute is open: `noShow.feePiastres`, `noShow.dispute.feeOnHold`. 🔴 **`PATCH /seat-requests/{seatRequest}` on `WAITLISTED` sends it back to the driver** as a pending `waitlist_application` (also takes `requestedDaysMask`); `waitlistPosition` is always `null` to the passenger; no waiting-list cap by default. `summary {carried, noShows, outcome}` on a completed trip session. Trusted contacts: one SMS when added; auto-share goes to **one** chosen contact (`autoShareTrips`, `meta.autoShareContactId`, `PUT /safety/auto-share {contactId?}`), and switching it on mid-run sends at once. InstaPay handle and name can't be saved empty. New **`GET /support/contact`**. `GET /content/{key}` is `404` while both languages are empty. Testing: **`GET /testing/safety/contact-messages`**. |
 | 2026-11-16 | 🧪 **Patrol findings of 2026-11-15.** 🔴 **Search keeps full commutes**, with `isFull` on the card and on `otherDays[]`, so a passenger can reach a full commute's waiting list (BOOK-18). `GET /groups/{group}/attendance?tripId=` lists every seated member, `NO_RESPONSE` for those who have not answered. 🔴 **A banned account gets `403 ACCOUNT_SUSPENDED` on `GET /home` and `GET /driver/home` too**, and the refusal carries `permanent`. `POST /trips/{trip}/complete` closes a run from `EN_ROUTE` / `AT_PICKUP` when every passenger is a no-show or already dropped off. `PATCH /seat-requests/{seatRequest}` works on `WAITLISTED` and keeps her position. `instapay` falls back to env values, and to a test payee on staging. Testing: `POST /testing/driver/approve` takes `{approvedSeats?, tier?, hasAc?}` and keeps an approved car's values; `POST /testing/reset` restores a cast account's name. |
 | 2026-11-15 | 🧪 **Testing calls for Patrol (staging only, 4.17).** New `POST/GET/DELETE /testing/faults` and `POST /testing/rate-limit` (slow or failing answers for the caller's own token), `POST /testing/otp/expire` and `/otp/unlock` (no token, test numbers only), `POST /testing/session/revoke`, `POST /testing/reset`, `POST /testing/seed/past-bookings`, `POST /testing/seat-requests/{seatRequest}/age`, `POST /testing/debt/seed`, `POST /testing/credits`, `POST /testing/bookings/{booking}/fields`, `PUT/DELETE /testing/content/{key}`, `POST /testing/trips/{trip}/location/age`, `POST /testing/push`. New codes `TEST_NUMBER_ONLY`, `OTP_NOT_REQUESTED`, `FAULT_LIMIT_REACHED`, `TRIP_IN_PROGRESS`, `REQUEST_STILL_PENDING`, `BOOKING_NOT_CANCELLED`, `DRIVER_NOT_APPROVED`. |
 | 2026-11-15 | 📲 **Auto-share live trip (SAFE-14).** New **`PUT /safety/auto-share`** `{enabled}` → `{enabled, available}`, one switch per account. `GET /safety/emergency-contacts` adds **`meta.autoShare`** and **`meta.autoShareAvailable`**. When it is on, each trusted contact gets an SMS with a live link as her trip leaves; the shares carry **`source: "AUTO"`** in `GET /safety/live-shares` (manual ones `MANUAL`). New inbox and push types **`live_trip_auto_shared`** and **`live_trip_auto_share_failed`**. Removing a contact ends that contact's links. `autoShareTrips` on a contact is ignored. New staging-only **`GET /testing/safety/auto-share/messages`** (4.17). |

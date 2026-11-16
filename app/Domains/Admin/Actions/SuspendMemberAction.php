@@ -15,8 +15,10 @@ use App\Domains\Commute\Models\ScheduledTrip;
 use App\Domains\Driver\Models\DriverProfile;
 use App\Domains\Identity\Enums\AccountStatus;
 use App\Domains\Identity\Enums\SuspensionReason;
+use App\Domains\Identity\Events\AccountBanned;
 use App\Domains\Identity\Models\AccountSuspension;
 use App\Domains\Identity\Models\User;
+use App\Domains\Identity\Support\BannedRide;
 use App\Domains\Notification\Enums\NotificationType;
 use App\Domains\Notification\Support\Notifier;
 use App\Domains\Safety\Models\Incident;
@@ -116,6 +118,10 @@ final readonly class SuspendMemberAction
             );
 
             Notifier::send($member, NotificationType::AccountOnHold, ['case' => $suspension->case_number]);
+
+            if ($permanent) {
+                AccountBanned::dispatch($member->id, $suspension->case_number, BannedRide::activeTrip($member)?->id);
+            }
 
             return $suspension;
         });

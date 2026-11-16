@@ -91,10 +91,10 @@ it('says the feature is not live when no SMS gateway is configured', function ()
         ->assertJsonPath('meta.autoShareAvailable', false);
 });
 
-it('sends each trusted contact one link when the run leaves', function () {
-    $hoda = addTrustedContact($this->paxToken, 'Hoda', '01223334444');
+it('sends the chosen trusted contact one link when the run leaves', function () {
+    addTrustedContact($this->paxToken, 'Hoda', '01223334444');
     $nada = addTrustedContact($this->paxToken, 'Nada', '01005556666');
-    switchAutoShare($this->paxToken, true)->assertOk();
+    test()->withToken($this->paxToken)->putJson('/api/v1/safety/auto-share', ['enabled' => true, 'contactId' => $nada])->assertOk();
 
     underway($this->driverToken, $this->tripId);
 
@@ -103,8 +103,8 @@ it('sends each trusted contact one link when the run leaves', function () {
         ->assertJsonPath('meta.tripId', $this->tripId)
         ->json('data');
 
-    expect($messages)->toHaveCount(2)
-        ->and(array_column($messages, 'contactId'))->toEqualCanonicalizing([$hoda, $nada])
+    expect($messages)->toHaveCount(1)
+        ->and(array_column($messages, 'contactId'))->toBe([$nada])
         ->and(array_column($messages, 'status'))->each->toBe('SENT')
         ->and(array_column($messages, 'channel'))->each->toBe('SMS')
         ->and($messages[0]['url'])->toContain('/s/');
@@ -113,14 +113,14 @@ it('sends each trusted contact one link when the run leaves', function () {
 
     $shares = test()->withToken($this->paxToken)->getJson('/api/v1/safety/live-shares')->assertOk()->json('data');
 
-    expect($shares)->toHaveCount(2)
+    expect($shares)->toHaveCount(1)
         ->and(array_column($shares, 'source'))->each->toBe('AUTO')
         ->and(array_column($shares, 'isActive'))->each->toBeTrue();
 
     $notice = Notification::query()->where('type', 'live_trip_auto_shared')->where('channel', 'in_app')->sole();
 
     expect($notice->data['tripId'])->toBe($this->tripId)
-        ->and(explode(',', $notice->data['sentTo']))->toEqualCanonicalizing([$hoda, $nada]);
+        ->and(explode(',', $notice->data['sentTo']))->toBe([$nada]);
 });
 
 it('shares the driver’s own run when she has it on', function () {
@@ -139,7 +139,7 @@ it('sends nothing when the switch is off', function () {
 
     underway($this->driverToken, $this->tripId);
 
-    expect(AutoShareMessage::query()->count())->toBe(0)
+    expect(AutoShareMessage::query()->where('kind', 'auto_share')->count())->toBe(0)
         ->and(LiveShare::query()->count())->toBe(0);
 });
 
@@ -150,7 +150,7 @@ it('sends nothing when the feature is not live', function () {
 
     underway($this->driverToken, $this->tripId);
 
-    expect(AutoShareMessage::query()->count())->toBe(0);
+    expect(AutoShareMessage::query()->where('kind', 'auto_share')->count())->toBe(0);
 });
 
 it('sends once per trip, however often the run is looked at', function () {
@@ -161,7 +161,7 @@ it('sends once per trip, however often the run is looked at', function () {
 
     SendAutoShareLinks::dispatchSync(TripSession::query()->sole()->id);
 
-    expect(AutoShareMessage::query()->count())->toBe(1);
+    expect(AutoShareMessage::query()->where('kind', 'auto_share')->count())->toBe(1);
 });
 
 it('lets her stop an automatic link', function () {
@@ -252,7 +252,8 @@ it('writes the message in her app language', function () {
 
     underway($this->driverToken, $this->tripId);
 
-    expect($sent)->toHaveCount(1)
-        ->and($sent[0])->toContain('رفيق')
-        ->and($sent[0])->toContain('/s/');
+    expect($sent)->toHaveCount(2)
+        ->and($sent[0])->toContain('YuGo')
+        ->and($sent[1])->toContain('رفيق')
+        ->and($sent[1])->toContain('/s/');
 });

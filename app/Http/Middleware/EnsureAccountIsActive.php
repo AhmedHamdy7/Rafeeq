@@ -4,6 +4,7 @@ namespace App\Http\Middleware;
 
 use App\Domains\Identity\Enums\AccountStatus;
 use App\Domains\Identity\Enums\SecurityEventType;
+use App\Domains\Identity\Support\BannedRide;
 use App\Domains\Identity\Support\SecurityLog;
 use App\Domains\Shared\Exceptions\DomainException;
 use App\Domains\Shared\Support\ErrorCode;
@@ -39,6 +40,12 @@ final class EnsureAccountIsActive
          */
         if ($user !== null && $user->account_status === AccountStatus::Suspended
             && ($user->isBanned() || ! $request->isMethodSafe())) {
+            $activeTrip = $user->isBanned() ? BannedRide::activeTrip($user) : null;
+
+            if ($activeTrip !== null && BannedRide::allows($request, $activeTrip)) {
+                return $next($request);
+            }
+
             SecurityLog::record(SecurityEventType::SuspendedAccessAttempt, $user, metadata: [
                 'path' => $request->path(),
             ]);
@@ -54,6 +61,7 @@ final class EnsureAccountIsActive
                     SuspensionSummary::for($user),
                 ),
                 'permanent' => [$user->isBanned() ? 'true' : 'false'],
+                ...($activeTrip !== null ? ['activeTripId' => [$activeTrip->id]] : []),
             ]);
         }
 

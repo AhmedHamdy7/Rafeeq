@@ -13,6 +13,7 @@ use App\Domains\Rating\Enums\ModerationStatus;
 use App\Domains\Rating\Enums\RatingDirection;
 use App\Domains\Rating\Enums\RatingKind;
 use App\Domains\Rating\Models\Rating;
+use App\Domains\Rating\Support\RatingPrompts;
 use App\Domains\Shared\Exceptions\DomainException;
 use App\Domains\Shared\Support\ErrorCode;
 use App\Http\Controllers\Controller;
@@ -106,6 +107,20 @@ final class RatingController extends Controller
         }
 
         return ApiResponse::success($rows);
+    }
+
+    #[ApiErrors(ErrorCode::NotFound)]
+    public function dismissPrompt(Request $request, string $booking, RatingPrompts $prompts): JsonResponse
+    {
+        $target = Booking::query()
+            ->whereKey($booking)
+            ->where('passenger_user_id', $request->user()->id)
+            ->first()
+            ?? throw DomainException::of(ErrorCode::NotFound);
+
+        $prompts->dismiss($target);
+
+        return ApiResponse::success(['dismissed' => true]);
     }
 
     /**

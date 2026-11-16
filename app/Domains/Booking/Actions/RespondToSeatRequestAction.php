@@ -124,7 +124,7 @@ final readonly class RespondToSeatRequestAction
         // An admin setting (Feature 03 R-1 follow-up): 10 unless operations decide otherwise.
         $cap = (int) PlatformSetting::value('booking.max_waitlist_size', config('rafeeq.booking.max_waitlist_size'));
 
-        if ($waiting->clone()->count() >= $cap) {
+        if ($cap > 0 && $waiting->clone()->count() >= $cap) {
             throw DomainException::of(ErrorCode::WaitlistFull);
         }
 

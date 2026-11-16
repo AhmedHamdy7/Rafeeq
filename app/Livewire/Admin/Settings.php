@@ -77,7 +77,11 @@ class Settings extends Component
         if ($this->mode === 'update') {
             $rules['value'] = $text === null
                 ? ['required', 'integer', 'min:'.$entry['min'], 'max:'.$entry['max']]
-                : array_values(array_filter(['required', 'string', 'max:'.$text['max'], ($text['format'] ?? null) === 'url' ? 'url:https' : null]));
+                : array_values(array_filter(['required', 'string', 'max:'.$text['max'], match ($text['format'] ?? null) {
+                    'url' => 'url:https',
+                    'email' => 'email',
+                    default => null,
+                }]));
         }
 
         $this->validate($rules, attributes: [

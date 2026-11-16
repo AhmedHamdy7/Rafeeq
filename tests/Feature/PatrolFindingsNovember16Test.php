@@ -161,7 +161,7 @@ it('B7: still refuses to complete while somebody is waiting to be collected', fu
         ->assertJsonPath('error.code', 'TRIP_INVALID_TRANSITION');
 });
 
-it('B8: edits the pickup on a waiting-list place and keeps her on the list', function () {
+it('B8: edits the pickup on a waiting-list place and sends it back to the driver', function () {
     $riderToken = verifiedPassenger('01112223344', device: 'pax-1');
     approveSeat($this->driverToken, requestSeat($riderToken, $this->commuteId, ['scheduledTripId' => $this->tripId])->assertStatus(201)->json('data.id'));
     ScheduledTrip::query()->whereKey($this->tripId)->update(['seats_taken' => DB::raw('seats_total')]);
@@ -175,7 +175,7 @@ it('B8: edits the pickup on a waiting-list place and keeps her on the list', fun
     nov16As($waiterToken)->patchJson("/api/v1/seat-requests/{$requestId}", [
         'pickup' => ['lat' => 30.0630, 'lng' => 31.3500, 'label' => 'Rehab gate 2'],
         'dropoff' => ['lat' => 30.0684, 'lng' => 31.1015, 'label' => 'Mehwar, Sheikh Zayed'],
-    ])->assertOk()->assertJsonPath('data.status', 'WAITLISTED');
+    ])->assertOk()->assertJsonPath('data.status', 'PENDING')->assertJsonPath('data.kind', 'waitlist_application');
 
     expect(round((float) SeatRequest::query()->findOrFail($requestId)->requested_pickup_lat, 4))->toBe(30.063);
 });

@@ -10,6 +10,11 @@ final class AutoShare
             return false;
         }
 
+        return self::messengerReady();
+    }
+
+    public static function messengerReady(): bool
+    {
         return match (self::driver()) {
             'http' => HttpSmsContactMessenger::configured(),
             'log' => ! app()->isProduction(),

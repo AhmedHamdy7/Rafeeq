@@ -11,6 +11,7 @@ use App\Domains\Booking\Models\Booking;
 use App\Domains\Booking\Support\BookingEventLog;
 use App\Domains\Notification\Enums\NotificationType;
 use App\Domains\Notification\Support\Notifier;
+use App\Domains\Payment\Support\FeeLines;
 use App\Domains\Reliability\Actions\AppealReliabilityEventAction;
 use App\Domains\Reliability\Enums\ReliabilityEventKind;
 use App\Domains\Reliability\Models\ReliabilityEvent;
@@ -61,6 +62,8 @@ final readonly class ResolveAttendanceDisputeAction
             if ($resolution !== DisputeResolution::Upheld) {
                 $this->removeNoShow($booking, $admin, $reason);
             }
+
+            FeeLines::refresh($booking->passenger_user_id);
 
             BookingEventLog::record(
                 $booking,

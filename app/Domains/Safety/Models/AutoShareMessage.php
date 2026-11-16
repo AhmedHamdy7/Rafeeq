@@ -14,10 +14,10 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 #[Fillable([
-    'user_id', 'trip_session_id', 'live_share_id', 'emergency_contact_id', 'channel',
+    'kind', 'body', 'user_id', 'trip_session_id', 'live_share_id', 'emergency_contact_id', 'channel',
     'to_e164', 'status', 'failure_reason', 'preview_url', 'sent_at',
 ])]
-#[Hidden(['to_e164', 'preview_url'])]
+#[Hidden(['to_e164', 'preview_url', 'body'])]
 class AutoShareMessage extends Model
 {
     /** @use HasFactory<AutoShareMessageFactory> */

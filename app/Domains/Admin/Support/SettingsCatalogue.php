@@ -79,7 +79,7 @@ final class SettingsCatalogue
 
         // ---- Booking and the waiting list (Feature 03 R-1, BOOK-18) --------
         // How many people may wait on one commute; past it `BOOKING_WAITLIST_FULL`.
-        'booking.max_waitlist_size' => ['group' => 'booking', 'min' => 1, 'max' => 50, 'unit' => 'passengers'],
+        'booking.max_waitlist_size' => ['group' => 'booking', 'min' => 0, 'max' => 50, 'unit' => 'passengers'],
 
         // ---- The trip itself (Chapter 8) ---------------------------------
         'trip.start_window_minutes' => ['group' => 'trip', 'min' => 15, 'max' => 240, 'unit' => 'minutes'],
@@ -181,15 +181,20 @@ final class SettingsCatalogue
         'admin.suspension_appeal_hours' => ['group' => 'admin', 'min' => 1, 'max' => 336, 'unit' => 'hours'],
     ];
 
-    public const array GROUPS = ['auth', 'profile', 'commute', 'booking', 'debt', 'fees', 'trip', 'rating', 'reliability', 'safety', 'chat', 'admin'];
+    public const array GROUPS = ['auth', 'profile', 'commute', 'booking', 'debt', 'fees', 'trip', 'rating', 'reliability', 'safety', 'chat', 'support', 'admin'];
 
     /**
      * @return array{group: string, min: int, max: int, unit: string, locked?: string}|null
      */
     public const array TEXT_ENTRIES = [
         'debt.instapay_link' => ['group' => 'debt', 'max' => 500, 'format' => 'url'],
-        'debt.instapay_handle' => ['group' => 'debt', 'max' => 100],
-        'debt.instapay_name' => ['group' => 'debt', 'max' => 100],
+        'debt.instapay_handle' => ['group' => 'debt', 'max' => 100, 'required' => true],
+        'debt.instapay_name' => ['group' => 'debt', 'max' => 100, 'required' => true],
+        'support.email' => ['group' => 'support', 'max' => 191, 'format' => 'email'],
+        'support.working_hours_en' => ['group' => 'support', 'max' => 200],
+        'support.working_hours_ar' => ['group' => 'support', 'max' => 200],
+        'support.response_time_en' => ['group' => 'support', 'max' => 200],
+        'support.response_time_ar' => ['group' => 'support', 'max' => 200],
     ];
 
     public static function entry(string $key): ?array

@@ -202,9 +202,9 @@ it('records that she cannot ride today, and says so on her membership', function
         ->patchJson("/api/v1/seat-requests/{$this->waiterRequestId}/availability", ['available' => false])
         ->assertOk()
         ->assertJsonPath('data.availableToday', false)
-        // Untouched by the toggle: she is still a member, still in position 1.
-        ->assertJsonPath('data.status', 'WAITLISTED')
-        ->assertJsonPath('data.waitlistPosition', 1);
+        ->assertJsonPath('data.status', 'WAITLISTED');
+
+    expect(SeatRequest::query()->findOrFail($this->waiterRequestId)->waitlist_position)->toBe(1);
 });
 
 it('is reversible as often as she likes', function () {

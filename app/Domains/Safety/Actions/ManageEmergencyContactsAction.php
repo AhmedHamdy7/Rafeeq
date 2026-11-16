@@ -6,6 +6,7 @@ use App\Domains\Identity\Models\User;
 use App\Domains\Safety\Models\EmergencyContact;
 use App\Domains\Safety\Models\LiveShare;
 use App\Domains\Safety\Support\SafetySettings;
+use App\Domains\Safety\Support\TrustedContactNotice;
 use App\Domains\Shared\Exceptions\DomainException;
 use App\Domains\Shared\Support\ErrorCode;
 use App\Domains\Shared\ValueObjects\PhoneNumber;
@@ -33,6 +34,8 @@ use Illuminate\Support\Facades\DB;
  */
 final readonly class ManageEmergencyContactsAction
 {
+    public function __construct(private AutoShareTripAction $autoShare) {}
+
     /**
      * @param  array<string, mixed>  $attributes
      */
@@ -51,11 +54,17 @@ final readonly class ManageEmergencyContactsAction
             'name' => $attributes['name'],
             'phone_e164' => $phone->e164,
             'relationship' => $attributes['relationship'] ?? null,
-            'auto_share_trips' => $attributes['autoShareTrips'] ?? false,
+            'auto_share_trips' => false,
             'is_guardian' => $attributes['isGuardian'] ?? false,
         ]);
 
         $contact->save();
+
+        TrustedContactNotice::send($user, $contact);
+
+        if (($attributes['autoShareTrips'] ?? false) === true) {
+            $this->choose($contact);
+        }
 
         return $contact;
     }
@@ -67,8 +76,7 @@ final readonly class ManageEmergencyContactsAction
     {
         $changes = [];
 
-        foreach (['name' => 'name', 'relationship' => 'relationship',
-            'autoShareTrips' => 'auto_share_trips', 'isGuardian' => 'is_guardian'] as $input => $column) {
+        foreach (['name' => 'name', 'relationship' => 'relationship', 'isGuardian' => 'is_guardian'] as $input => $column) {
             if (array_key_exists($input, $attributes)) {
                 $changes[$column] = $attributes[$input];
             }
@@ -93,7 +101,13 @@ final readonly class ManageEmergencyContactsAction
 
         $contact->forceFill($changes)->save();
 
-        return $contact;
+        if (array_key_exists('autoShareTrips', $attributes)) {
+            $attributes['autoShareTrips']
+                ? $this->choose($contact)
+                : $contact->forceFill(['auto_share_trips' => false])->save();
+        }
+
+        return $contact->refresh();
     }
 
     /**
@@ -112,11 +126,47 @@ final readonly class ManageEmergencyContactsAction
         });
     }
 
-    public function setAutoShare(User $user, bool $enabled): User
+    public function setAutoShare(User $user, bool $enabled, ?string $contactId = null): User
     {
         $user->forceFill(['auto_share_trips' => $enabled])->save();
 
+        if ($contactId !== null) {
+            $contact = EmergencyContact::query()->where('user_id', $user->id)->whereKey($contactId)->first()
+                ?? throw DomainException::of(ErrorCode::NotFound);
+
+            $this->choose($contact, share: false);
+        } elseif ($enabled && AutoShareTripAction::chosenContact($user) === null) {
+            $only = EmergencyContact::query()->where('user_id', $user->id)->get();
+
+            if ($only->count() === 1) {
+                $this->choose($only->first(), share: false);
+            }
+        }
+
+        if ($enabled) {
+            $this->autoShare->forCurrentRun($user);
+        }
+
         return $user;
+    }
+
+    public function choose(EmergencyContact $contact, bool $share = true): EmergencyContact
+    {
+        DB::transaction(function () use ($contact): void {
+            EmergencyContact::query()
+                ->where('user_id', $contact->user_id)
+                ->whereKeyNot($contact->id)
+                ->where('auto_share_trips', true)
+                ->update(['auto_share_trips' => false]);
+
+            $contact->forceFill(['auto_share_trips' => true])->save();
+        });
+
+        if ($share && $contact->user->auto_share_trips) {
+            $this->autoShare->forCurrentRun($contact->user);
+        }
+
+        return $contact;
     }
 
     private function assertNotOwnNumber(User $user, string $e164): void

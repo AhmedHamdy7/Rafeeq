@@ -129,6 +129,7 @@ it('generates a document describing every /v1 route', function () {
         'GET /v1/account/stats',
         // Texts staff write on the dashboard's Content page (help, support, terms, guidelines).
         'GET /v1/content/{key}',
+        'GET /v1/support/contact',
 
         /*
          * Her own reliability standing and every event behind it (Feature 03 v5). No parameter for
@@ -265,6 +266,7 @@ it('generates a document describing every /v1 route', function () {
         'POST /v1/testing/account/suspension/age',
         'POST /v1/testing/account/ban',
         'GET /v1/testing/safety/auto-share/messages',
+        'GET /v1/testing/safety/contact-messages',
         'POST /v1/testing/bookings/{booking}/dispute/decide',
         'POST /v1/testing/incidents/{incident}/decide',
         'POST /v1/testing/incidents/{incident}/age',
@@ -294,6 +296,7 @@ it('generates a document describing every /v1 route', function () {
         'GET /v1/ratings/pending',
         'GET /v1/ratings/mine',
         'POST /v1/bookings/{booking}/rating',
+        'POST /v1/bookings/{booking}/rating-prompt/dismiss',
         'PATCH /v1/ratings/{rating}',
         // Reviews: keyed on the commute, never on a user id — no payload in this API returns one.
         'GET /v1/commutes/{commute}/reviews',

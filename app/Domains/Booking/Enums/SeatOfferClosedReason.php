@@ -10,6 +10,7 @@ enum SeatOfferClosedReason: string
     case Declined = 'declined';
     case WithdrawnByDriver = 'withdrawn_by_driver';
     case RequestWithdrawn = 'request_withdrawn';
+    case RequestChanged = 'request_changed';
     case DayCancelled = 'day_cancelled';
     case CommutePaused = 'commute_paused';
     case CommuteDeleted = 'commute_deleted';

@@ -72,8 +72,10 @@ final readonly class UpdatePlatformSettingAction
      */
     public function updateText(string $key, string $value, AdminUser $admin, string $reason): void
     {
-        if (SettingsCatalogue::textEntry($key) === null) {
-            throw DomainException::of(ErrorCode::NotFound);
+        $entry = SettingsCatalogue::textEntry($key) ?? throw DomainException::of(ErrorCode::NotFound);
+
+        if (($entry['required'] ?? false) && trim($value) === '') {
+            throw DomainException::of(ErrorCode::ValidationFailed, fields: ['value' => [__('admin.settings.required_text')]]);
         }
 
         DB::transaction(function () use ($key, $value, $admin, $reason): void {
@@ -95,6 +97,9 @@ final readonly class UpdatePlatformSettingAction
 
     public function reset(string $key, AdminUser $admin, string $reason): void
     {
+        if ((SettingsCatalogue::textEntry($key)['required'] ?? false) === true) {
+            throw DomainException::of(ErrorCode::ValidationFailed, fields: ['value' => [__('admin.settings.required_text')]]);
+        }
         if (SettingsCatalogue::textEntry($key) === null) {
             $this->editable($key);
         }

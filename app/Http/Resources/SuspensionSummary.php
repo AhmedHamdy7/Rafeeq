@@ -5,6 +5,7 @@ namespace App\Http\Resources;
 use App\Domains\Identity\Actions\AppealSuspensionAction;
 use App\Domains\Identity\Models\SuspensionAppeal;
 use App\Domains\Identity\Models\User;
+use App\Domains\Identity\Support\BannedRide;
 
 /**
  * What a suspended member is told about their own hold (screen 35), in one shape for both
@@ -39,7 +40,7 @@ final class SuspensionSummary
      * show the banner with Appeal. `permanent: true` is the only case behind
      * `RESTRICTED_ACCOUNT`.
      *
-     * @return array{caseNumber: string|null, reasonCode: string|null, suspendedAt: string|null, reviewDueAt: string|null, permanent: bool, appeal: array{canAppeal: bool, appealBy: string|null, needsNewEvidence: bool, appeals: list<array{id: string, attempt: int, status: string, createdAt: string, resolvedAt: string|null}>}}
+     * @return array{caseNumber: string|null, reasonCode: string|null, suspendedAt: string|null, reviewDueAt: string|null, permanent: bool, activeTripId: string|null, appeal: array{canAppeal: bool, appealBy: string|null, needsNewEvidence: bool, appeals: list<array{id: string, attempt: int, status: string, createdAt: string, resolvedAt: string|null}>}}
      */
     public static function forMember(User $user): array
     {
@@ -50,6 +51,7 @@ final class SuspensionSummary
         return [
             ...self::for($user),
             'permanent' => $suspension?->is_permanent === true,
+            'activeTripId' => BannedRide::activeTripId($user),
             'appeal' => [
                 // Whether `POST /account/suspension/appeal` would accept one right now.
                 'canAppeal' => $closesAt !== null,

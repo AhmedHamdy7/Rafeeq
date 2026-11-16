@@ -2,6 +2,7 @@
 
 namespace App\Domains\Trip\Support;
 
+use App\Domains\Payment\Support\DisputedFees;
 use App\Domains\Trip\Enums\AttendanceStatus;
 use App\Domains\Trip\Models\Attendance;
 use Carbon\CarbonInterface;
@@ -35,11 +36,17 @@ final class AttendanceDisputes
             return null;
         }
 
+        $attendance->loadMissing('booking');
+        $fee = $attendance->booking === null ? 0 : DisputedFees::feeFor($attendance->booking_id, $attendance->booking->passenger_user_id);
+        $open = $attendance->disputed_at !== null && $attendance->dispute_resolution === null;
+
         return [
+            'feePiastres' => $fee,
             'confirmedAt' => $attendance->confirmed_at?->toIso8601String(),
             'disputableUntil' => self::disputableUntil($attendance)?->toIso8601String(),
             'dispute' => $attendance->disputed_at === null ? null : [
                 'status' => $attendance->dispute_resolution === null ? 'OPEN' : 'DECIDED',
+                'feeOnHold' => $open && $fee > 0,
                 'reason' => $attendance->dispute_reason,
                 'disputedAt' => $attendance->disputed_at->toIso8601String(),
                 'resolution' => $attendance->dispute_resolution?->value,

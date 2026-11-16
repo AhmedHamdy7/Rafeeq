@@ -133,6 +133,7 @@ Route::prefix('v1')->group(function (): void {
         Route::post('account/suspension/age', [TestingSuspensionController::class, 'age']);
         Route::post('account/ban', [TestingSuspensionController::class, 'ban']);
         Route::get('safety/auto-share/messages', [TestingSafetyController::class, 'autoShareMessages']);
+        Route::get('safety/contact-messages', [TestingSafetyController::class, 'contactMessages']);
         Route::post('faults', [TestingToolsController::class, 'addFault']);
         Route::get('faults', [TestingToolsController::class, 'listFaults']);
         Route::delete('faults', [TestingToolsController::class, 'clearFaults']);
@@ -494,6 +495,7 @@ Route::prefix('v1')->group(function (): void {
          */
         // Content staff write on the dashboard (help, support contact, terms, guidelines).
         Route::get('content/{key}', [ContentController::class, 'show']);
+        Route::get('support/contact', [ContentController::class, 'supportContact']);
 
         /*
          * Notifications (Phase 12, Chapter 11). Signed-in tier, not active: a member whose
@@ -507,6 +509,7 @@ Route::prefix('v1')->group(function (): void {
         Route::get('ratings/pending', [RatingController::class, 'pending']);
         Route::get('ratings/mine', [RatingController::class, 'mine']);
         Route::post('bookings/{booking}/rating', [RatingController::class, 'store']);
+        Route::post('bookings/{booking}/rating-prompt/dismiss', [RatingController::class, 'dismissPrompt']);
         Route::patch('ratings/{rating}', [RatingController::class, 'update']);
 
         /*

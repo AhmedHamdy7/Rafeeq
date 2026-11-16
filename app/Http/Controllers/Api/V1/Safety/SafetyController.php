@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Api\V1\Safety;
 
 use App\Domains\Safety\Actions\AppealIncidentAction;
 use App\Domains\Safety\Actions\AttachIncidentEvidenceAction;
+use App\Domains\Safety\Actions\AutoShareTripAction;
 use App\Domains\Safety\Actions\BlockUserAction;
 use App\Domains\Safety\Actions\ManageEmergencyContactsAction;
 use App\Domains\Safety\Actions\ReportIncidentAction;
@@ -113,18 +114,20 @@ final class SafetyController extends Controller
             'limit' => $limit,
             'canAdd' => $contacts->count() < $limit,
             'autoShare' => (bool) $request->user()->auto_share_trips,
+            'autoShareContactId' => $contacts->firstWhere('auto_share_trips', true)?->id,
             'autoShareAvailable' => AutoShare::available(),
         ]);
     }
 
-    #[ApiErrors(ErrorCode::ValidationFailed)]
+    #[ApiErrors(ErrorCode::ValidationFailed, ErrorCode::NotFound)]
     public function setAutoShare(SetAutoShareRequest $request, ManageEmergencyContactsAction $action): JsonResponse
     {
-        $user = $action->setAutoShare($request->user(), $request->boolean('enabled'));
+        $user = $action->setAutoShare($request->user(), $request->boolean('enabled'), $request->validated('contactId'));
 
         return ApiResponse::success([
             'enabled' => (bool) $user->auto_share_trips,
             'available' => AutoShare::available(),
+            'contactId' => AutoShareTripAction::chosenContact($user)?->id,
         ]);
     }
 

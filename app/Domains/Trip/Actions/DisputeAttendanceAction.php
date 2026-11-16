@@ -7,6 +7,7 @@ use App\Domains\Booking\Enums\BookingEventType;
 use App\Domains\Booking\Enums\PaymentStatus;
 use App\Domains\Booking\Models\Booking;
 use App\Domains\Booking\Support\BookingEventLog;
+use App\Domains\Payment\Support\FeeLines;
 use App\Domains\Shared\Exceptions\DomainException;
 use App\Domains\Shared\Support\ErrorCode;
 use App\Domains\Trip\Models\Attendance;
@@ -81,6 +82,8 @@ final readonly class DisputeAttendanceAction
              * was for, and the dispute must be visible on it until they do.
              */
             $booking->forceFill(['payment_status' => PaymentStatus::Disputed->value])->save();
+
+            FeeLines::refresh($booking->passenger_user_id);
 
             BookingEventLog::record(
                 $booking,

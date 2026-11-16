@@ -33,6 +33,7 @@ use App\Domains\Matching\Support\SearchCriteria;
 use App\Domains\Notification\Enums\NotificationChannel;
 use App\Domains\Notification\Models\Notification;
 use App\Domains\Rating\Actions\SubmitRatingAction;
+use App\Domains\Rating\Support\RatingPrompts;
 use App\Domains\Shared\Exceptions\DomainException;
 use App\Domains\Trip\Actions\StartTripAction;
 use App\Domains\Verification\Support\VerificationCentre;
@@ -46,6 +47,7 @@ use App\Http\Resources\LocalisedLabel;
 use App\Http\Resources\MatchNotificationResource;
 use App\Http\Resources\PersonSummary;
 use App\Http\Resources\SeatRequestResource;
+use App\Http\Resources\SuspensionSummary;
 use App\Http\Responses\ApiResponse;
 use Carbon\CarbonImmutable;
 use Illuminate\Database\Eloquent\Builder;
@@ -126,6 +128,7 @@ final class HomeController extends Controller
         Request $request,
         SubmitRatingAction $ratings,
         SuggestAlternativesAction $alternatives,
+        RatingPrompts $prompts,
     ): JsonResponse {
         $user = $request->user();
 
@@ -152,6 +155,8 @@ final class HomeController extends Controller
              */
             'unreadNotifications' => $this->unreadNotifications($user->id),
 
+            'suspension' => $this->suspension($user),
+            'ratingPrompt' => $prompts->for($user),
             'nextJourney' => $this->nextJourney($request, $ratings, $alternatives),
             'demandAlert' => $this->demandAlert($user->id),
             'topMatches' => $this->topMatches($request),
@@ -180,6 +185,7 @@ final class HomeController extends Controller
         if ($profile === null) {
             return ApiResponse::success([
                 'greetingName' => $request->user()->public_first_name,
+                'suspension' => $this->suspension($request->user()),
                 'verification' => VerificationCentre::appliesTo($request->user()) ? DriverChecklist::summary($request->user()) : null,
                 'expiredRun' => null,
                 'nextRun' => null,
@@ -198,6 +204,7 @@ final class HomeController extends Controller
 
         return ApiResponse::success([
             'greetingName' => $request->user()->public_first_name,
+            'suspension' => $this->suspension($request->user()),
             'verification' => DriverChecklist::summary($request->user()),
             'expiredRun' => $this->expiredRun($profile),
             'nextRun' => $nextRun = $this->nextRun($request, $profile, $departures, $start, $waiting),
@@ -236,6 +243,11 @@ final class HomeController extends Controller
      *
      * @return array{level: int, of: int, percentage: int, isComplete: bool}|null
      */
+    private function suspension(User $user): ?array
+    {
+        return $user->account_status === AccountStatus::Suspended ? SuspensionSummary::forMember($user) : null;
+    }
+
     private function verificationBanner(User $user): ?array
     {
         if (! VerificationCentre::appliesTo($user)) {

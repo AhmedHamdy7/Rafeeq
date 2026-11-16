@@ -307,10 +307,7 @@ return [
          */
         'during_ride_request_expiry_minutes' => 3,
 
-        // How many people may wait for a seat on one commute. Beyond this the
-        // queue is long enough that joining it is a false hope. The shipped
-        // default; operations change it from the settings page.
-        'max_waitlist_size' => 10,
+        'max_waitlist_size' => 0,
 
         /*
          * Cancellation fees are NOT implemented: the policy is open question #7
@@ -1390,6 +1387,14 @@ return [
          * FIRST made, never from the last time she re-ran it.
          */
         'search_history_days' => 90,
+    ],
+
+    'support' => [
+        'email' => env('RAFEEQ_SUPPORT_EMAIL', 'sahla.aao007@gmail.com'),
+        'working_hours_en' => null,
+        'working_hours_ar' => null,
+        'response_time_en' => null,
+        'response_time_ar' => null,
     ],
 
     'testing' => [

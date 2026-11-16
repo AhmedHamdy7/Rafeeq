@@ -10,6 +10,7 @@ final class SetAutoShareRequest extends FormRequest
     {
         return [
             'enabled' => ['required', 'boolean'],
+            'contactId' => ['sometimes', 'nullable', 'string', 'size:26'],
         ];
     }
 }

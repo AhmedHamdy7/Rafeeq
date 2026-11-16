@@ -2,6 +2,9 @@
 
 namespace App\Http\Resources;
 
+use App\Domains\Booking\Enums\BookingStatus;
+use App\Domains\Booking\Models\Booking;
+use App\Domains\Trip\Enums\TripSessionStatus;
 use App\Domains\Trip\Models\TripSession;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
@@ -81,7 +84,31 @@ final class TripSessionResource extends JsonResource
             'deviationDetectedAt' => $this->deviation_detected_at?->toIso8601String(),
             'deviationDistanceMeters' => $this->deviation_distance_meters,
 
+            'summary' => $this->summary(),
+
             'trip' => new ScheduledTripResource($this->whenLoaded('scheduledTrip')),
+        ];
+    }
+
+    private function summary(): ?array
+    {
+        if ($this->current_status !== TripSessionStatus::Completed) {
+            return null;
+        }
+
+        $counts = Booking::query()
+            ->where('scheduled_trip_id', $this->scheduled_trip_id)
+            ->whereIn('status', [BookingStatus::Completed->value, BookingStatus::EndedEarly->value, BookingStatus::NoShow->value])
+            ->selectRaw('status, COUNT(*) as total')
+            ->groupBy('status')
+            ->pluck('total', 'status');
+
+        $carried = (int) ($counts[BookingStatus::Completed->value] ?? 0) + (int) ($counts[BookingStatus::EndedEarly->value] ?? 0);
+
+        return [
+            'carried' => $carried,
+            'noShows' => (int) ($counts[BookingStatus::NoShow->value] ?? 0),
+            'outcome' => $carried === 0 ? 'no_passengers' : 'completed',
         ];
     }
 }
