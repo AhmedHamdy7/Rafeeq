@@ -8,6 +8,7 @@ use App\Domains\Admin\Models\AdminAction;
 use App\Domains\Admin\Models\AdminUser;
 use App\Domains\Admin\Models\PlatformSetting;
 use App\Domains\Admin\Support\SettingsCatalogue;
+use App\Domains\Admin\Support\SettingsLadders;
 use App\Domains\Shared\Exceptions\DomainException;
 use Illuminate\Support\Facades\Auth;
 use Livewire\Attributes\Layout;
@@ -37,6 +38,12 @@ class Settings extends Component
     public string $value = '';
 
     public string $reason = '';
+
+    /** F02 · the fee ladder being edited, and its rungs (rung label => percent). */
+    public ?string $ladder = null;
+
+    /** @var array<string, string> */
+    public array $ladderValues = [];
 
     public function mount(): void
     {
@@ -106,6 +113,53 @@ class Settings extends Component
         $this->cancel();
     }
 
+    public function editLadder(string $name): void
+    {
+        $this->authorizeTo();
+        $this->cancel();
+
+        $rungs = SettingsLadders::ladder($name) ?? abort(404);
+
+        $this->ladder = $name;
+        $this->ladderValues = array_map(fn (string $key) => (string) PlatformSetting::value($key, SettingsCatalogue::defaultFor($key)), $rungs);
+    }
+
+    public function cancelLadder(): void
+    {
+        $this->resetValidation();
+        $this->reset('ladder', 'ladderValues', 'reason');
+    }
+
+    public function saveLadder(UpdatePlatformSettingAction $action): void
+    {
+        $this->authorizeTo();
+
+        $rungs = SettingsLadders::ladder((string) $this->ladder) ?? abort(404);
+
+        $rules = ['reason' => ['required', 'string', 'min:10', 'max:255']];
+
+        foreach ($rungs as $rung => $key) {
+            $entry = SettingsCatalogue::entry($key);
+            $rules["ladderValues.{$rung}"] = ['required', 'integer', 'min:'.$entry['min'], 'max:'.$entry['max']];
+        }
+
+        $this->validate($rules, attributes: ['reason' => __('admin.settings.reason')] + collect($rungs)->mapWithKeys(fn ($key, $rung) => ["ladderValues.{$rung}" => __('admin.settings.ladders.rung', ['rung' => $rung])])->all());
+
+        try {
+            $action->updateLadder($this->ladder, array_map('intval', $this->ladderValues), $this->admin(), $this->reason);
+        } catch (DomainException $e) {
+            foreach ($e->fields ?? ['ladder' => [__('errors.'.$e->errorCode->value)]] as $field => $messages) {
+                $this->addError(str_replace('ladder.', 'ladderValues.', (string) $field), $messages[0]);
+            }
+
+            return;
+        }
+
+        session()->flash('status', __('admin.settings.ladder_saved', ['name' => __('admin.settings.ladders.names.'.$this->ladder)]));
+
+        $this->cancelLadder();
+    }
+
     private function admin(): ?AdminUser
     {
         return Auth::guard('admin')->user();
@@ -153,6 +207,11 @@ class Settings extends Component
 
         return view('livewire.admin.settings', [
             'groups' => $groups,
+            // F02: each fee ladder with its rungs as they stand, for the ladder card.
+            'ladders' => collect(SettingsLadders::LADDERS)->map(fn (array $rungs) => array_map(
+                fn (string $key) => (int) PlatformSetting::value($key, SettingsCatalogue::defaultFor($key)),
+                $rungs,
+            ))->all(),
             // F04: every change to the open setting, newest first, from the audit log.
             'history' => $this->historyFor === null ? collect() : AdminAction::query()
                 ->whereIn('action', ['settings.update', 'settings.reset'])
