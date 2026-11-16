@@ -42,11 +42,21 @@ class Statistics extends Component
     #[Url(as: 'tier')]
     public string $tier = '';
 
+    #[Url(as: 'women')]
+    public bool $womenOnly = false;
+
+    /** The custom range (Cairo days, inclusive), used when the period is `custom`. */
+    #[Url(as: 'from')]
+    public string $from = '';
+
+    #[Url(as: 'to')]
+    public string $to = '';
+
     public function mount(): void
     {
         abort_unless(Auth::guard('admin')->user()?->can(AdminPermission::PaymentView->value) === true, 403);
 
-        $this->period = in_array($this->period, StatisticsPeriod::KEYS, true) ? $this->period : 'this_week';
+        $this->period = in_array($this->period, [...StatisticsPeriod::KEYS, 'custom'], true) ? $this->period : 'this_week';
         $this->tab = in_array($this->tab, self::TABS, true) ? $this->tab : 'revenue';
         $filter = $this->currentFilter();
         $this->area = $filter->area;
@@ -55,7 +65,13 @@ class Statistics extends Component
 
     public function pickPeriod(string $period): void
     {
-        $this->period = in_array($period, StatisticsPeriod::KEYS, true) ? $period : 'this_week';
+        $this->period = in_array($period, [...StatisticsPeriod::KEYS, 'custom'], true) ? $period : 'this_week';
+
+        if ($this->period === 'custom' && $this->from === '') {
+            // A sensible start: the last 30 days, which staff then adjust.
+            $this->from = now('Africa/Cairo')->subDays(29)->toDateString();
+            $this->to = now('Africa/Cairo')->toDateString();
+        }
     }
 
     public function pickTab(string $tab): void
@@ -63,9 +79,17 @@ class Statistics extends Component
         $this->tab = in_array($tab, self::TABS, true) ? $tab : 'revenue';
     }
 
+    /** The period on screen: a named one, or the custom range (this week if the range is not valid). */
+    private function currentPeriod(): StatisticsPeriod
+    {
+        return $this->period === 'custom'
+            ? (StatisticsPeriod::custom($this->from, $this->to) ?? StatisticsPeriod::of('this_week'))
+            : StatisticsPeriod::of($this->period);
+    }
+
     private function currentFilter(): StatisticsFilter
     {
-        return StatisticsFilter::of($this->area, $this->tier);
+        return StatisticsFilter::of($this->area, $this->tier, $this->womenOnly);
     }
 
     /** @return array<string, mixed> */
@@ -78,6 +102,8 @@ class Statistics extends Component
                 'now' => Figures::revenue($period),
                 'before' => Figures::revenue($previous),
                 'weekly' => Figures::weeklyMoney(),
+                'feesByReason' => Figures::feesByReason($period),
+                'settingChanges' => Figures::moneySettingChanges(),
             ],
             'trips' => [
                 'now' => Figures::trips($period, $filter),
@@ -109,12 +135,12 @@ class Statistics extends Component
         abort_unless($admin instanceof AdminUser && $admin->can(AdminPermission::SettingsManage->value), 403);
         abort_if($this->tab === 'definitions', 404);
 
-        $period = StatisticsPeriod::of($this->period);
+        $period = $this->currentPeriod();
         $rows = self::flatten($this->figures($period, $period->previous()));
 
         AdminActionLog::record($admin, 'table.export', $admin, null, [
             'table' => 'statistics.'.$this->tab,
-            'filters' => ['period' => $this->period, 'area' => $this->area, 'tier' => $this->tier],
+            'filters' => ['period' => $this->period, 'from' => $this->from, 'to' => $this->to, 'area' => $this->area, 'tier' => $this->tier, 'womenOnly' => $this->womenOnly],
             'rows' => count($rows),
         ]);
 
@@ -157,7 +183,7 @@ class Statistics extends Component
 
     public function render()
     {
-        $period = StatisticsPeriod::of($this->period);
+        $period = $this->currentPeriod();
         $previous = $period->previous();
         $admin = Auth::guard('admin')->user();
 
@@ -167,6 +193,7 @@ class Statistics extends Component
             'data' => $this->figures($period, $previous),
             'areas' => StatisticsFilter::areas(),
             'filtered' => in_array($this->tab, self::FILTERED_TABS, true),
+            'customInvalid' => $this->period === 'custom' && StatisticsPeriod::custom($this->from, $this->to) === null,
             'mayExport' => $admin?->can(AdminPermission::SettingsManage->value) === true,
         ])->title(__('admin/stats.title'));
     }
