@@ -43,7 +43,10 @@ final readonly class SendRatingRemindersAction
         foreach ($closingSoon as $booking) {
             if (! $this->hasRated($booking->passenger_user_id, $booking->id)
                 && ! $this->alreadyReminded($booking->passenger, 'bookingId', $booking->id)) {
-                Notifier::send($booking->passenger, NotificationType::RatingReminder, data: ['bookingId' => $booking->id]);
+                Notifier::send($booking->passenger, NotificationType::RatingReminder,
+                    ['date' => $booking->scheduledTrip->trip_date->format('j/n')],
+                    ['bookingId' => $booking->id],
+                );
                 $sent++;
             }
         }
@@ -55,7 +58,10 @@ final readonly class SendRatingRemindersAction
             $unrated = $bookings->contains(fn (Booking $booking) => ! $this->hasRated($driver->id, $booking->id));
 
             if ($unrated && ! $this->alreadyReminded($driver, 'tripId', $tripId)) {
-                Notifier::send($driver, NotificationType::RatingReminder, data: ['tripId' => $tripId]);
+                Notifier::send($driver, NotificationType::RatingReminder,
+                    ['date' => $bookings->first()->scheduledTrip->trip_date->format('j/n')],
+                    ['tripId' => $tripId],
+                );
                 $sent++;
             }
         }

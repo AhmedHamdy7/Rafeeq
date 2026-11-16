@@ -15,19 +15,19 @@ return [
     ],
     'report_resolved' => [
         'title' => 'Your report has been dealt with',
-        'body' => 'Open it to read what the safety team did.',
+        'body' => 'The safety team has dealt with your report. Open it to read what they did.',
     ],
     'report_closed' => [
         'title' => 'Your report has been closed',
-        'body' => 'Open it to read the safety team’s answer.',
+        'body' => 'The safety team has closed your report. Open it to read their answer.',
     ],
     'account_on_hold' => [
         'title' => 'Your account is on hold',
-        'body' => 'New bookings are paused while we review. Reference :case.',
+        'body' => 'Your account is on hold while we review it, so new bookings are paused. Reference :case.',
     ],
     'account_reinstated' => [
         'title' => 'Your account is active again',
-        'body' => 'The hold has been lifted. You can book as usual.',
+        'body' => 'Your account is active again. You can book as usual.',
     ],
     'seat_requested' => [
         'title' => 'New seat request',
@@ -39,7 +39,7 @@ return [
     ],
     'seat_approved' => [
         'title' => 'You have a seat',
-        'body' => ':name has approved your request.',
+        'body' => ':name approved your seat request. Your seat is confirmed.',
     ],
     'seat_declined' => [
         'title' => 'Seat request not accepted',
@@ -47,7 +47,7 @@ return [
     ],
     'chat_message' => [
         'title' => 'New message from :name',
-        'body' => 'Open the trip to read it.',
+        'body' => ':name sent you a message. Open the trip to read it.',
     ],
     // Not a notification: the description of the report filed when a chat message is reported.
     'chat_report' => "Reported chat message.\nReason: :reason\nMessage: «:message»",
@@ -65,7 +65,7 @@ return [
     ],
     'active_trip_cancelled_aboard' => [
         'title' => 'The trip was stopped',
-        'body' => 'The part you rode still counts and you owe nothing. Open it to see what else runs from here.',
+        'body' => ':name stopped the trip. The part you rode still counts and you owe nothing. Open it to see what else runs from here.',
     ],
     'booking_cancelled' => [
         'title' => 'A seat was cancelled',
@@ -78,7 +78,7 @@ return [
      */
     'seat_offered' => [
         'title' => 'A seat just opened up',
-        'body' => 'A seat is free on :date. First to accept gets it.',
+        'body' => 'A seat opened up on :name’s commute on :date. The first to accept gets it.',
     ],
     /*
      * 🔴 "You are back on the waiting list" rather than "your seat is being held". v5 is explicit
@@ -138,15 +138,15 @@ return [
     ],
     'vehicle_registration_expired' => [
         'title' => 'Your car registration has expired',
-        'body' => 'Your commutes are paused and your bookings were cancelled. Upload the new registration, and you can resume once we approve it.',
+        'body' => 'Your car registration has expired, so your commutes are paused and your bookings were cancelled. Upload the new registration, and you can resume once we approve it.',
     ],
     'vehicle_suspended' => [
         'title' => 'Your car was suspended',
-        'body' => 'Your commutes are paused after we reviewed a report about your car. Contact support to find out what is needed.',
+        'body' => 'Your car was suspended after we reviewed a report about it, so your commutes are paused. Contact support to find out what is needed.',
     ],
     'vehicle_reinstated' => [
         'title' => 'Your car is approved again',
-        'body' => 'You can resume your commutes now. Cancelled bookings do not come back automatically.',
+        'body' => 'Your car is approved again, so you can resume your commutes now. Cancelled bookings do not come back automatically.',
     ],
     'pickup_moved_earlier' => [
         'title' => 'Your pickup is earlier now',
@@ -166,11 +166,11 @@ return [
     ],
     'change_proposal_applied' => [
         'title' => 'The change is now in effect',
-        'body' => 'Everyone affected agreed, so your commute has been updated. Check your next journey.',
+        'body' => 'Everyone affected agreed to the proposed change, so your commute has been updated. Check your next journey.',
     ],
     'change_proposal_rejected' => [
         'title' => 'Your proposed change was declined',
-        'body' => 'One of your passengers declined, so nothing changed. You can revise it and ask again.',
+        'body' => 'One of your passengers declined your proposed change, so nothing changed. You can revise it and ask again.',
     ],
     /*
      * 🔒 Not a refusal, and the wording avoids reading as one. Her application was not turned down;
@@ -203,7 +203,7 @@ return [
     ],
     'seats_offered_by_driver' => [
         'title' => 'A driver offered you a seat',
-        'body' => 'You have been offered a seat on :days day(s). Accept to confirm — the first to accept each day gets it.',
+        'body' => ':name offered you a seat on :days day(s). Accept to confirm — the first to accept each day gets it.',
     ],
     'vehicle_replaced_seat_cancelled' => [
         'title' => 'Your driver changed car',
@@ -219,15 +219,15 @@ return [
     ],
     'rating_due_riders' => [
         'title' => 'How was your commute today?',
-        'body' => 'Rate your riders. Nobody sees a rating until both sides have rated.',
+        'body' => 'Rate the riders on today’s commute. Nobody sees a rating until both sides have rated.',
     ],
     'rating_reminder' => [
         'title' => 'Last day to rate your trip',
-        'body' => 'Ratings for this trip close soon.',
+        'body' => 'Ratings for your trip on :date close soon, so rate it today.',
     ],
     'trip_started' => [
         'title' => ':name has started today’s commute',
-        'body' => 'Open the trip to follow the car.',
+        'body' => ':name has started today’s commute. Open the trip to follow the car.',
     ],
     /*
      * 🔒 No reason, and no suggestion that she owes the driver one. It may be about the driver. The
@@ -251,7 +251,7 @@ return [
      */
     'commute_not_started_reminder' => [
         'title' => 'Your commute was due to leave',
-        'body' => 'It was due to leave at :time and has not been started. Tap Start Commute so your passengers can see you are on the way.',
+        'body' => 'Your commute was due to leave at :time and has not been started. Tap Start Commute so your passengers can see you are on the way.',
     ],
     /*
      * 🔴 To the passenger. It says what is true and stops there — it does NOT tell her she may
@@ -275,11 +275,11 @@ return [
      */
     'late_boarding_warning' => [
         'title' => 'Late pickup recorded (warning :ordinal)',
-        'body' => 'You boarded after the 5-minute grace on :date. The 1st and 2nd are warnings; a 3rd may lead to a fee. Tap to review or dispute.',
+        'body' => 'You boarded after the 5-minute grace on :date. This is warning :ordinal: the 1st and 2nd are warnings; a 3rd may lead to a fee. Tap to review or dispute.',
     ],
     'missed_commitment_warning' => [
         'title' => 'Missed commute recorded (warning :ordinal)',
-        'body' => 'Your seat on :date was not used and was too late to be filled. The 1st is a warning; a 2nd may lead to a fee. Tap to review or dispute.',
+        'body' => 'Your seat on :date was not used and was too late to be filled. This is warning :ordinal: the 1st is a warning; a 2nd may lead to a fee. Tap to review or dispute.',
     ],
     'no_show_fee' => [
         'title' => 'No-show fee: EGP :amount',
@@ -291,7 +291,7 @@ return [
     ],
     'late_cancel_fee' => [
         'title' => 'Late cancellation: EGP :amount unless your seat is taken',
-        'body' => 'You cancelled :date within 12 hours of departure. If somebody from the waiting list takes your seat, it costs nothing. Appeal within :hours hours.',
+        'body' => 'You cancelled :date within 12 hours of departure, so EGP :amount is due unless somebody from the waiting list takes your seat. Appeal within :hours hours.',
     ],
     'late_cancel_fee_charged' => [
         'title' => 'Late cancellation fee: EGP :amount',
@@ -335,19 +335,19 @@ return [
     ],
     'debt_due_tomorrow' => [
         'title' => 'EGP :amount due tomorrow',
-        'body' => 'Your commission for this week is due by Friday 23:59. Pay with InstaPay from the Payments screen.',
+        'body' => 'Your commission of EGP :amount for this week is due by Friday 23:59. Pay with InstaPay from the Payments screen.',
     ],
     'debt_overdue' => [
         'title' => 'EGP :amount is overdue',
-        'body' => 'Pay with InstaPay to publish commutes and accept new riders again. Your booked rides continue.',
+        'body' => 'Your commission of EGP :amount is overdue. Pay with InstaPay to publish commutes and accept new riders again. Your booked rides continue.',
     ],
     'debt_late_fee_added' => [
         'title' => 'Commission overdue: EGP :fee late fee added',
-        'body' => 'You now owe EGP :amount. Until it is paid you cannot publish commutes or accept new riders.',
+        'body' => 'A late fee of EGP :fee was added to your overdue commission, so you now owe EGP :amount. Until it is paid you cannot publish commutes or accept new riders.',
     ],
     'debt_suspension_warning' => [
         'title' => 'Pay EGP :amount by Friday to keep driving',
-        'body' => 'If it is still unpaid after Friday 23:59, your upcoming trips will be cancelled and driving suspended.',
+        'body' => 'Pay the EGP :amount you owe by Friday 23:59, or your upcoming trips will be cancelled and driving suspended.',
     ],
     'debt_payment_confirmed' => [
         'title' => 'Payment received',
@@ -355,15 +355,15 @@ return [
     ],
     'debt_payment_rejected' => [
         'title' => 'We could not find your payment',
-        'body' => 'Check the InstaPay reference and send it again, or contact support.',
+        'body' => 'We could not find your InstaPay payment. Check the reference and send it again, or contact support.',
     ],
     'coupon_issued' => [
         'title' => 'You have a coupon',
-        'body' => 'EGP :amount off what you owe next, for a ride that did not go as it should.',
+        'body' => 'You have a coupon for EGP :amount off what you owe next, for a ride that did not go as it should.',
     ],
     'driving_suspended_for_debt' => [
         'title' => 'Driving suspended',
-        'body' => 'Your commission was not paid by the second Friday, so your upcoming trips were cancelled. Pay EGP :amount to drive again. You can still ride as a passenger.',
+        'body' => 'Your driving is suspended because your commission was not paid by the second Friday, and your upcoming trips were cancelled. Pay EGP :amount to drive again. You can still ride as a passenger.',
     ],
     'riding_suspended_for_debt' => [
         'title' => 'Riding suspended',
@@ -375,23 +375,23 @@ return [
      */
     'trip_starts_in_hour' => [
         'title' => 'Your commute leaves in about an hour',
-        'body' => 'Departure is at :time. Open the trip for the details.',
+        'body' => 'Your commute leaves at :time, in about an hour. Open the trip for the details.',
     ],
     'trip_starts_soon' => [
         'title' => 'Your commute leaves in :minutes minutes',
-        'body' => 'Departure is at :time.',
+        'body' => 'Your commute leaves in :minutes minutes, at :time.',
     ],
     'driver_heading_to_you' => [
         'title' => ':name is on the way to you',
-        'body' => 'You are the next pickup. Be ready at your meeting point.',
+        'body' => ':name is on the way to you. You are the next pickup, so be ready at your meeting point.',
     ],
     'driver_arrived' => [
         'title' => ':name has arrived',
-        'body' => 'Your driver is at your meeting point.',
+        'body' => ':name has arrived at your meeting point.',
     ],
     'commute_still_not_started' => [
         'title' => 'Your driver is :minutes minutes late',
-        'body' => ':name’s commute was due to leave at :time and still has not started.',
+        'body' => ':name is :minutes minutes late: the commute was due to leave at :time and still has not started.',
     ],
     'driver_verified' => [
         'title' => 'You are a verified driver',
@@ -403,7 +403,7 @@ return [
     ],
     'driver_item_rejected' => [
         'title' => ':item needs a new upload',
-        'body' => 'Open the app to see why, and replace only this item.',
+        'body' => 'Your :item needs a new upload. Open the app to see why, and replace only this item.',
     ],
     // The names of the five items, as they read in the two notices above.
     'driver_items' => [
@@ -415,19 +415,19 @@ return [
     ],
     'driver_documents_rejected' => [
         'title' => 'Your documents need a change',
-        'body' => 'Open the app to see what to fix and send it again.',
+        'body' => 'Your driver documents need a change. Open the app to see what to fix and send them again.',
     ],
     'driver_item_expiring' => [
         'title' => ':item expires soon',
-        'body' => 'It expires on :date. Upload the renewed one to keep driving.',
+        'body' => 'Your :item expires on :date. Upload the renewed one to keep driving.',
     ],
     'driver_licence_expired' => [
         'title' => 'Your driving licence has expired',
-        'body' => 'Your commutes are paused and upcoming trips are cancelled. Send your renewed licence for review to drive again.',
+        'body' => 'Your driving licence has expired, so your commutes are paused and upcoming trips are cancelled. Send your renewed licence for review to drive again.',
     ],
     'driver_suspended' => [
         'title' => 'Your driving is suspended',
-        'body' => 'Your commutes are paused and upcoming trips are cancelled, with no fee. You can still ride as a passenger. Contact support.',
+        'body' => 'Your driving is suspended: your commutes are paused and upcoming trips are cancelled, with no fee. You can still ride as a passenger. Contact support.',
     ],
     'pickup_change_requested' => [
         'title' => ':name asks for a new pickup',

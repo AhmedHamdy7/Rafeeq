@@ -134,6 +134,7 @@ final readonly class OfferSeatsToWaitlistMembersAction
                  */
                 if ($offeredDays > 0 && $member->passenger !== null) {
                     Notifier::send($member->passenger, NotificationType::SeatsOfferedByDriver, params: [
+                        'name' => $offer->driverProfile?->user?->public_first_name ?? '',
                         'days' => $offeredDays,
                     ], data: [
                         'commuteId' => $offer->getKey(),

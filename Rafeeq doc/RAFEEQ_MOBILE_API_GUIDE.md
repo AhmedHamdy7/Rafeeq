@@ -14,7 +14,7 @@
 >
 > **Base URL:** `{host}/api/v1` · **Auth:** bearer token · **Format:** JSON only.
 
-**Last updated:** 2026-11-16 · **271 endpoints live** · Phases 0–7, 9 and 11 complete · 10, 12 and 13 all but a decision each
+**Last updated:** 2026-11-16 · **272 endpoints live** · Phases 0–7, 9 and 11 complete · 10, 12 and 13 all but a decision each
 
 ---
 
@@ -22,7 +22,7 @@
 
 ### What is ready
 
-**271 endpoints live** and tested, across the 47 designed screens:
+**272 endpoints live** and tested, across the 47 designed screens:
 
 | | Count | Covers |
 |---|---|---|
@@ -905,6 +905,7 @@ fails if this list and the running routes ever disagree in either direction.
 | `POST /testing/account/suspension/age` | 4.17 Testing (staging only) |
 | `POST /testing/account/ban` | 4.17 Testing (staging only) |
 | `POST /testing/bookings/{booking}/rating-prompt` | 4.17 Testing (staging only) |
+| `GET /testing/rating-prompt` | 4.17 Testing (staging only) |
 | `POST /testing/realtime/account-banned` | 4.17 Testing (staging only) |
 | `GET /testing/safety/auto-share/messages` | 4.17 Testing (staging only) |
 | `GET /testing/safety/contact-messages` | 4.17 Testing (staging only) |
@@ -4210,7 +4211,7 @@ they explain.
 | `verification` | `{level, of, percentage, isComplete}` — the same numbers as the Verification Centre, so the banner cannot disagree with the screen behind it. 🔴 **`null` for a passenger-only account** (PROF-12, F2-8): passengers never verify, so hide the banner. It appears once the account has the driver capability. |
 | `unreadNotifications` | The bell badge: the same number as `GET /notifications` → `meta.unreadCount`, so Home is one request. |
 | `suspension` | `null` unless the account is on hold; then the same object as `GET /auth/me` → `user.suspension`, with **`activeTripId`**. A banned member (`permanent: true`) reaches Home only while a run of hers is under way: `activeTripId` is that trip, the Live trip keeps working, and once it ends Home answers `403 ACCOUNT_SUSPENDED` and the app opens the hold screen. Also on `GET /driver/home`. |
-| `ratingPrompt` | `null`, or `{bookingId, tripId, driverName, tripDate, pickupLocal, pickupLabel, reason, unusualKind}` (owner decision 2026-11-16). `pickupLocal` is her agreed pickup on that day, commute wall clock, `HH:mm`; `pickupLabel` her meeting point's label or `null`. `unusualKind` (only with `reason: unusual`, otherwise `null`): `dispute` · `report` · `late` · `ended_early`, the first that applies in that order. `reason`: `first_ride` (her first finished ride with that driver), `weekly` (at most once a week per driver, counted from the last prompt, dismissal or rating), `unusual` (the driver was more than 5 minutes late at her pickup, she left early, or a dispute or report was opened; asked at once). It stays until she rates that booking or calls **`POST /bookings/{booking}/rating-prompt/dismiss`** → `{dismissed: true}`; a dismissed booking never comes back. |
+| `ratingPrompt` | `null`, or `{bookingId, tripId, driverName, tripDate, pickupLocal, pickupLabel, reason, unusualKind}` (owner decision 2026-11-16). `pickupLocal` is her agreed pickup on that day, commute wall clock, `HH:mm`; `pickupLabel` her meeting point's label or `null`. `unusualKind` (only with `reason: unusual`, otherwise `null`): `dispute` · `report` · `late` · `ended_early`, the first that applies in that order. `reason`: `first_ride` (her first finished ride with that driver), `weekly` (at most once a week per driver, counted from the last prompt, dismissal or rating with that driver; a rating counts from the departure of the ride she rated, not the moment she pressed submit. A booked next commute never holds it back), `unusual` (the driver was more than 5 minutes late at her pickup, she left early, or a dispute or report was opened; asked at once). It stays until she rates that booking or calls **`POST /bookings/{booking}/rating-prompt/dismiss`** → `{dismissed: true}`; a dismissed booking never comes back. |
 | `nextJourney` | The journey the card is about, or **`null`** (F3P-01). Contains the full booking (4.7) plus `originLabel`, `destinationLabel`, `departureAt`, `departureLocal`, `departsInMinutes`, `isToday`, `attendance`, `noShow` (the same object and rules as on the booking, 4.7: `null` unless the driver marked her a no-show), `isTrial`, `driver` (5.1), `vehicle`, and the state fields below. **Which journey**, the first that exists: ① the one **happening now** (run started, or departure passed and the driver has not started — today only); ② one that **ended and she has not seen** — cancelled by the driver, expired, she left for a driver delay, or completed and not yet rated — until you send `POST /bookings/{booking}/seen`, for up to 7 days; ③ the **soonest upcoming confirmed** one — a `PENDING` request is never on the card (TRIP-01); ④ a **completed ride still waiting for her stars**, inside the rating window, only when nothing is upcoming. A ride she cancelled herself is not shown. |
 | `nextJourney.phase` | **The state the card switches on**, decided by the server: `scheduled` (F3P-02/03) · `driver_en_route` (F3P-04, the run has started) · `driver_arrived` (F3P-05, the driver's GPS-checked "I've arrived" for her) · `on_board` (F3P-06, she is checked in and not yet dropped off) · `driver_delayed` (F3P-07: 5 min after departure with the run not started, or the run started but the driver has not arrived 5 min after her pickup time, or the car passed her stop) · `cancelled_by_driver` (F3P-08) · `expired` (F3P-09, the driver never started and the day was closed) · `exited` (F3P-10, she pressed Leave Without Fee) · `completed` (F3P-11). `status` and `trip.status` are unchanged — switch on `phase`, not on them. |
 | `nextJourney.daysMask` | The days she rides — her requested days, or the commute's days. Sat 1 … Fri 64. |
@@ -4921,7 +4922,7 @@ hold must still be able to read the notice that says so.
 |---|---|
 | `type` | What happened — **route on this**. Every value is in the table below. **Expect new values**; show an unknown one as a plain message. |
 | `category` | `booking` · `payment` · `trip` · `safety` · `marketing`. |
-| `title` / `body` | **Already in the member's language** — rendered when the message was sent, and stored as written. Show them as they are. They never contain a phone number, an address or a full name: a push body appears on a lock screen. |
+| `title` / `body` | **Already in the member's language** — rendered when the message was sent, and stored as written. Show them as they are. Every type's `body` is a full sentence on its own and names who or what it is about (the driver or passenger, the day), so the inbox row can show `body` alone. Never empty: `announcement` and `staff_message` bodies are required on the dashboard. They never contain a phone number, an address or a full name: a push body appears on a lock screen. |
 | `data` | Ids for the screen to open: `seatRequestId`, `commuteId`, `tripId`, `sosId`, `incidentId`. Never names. |
 | `isRead` / `readAt` / `createdAt` | |
 
@@ -5384,7 +5385,10 @@ makes the car `SUSPENDED` with `suspensionReason: registration_expired`.
 
 `{days}` (1–60). For a booking the caller rides or drives, on a run that is not under way: moves that day's
 departure, the run's start and end, the cancellation and the attendance times `days` back, then reveals due
-ratings. Use it for the 7-day rating window and reveal, and the report and dispute windows.
+ratings. Use it for the 7-day rating window and reveal, and the report and dispute windows. It also moves the
+booking's rating-prompt and dismissal times, and, since a rating counts from the rated ride's departure, the
+"last rating" the weekly `ratingPrompt` rule reads. To force `weekly`, age every booking she has with that driver
+in the last 7 days (the rule takes the latest of all of them).
 
 #### `POST /testing/jobs/{name}/run`
 
@@ -5547,6 +5551,23 @@ All three answer `{ accountStatus, nextStep, suspension }`: `suspension` is `use
 reason and kind, until she rates or dismisses it. Answers `{ ratingPrompt }` as on `GET /home`.
 `409 BOOKING_NOT_RATEABLE` when it can't be rated.
 
+#### `GET /testing/rating-prompt`
+
+Why `ratingPrompt` on `GET /home` is what it is. Lists the caller's bookings of the last 31 days (and up to a day
+ahead), newest first, at most 20. Changes nothing.
+
+```
+→ 200 { bookings: [ { bookingId, tripId, driverName, departureAt, status, reason, heldBy, promptedAt,
+                      lastWithDriverAt, weeklyFrom } ] }
+```
+
+- `reason`: what Home would ask with (`first_ride` · `weekly` · `unusual`), or `null` when held back.
+- `heldBy`: `null` when it can be asked, else `not_finished` (not `COMPLETED` / `ENDED_EARLY`), `rated`,
+  `dismissed`, `rating_closed` (past the rating window), or `asked_within_week`.
+- `lastWithDriverAt`: the latest prompt, dismissal or rated ride (its departure) with that driver on her other
+  bookings; `weeklyFrom` is that plus 7 days. Both `null` when there is none.
+- Home asks for one booking at a time: the newest that can be asked.
+
 #### `POST /testing/realtime/account-banned`
 
 `{ "activeTripId"?: "01…" | null }`. Broadcasts the same `account.banned` as a real ban to the caller's
@@ -5618,6 +5639,7 @@ Deletes the caller's own commutes and their days, requests, bookings, waiting-li
 - Always kept: the account, profile, role, active mode and the **active car**. Spare cars go unless `vehicles` is kept.
 - Others' seats on the caller's commutes go with them, with no fee, no reliability event and no push. The caller's seats on someone else's run are freed on that run.
 - Lifts a debt suspension once the debt is gone.
+- Clears the Home rating-prompt history with every driver: her bookings go, and with them their ratings and prompt and dismissal times. Her next finished ride with the same driver is a `first_ride` again.
 - `409 TRIP_IN_PROGRESS` only when a run under way has a real (non-test-number) member aboard with the caller.
 
 #### `POST /testing/seed/past-bookings`
@@ -5887,6 +5909,7 @@ exist, and every live endpoint must be named here.
 | Date | Change |
 |---|---|
 | 2026-11-17 | ⏸️ **Staff can pause a commute (C04). No new endpoint, no field changed or removed.** New `pausedReason` value **`by_staff`** and a new commute field **`pausedMessage`** (staff's text for the driver; `null` otherwise). Upcoming confirmed seats are cancelled with no fee, as with the other automatic reasons. Only staff resume it: the driver's Resume and Publish answer the existing `409 COMMUTE_INVALID_TRANSITION`, with `fields.pausedReason: ["by_staff"]`. The driver also gets a `staff_message` in the inbox. `pausedCommuteReasons` on `GET /driver/home` can carry `by_staff` (and `gender_review`). Staff warnings to a member (D20) arrive as an ordinary `staff_message` titled "A warning from RAFEEQ". |
+| 2026-11-16 | 💬 **Rating prompt and inbox text.** Every notification `body` now reads on its own without the `title`, in English and Arabic, and names the driver, passenger or day where it matters (38 types reworded; `seat_offered` and `seats_offered_by_driver` now carry the driver's name, `rating_reminder` the trip's day). Stated: a booked next commute never holds `ratingPrompt` back; `POST /testing/reset` clears the rating-prompt history; `POST /testing/bookings/{booking}/age` moves the weekly rule's "last rating". Testing: **`GET /testing/rating-prompt`** says why each recent booking is or isn't prompted. |
 | 2026-11-16 | 🎨 **Designer follow-ups of 2026-11-16.** `ratingPrompt` on `GET /home` gains `pickupLocal`, `pickupLabel` and `unusualKind` (`dispute` · `report` · `late` · `ended_early`). `GET /my-bookings` takes `groupId` and `includeCancelled=1` (with `scope=upcoming`). `sharedWithName` on live shares. `account.banned` frame shape stated (6.3). New **`409 BOOKING_NOT_RATEABLE`**. Testing: **`POST /testing/bookings/{booking}/rating-prompt`**, **`POST /testing/realtime/account-banned`**. |
 | 2026-11-16 | 🧭 **Owner decisions of 2026-11-16.** 🔴 **A banned member finishes the ride under way**: until it ends, Home, the trip, its location, check-in / no-show / drop-off / complete, wait timers, the booking and its chat keep answering; `suspension.activeTripId` on `GET /auth/me`, `GET /home` and `GET /driver/home` (new `suspension` key on both Homes), and `error.fields.activeTripId` on a refusal while riding. Reverb **`account.banned`** on `user.{id}`. New **`ratingPrompt`** on `GET /home` (`first_ride` / `weekly` / `unusual`) and **`POST /bookings/{booking}/rating-prompt/dismiss`**. A disputed no-show fee is left out of her next fee line while the dispute is open: `noShow.feePiastres`, `noShow.dispute.feeOnHold`. 🔴 **`PATCH /seat-requests/{seatRequest}` on `WAITLISTED` sends it back to the driver** as a pending `waitlist_application` (also takes `requestedDaysMask`); `waitlistPosition` is always `null` to the passenger; no waiting-list cap by default. `summary {carried, noShows, outcome}` on a completed trip session. Trusted contacts: one SMS when added; auto-share goes to **one** chosen contact (`autoShareTrips`, `meta.autoShareContactId`, `PUT /safety/auto-share {contactId?}`), and switching it on mid-run sends at once. InstaPay handle and name can't be saved empty. New **`GET /support/contact`**. `GET /content/{key}` is `404` while both languages are empty. Testing: **`GET /testing/safety/contact-messages`**. |
 | 2026-11-16 | 🧪 **Patrol findings of 2026-11-15.** 🔴 **Search keeps full commutes**, with `isFull` on the card and on `otherDays[]`, so a passenger can reach a full commute's waiting list (BOOK-18). `GET /groups/{group}/attendance?tripId=` lists every seated member, `NO_RESPONSE` for those who have not answered. 🔴 **A banned account gets `403 ACCOUNT_SUSPENDED` on `GET /home` and `GET /driver/home` too**, and the refusal carries `permanent`. `POST /trips/{trip}/complete` closes a run from `EN_ROUTE` / `AT_PICKUP` when every passenger is a no-show or already dropped off. `PATCH /seat-requests/{seatRequest}` works on `WAITLISTED` and keeps her position. `instapay` falls back to env values, and to a test payee on staging. Testing: `POST /testing/driver/approve` takes `{approvedSeats?, tier?, hasAc?}` and keeps an approved car's values; `POST /testing/reset` restores a cast account's name. |

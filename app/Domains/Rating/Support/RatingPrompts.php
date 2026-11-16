@@ -142,6 +142,52 @@ final readonly class RatingPrompts
         return null;
     }
 
+    public function explain(User $user): array
+    {
+        $bookings = Booking::query()
+            ->join('scheduled_trips', 'scheduled_trips.id', '=', 'bookings.scheduled_trip_id')
+            ->select('bookings.*')
+            ->where('bookings.passenger_user_id', $user->id)
+            ->where('scheduled_trips.departure_at', '>=', now()->subDays(31))
+            ->where('scheduled_trips.departure_at', '<=', now()->addDay())
+            ->with(['scheduledTrip', 'driverProfile.user'])
+            ->orderByDesc('scheduled_trips.departure_at')
+            ->orderByDesc('bookings.id')
+            ->limit(self::CANDIDATES)
+            ->get();
+
+        return $bookings->map(function (Booking $booking) use ($user): array {
+            $last = $this->lastTouchWithDriver($booking, $user);
+            $reason = null;
+
+            $heldBy = match (true) {
+                ! in_array($booking->status, self::RATEABLE, true) => 'not_finished',
+                $booking->ratings()->where('reviewer_user_id', $user->id)->exists() => 'rated',
+                $booking->rating_prompt_dismissed_at !== null => 'dismissed',
+                $this->ratings->deadlineFor($booking)->isPast() => 'rating_closed',
+                default => null,
+            };
+
+            if ($heldBy === null) {
+                $reason = $this->reasonFor($booking, $user);
+                $heldBy = $reason === null ? 'asked_within_week' : null;
+            }
+
+            return [
+                'bookingId' => $booking->id,
+                'tripId' => $booking->scheduled_trip_id,
+                'driverName' => $booking->driverProfile?->user?->public_first_name,
+                'departureAt' => $booking->scheduledTrip->departure_at->toIso8601String(),
+                'status' => strtoupper($booking->status->value),
+                'reason' => $reason,
+                'heldBy' => $heldBy,
+                'promptedAt' => $booking->rating_prompted_at?->toIso8601String(),
+                'lastWithDriverAt' => $last?->toIso8601String(),
+                'weeklyFrom' => $last?->addDays(self::WEEK_DAYS)->toIso8601String(),
+            ];
+        })->all();
+    }
+
     public function wasUnusual(Booking $booking): bool
     {
         return $this->unusualKind($booking) !== null;

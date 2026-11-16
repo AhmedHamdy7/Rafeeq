@@ -43,6 +43,14 @@ final class TestingPromptsController extends Controller
         ]);
     }
 
+    #[ApiErrors(ErrorCode::NotFound)]
+    public function explainRatingPrompt(Request $request, RatingPrompts $prompts): JsonResponse
+    {
+        $user = TestAccounts::assertAllowed($request->user());
+
+        return ApiResponse::success(['bookings' => $prompts->explain($user)]);
+    }
+
     #[ApiErrors(ErrorCode::ValidationFailed)]
     public function accountBanned(Request $request): JsonResponse
     {

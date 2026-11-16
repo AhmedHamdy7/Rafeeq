@@ -134,6 +134,7 @@ Route::prefix('v1')->group(function (): void {
         Route::post('account/suspension/age', [TestingSuspensionController::class, 'age']);
         Route::post('account/ban', [TestingSuspensionController::class, 'ban']);
         Route::post('bookings/{booking}/rating-prompt', [TestingPromptsController::class, 'ratingPrompt']);
+        Route::get('rating-prompt', [TestingPromptsController::class, 'explainRatingPrompt']);
         Route::post('realtime/account-banned', [TestingPromptsController::class, 'accountBanned']);
         Route::get('safety/auto-share/messages', [TestingSafetyController::class, 'autoShareMessages']);
         Route::get('safety/contact-messages', [TestingSafetyController::class, 'contactMessages']);

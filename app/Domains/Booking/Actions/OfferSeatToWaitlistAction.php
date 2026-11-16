@@ -222,6 +222,7 @@ final readonly class OfferSeatToWaitlistAction
 
             if ($request->passenger !== null) {
                 Notifier::send($request->passenger, NotificationType::SeatOffered, params: [
+                    'name' => $trip->commuteOffer?->driverProfile?->user?->public_first_name ?? '',
                     'date' => $trip->trip_date->toFormattedDateString(),
                 ], data: [
                     'offerId' => $offer->id,

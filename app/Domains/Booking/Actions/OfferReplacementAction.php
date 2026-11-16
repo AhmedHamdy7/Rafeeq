@@ -66,7 +66,10 @@ final readonly class OfferReplacementAction
             ])->save();
 
             if ($member->passenger !== null) {
-                Notifier::send($member->passenger, NotificationType::SeatsOfferedByDriver, params: ['days' => 1], data: [
+                Notifier::send($member->passenger, NotificationType::SeatsOfferedByDriver, params: [
+                    'name' => $trip->commuteOffer?->driverProfile?->user?->public_first_name ?? '',
+                    'days' => 1,
+                ], data: [
                     'commuteId' => $trip->commute_offer_id,
                     'seatRequestId' => $member->getKey(),
                 ]);
