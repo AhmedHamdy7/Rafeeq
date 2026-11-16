@@ -174,6 +174,25 @@ final class ManageMemberAction
         });
     }
 
+    /**
+     * D20 · a formal warning (ADM-05, SAFE-05). It reaches her inbox as a staff message titled
+     * "A warning from RAFEEQ" in her language, never as a push, and is kept in the audit log with
+     * the team's reason, which she does not see. It changes nothing else: no fee, no score, no
+     * suspension. What a warning leads to is the monthly review's decision (Q-072).
+     */
+    public function warn(AdminUser $by, User $user, string $text, string $reason): void
+    {
+        $this->authorize($by, AdminPermission::MemberSuspend);
+
+        $text = trim($text);
+        $title = __('admin/actions.warning_title', locale: $user->preferred_language === 'en' ? 'en' : 'ar');
+
+        DB::transaction(function () use ($by, $user, $text, $title, $reason): void {
+            Notifier::send($user, NotificationType::StaffMessage, params: ['title' => $title, 'body' => $text], quiet: true);
+            AdminActionLog::record($by, 'member.warn', $user, null, ['title' => $title, 'body' => $text], trim($reason));
+        });
+    }
+
     private function authorize(AdminUser $by, AdminPermission $permission): void
     {
         if (! $by->can($permission->value)) {

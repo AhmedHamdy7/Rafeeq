@@ -57,6 +57,7 @@
                     <div class="ad-pop" role="menu" x-show="open" x-cloak>
                         @if ($mayDecide)
                             <button type="button" class="ad-pop__item" role="menuitem" x-on:click="open = false" wire:click="startAction('correct')">{{ __('admin/actions.titles.correct') }}</button>
+                            <button type="button" class="ad-pop__item" role="menuitem" x-on:click="open = false" wire:click="startAction('warn')">{{ __('admin/actions.titles.warn') }}</button>
                             @if ($signInLocked)
                                 <button type="button" class="ad-pop__item" role="menuitem" x-on:click="open = false" wire:click="startAction('unlock')">{{ __('admin/actions.titles.unlock') }}</button>
                             @endif
@@ -138,6 +139,14 @@
                         @error('messageTitle') <span class="ad-error">{{ $message }}</span> @enderror
                     </div>
                 @endif
+                @if ($action === 'warn')
+                    <div class="ad-field">
+                        <label class="ad-label" for="act-warning">{{ __('admin/actions.warning_text') }}</label>
+                        <textarea id="act-warning" class="ad-textarea" dir="auto" rows="3" wire:model="warningText" maxlength="1000" required></textarea>
+                        <span class="ad-hint">{{ __('admin/actions.warning_text_hint') }}</span>
+                        @error('warningText') <span class="ad-error">{{ $message }}</span> @enderror
+                    </div>
+                @endif
                 @if ($action === 'decline_appeal')
                     <div class="ad-field">
                         <label class="ad-label" for="act-decline-code">{{ __('admin/actions.decline_code') }}</label>
@@ -154,7 +163,7 @@
                     @error('reason') <span class="ad-error">{{ $message }}</span> @enderror
                 </div>
                 <div class="ad-row">
-                    <button type="submit" @class(['ad-btn', 'ad-btn--danger' => in_array($action, ['write_off', 'hide_rating'], true), 'ad-btn--primary' => ! in_array($action, ['write_off', 'hide_rating'], true)]) wire:loading.attr="disabled">{{ __('admin/actions.confirm.'.$action) }}</button>
+                    <button type="submit" @class(['ad-btn', 'ad-btn--danger' => in_array($action, ['write_off', 'hide_rating', 'warn'], true), 'ad-btn--primary' => ! in_array($action, ['write_off', 'hide_rating', 'warn'], true)]) wire:loading.attr="disabled">{{ __('admin/actions.confirm.'.$action) }}</button>
                     <button type="button" class="ad-btn" wire:click="$set('action', '')">{{ __('admin.queue.cancel') }}</button>
                 </div>
             </form>

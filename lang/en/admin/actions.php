@@ -14,6 +14,9 @@ return [
     'ban_confirm' => 'Ban :name permanently? They will see the restricted screen and cannot appeal in the app.',
     'already_reversed' => 'This event was already reversed.',
     'no_open_appeal' => 'There is no open appeal on this event.',
+    'warning_title' => 'A warning from RAFEEQ',
+    'warning_text' => 'Warning text (they read this)',
+    'warning_text_hint' => 'Write it in their app language. Say what happened and what happens if it repeats.',
     'message_title' => 'Title',
     'message_body' => 'Message',
     'titles' => [
@@ -28,6 +31,7 @@ return [
         'restore_rating' => 'Show review again',
         'keep_rating' => 'Keep review',
         'message' => 'Message',
+        'warn' => 'Warn',
     ],
     'hints' => [
         'correct' => 'Fix what the member entered. A woman changed to another gender has her women-only commutes paused for review (COM-45).',
@@ -40,6 +44,7 @@ return [
         'hide_rating' => 'The review stops showing and stops counting in their average. Open complaints about it are closed as upheld.',
         'restore_rating' => 'The review shows and counts again. Open complaints about it are closed as dismissed.',
         'message' => 'Lands in their app inbox, in the language you write it in. Never a push. The full text is kept in the audit log.',
+        'warn' => 'A formal warning for low reliability or repeated violations (ADM-05). They read your text in their app inbox under "A warning from RAFEEQ", never as a push. Your reason stays internal. It changes nothing else.',
     ],
     'confirm' => [
         'correct' => 'Save the correction',
@@ -52,6 +57,7 @@ return [
         'hide_rating' => 'Hide it',
         'restore_rating' => 'Show it',
         'message' => 'Send',
+        'warn' => 'Send warning',
     ],
     'done' => [
         'correct' => 'Details corrected.',
@@ -64,6 +70,7 @@ return [
         'hide_rating' => 'Review hidden.',
         'restore_rating' => 'Review is showing.',
         'message' => 'Message sent to their inbox.',
+        'warn' => 'Warning sent to their inbox.',
     ],
     'decline_code' => 'Reason shown to the member',
     'decline_codes' => [

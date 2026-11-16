@@ -82,6 +82,7 @@ final readonly class PublishCommuteOfferAction
                 'published_at' => now(),
                 'paused_at' => null,
                 'paused_reason' => null,
+                'paused_message' => null,
                 'route_polyline' => $route->polyline,
                 'route_distance_meters' => $route->distance->metres,
                 'route_duration_seconds' => $route->durationSeconds,

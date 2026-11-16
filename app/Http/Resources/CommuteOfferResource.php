@@ -63,6 +63,8 @@ final class CommuteOfferResource extends JsonResource
             'publishedAt' => $this->published_at?->toIso8601String(),
             'pausedAt' => $this->paused_at?->toIso8601String(),
             'pausedReason' => $this->paused_reason?->value,
+            // C04 · what staff told her, with `by_staff`; null for every other reason.
+            'pausedMessage' => $this->paused_message,
             'archivedAt' => $this->archived_at?->toIso8601String(),
             // What still stands between this draft and being publishable.
             'missing' => CommuteChecklist::forReview($this->resource),

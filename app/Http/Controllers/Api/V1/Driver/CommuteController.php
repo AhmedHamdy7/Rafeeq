@@ -299,7 +299,7 @@ final class CommuteController extends Controller
     )]
     public function publish(Request $request, string $commute, PublishCommuteOfferAction $action): JsonResponse
     {
-        $offer = $action->execute($this->owned($request, $commute));
+        $offer = $action->execute($this->notPausedByStaff($this->owned($request, $commute)));
 
         return ApiResponse::success(new CommuteOfferResource(
             $offer->load(['locations', 'schedule', 'weekdaySchedules', 'rules', 'scheduledTrips'])
@@ -349,7 +349,7 @@ final class CommuteController extends Controller
     )]
     public function resume(Request $request, string $commute, ChangeCommuteStatusAction $action): JsonResponse
     {
-        $offer = $action->resume($this->owned($request, $commute));
+        $offer = $action->resume($this->notPausedByStaff($this->owned($request, $commute)));
 
         return ApiResponse::success(new CommuteOfferResource(
             $offer->load(['locations', 'schedule', 'weekdaySchedules', 'rules'])
@@ -635,5 +635,21 @@ final class CommuteController extends Controller
         if ($live !== null) {
             throw DomainException::of(ErrorCode::CommuteTripInProgress, fields: ['tripId' => [(string) $live]]);
         }
+    }
+
+    /**
+     * C04 · a commute staff paused is resumed by staff. The driver's Resume (and Publish, which
+     * also leaves PAUSED) answers the transition refusal she already handles, with the reason.
+     */
+    private function notPausedByStaff(CommuteOffer $offer): CommuteOffer
+    {
+        if ($offer->status === CommuteOfferStatus::Paused && $offer->paused_reason === CommutePausedReason::ByStaff) {
+            throw DomainException::of(ErrorCode::CommuteInvalidTransition, fields: [
+                'status' => ['PAUSED'],
+                'pausedReason' => [CommutePausedReason::ByStaff->value],
+            ]);
+        }
+
+        return $offer;
     }
 }

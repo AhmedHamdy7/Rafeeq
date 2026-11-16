@@ -48,6 +48,8 @@ final class AdminActionLog
         // Every "More actions" step on a member (D16–D18, D22): what changed and why.
         'member.correct',
         'member.escalate',
+        // D20 · a warning sent to a member, and why.
+        'member.warn',
         // Changes to what a member's record says about them (reliability and reviews).
         'reliability.reverse',
         'reliability.decline_appeal',
@@ -62,6 +64,9 @@ final class AdminActionLog
         // A seat staff cancelled for a member, and a commute resumed after a gender review.
         'booking.cancel',
         'commute.resume_after_review',
+        // C04 · a commute staff stopped from the dashboard, and started again.
+        'commute.pause_by_staff',
+        'commute.resume_by_staff',
         // Money off somebody's debt that she did not pay, or a payment she says she made refused.
         'debt.payment_reject',
         'debt.coupon',
