@@ -42,6 +42,8 @@ class PickupPointRequest extends Model
             'added_minutes' => 'decimal:1',
             'added_km' => 'decimal:2',
             'status' => PickupPointRequestStatus::class,
+            'expires_at' => 'datetime',
+            'expired_at' => 'datetime',
         ];
     }
 

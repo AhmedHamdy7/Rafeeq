@@ -55,6 +55,10 @@ return [
         'title' => 'No ride on :date',
         'body' => ':name cancelled the commute for :date. Your other days are unchanged.',
     ],
+    'trip_day_cancelled_by_platform' => [
+        'title' => 'YuGo cancelled your ride on :date',
+        'body' => 'Your :time ride on :date was cancelled by YuGo. You won\'t be charged. Find another commute for that day. Your other days are unchanged.',
+    ],
     /*
      * 🔴 Leads with the fact she can act on. She is waiting somewhere, so "no car is coming" comes
      * before anything about a booking, and the second line is where to look rather than an apology.
@@ -452,6 +456,14 @@ return [
     'pickup_change_alternative_declined' => [
         'title' => ':name kept their pickup',
         'body' => ':name prefers their current pickup to :place. Nothing changes.',
+    ],
+    'pickup_change_expired' => [
+        'title' => 'Your pickup stays the same',
+        'body' => 'Your new pickup wasn\'t answered before the ride, so it expired. You can ask again for a later trip.',
+    ],
+    'pickup_change_expired_for_driver' => [
+        'title' => ':name\'s pickup request expired',
+        'body' => 'You didn\'t answer :name\'s new pickup before the ride, so her pickup stays the same.',
     ],
     // Written by staff: the text is theirs, already in her language.
     'announcement' => [

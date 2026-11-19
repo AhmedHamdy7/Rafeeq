@@ -13,6 +13,7 @@ enum CancelCode: string
     case CommuteDeleted = 'commute_deleted';
     case CommuteEnded = 'commute_ended';
     case CommuteStopped = 'commute_stopped';
+    case CancelledByPlatform = 'cancelled_by_platform';
     case VehicleReplaced = 'vehicle_replaced';
     case Replaced = 'replaced';
     case ActiveTripCancelled = 'active_trip_cancelled';
@@ -51,6 +52,7 @@ enum CancelCode: string
             DisplacementReason::VehicleReplaced->value => self::VehicleReplaced,
             DisplacementReason::CommuteDeleted->value => self::CommuteDeleted,
             'driver_cancelled_day' => self::DayCancelled,
+            'platform_cancelled_day' => self::CancelledByPlatform,
             SwitchReason::Voluntary->value, SwitchReason::DriverDelay->value => self::Switched,
             'trip_expired' => self::TripExpired,
             'not_started' => self::NotStarted,
@@ -103,7 +105,7 @@ enum CancelCode: string
     {
         return in_array($this, [
             self::RemovedByDriver, self::DayCancelled, self::CommutePaused, self::CommuteDeleted,
-            self::CommuteEnded, self::CommuteStopped, self::VehicleReplaced, self::Replaced,
+            self::CommuteEnded, self::CommuteStopped, self::CancelledByPlatform, self::VehicleReplaced, self::Replaced,
             self::ActiveTripCancelled, self::TripExpired, self::NotStarted, self::PassedYourStop, self::LateForPickup,
         ], true);
     }

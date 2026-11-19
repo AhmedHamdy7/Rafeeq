@@ -1,5 +1,6 @@
 <?php
 
+use App\Domains\Booking\Actions\RespondToPickupPointAction;
 use App\Domains\Booking\Enums\PickupPointRequestStatus;
 use App\Domains\Booking\Models\Booking;
 use App\Domains\Booking\Models\PickupPointRequest;
@@ -9,6 +10,7 @@ use App\Domains\Driver\Models\Vehicle;
 use App\Domains\Geo\Models\Place;
 use App\Domains\Group\Models\GroupMember;
 use App\Domains\Notification\Models\Notification;
+use App\Domains\Shared\Exceptions\DomainException;
 use Illuminate\Support\Facades\Storage;
 
 /**
@@ -410,4 +412,50 @@ it('shows the approved point and her label as the meeting point on her booking',
         ->and($meetingPoint['label'])->toBe(onTheWay()['label'])
         ->and($meetingPoint['isExact'])->toBeTrue()
         ->and(round($meetingPoint['lat'], 4))->toBe(30.0654);
+});
+
+it('expires an unanswered pickup change when the morning it was for departs, and keeps her old point', function () {
+    approveSeat($this->driverToken, $this->requestId);
+    $member = GroupMember::query()->where('role', 'trial')->sole();
+
+    $pickup = test()->flushHeaders()->withToken($this->paxToken)
+        ->postJson("/api/v1/groups/{$member->commute_group_id}/pickup-request", onTheWay())
+        ->assertStatus(201)->json('data');
+
+    $departure = ScheduledTrip::query()->findOrFail($this->tripId)->departure_at;
+    expect($pickup['expiresAt'])->toBe($departure->toIso8601String());
+
+    $before = Booking::query()->where('scheduled_trip_id', $this->tripId)->sole()->pickup_point;
+
+    test()->travelTo($departure->copy()->addMinute());
+    $this->artisan('requests:expire')->assertSuccessful();
+
+    $row = PickupPointRequest::query()->findOrFail($pickup['id']);
+    expect($row->status)->toBe(PickupPointRequestStatus::Expired)
+        ->and($row->expired_at)->not->toBeNull()
+        ->and(Booking::query()->where('scheduled_trip_id', $this->tripId)->sole()->pickup_point)->toEqual($before)
+        ->and(Notification::query()->where('type', 'pickup_change_expired')->where('channel', 'in_app')->count())->toBe(1)
+        ->and(Notification::query()->where('type', 'pickup_change_expired_for_driver')->where('channel', 'in_app')->count())->toBe(1);
+
+    expect(fn () => app(RespondToPickupPointAction::class)->approve($row))
+        ->toThrow(DomainException::class);
+});
+
+it('expires a pickup change on demand for tests, once', function () {
+    config(['rafeeq.testing.api' => true]);
+
+    $pickup = proposePickup($this->paxToken, $this->requestId)->assertStatus(201)->json('data');
+
+    test()->flushHeaders()->withToken(verifiedPassenger('01155667788', device: 'pax-9'))
+        ->postJson("/api/v1/testing/pickup-requests/{$pickup['id']}/expire")->assertNotFound();
+
+    test()->flushHeaders()->withToken($this->driverToken)
+        ->postJson("/api/v1/testing/pickup-requests/{$pickup['id']}/expire")
+        ->assertOk()
+        ->assertJsonPath('data.status', 'EXPIRED');
+
+    test()->flushHeaders()->withToken($this->paxToken)
+        ->postJson("/api/v1/testing/pickup-requests/{$pickup['id']}/expire")
+        ->assertStatus(409)
+        ->assertJsonPath('error.code', 'PICKUP_REQUEST_NOT_PENDING');
 });

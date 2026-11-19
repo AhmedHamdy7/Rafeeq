@@ -14,7 +14,7 @@
 >
 > **Base URL:** `{host}/api/v1` · **Auth:** bearer token · **Format:** JSON only.
 
-**Last updated:** 2026-11-16 · **282 endpoints live** · Phases 0–7, 9 and 11 complete · 10, 12 and 13 all but a decision each
+**Last updated:** 2026-11-19 · **283 endpoints live** · Phases 0–7, 9 and 11 complete · 10, 12 and 13 all but a decision each
 
 ---
 
@@ -22,7 +22,7 @@
 
 ### What is ready
 
-**282 endpoints live** and tested, across the 47 designed screens:
+**283 endpoints live** and tested, across the 47 designed screens:
 
 | | Count | Covers |
 |---|---|---|
@@ -3421,6 +3421,7 @@ What a decision moves:
 | `commute_deleted` | The driver deleted the commute, or the driver's account was deleted | `CANCELLED_BY_DRIVER` |
 | `commute_ended` | The commute's schedule ended | `CANCELLED_BY_DRIVER` |
 | `commute_stopped` | The platform stopped the commute: licence expired (COM-26), car suspended (COM-47), driver suspended (COM-37), unpaid commission, a review. One code on purpose: the passenger is not told which. "This trip can't run" | `CANCELLED_BY_DRIVER` |
+| `cancelled_by_platform` | YuGo staff cancelled that one day. Show "Canceled by YuGo". No fee for her. *(Interim, proposed rule, 2026-11-19.)* |
 | `vehicle_replaced` | The driver replaced the car | `CANCELLED_BY_DRIVER` |
 | `replaced` | Her seat went to another passenger (`replacement-offer` accepted) | `CANCELLED_BY_DRIVER` |
 | `active_trip_cancelled` | The run was stopped after it set off (`cancel-active`); read `wasAboard` and `tripCancelReason` | `ENDED_EARLY` or `CANCELLED_BY_DRIVER` |
@@ -3542,6 +3543,15 @@ gets the push `pickup_change_alternative_declined` (`pickupRequestId`, `commuteI
 `commuteGroupId` or `seatRequestId`). Answers the updated row. Refused with
 `409 PICKUP_REQUEST_NOT_PENDING` unless the row is `SUGGESTED_ALTERNATIVE`. The 12-hour lock does
 not apply, because nothing moves.
+
+**Expiry** *(interim, proposed rule of 2026-11-19, waiting on partner approval)*. Every pickup-change
+row has `expiresAt`: the departure of the next morning it would change (her next confirmed seat, or
+the day of a one-day seat request); `null` for a recurring seat request. A row still `PENDING` or
+`SUGGESTED_ALTERNATIVE` at that time becomes **`EXPIRED`** (`expiredAt` set): her old point stays,
+nothing moves, and both sides are told — the passenger `pickup_change_expired`, the driver
+`pickup_change_expired_for_driver` (`pickupRequestId`, `commuteId`, `seatRequestId` when there is
+one). Answering an expired row is `409 PICKUP_REQUEST_NOT_PENDING`. She can ask again for a later
+trip. Show the driver's "Expired" card from `status: "EXPIRED"`.
 
 #### `POST /commutes/{commute}/dropoff-preview` — active, profile complete
 
@@ -4953,6 +4963,9 @@ hold must still be able to read the notice that says so.
 | `seats_offered_by_driver` | passenger on a waiting list | her offers | `commuteId`, `seatRequestId` |
 | `booking_cancelled` | the other side | the booking | `bookingId` |
 | `trip_day_cancelled` | passenger | the booking | `tripId`, `bookingId` |
+| `trip_day_cancelled_by_platform` | passenger | the booking (offer Find another commute) | `tripId`, `bookingId` |
+| `pickup_change_expired` | passenger | the pickup request | `pickupRequestId`, `commuteId`, `seatRequestId`? |
+| `pickup_change_expired_for_driver` | driver | the pickup request | `pickupRequestId`, `commuteId`, `seatRequestId`? |
 | `commute_paused_seat_cancelled` · `vehicle_replaced_seat_cancelled` | passenger (back on the waiting list) | the commute | `commuteId`, `bookingId` |
 | `commute_deleted_seat_cancelled` | passenger (**not** on any list) | her bookings | `commuteId`, `bookingId` |
 | `change_proposal_received` · `_revised` · `_applied` · `_rejected` | passenger / driver | the proposal (`GET /change-proposals/{proposal}` with the `changeProposalId`, for a passenger) | `changeProposalId` (+ `bookingId` / `commuteId`) |
@@ -5730,6 +5743,12 @@ gets it. `{ "enabled": true }` puts it back; `POST /testing/reset` does too.
 
 `{ "type": "pickup_change_requested", "data": { "bookingId": "01J…" }, "params": {} }` → `202 { type, sent, tokens }`. A push to the caller's own devices with **no inbox row**. Any notification type; ids in `data` must be the caller's own (`422`). Simulators get no APNs push; Android emulators do.
 
+#### `POST /testing/pickup-requests/{pickupRequest}/expire`
+
+No body → the pickup-change row, now `status: "EXPIRED"`, with both notifications sent as the
+every-minute sweep would. The commute's driver or the passenger who asked; anybody else `404`. Only
+a `PENDING` or `SUGGESTED_ALTERNATIVE` row, else `409 PICKUP_REQUEST_NOT_PENDING`.
+
 #### `POST /testing/change-proposals/{proposal}/expire`
 
 No body → the proposal as the driver's list shows it, now `status: "EXPIRED"`. The driver of the commute, or a passenger with a booking on it. Only a `PENDING` (or `REJECTED`) one, else `409 CHANGE_PROPOSAL_NOT_LIVE`. `expiresAt` becomes now, and the same sweep that runs every minute (`requests:expire`) closes it. Both sides then read it as expired on `GET /driver/change-proposals` and `GET /change-proposals/{proposal}`.
@@ -5740,7 +5759,7 @@ No body → the proposal as the driver's list shows it, now `status: "EXPIRED"`.
 
 #### `POST /testing/trips/{trip}/cancel-by-platform`
 
-`{ "reason": "Road closed" }` → `{ id, status: "CANCELLED", cancelledBy: "PLATFORM", cancelledReason, bookingsCancelled }`. Staff call the day off. The driver of the run or a passenger with a booking on it; only a run that has not started (`409 TRIP_NOT_CANCELLABLE`). The driver's History row has `cancelledBy: "PLATFORM"`; each booking becomes `CANCELLED_BY_DRIVER` with `cancelledReason: "commute_stopped"`. No fee and no reliability event for the driver, and no push.
+`{ "reason": "Road closed" }` → `{ id, status: "CANCELLED", cancelledBy: "PLATFORM", cancelledReason, bookingsCancelled }`. Staff call the day off. The driver of the run or a passenger with a booking on it; only a run that has not started (`409 TRIP_NOT_CANCELLABLE`). The driver's History row has `cancelledBy: "PLATFORM"`; each booking becomes `CANCELLED_BY_DRIVER` with `cancelledReason: "cancelled_by_platform"`, and each passenger gets `trip_day_cancelled_by_platform`. No fee and no reliability event for the driver.
 
 #### `POST /testing/driver/application/state`
 
@@ -5981,7 +6000,7 @@ exist, and every live endpoint must be named here.
 
 | Date | Change |
 |---|---|
-| 2026-11-19 | 🧪 **Patrol run requests of 2026-11-19.** `nextJourney.live` is filled from the same itinerary as `GET /trips/{trip}/location`, and `driverDelay: "passed_your_stop"` also comes from the car's GPS (300 m past her stop along the route). New **`graceStartsAt` / `graceEndsAt`** on `nextJourney.live` and `GET /trips/{trip}/location`. Seat requests gain **`endedAt`** and `updatedAt`. A `REJECTED` change proposal no longer blocks a new one. `lastSearchedAt` matches on the saved filters only. 🔴 A driver's "offer to all" now gives each member **one offer per morning** in one `offerGroupId`, and accepting the group books every morning still open. Member-facing texts say YuGo. New and changed testing calls in 4.17. |
+| 2026-11-19 | 🧪 **Patrol run requests of 2026-11-19.** `nextJourney.live` is filled from the same itinerary as `GET /trips/{trip}/location`, and `driverDelay: "passed_your_stop"` also comes from the car's GPS (300 m past her stop along the route). New **`graceStartsAt` / `graceEndsAt`** on `nextJourney.live` and `GET /trips/{trip}/location`. Seat requests gain **`endedAt`** and `updatedAt`. A `REJECTED` change proposal no longer blocks a new one. `lastSearchedAt` matches on the saved filters only. 🔴 A driver's "offer to all" now gives each member **one offer per morning** in one `offerGroupId`, and accepting the group books every morning still open. Member-facing texts say YuGo. New and changed testing calls in 4.17. *Later the same day (interim, proposed rules):* pickup-change rows gain `expiresAt` / `expiredAt` and the status **`EXPIRED`** (notifications `pickup_change_expired`, `pickup_change_expired_for_driver`; testing call `POST /testing/pickup-requests/{pickupRequest}/expire`). A day cancelled by staff gives each passenger `trip_day_cancelled_by_platform` and `cancelledReason: "cancelled_by_platform"`. |
 | 2026-11-19 | 🧪 **More testing calls for Patrol (staging only, 4.17).** `POST /testing/change-proposals/{proposal}/expire`, `POST /testing/seat-requests/{seatRequest}/close`, `POST /testing/trips/{trip}/cancel-by-platform`, `POST /testing/driver/application/state`, `POST`/`DELETE /testing/driver/blocker`. A change proposal past its `expiresAt` now turns `EXPIRED` within a minute. New eligibility blocker `not_eligible` (testing only). |
 | 2026-11-17 | ⏸️ **Staff can pause a commute (C04). No new endpoint, no field changed or removed.** New `pausedReason` value **`by_staff`** and a new commute field **`pausedMessage`** (staff's text for the driver; `null` otherwise). Upcoming confirmed seats are cancelled with no fee, as with the other automatic reasons. Only staff resume it: the driver's Resume and Publish answer the existing `409 COMMUTE_INVALID_TRANSITION`, with `fields.pausedReason: ["by_staff"]`. The driver also gets a `staff_message` in the inbox. `pausedCommuteReasons` on `GET /driver/home` can carry `by_staff` (and `gender_review`). Staff warnings to a member (D20) arrive as an ordinary `staff_message` titled "A warning from RAFEEQ". |
 | 2026-11-16 | 💬 **Rating prompt and inbox text.** Every notification `body` now reads on its own without the `title`, in English and Arabic, and names the driver, passenger or day where it matters (38 types reworded; `seat_offered` and `seats_offered_by_driver` now carry the driver's name, `rating_reminder` the trip's day). Stated: a booked next commute never holds `ratingPrompt` back; `POST /testing/reset` clears the rating-prompt history; `POST /testing/bookings/{booking}/age` moves the weekly rule's "last rating". Testing: **`GET /testing/rating-prompt`** says why each recent booking is or isn't prompted. |

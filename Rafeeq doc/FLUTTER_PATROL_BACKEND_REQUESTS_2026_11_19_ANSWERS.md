@@ -172,10 +172,10 @@ Full bodies and answers are in guide 4.17.
 | T4 | ✅ **Fixed.** Reject works on an approved, active car |
 | T5 | ✅ **Fixed.** `/auth/me`, faults by phone number, and `fields` |
 | T6 | ✅ **New** `POST /testing/change-proposals/{proposal}/expire`. Also fixed: the server never expired overdue proposals |
-| T7 | ⛔ **Not built.** A pickup-change request has no expired state, and no rule says it expires |
+| T7 | ✅ **New** `POST /testing/pickup-requests/{pickupRequest}/expire`, and pickup changes now expire on their own. *Interim: proposed rule, waiting on partner approval* |
 | T8 | ✅ **New** `POST /testing/seat-requests/{seatRequest}/close` |
-| T9 | ✅ **New** `POST /testing/trips/{trip}/cancel-by-platform` |
-| T10 | ⛔ **Not built.** There is no "on hold" state apart from a suspension |
+| T9 | ✅ **New** `POST /testing/trips/{trip}/cancel-by-platform`. Passengers now get their own notification. *Interim* |
+| T10 | ⛔ **Not built, on purpose.** Use the suspension banner; drop the "on hold" design. *Proposed, waiting on partner approval* |
 | T11 | ✅ **New** `POST /testing/driver/application/state` |
 | T12 | ✅ **New** `POST` / `DELETE /testing/driver/blocker` |
 | T13 | ✅ **Fixed.** `skipEvidence: true` on the appeal decide call |
@@ -282,11 +282,40 @@ For "already published" or "account on hold" publish refusals, use the `error` m
 
 🔴 **Server bug found and fixed.** Nothing ever ran the expiry, so a proposal stayed `PENDING` after its morning. The every-minute job now expires them at the original departure (COM-17). You get the same `EXPIRED` without the testing call.
 
-### T7 · Pickup-change expire: not built
+### T7 · Pickup changes now expire
 
-A pickup-change request has no expired status. Its statuses are `PENDING`, `APPROVED`, `SUGGESTED_ALTERNATIVE`, `REJECTED` and `ALTERNATIVE_DECLINED`. Nothing on the server expires one, and the business rules (BOOK-37) don't say it should.
+*Interim: this is a proposed rule (change file `2026-11-19-pickup-expiry-platform-cancel-and-hold.md` in the business repo), built so you can design against it. It may change when the partners decide.*
 
-The driver's "Expired" pickup-change card has no state behind it. Please take it to the product owner. Until there is a rule, don't show that card.
+**The rule:** a pickup change that is still unanswered when the next morning it would change departs becomes `EXPIRED`. Her old point stays, and both sides are told.
+
+This covers both open statuses: `PENDING` (waiting on the driver) and `SUGGESTED_ALTERNATIVE` (waiting on her).
+
+New on every pickup-change row (`GET /pickup-requests`, `GET /driver/pickup-requests`):
+
+| Field | Meaning |
+|---|---|
+| `status` | New value `EXPIRED`. |
+| `expiresAt` | When it expires: the departure of her next confirmed seat on that commute, or the day of a one-day seat request. `null` for a request on a recurring seat request. |
+| `expiredAt` | When it expired, or `null`. |
+
+New notifications:
+
+| Type | To | Text |
+|---|---|---|
+| `pickup_change_expired` | passenger | "Your pickup stays the same. Your new pickup wasn't answered before the ride, so it expired. You can ask again for a later trip." |
+| `pickup_change_expired_for_driver` | driver | "‹Name›'s pickup request expired. You didn't answer ‹Name›'s new pickup before the ride, so her pickup stays the same." |
+
+Both carry `pickupRequestId` and `commuteId`, plus `seatRequestId` when there is one.
+
+- Answering an expired row is `409 PICKUP_REQUEST_NOT_PENDING`.
+- She can send a new request at once.
+- Show the driver's "Expired" card from `status: "EXPIRED"`.
+
+**Testing:** `POST /testing/pickup-requests/{pickupRequest}/expire`, no body.
+
+- Answers the row with `status: "EXPIRED"` and sends both notifications.
+- Who: the commute's driver or the passenger who asked. Anyone else gets `404`.
+- A row that isn't open answers `409 PICKUP_REQUEST_NOT_PENDING`.
 
 ### T8 · Close a one-day request as if its day passed
 
@@ -310,13 +339,20 @@ What the screens read:
 | Who | Where | Value |
 |---|---|---|
 | Driver | `GET /driver/trips?scope=past` row | `cancelledBy: "PLATFORM"` |
-| Passenger | her booking | `status: "CANCELLED_BY_DRIVER"`, `cancelledReason: "commute_stopped"` |
+| Passenger | her booking | `status: "CANCELLED_BY_DRIVER"`, `cancelledReason: "cancelled_by_platform"` |
 
-**Show `commute_stopped` as "Canceled by YuGo".** It is the existing code for a stop the driver didn't choose.
+The driver pays no fee and gets no reliability event.
 
-The driver pays no fee and gets no reliability event. ⚠️ Passengers get no push or inbox message from this call yet: the only text for a cancelled day says the driver cancelled, which would be false.
+*Interim (proposed rule):* a day staff cancel now has its own code and notification:
 
-### T10 · Account hold: not built
+- **`cancelledReason: "cancelled_by_platform"`** on her booking. Show "Canceled by YuGo" on History and the past trip.
+- **`trip_day_cancelled_by_platform`** to each passenger, as push and inbox, with `tripId` and `bookingId`. Open the alternatives for that booking.
+  - English: "YuGo cancelled your ride on 24/11" / "Your 07:30 ride on 24/11 was cancelled by YuGo. You won't be charged. Find another commute for that day. Your other days are unchanged."
+  - Arabic: "YuGo لغت رحلتك يوم 24/11" / "رحلتك الساعة 07:30 يوم 24/11 اتلغت من YuGo. مش هتدفع حاجة. دوّري على رحلة تانية لليوم ده. باقي أيامك زي ما هي."
+
+`commute_stopped` is unchanged: the platform stopped the whole commute (licence, car, suspension).
+
+### T10 · Account hold: not built, on purpose
 
 The backend has no "on hold for review" state apart from a suspension. Under AUTH-19 (D-0018, D-0048):
 
@@ -328,7 +364,15 @@ Both already have testing calls:
 - `POST /testing/driver/suspend {scope: "account", reason?}`: temporary, with a review time and a case number. Commutes pause with `account_suspended`.
 - `POST /testing/account/ban`.
 
-There is no paused reason "account under review". A Restricted screen with "Within N h" for something that isn't a suspension doesn't match today's rule. Please check that design with the product owner before we build anything.
+There is no paused reason "account under review".
+
+**Proposed (waiting on partner approval): no "on hold" state.** Anything temporary is a suspension:
+
+- show the suspension banner;
+- commutes read `account_suspended`;
+- keep the Restricted screen for a permanent ban only.
+
+Please drop the "on hold" design, or bring it to the partners as a new decision if a hold before review is really wanted.
 
 ### T11 · Put the driver application in any state
 
@@ -382,8 +426,6 @@ POST /testing/faults
 
 Her next evidence upload, on any report, fails with the `X-Testing-Fault` header. Then show "Your report was sent, but the photo didn't upload".
 
-## Waiting on the product owner
+## Waiting on partner approval
 
-- **T7:** should a pickup-change request expire, and when?
-- **T10:** is there an "on hold for review" state apart from a suspension? Today's rule is a banner for a suspension and the Restricted screen for a ban only.
-- **T9:** what should a passenger be told when staff cancel her day?
+All three are written up as one proposed change in the business repo: `changes/2026-11-19-pickup-expiry-platform-cancel-and-hold.md`. T7 and T9 are built as interim rules. If the partners decide differently, the backend changes and we tell you.

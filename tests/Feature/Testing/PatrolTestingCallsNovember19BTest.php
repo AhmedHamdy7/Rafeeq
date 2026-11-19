@@ -11,6 +11,7 @@ use App\Domains\Commute\Models\CommuteWeekdaySchedule;
 use App\Domains\Commute\Models\ScheduledTrip;
 use App\Domains\Driver\Models\Vehicle;
 use App\Domains\Identity\Models\User;
+use App\Domains\Notification\Models\Notification;
 use App\Domains\Payment\Models\DebtEntry;
 use App\Domains\Reliability\Models\ReliabilityEvent;
 use Illuminate\Support\Facades\Storage;
@@ -123,7 +124,8 @@ it('cancels a run as staff: no fee or reliability mark on the driver, the passen
 
     $booking = Booking::query()->findOrFail($bookingId);
     expect($booking->status)->toBe(BookingStatus::CancelledByDriver)
-        ->and($booking->cancel_code)->toBe('commute_stopped')
+        ->and($booking->cancel_code)->toBe('cancelled_by_platform')
+        ->and(Notification::query()->where('type', 'trip_day_cancelled_by_platform')->where('channel', 'in_app')->sole()->body)->toContain('YuGo')
         ->and(DebtEntry::query()->count())->toBe(0)
         ->and(ReliabilityEvent::query()->count())->toBe(0);
 
@@ -132,7 +134,7 @@ it('cancels a run as staff: no fee or reliability mark on the driver, the passen
     expect($row['cancelledBy'])->toBe('PLATFORM');
 
     test()->flushHeaders()->withToken($rider)->getJson("/api/v1/bookings/{$bookingId}")
-        ->assertOk()->assertJsonPath('data.cancelledReason', 'commute_stopped');
+        ->assertOk()->assertJsonPath('data.cancelledReason', 'cancelled_by_platform');
 
     test()->flushHeaders()->withToken($driver)->postJson("/api/v1/testing/trips/{$tripId}/cancel-by-platform", ['reason' => 'Again'])
         ->assertStatus(409)->assertJsonPath('error.code', 'TRIP_NOT_CANCELLABLE');

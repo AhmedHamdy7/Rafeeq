@@ -42,6 +42,8 @@ enum NotificationType: string
     case SeatDeclined = 'seat_declined';
     case BookingCancelled = 'booking_cancelled';
     case TripDayCancelled = 'trip_day_cancelled';
+
+    case TripDayCancelledByPlatform = 'trip_day_cancelled_by_platform';
     case MatchFound = 'match_found';
 
     /*
@@ -457,6 +459,10 @@ enum NotificationType: string
 
     case PickupChangeAlternativeDeclined = 'pickup_change_alternative_declined';
 
+    case PickupChangeExpired = 'pickup_change_expired';
+
+    case PickupChangeExpiredForDriver = 'pickup_change_expired_for_driver';
+
     /** Staff to everyone, or to passengers or drivers (Z01). Inbox only, never a push (NOTIF-02). */
     case Announcement = 'announcement';
 
@@ -518,6 +524,7 @@ enum NotificationType: string
             self::ChangeProposalRejected,
             self::WaitlistClearedByChange,
             self::TripDayCancelled,
+            self::TripDayCancelledByPlatform,
             self::DepartureTimeChanged,
             self::PickupMovedEarlier,
             self::PickupTimeChanged,
@@ -533,6 +540,8 @@ enum NotificationType: string
             self::PickupChangeRejected,
             self::PickupChangeAlternativeAccepted,
             self::PickupChangeAlternativeDeclined,
+            self::PickupChangeExpired,
+            self::PickupChangeExpiredForDriver,
             self::MatchFound => NotificationCategory::Booking,
 
             self::TripStarted,

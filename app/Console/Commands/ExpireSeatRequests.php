@@ -4,6 +4,7 @@ namespace App\Console\Commands;
 
 use App\Domains\Booking\Actions\OfferSeatToWaitlistAction;
 use App\Domains\Booking\Actions\RespondToSeatRequestAction;
+use App\Domains\Booking\Support\PickupRequestExpiry;
 use App\Domains\Commute\Actions\ProposeCommuteChangeAction;
 use App\Domains\Trip\Support\PickupReachability;
 use Illuminate\Console\Command;
@@ -52,8 +53,9 @@ final class ExpireSeatRequests extends Command
          */
         $unreachable = $offers->closeUnreachable($reachability);
         $proposals = ProposeCommuteChangeAction::expireOverdue();
+        $pickups = PickupRequestExpiry::expireOverdue();
 
-        $this->info("Expired {$expired} seat request(s); closed {$datePassed} whose day passed; closed {$unreachable} unreachable offer(s); expired {$proposals} change proposal(s).");
+        $this->info("Expired {$expired} seat request(s); closed {$datePassed} whose day passed; closed {$unreachable} unreachable offer(s); expired {$proposals} change proposal(s); expired {$pickups} pickup change(s).");
 
         return self::SUCCESS;
     }

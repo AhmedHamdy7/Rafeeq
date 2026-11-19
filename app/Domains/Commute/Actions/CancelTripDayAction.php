@@ -100,7 +100,7 @@ final readonly class CancelTripDayAction
                     'status' => BookingStatus::CancelledByDriver->value,
                     'cancelled_at' => now(),
                     'cancelled_reason' => $driver === null ? 'platform_cancelled_day' : 'driver_cancelled_day',
-                    'cancel_code' => $driver === null ? CancelCode::CommuteStopped->value : CancelCode::DayCancelled->value,
+                    'cancel_code' => $driver === null ? CancelCode::CancelledByPlatform->value : CancelCode::DayCancelled->value,
                     'cancellation_fee_piastres' => 0,
                 ])->save();
 
@@ -127,6 +127,13 @@ final readonly class CancelTripDayAction
                  */
                 // PAY-23 (C-6): the driver-cancel fee by the notice he gave, per confirmed seat.
                 if ($driver === null) {
+                    if ($booking->passenger !== null) {
+                        Notifier::send($booking->passenger, NotificationType::TripDayCancelledByPlatform, [
+                            'date' => $trip->trip_date->format('j/n'),
+                            'time' => $trip->departure_local?->format('H:i') ?? '',
+                        ], ['tripId' => $trip->id, 'bookingId' => $booking->id]);
+                    }
+
                     continue;
                 }
 

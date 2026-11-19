@@ -51,6 +51,10 @@ return [
         'title' => 'مفيش رحلة يوم :date',
         'body' => 'رحلة يوم :date اتلغت من :name. باقي أيامك زي ما هي.',
     ],
+    'trip_day_cancelled_by_platform' => [
+        'title' => 'YuGo لغت رحلتك يوم :date',
+        'body' => 'رحلتك الساعة :time يوم :date اتلغت من YuGo. مش هتدفع حاجة. دوّري على رحلة تانية لليوم ده. باقي أيامك زي ما هي.',
+    ],
     // بتبدأ بالحاجة اللي تقدر تتصرف فيها: مفيش عربية جاية، وبعدين تبص على إيه.
     'active_trip_cancelled' => [
         'title' => 'مفيش عربية جاية',
@@ -378,6 +382,14 @@ return [
     'pickup_change_alternative_declined' => [
         'title' => 'مكان الركوب زي ما هو',
         'body' => ':name فضّل مكان الركوب الحالي بدل :place. مفيش حاجة اتغيرت.',
+    ],
+    'pickup_change_expired' => [
+        'title' => 'مكان الركوب زي ما هو',
+        'body' => 'محدش ردّ على مكان الركوب الجديد قبل الرحلة، فالطلب انتهى. تقدري تطلبيه تاني لرحلة بعد كده.',
+    ],
+    'pickup_change_expired_for_driver' => [
+        'title' => 'طلب :name لمكان ركوب جديد انتهى',
+        'body' => 'مارديتش على مكان الركوب الجديد اللي طلبته :name قبل الرحلة، فمكانها زي ما هو.',
     ],
     // Written by staff: the text is theirs, already in her language.
     'announcement' => [

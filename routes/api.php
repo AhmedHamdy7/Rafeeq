@@ -157,6 +157,7 @@ Route::prefix('v1')->group(function (): void {
         Route::post('bookings/{booking}/fields', [TestingDataController::class, 'bookingFields']);
         Route::post('trips/{trip}/location/age', [TestingDataController::class, 'ageLocation']);
         Route::post('change-proposals/{proposal}/expire', [TestingStatesController::class, 'expireProposal']);
+        Route::post('pickup-requests/{pickupRequest}/expire', [TestingStatesController::class, 'expirePickupRequest']);
         Route::post('seat-requests/{seatRequest}/close', [TestingStatesController::class, 'closeSeatRequest']);
         Route::post('trips/{trip}/cancel-by-platform', [TestingStatesController::class, 'cancelByPlatform']);
         Route::post('driver/application/state', [TestingStatesController::class, 'applicationState']);

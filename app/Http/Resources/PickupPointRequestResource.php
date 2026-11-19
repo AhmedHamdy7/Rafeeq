@@ -110,6 +110,8 @@ final class PickupPointRequestResource extends JsonResource
                 'isExact' => true,
             ],
 
+            'expiresAt' => $this->expires_at?->toIso8601String(),
+            'expiredAt' => $this->expired_at?->toIso8601String(),
             'createdAt' => $this->created_at->toIso8601String(),
         ];
     }

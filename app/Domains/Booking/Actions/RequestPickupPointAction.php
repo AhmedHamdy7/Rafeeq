@@ -7,6 +7,7 @@ use App\Domains\Booking\Enums\SeatRequestStatus;
 use App\Domains\Booking\Models\PickupPointRequest;
 use App\Domains\Booking\Models\SeatRequest;
 use App\Domains\Booking\Support\PickupDetour;
+use App\Domains\Booking\Support\PickupRequestExpiry;
 use App\Domains\Commute\Models\CommuteOffer;
 use App\Domains\Geo\Contracts\GeoQueryEngine;
 use App\Domains\Group\Models\GroupMember;
@@ -137,6 +138,8 @@ final readonly class RequestPickupPointAction
         $pickup->status = PickupPointRequestStatus::Pending->value;
 
         $pickup->save();
+
+        PickupRequestExpiry::stamp($pickup);
 
         $driver = User::query()->find($offer->driver_profile_id);
         $requester = User::query()->find($requesterUserId);

@@ -4,10 +4,14 @@ namespace App\Http\Controllers\Api\V1\Testing;
 
 use App\Domains\Admin\Models\AdminUser;
 use App\Domains\Booking\Actions\RespondToSeatRequestAction;
+use App\Domains\Booking\Enums\CancelCode;
 use App\Domains\Booking\Enums\SeatRequestCommitment;
 use App\Domains\Booking\Enums\SeatRequestStatus;
 use App\Domains\Booking\Models\Booking;
+use App\Domains\Booking\Models\PickupPointRequest;
 use App\Domains\Booking\Models\SeatRequest;
+use App\Domains\Booking\Support\PickupRequestContext;
+use App\Domains\Booking\Support\PickupRequestExpiry;
 use App\Domains\Commute\Actions\CancelTripDayAction;
 use App\Domains\Commute\Actions\ProposeCommuteChangeAction;
 use App\Domains\Commute\Models\ChangeProposal;
@@ -40,6 +44,7 @@ use App\Domains\Verification\Models\UserVerification;
 use App\Http\Controllers\Controller;
 use App\Http\OpenApi\ApiErrors;
 use App\Http\Resources\ChangeProposalResource;
+use App\Http\Resources\PickupPointRequestResource;
 use App\Http\Responses\ApiResponse;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -53,6 +58,31 @@ final class TestingStatesController extends Controller
     private const array ACTION_ITEMS = ['government_id', 'selfie', 'driving_licence', 'vehicle_registration', 'vehicle_details', 'application'];
 
     private const array DRIVER_TYPES = [VerificationType::GovernmentId, VerificationType::Selfie, VerificationType::DrivingLicence];
+
+    #[ApiErrors(ErrorCode::NotFound, ErrorCode::PickupRequestNotPending)]
+    public function expirePickupRequest(Request $request, string $pickupRequest): JsonResponse
+    {
+        $user = TestAccounts::assertAllowed($request->user());
+
+        $target = PickupPointRequest::query()->whereKey($pickupRequest)->first()
+            ?? throw DomainException::of(ErrorCode::NotFound);
+
+        $commuteId = PickupRequestContext::commuteId($target);
+        $isDriver = $commuteId !== null
+            && (string) CommuteOffer::query()->whereKey($commuteId)->value('driver_profile_id') === (string) $user->id;
+
+        if (! $isDriver && (string) $target->requested_by_user_id !== (string) $user->id) {
+            throw DomainException::of(ErrorCode::NotFound);
+        }
+
+        if (! PickupRequestExpiry::expire($target)) {
+            throw DomainException::of(ErrorCode::PickupRequestNotPending, fields: [
+                'status' => [strtoupper($target->fresh()->status->value)],
+            ]);
+        }
+
+        return ApiResponse::success(new PickupPointRequestResource($target->fresh()));
+    }
 
     #[ApiErrors(ErrorCode::NotFound, ErrorCode::ChangeProposalNotLive, ErrorCode::ServiceUnavailable)]
     public function expireProposal(Request $request, string $proposal): JsonResponse
@@ -158,7 +188,7 @@ final class TestingStatesController extends Controller
             'cancelledReason' => $cancelled->cancelled_reason,
             'bookingsCancelled' => Booking::query()
                 ->where('scheduled_trip_id', $cancelled->id)
-                ->where('cancel_code', 'commute_stopped')
+                ->where('cancel_code', CancelCode::CancelledByPlatform->value)
                 ->count(),
         ]);
     }
