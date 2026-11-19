@@ -133,3 +133,26 @@ it('lists her upcoming days after a recurring approval', function () {
 
     test()->flushHeaders()->withToken($passenger)->getJson('/api/v1/my-bookings?scope=upcoming&page=1&perPage=20')->assertOk();
 });
+
+it('lists her days right after a recurring approval on a one-weekday commute three days out (g117)', function () {
+    $driver = approvedDriver('01020001009', 'driver');
+    $day = now()->addDays(3);
+    $mask = DaysMask::fromBits(1 << $day->dayOfWeek)->value;
+    $commuteId = createCommute($driver, Vehicle::query()->where('is_active', true)->sole()->id)->assertStatus(201)->json('data.id');
+    saveRoute($driver, $commuteId)->assertOk();
+    saveSchedule($driver, $commuteId, ['daysMask' => $mask, 'startDate' => $day->toDateString()])->assertOk();
+    test()->flushHeaders()->withToken($driver)->postJson("/api/v1/commutes/{$commuteId}/publish")->assertOk();
+
+    $passenger = verifiedPassenger('01020001003');
+    $requestId = requestSeat($passenger, $commuteId, ['commitment' => 'recurring', 'requestedDaysMask' => $mask])
+        ->assertStatus(201)->json('data.id');
+
+    $approved = test()->flushHeaders()->withToken($driver)->postJson("/api/v1/driver/seat-requests/{$requestId}/approve")->assertSuccessful();
+
+    $upcoming = test()->flushHeaders()->withToken($passenger)->getJson('/api/v1/my-bookings?scope=upcoming')->assertOk()->json('data');
+
+    expect($upcoming)->not->toBeEmpty()
+        ->and(collect($upcoming)->pluck('status')->unique()->all())->toBe(['CONFIRMED'])
+        ->and($upcoming[0]['commuteGroupId'])->not->toBeNull()
+        ->and(count($upcoming))->toBe(count($approved->json('data.bookings') ?? $approved->json('data.bookingIds') ?? $upcoming));
+});
