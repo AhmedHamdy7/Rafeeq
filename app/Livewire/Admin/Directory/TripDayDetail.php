@@ -2,10 +2,13 @@
 
 namespace App\Livewire\Admin\Directory;
 
+use App\Domains\Admin\Actions\StaffCancelTripDayAction;
 use App\Domains\Admin\Enums\AdminPermission;
 use App\Domains\Admin\Support\AdminMaps;
 use App\Domains\Booking\Models\Booking;
+use App\Domains\Commute\Enums\ScheduledTripStatus;
 use App\Domains\Commute\Models\ScheduledTrip;
+use App\Domains\Shared\Exceptions\DomainException;
 use App\Domains\Trip\Models\TripLocation;
 use App\Domains\Trip\Models\TripSession;
 use Livewire\Attributes\Layout;
@@ -14,7 +17,8 @@ use Livewire\Attributes\Locked;
 /**
  * TRIP DAY DETAIL (Y02, Y03): one run — when it was meant to leave and what happened, who was
  * on it, whether they turned up, and the money each seat carried (frozen on the day, PAY-44).
- * Read-only. The chat is not here: it opens only inside a report about the run (Y04).
+ * One staff action: cancel a day that has not started (ADM-09). The chat is not here: it opens
+ * only inside a report about the run (Y04).
  */
 #[Layout('components.layouts.admin')]
 class TripDayDetail extends RecordPage
@@ -22,10 +26,39 @@ class TripDayDetail extends RecordPage
     #[Locked]
     public string $tripId = '';
 
+    public bool $cancelling = false;
+
     public function mount(ScheduledTrip $trip): void
     {
         $this->authorizeTo(AdminPermission::TripView);
         $this->tripId = $trip->id;
+    }
+
+    public function startCancel(): void
+    {
+        $this->authorizeTo(AdminPermission::CommuteModerate);
+        $this->resetValidation();
+        $this->reset('reason', 'done');
+        $this->cancelling = true;
+    }
+
+    public function cancelDay(StaffCancelTripDayAction $days): void
+    {
+        $this->authorizeTo(AdminPermission::CommuteModerate);
+        $this->validate(['reason' => ['required', 'string', 'min:5', 'max:255']], attributes: ['reason' => __('admin/actions.reason')]);
+
+        $trip = ScheduledTrip::query()->whereKey($this->tripId)->with('commuteOffer.driverProfile.user')->firstOrFail();
+
+        try {
+            $days->cancel($this->admin(), $trip, $this->reason);
+        } catch (DomainException $e) {
+            $this->addError('record', __('errors.'.$e->errorCode->value));
+
+            return;
+        }
+
+        $this->reset('cancelling', 'reason');
+        $this->done = __('admin/records.trip.cancelled_done');
     }
 
     public function render()
@@ -61,6 +94,8 @@ class TripDayDetail extends RecordPage
                 'driver' => (int) $completed->sum('driver_amount_snapshot_piastres'),
             ],
             'mayOpenMembers' => $this->may(AdminPermission::MemberView),
+            'mayCancel' => $this->may(AdminPermission::CommuteModerate) && $trip->status === ScheduledTripStatus::Scheduled,
+            'cancelPassengers' => $this->cancelling ? StaffCancelTripDayAction::passengers($trip) : null,
         ])->title(__('admin/records.trip.title'));
     }
 

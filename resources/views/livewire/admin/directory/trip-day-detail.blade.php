@@ -1,4 +1,4 @@
-{{-- TRIP DAY DETAIL (Y02, Y03). Read-only; the chat opens only inside a report (Y04). --}}
+{{-- TRIP DAY DETAIL (Y02, Y03). One staff action, cancel this day (ADM-09); the chat opens only inside a report (Y04). --}}
 @php
     use App\Domains\Commute\Enums\CommuteLocationType;
     use App\Livewire\Admin\Directory\DirectoryPage;
@@ -17,7 +17,19 @@
     <x-admin.page-head
         :title="($offer?->locations->firstWhere('type', CommuteLocationType::Origin)?->address ?? '—').' → '.($offer?->locations->firstWhere('type', CommuteLocationType::Destination)?->address ?? '—')"
         :sub="$trip->trip_date?->format('D j M Y').' · '.$trip->departure_at?->timezone('Africa/Cairo')->format('H:i')"
-    />
+    >
+        @if ($mayCancel)
+            <button type="button" class="ad-btn ad-btn--dangerline" wire:click="startCancel">{{ __('admin/records.trip.cancel') }}</button>
+        @endif
+    </x-admin.page-head>
+
+    @if ($done)
+        <p class="ad-flash" role="status"><x-admin.icon name="check" />{{ $done }}</p>
+    @endif
+
+    @if ($cancelling)
+        @include('livewire.admin.directory._reason-form', ['title' => __('admin/records.trip.cancel'), 'hint' => __('admin/records.trip.cancel_hint', ['passengers' => $cancelPassengers ?? 0]), 'submit' => 'cancelDay', 'confirm' => __('admin/records.trip.cancel_confirm'), 'cancel' => '$set(\'cancelling\', false)', 'danger' => true])
+    @endif
 
     <div class="ad-split">
         <div class="ad-stack">

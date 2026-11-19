@@ -172,10 +172,10 @@ Full bodies and answers are in guide 4.17.
 | T4 | ✅ **Fixed.** Reject works on an approved, active car |
 | T5 | ✅ **Fixed.** `/auth/me`, faults by phone number, and `fields` |
 | T6 | ✅ **New** `POST /testing/change-proposals/{proposal}/expire`. Also fixed: the server never expired overdue proposals |
-| T7 | ✅ **New** `POST /testing/pickup-requests/{pickupRequest}/expire`, and pickup changes now expire on their own. *Interim: proposed rule, waiting on partner approval* |
+| T7 | ✅ **New** `POST /testing/pickup-requests/{pickupRequest}/expire`, and pickup changes now expire on their own (BOOK-37, D-0049) |
 | T8 | ✅ **New** `POST /testing/seat-requests/{seatRequest}/close` |
-| T9 | ✅ **New** `POST /testing/trips/{trip}/cancel-by-platform`. Passengers now get their own notification. *Interim* |
-| T10 | ⛔ **Not built, on purpose.** Use the suspension banner; drop the "on hold" design. *Proposed, waiting on partner approval* |
+| T9 | ✅ **New** `POST /testing/trips/{trip}/cancel-by-platform`. Passengers now get their own notification, and staff have a **Cancel this day** button in the dashboard (ADM-09) |
+| T10 | ⛔ **Not built, on purpose.** Use the suspension banner; drop the "on hold" design (AUTH-19, D-0049) |
 | T11 | ✅ **New** `POST /testing/driver/application/state` |
 | T12 | ✅ **New** `POST` / `DELETE /testing/driver/blocker` |
 | T13 | ✅ **Fixed.** `skipEvidence: true` on the appeal decide call |
@@ -284,7 +284,7 @@ For "already published" or "account on hold" publish refusals, use the `error` m
 
 ### T7 · Pickup changes now expire
 
-*Interim: this is a proposed rule (change file `2026-11-19-pickup-expiry-platform-cancel-and-hold.md` in the business repo), built so you can design against it. It may change when the partners decide.*
+*Rule: [BOOK-37](https://github.com/Sahla-Organization/Rafeeq-Business/blob/master/features/discovery-booking/spec.md), D-0049, approved by all partners on 2026-11-19.*
 
 **The rule:** a pickup change that is still unanswered when the next morning it would change departs becomes `EXPIRED`. Her old point stays, and both sides are told.
 
@@ -343,7 +343,7 @@ What the screens read:
 
 The driver pays no fee and gets no reliability event.
 
-*Interim (proposed rule):* a day staff cancel now has its own code and notification:
+A day staff cancel (ADM-09, D-0049) has its own code and notification. Staff do it from the dashboard's trip-day page (**Cancel this day**, with a reason), and the testing call does the same:
 
 - **`cancelledReason: "cancelled_by_platform"`** on her booking. Show "Canceled by YuGo" on History and the past trip.
 - **`trip_day_cancelled_by_platform`** to each passenger, as push and inbox, with `tripId` and `bookingId`. Open the alternatives for that booking.
@@ -366,13 +366,13 @@ Both already have testing calls:
 
 There is no paused reason "account under review".
 
-**Proposed (waiting on partner approval): no "on hold" state.** Anything temporary is a suspension:
+**Decided (AUTH-19, D-0049): no "on hold" state.** Anything temporary is a suspension:
 
 - show the suspension banner;
 - commutes read `account_suspended`;
 - keep the Restricted screen for a permanent ban only.
 
-Please drop the "on hold" design, or bring it to the partners as a new decision if a hold before review is really wanted.
+Please drop the "on hold" design.
 
 ### T11 · Put the driver application in any state
 
@@ -426,6 +426,10 @@ POST /testing/faults
 
 Her next evidence upload, on any report, fails with the `X-Testing-Fault` header. Then show "Your report was sent, but the photo didn't upload".
 
-## Waiting on partner approval
+## Decided
 
-All three are written up as one proposed change in the business repo: `changes/2026-11-19-pickup-expiry-platform-cancel-and-hold.md`. T7 and T9 are built as interim rules. If the partners decide differently, the backend changes and we tell you.
+T7, T9 and T10 are decided in D-0049, approved by all partners on 2026-11-19 (business repo 0.14.1):
+
+- **BOOK-37:** an unanswered pickup change expires when the next morning it would change departs.
+- **ADM-09:** staff can cancel one day that has not started.
+- **AUTH-19:** there is no "on hold" state.

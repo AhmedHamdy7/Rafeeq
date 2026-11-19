@@ -66,6 +66,7 @@ final class AdminActionLog
         'commute.resume_after_review',
         // C04 · a commute staff stopped from the dashboard, and started again.
         'commute.pause_by_staff',
+        'trip.cancel_by_staff',
         'commute.resume_by_staff',
         // Money off somebody's debt that she did not pay, or a payment she says she made refused.
         'debt.payment_reject',

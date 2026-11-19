@@ -146,6 +146,13 @@ return [
         'passenger' => 'Passenger',
         'attendance' => 'Turned up',
         'price' => 'Seat price',
+        'cancel' => 'Cancel this day',
+        'cancel_confirm' => 'Cancel the day',
+        'cancel_hint' => 'Every seat on this day is cancelled with no fee for anybody, and the driver gets no Reliability drop (ADM-09). :passengers passenger(s) will be told "YuGo cancelled your ride". The reason stays in the audit log.',
+        'cancel_not_scheduled' => 'Only a day that has not started can be cancelled.',
+        'cancelled_done' => 'Day cancelled. The driver and the passengers were told.',
+        'cancelled_notice_title' => 'YuGo cancelled your run on :date',
+        'cancelled_notice_body' => 'YuGo cancelled your run on :date. Your passengers were told, and there is no fee for you. Your other days are unchanged.',
     ],
     'attendance' => [
         'pending' => 'Not yet',
