@@ -23,7 +23,7 @@ final class PickupRequestExpiry
     {
         $departure = $pickup->seat_request_id !== null
             ? ScheduledTrip::query()->whereKey($pickup->seatRequest?->scheduled_trip_id)->value('departure_at')
-            : PickupRequestContext::nextBooking($pickup)?->scheduledTrip?->departure_at;
+            : PickupRequestContext::nextBooking($pickup)?->loadMissing('scheduledTrip')->scheduledTrip?->departure_at;
 
         return $departure === null ? null : CarbonImmutable::parse($departure);
     }
@@ -43,6 +43,7 @@ final class PickupRequestExpiry
         PickupPointRequest::query()
             ->whereIn('status', array_map(fn (PickupPointRequestStatus $s): string => $s->value, self::OPEN))
             ->whereNull('expires_at')
+            ->with(['seatRequest', 'groupMember.commuteGroup'])
             ->get()
             ->each(fn (PickupPointRequest $pickup) => self::stamp($pickup));
 
@@ -63,7 +64,7 @@ final class PickupRequestExpiry
     public static function expire(PickupPointRequest $pickup): bool
     {
         return DB::transaction(function () use ($pickup): bool {
-            $fresh = PickupPointRequest::query()->whereKey($pickup->getKey())->lockForUpdate()->first();
+            $fresh = PickupPointRequest::query()->whereKey($pickup->getKey())->with(['seatRequest', 'groupMember.commuteGroup'])->lockForUpdate()->first();
 
             if ($fresh === null || ! self::isOpen($fresh)) {
                 return false;

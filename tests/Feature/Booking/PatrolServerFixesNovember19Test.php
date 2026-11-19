@@ -116,3 +116,20 @@ it('names YuGo when she is under age', function () {
         ->assertStatus(422)
         ->assertJsonPath('error.fields.dateOfBirth.0', 'You must be at least 18 years old to use YuGo.');
 });
+
+it('lists her upcoming days after a recurring approval', function () {
+    $driver = approvedDriver('01020001009', 'driver');
+    [$commuteId] = patrolTrip($driver);
+    $passenger = verifiedPassenger('01020001003');
+    $requestId = requestSeat($passenger, $commuteId, ['commitment' => 'recurring', 'requestedDaysMask' => DaysMask::weekdaysSunToThu()->value])
+        ->assertStatus(201)->json('data.id');
+
+    test()->flushHeaders()->withToken($driver)->postJson("/api/v1/driver/seat-requests/{$requestId}/approve")->assertSuccessful();
+
+    $upcoming = test()->flushHeaders()->withToken($passenger)->getJson('/api/v1/my-bookings?scope=upcoming')->assertOk()->json('data');
+
+    expect(count($upcoming))->toBeGreaterThan(1)
+        ->and($upcoming[0])->toHaveKey('driverDelay');
+
+    test()->flushHeaders()->withToken($passenger)->getJson('/api/v1/my-bookings?scope=upcoming&page=1&perPage=20')->assertOk();
+});

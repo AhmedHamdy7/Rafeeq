@@ -12,6 +12,7 @@ use App\Domains\Group\Models\GroupMember;
 use App\Domains\Notification\Models\Notification;
 use App\Domains\Shared\Exceptions\DomainException;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Str;
 
 /**
  * "Could you pick me up here instead?" — Master Plan §889's custom pickup request,
@@ -458,4 +459,24 @@ it('expires a pickup change on demand for tests, once', function () {
         ->postJson("/api/v1/testing/pickup-requests/{$pickup['id']}/expire")
         ->assertStatus(409)
         ->assertJsonPath('error.code', 'PICKUP_REQUEST_NOT_PENDING');
+});
+
+it('expires several open pickup changes in one sweep', function () {
+    approveSeat($this->driverToken, $this->requestId);
+    $member = GroupMember::query()->where('role', 'trial')->sole();
+
+    test()->flushHeaders()->withToken($this->paxToken)
+        ->postJson("/api/v1/groups/{$member->commute_group_id}/pickup-request", onTheWay())->assertStatus(201);
+
+    $other = PickupPointRequest::query()->sole()->replicate();
+    $other->forceFill(['id' => (string) Str::ulid(), 'expires_at' => null])->save();
+    PickupPointRequest::query()->update(['expires_at' => null]);
+
+    $this->artisan('requests:expire')->assertSuccessful();
+    expect(PickupPointRequest::query()->whereNotNull('expires_at')->count())->toBe(2);
+
+    test()->travelTo(ScheduledTrip::query()->findOrFail($this->tripId)->departure_at->copy()->addMinute());
+    $this->artisan('requests:expire')->assertSuccessful();
+
+    expect(PickupPointRequest::query()->where('status', PickupPointRequestStatus::Expired->value)->count())->toBe(2);
 });

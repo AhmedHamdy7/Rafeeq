@@ -58,7 +58,7 @@ final class DriverDelay
             return false;
         }
 
-        $session = $trip->tripSession;
+        $session = $trip->loadMissing('tripSession')->tripSession;
 
         return $session === null || $session->started_at === null;
     }
@@ -72,7 +72,7 @@ final class DriverDelay
             return false;
         }
 
-        $session = $trip->tripSession;
+        $session = $trip->loadMissing('tripSession')->tripSession;
 
         if ($session === null || $session->started_at === null || $session->current_status->isTerminal()) {
             return false;
@@ -138,7 +138,7 @@ final class DriverDelay
      */
     private static function stopsFor(Booking $booking, ?ScheduledTrip $trip): Collection
     {
-        $session = $trip?->tripSession;
+        $session = $trip?->loadMissing('tripSession')->tripSession;
 
         if ($trip !== null && $session !== null && $session->started_at !== null && ! $session->current_status->isTerminal()) {
             return app(BuildNavigationItineraryAction::class)->forTrip($trip);
@@ -175,7 +175,7 @@ final class DriverDelay
             return false;
         }
 
-        $polyline = $trip->itinerary_polyline ?? $trip->commuteOffer?->route_polyline;
+        $polyline = $trip->itinerary_polyline ?? $trip->loadMissing('commuteOffer')->commuteOffer?->route_polyline;
 
         if ($polyline === null || ! Polyline::isReadable($polyline)) {
             return false;
