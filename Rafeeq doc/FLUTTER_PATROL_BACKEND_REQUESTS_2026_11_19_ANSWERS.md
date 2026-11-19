@@ -1,6 +1,8 @@
 # Answers: backend requests from the Patrol run (2026-11-19)
 
-Answers to `backend-requests-2026-11-19.md`. Everything below reaches the test server with the next deploy. Guide sections: 4.7 (seat requests and offers), 4.9 (live trip), 4.11 (Home), 4.17 (testing calls).
+Answers to `backend-requests-2026-11-19.md`. Everything below reaches the test server with the next deploy. Guide sections: 4.7 (seat requests and offers), 4.8 (pickup changes), 4.9 (live trip), 4.11 (Home), 4.14 (notifications), 4.17 (testing calls).
+
+Each section below says what you asked, what we found, and what the app should do now.
 
 ## Part 1: server fixes
 
