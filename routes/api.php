@@ -47,10 +47,12 @@ use App\Http\Controllers\Api\V1\Search\SearchController;
 use App\Http\Controllers\Api\V1\Testing\TestingCasesController;
 use App\Http\Controllers\Api\V1\Testing\TestingController;
 use App\Http\Controllers\Api\V1\Testing\TestingDataController;
+use App\Http\Controllers\Api\V1\Testing\TestingPaymentsController;
 use App\Http\Controllers\Api\V1\Testing\TestingPromptsController;
 use App\Http\Controllers\Api\V1\Testing\TestingRecordsController;
 use App\Http\Controllers\Api\V1\Testing\TestingSafetyController;
 use App\Http\Controllers\Api\V1\Testing\TestingScenarioController;
+use App\Http\Controllers\Api\V1\Testing\TestingStatesController;
 use App\Http\Controllers\Api\V1\Testing\TestingSuspensionController;
 use App\Http\Controllers\Api\V1\Testing\TestingToolsController;
 use App\Http\Controllers\Api\V1\Testing\TestingTripsController;
@@ -141,6 +143,7 @@ Route::prefix('v1')->group(function (): void {
         Route::post('faults', [TestingToolsController::class, 'addFault']);
         Route::get('faults', [TestingToolsController::class, 'listFaults']);
         Route::delete('faults', [TestingToolsController::class, 'clearFaults']);
+        Route::post('payments/instapay', [TestingPaymentsController::class, 'instapay']);
         Route::post('rate-limit', [TestingToolsController::class, 'rateLimit']);
         Route::post('session/revoke', [TestingToolsController::class, 'revokeSession']);
         Route::put('content/{key}', [TestingToolsController::class, 'writeContent']);
@@ -153,11 +156,20 @@ Route::prefix('v1')->group(function (): void {
         Route::post('credits', [TestingDataController::class, 'credit']);
         Route::post('bookings/{booking}/fields', [TestingDataController::class, 'bookingFields']);
         Route::post('trips/{trip}/location/age', [TestingDataController::class, 'ageLocation']);
+        Route::post('change-proposals/{proposal}/expire', [TestingStatesController::class, 'expireProposal']);
+        Route::post('seat-requests/{seatRequest}/close', [TestingStatesController::class, 'closeSeatRequest']);
+        Route::post('trips/{trip}/cancel-by-platform', [TestingStatesController::class, 'cancelByPlatform']);
+        Route::post('driver/application/state', [TestingStatesController::class, 'applicationState']);
+        Route::post('driver/blocker', [TestingStatesController::class, 'setBlocker']);
+        Route::delete('driver/blocker', [TestingStatesController::class, 'clearBlocker']);
     });
 
     Route::prefix('testing')->middleware('testing.api')->group(function (): void {
         Route::post('otp/expire', [TestingToolsController::class, 'expireOtp']);
         Route::post('otp/unlock', [TestingToolsController::class, 'unlockOtp']);
+        Route::post('faults/by-phone', [TestingToolsController::class, 'addPhoneFault']);
+        Route::get('faults/by-phone', [TestingToolsController::class, 'listPhoneFaults']);
+        Route::delete('faults/by-phone', [TestingToolsController::class, 'clearPhoneFaults']);
     });
 
     Route::prefix('account')->middleware('auth:sanctum')->group(function (): void {

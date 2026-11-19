@@ -45,9 +45,59 @@ final class TestingToolsController extends Controller
             'retryAfterSeconds' => ['sometimes', 'nullable', 'integer', 'between:1,3600'],
             'count' => ['sometimes', 'integer', 'between:1,10'],
             'phone' => ['sometimes', 'nullable', 'string', 'max:30'],
+            'fields' => ['sometimes', 'nullable', 'array', 'max:20'],
         ]);
 
         return ApiResponse::success($this->storeFault($request, $user, $data), status: 201);
+    }
+
+    #[ApiErrors(ErrorCode::ValidationFailed, ErrorCode::TestNumberOnly, ErrorCode::FaultLimitReached, ErrorCode::NotFound)]
+    public function addPhoneFault(Request $request): JsonResponse
+    {
+        $phone = $this->testPhone($request);
+
+        $data = $request->validate([
+            'path' => ['required', 'string', 'max:191', 'starts_with:/'],
+            'method' => ['sometimes', 'nullable', 'string', Rule::in(['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'get', 'post', 'put', 'patch', 'delete'])],
+            'mode' => ['required', 'string', Rule::in(['delay', 'error'])],
+            'delayMs' => ['required_if:mode,delay', 'nullable', 'integer', 'between:500,15000'],
+            'status' => ['required_if:mode,error', 'nullable', 'integer', Rule::in(TestingFaults::ERROR_STATUSES)],
+            'code' => ['sometimes', 'nullable', 'string', 'regex:/^[A-Z][A-Z0-9_]{1,63}$/'],
+            'retryAfterSeconds' => ['sometimes', 'nullable', 'integer', 'between:1,3600'],
+            'count' => ['sometimes', 'integer', 'between:1,10'],
+            'fields' => ['sometimes', 'nullable', 'array', 'max:20'],
+        ]);
+
+        $path = TestingFaults::normalise((string) $data['path']);
+
+        if (! TestingFaults::isAllowedPath($path)) {
+            throw DomainException::of(ErrorCode::ValidationFailed, fields: [
+                'path' => ['/testing/* and /auth/* cannot be matched, except /auth/me, /auth/otp/request and /auth/otp/verify named exactly.'],
+            ]);
+        }
+
+        if (TestingFaults::openCountForPhone($phone->e164) >= (int) config('rafeeq.testing.fault_limit', 10)) {
+            throw DomainException::of(ErrorCode::FaultLimitReached);
+        }
+
+        return ApiResponse::success(TestingFaults::create([
+            'user_id' => User::query()->where('phone_e164', $phone->e164)->value('id'),
+            'token_id' => null,
+            'phone_e164' => $phone->e164,
+            ...$this->faultColumns($path, $data),
+        ]), status: 201);
+    }
+
+    #[ApiErrors(ErrorCode::ValidationFailed, ErrorCode::TestNumberOnly, ErrorCode::NotFound)]
+    public function listPhoneFaults(Request $request): JsonResponse
+    {
+        return ApiResponse::success(TestingFaults::listForPhone($this->testPhone($request)->e164));
+    }
+
+    #[ApiErrors(ErrorCode::ValidationFailed, ErrorCode::TestNumberOnly, ErrorCode::NotFound)]
+    public function clearPhoneFaults(Request $request): JsonResponse
+    {
+        return ApiResponse::success(['cleared' => TestingFaults::clearPhone($this->testPhone($request)->e164)]);
     }
 
     #[ApiErrors(ErrorCode::ValidationFailed, ErrorCode::FaultLimitReached, ErrorCode::NotFound)]
@@ -271,7 +321,7 @@ final class TestingToolsController extends Controller
 
         if (! TestingFaults::isAllowedPath($path)) {
             throw DomainException::of(ErrorCode::ValidationFailed, fields: [
-                'path' => ['/testing/* and /auth/* cannot be matched, except /auth/otp/request and /auth/otp/verify named exactly.'],
+                'path' => ['/testing/* and /auth/* cannot be matched, except /auth/me, /auth/otp/request and /auth/otp/verify named exactly.'],
             ]);
         }
 
@@ -309,6 +359,38 @@ final class TestingToolsController extends Controller
             'user_id' => $user->id,
             'token_id' => $tokenId,
             'phone_e164' => $phone,
+            ...$this->faultColumns($path, $data),
+        ]);
+    }
+
+    /**
+     * @param  array<string, mixed>  $data
+     * @return array<string, mixed>
+     */
+    private function faultColumns(string $path, array $data): array
+    {
+        $fields = null;
+
+        if ($data['mode'] === 'error' && ! empty($data['fields']) && is_array($data['fields'])) {
+            $fields = [];
+
+            foreach ($data['fields'] as $key => $value) {
+                $messages = array_values(array_filter(
+                    array_map(fn ($item): ?string => is_scalar($item) ? mb_substr((string) $item, 0, 255) : null, is_array($value) ? $value : [$value]),
+                    fn (?string $item): bool => $item !== null,
+                ));
+
+                if (! is_string($key) || $key === '' || strlen($key) > 64 || $messages === []) {
+                    throw DomainException::of(ErrorCode::ValidationFailed, fields: [
+                        'fields' => ['Each key needs a string or a list of strings, as in error.fields.'],
+                    ]);
+                }
+
+                $fields[$key] = $messages;
+            }
+        }
+
+        return [
             'path' => $path,
             'method' => isset($data['method']) ? strtoupper((string) $data['method']) : null,
             'mode' => $data['mode'],
@@ -316,8 +398,9 @@ final class TestingToolsController extends Controller
             'status' => $data['mode'] === 'error' ? (int) $data['status'] : null,
             'code' => $data['mode'] === 'error' ? ($data['code'] ?? null) : null,
             'retry_after_seconds' => $data['mode'] === 'error' && (int) $data['status'] === 429 ? (int) ($data['retryAfterSeconds'] ?? 30) : null,
+            'fields' => $fields === null ? null : json_encode($fields, JSON_UNESCAPED_UNICODE),
             'remaining' => (int) ($data['count'] ?? 1),
-        ]);
+        ];
     }
 
     private function testPhone(Request $request): PhoneNumber

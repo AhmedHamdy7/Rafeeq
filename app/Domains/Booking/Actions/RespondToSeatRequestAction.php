@@ -222,18 +222,23 @@ final readonly class RespondToSeatRequestAction
             ->orderBy('id')
             ->pluck('id');
 
-        if ($ids->isEmpty()) {
+        return self::closeAsDatePassed($ids->map(fn ($id): string => (string) $id)->all());
+    }
+
+    public static function closeAsDatePassed(array $ids): int
+    {
+        if ($ids === []) {
             return 0;
         }
 
         $offers = SeatRequest::query()
-            ->whereIn('id', $ids->all())
+            ->whereIn('id', $ids)
             ->where('status', SeatRequestStatus::Waitlisted->value)
             ->distinct()
             ->pluck('commute_offer_id');
 
         $closed = SeatRequest::query()
-            ->whereIn('id', $ids->all())
+            ->whereIn('id', $ids)
             ->update([
                 'status' => SeatRequestStatus::ClosedDatePassed->value,
                 'waitlist_position' => null,

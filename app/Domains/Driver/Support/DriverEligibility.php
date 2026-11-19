@@ -7,6 +7,7 @@ use App\Domains\Identity\Enums\AccountStatus;
 use App\Domains\Identity\Enums\ProfileStatus;
 use App\Domains\Identity\Models\User;
 use App\Domains\Identity\Support\ProfileSettings;
+use App\Domains\Shared\Testing\DriverBlocker;
 
 /**
  * Chapter 3 §2: what "Become a Driver" checks before letting anyone in.
@@ -72,6 +73,10 @@ final class DriverEligibility
             if ($profile->status === DriverProfileStatus::Suspended) {
                 $blockers[] = self::blocker('driver_suspended', 'CONTACT_SUPPORT');
             }
+        }
+
+        if (DriverBlocker::isOn($user->id)) {
+            $blockers[] = self::blocker('not_eligible', 'CONTACT_SUPPORT');
         }
 
         return [

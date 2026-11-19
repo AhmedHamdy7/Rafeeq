@@ -21,7 +21,7 @@ return [
 
     // P-1: the price is automatic, so a request that sends one is refused.
     'price' => [
-        'set_by_rafeeq' => 'رفيق بيحدّد سعر المقعد من مسارك وعربيتك. مش ممكن يتبعت أو يتغيّر.',
+        'set_by_rafeeq' => 'YuGo بيحدّد سعر المقعد من مسارك وعربيتك. مش ممكن يتبعت أو يتغيّر.',
     ],
 
     'seats' => [

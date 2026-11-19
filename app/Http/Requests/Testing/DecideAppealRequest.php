@@ -14,6 +14,7 @@ final class DecideAppealRequest extends FormRequest
             'decision' => ['required', 'string', Rule::in(['approved', 'declined'])],
             'declineReasonCode' => ['nullable', 'string', Rule::enum(AppealDeclineReason::class)],
             'note' => ['nullable', 'string', 'max:255'],
+            'skipEvidence' => ['sometimes', 'boolean'],
         ];
     }
 }

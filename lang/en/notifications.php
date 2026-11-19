@@ -10,7 +10,7 @@
  */
 return [
     'sos_picked_up' => [
-        'title' => 'Someone from Rafeeq is on it',
+        'title' => 'Someone from YuGo is on it',
         'body' => 'A member of our safety team has picked up your alert.',
     ],
     'report_resolved' => [

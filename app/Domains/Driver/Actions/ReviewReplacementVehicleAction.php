@@ -44,9 +44,9 @@ final readonly class ReviewReplacementVehicleAction
         });
     }
 
-    public function reject(Vehicle $vehicle, AdminUser $reviewer, VehicleRejectedItem $item, string $reason): Vehicle
+    public function reject(Vehicle $vehicle, AdminUser $reviewer, VehicleRejectedItem $item, string $reason, bool $evenIfApproved = false): Vehicle
     {
-        $this->assertReviewable($vehicle);
+        $this->assertReviewable($vehicle, $evenIfApproved ? [VehicleVerificationStatus::Approved] : []);
 
         if (trim($reason) === '') {
             throw DomainException::of(ErrorCode::ValidationFailed, fields: [
@@ -70,7 +70,10 @@ final readonly class ReviewReplacementVehicleAction
         });
     }
 
-    private function assertReviewable(Vehicle $vehicle): void
+    /**
+     * @param  list<VehicleVerificationStatus>  $alsoFrom
+     */
+    private function assertReviewable(Vehicle $vehicle, array $alsoFrom = []): void
     {
         $vehicle->loadMissing('driverProfile');
 
@@ -80,7 +83,9 @@ final readonly class ReviewReplacementVehicleAction
             ]);
         }
 
-        if ($vehicle->verification_status !== null && $vehicle->verification_status !== VehicleVerificationStatus::Pending) {
+        if ($vehicle->verification_status !== null
+            && $vehicle->verification_status !== VehicleVerificationStatus::Pending
+            && ! in_array($vehicle->verification_status, $alsoFrom, true)) {
             throw DomainException::of(ErrorCode::VehicleNotAllowed, fields: [
                 'verificationStatus' => [strtoupper($vehicle->verification_status->value)],
             ]);

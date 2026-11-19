@@ -8,6 +8,7 @@ use App\Domains\Commute\Enums\ScheduledTripStatus;
 use App\Domains\Commute\Models\ScheduledTrip;
 use App\Domains\Group\Enums\GroupAttendanceStatus;
 use App\Domains\Rating\Actions\SubmitRatingAction;
+use App\Domains\Trip\Actions\BuildNavigationItineraryAction;
 use App\Domains\Trip\Enums\NavigationStopKind;
 use App\Domains\Trip\Models\Attendance;
 use App\Domains\Trip\Models\NavigationStop;
@@ -79,17 +80,24 @@ final class HomeJourney
 
     private ?CarbonImmutable $arrivedAt;
 
+    private ?TripWaitTimer $timer;
+
     private function __construct(
         private readonly Booking $booking,
         private readonly ScheduledTrip $trip,
         private readonly SubmitRatingAction $ratings,
         private readonly string $viewerId,
     ) {
-        $this->stops = NavigationStop::query()
-            ->where('scheduled_trip_id', $trip->getKey())
-            ->orderBy('sequence')
-            ->orderBy('id')
-            ->get(['id', 'scheduled_trip_id', 'booking_id', 'kind', 'sequence', 'leg_duration_seconds', 'reached_at', 'eta_at', 'lat', 'lng']);
+        $session = $trip->tripSession;
+
+        $this->stops = $booking->status === BookingStatus::Confirmed
+            && $session !== null && $session->started_at !== null && ! $session->current_status->isTerminal()
+            ? app(BuildNavigationItineraryAction::class)->forTrip($trip)
+            : NavigationStop::query()
+                ->where('scheduled_trip_id', $trip->getKey())
+                ->orderBy('sequence')
+                ->orderBy('id')
+                ->get(['id', 'scheduled_trip_id', 'booking_id', 'kind', 'sequence', 'leg_duration_seconds', 'reached_at', 'eta_at', 'lat', 'lng']);
 
         $this->attendance = Attendance::query()->whereKey($booking->getKey())->first();
 
@@ -107,6 +115,7 @@ final class HomeJourney
             ->first();
 
         $this->arrivedAt = $timer?->arrived_at === null ? null : CarbonImmutable::instance($timer->arrived_at);
+        $this->timer = $timer;
     }
 
     public static function for(Booking $booking, SubmitRatingAction $ratings, string $viewerId): self
@@ -220,7 +229,7 @@ final class HomeJourney
     /**
      * F3P-04 → F3P-06. Null outside those three, which is what "before the driver starts" means.
      *
-     * @return array{pickupEtaAt: string|null, arrivalEtaAt: string|null, progressPercent: int|null, driverArrivedAt: string|null, boardedAt: string|null, stopsBeforeYou: int|null}|null
+     * @return array{pickupEtaAt: string|null, arrivalEtaAt: string|null, progressPercent: int|null, driverArrivedAt: string|null, graceStartsAt: string|null, graceEndsAt: string|null, boardedAt: string|null, stopsBeforeYou: int|null}|null
      */
     public function live(): ?array
     {
@@ -266,6 +275,8 @@ final class HomeJourney
             'arrivalEtaAt' => $arrivalEta?->toIso8601String(),
             'progressPercent' => $progress,
             'driverArrivedAt' => $this->arrivedAt?->toIso8601String(),
+            'graceStartsAt' => $phase === self::DRIVER_ARRIVED ? ($this->timer?->grace_starts_at ?? $this->timer?->started_at)?->toIso8601String() : null,
+            'graceEndsAt' => $phase === self::DRIVER_ARRIVED ? $this->timer?->expiresAt()->toIso8601String() : null,
             'boardedAt' => $phase === self::ON_BOARD ? $boardedAt?->toIso8601String() : null,
             'stopsBeforeYou' => $stopsBefore,
         ];

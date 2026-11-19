@@ -15,6 +15,7 @@ use App\Domains\Payment\Support\DebtStanding;
 use App\Domains\Payment\Support\SettlementWeek;
 use App\Domains\Shared\Support\ErrorCode;
 use App\Domains\Shared\Support\TestAccounts;
+use App\Domains\Shared\Testing\HiddenInstapay;
 use App\Http\Controllers\Controller;
 use App\Http\OpenApi\ApiErrors;
 use App\Http\Requests\Payment\AppealFeeRequest;
@@ -64,7 +65,7 @@ final class DebtController extends Controller
             'coupons' => CouponResource::collection(
                 Coupon::query()->where('user_id', $user->id)->latest('created_at')->limit(10)->get(),
             ),
-            'instapay' => $this->instapayPayee(),
+            'instapay' => HiddenInstapay::isHiddenFor($user->id) ? null : $this->instapayPayee(),
         ]);
     }
 

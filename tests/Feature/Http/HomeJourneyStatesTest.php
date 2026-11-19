@@ -6,6 +6,7 @@ use App\Domains\Commute\Enums\ScheduledTripStatus;
 use App\Domains\Commute\Models\CommuteOffer;
 use App\Domains\Commute\Models\ScheduledTrip;
 use App\Domains\Driver\Models\Vehicle;
+use App\Domains\Geo\Support\Polyline;
 use App\Domains\Identity\Models\User;
 use App\Domains\Matching\Models\CommuteDemand;
 use App\Domains\Matching\Models\MatchNotification;
@@ -192,6 +193,57 @@ it('follows the car from setting off, to her kerb, to on board', function () {
         ->and($aboard['live']['pickupEtaAt'])->toBeNull()
         // She is in the car: leaving "without a fee" is not what this button means any more.
         ->and($aboard['canLeaveWithoutFee'])->toBeFalse();
+});
+
+it('fills the live fields like the location call does, and says when the car passed her stop', function () {
+    runLeavingIn($this->tripId, 10);
+    asHomeDriver($this->driverToken, 'POST', "/api/v1/trips/{$this->tripId}/start")->assertStatus(201);
+    asHomeDriver($this->driverToken, 'POST', "/api/v1/trips/{$this->tripId}/status", ['status' => 'EN_ROUTE'])->assertOk();
+
+    $start = Polyline::decode(CommuteOffer::query()->whereKey($this->commuteId)->value('route_polyline'))[0];
+    reportPosition($this->driverToken, $this->tripId, [position($start->lat, $start->lng)])->assertOk();
+
+    $location = test()->flushHeaders()->withToken($this->paxToken)->getJson("/api/v1/trips/{$this->tripId}/location")->assertOk()->json('data');
+    $card = homeCard($this->paxToken);
+
+    expect($card['phase'])->toBe('driver_en_route')
+        ->and($card['live']['stopsBeforeYou'])->toBe($location['stopsBeforeYou'])
+        ->and($card['live']['stopsBeforeYou'])->not->toBeNull()
+        ->and($card['live']['pickupEtaAt'])->not->toBeNull()
+        ->and($card['live']['progressPercent'])->not->toBeNull()
+        ->and($card['driverDelay'])->toBeNull();
+
+    $booking = Booking::query()->whereKey($this->bookingId)->sole();
+    reportPosition($this->driverToken, $this->tripId, [position((float) $booking->dropoff_lat, (float) $booking->dropoff_lng, 1)])->assertOk();
+
+    $passed = homeCard($this->paxToken);
+
+    expect($passed['driverDelay'])->toBe('passed_your_stop')
+        ->and($passed['canLeaveWithoutFee'])->toBeTrue();
+});
+
+it('tells her when her five minutes end, counted from the later of the arrival and her pickup time', function () {
+    config(['rafeeq.testing.api' => true]);
+    runLeavingIn($this->tripId, 10);
+    asHomeDriver($this->driverToken, 'POST', "/api/v1/trips/{$this->tripId}/start")->assertStatus(201);
+    asHomeDriver($this->driverToken, 'POST', "/api/v1/trips/{$this->tripId}/status", ['status' => 'EN_ROUTE'])->assertOk();
+    $timer = asHomeDriver($this->driverToken, 'POST', "/api/v1/trips/{$this->tripId}/wait-timers", [
+        'bookingId' => $this->bookingId, ...atPickupOf($this->bookingId),
+    ])->assertStatus(201)->json('data');
+
+    $live = homeCard($this->paxToken)['live'];
+
+    expect($live['graceEndsAt'])->toBe($timer['expiresAt'])
+        ->and($live['graceStartsAt'])->toBe($timer['graceStartsAt'])
+        ->and(strtotime($live['graceStartsAt']))->toBeGreaterThanOrEqual(strtotime($live['driverArrivedAt']));
+
+    $location = test()->flushHeaders()->withToken($this->paxToken)->getJson("/api/v1/trips/{$this->tripId}/location")->assertOk();
+    expect($location->json('data.graceEndsAt'))->toBe($timer['expiresAt']);
+
+    asHomeDriver($this->driverToken, 'POST', "/api/v1/testing/trips/{$this->tripId}/wait-timers/expire", ['bookingId' => $this->bookingId])->assertOk();
+
+    expect(strtotime(homeCard($this->paxToken)['live']['graceEndsAt']))->toBeLessThan(now()->getTimestamp())
+        ->and(strtotime(test()->flushHeaders()->withToken($this->paxToken)->getJson("/api/v1/trips/{$this->tripId}/location")->json('data.graceEndsAt')))->toBeLessThan(now()->getTimestamp());
 });
 
 /*
@@ -462,6 +514,23 @@ it('says when she last ran a saved search', function () {
     expect(homeAs($this->paxToken)['savedSearches'][0]['lastSearchedAt'])->not->toBeNull();
 });
 
+it('says when she last ran a saved search, also when the run carried filters a saved search does not keep', function () {
+    test()->flushHeaders()->withToken($this->paxToken)->postJson('/api/v1/saved-searches', [
+        'title' => 'الرحاب ← القرية الذكية',
+        'filters' => searchCriteria(['seatsNeeded' => 2, 'flexibilityMinutes' => 30, 'womenOnly' => true]),
+    ])->assertStatus(201);
+
+    test()->flushHeaders();
+    search($this->paxToken, ['seatsNeeded' => 2, 'flexibilityMinutes' => 30, 'womenOnly' => 1])->assertOk();
+
+    expect(homeAs($this->paxToken)['savedSearches'][0]['lastSearchedAt'])->not->toBeNull();
+
+    test()->flushHeaders();
+    search($this->paxToken, ['daysMask' => 2])->assertOk();
+
+    expect(homeAs($this->paxToken)['savedSearches'][0]['lastSearchedAt'])->not->toBeNull();
+});
+
 it('carries the unread notification count the inbox reports', function () {
     Notifier::send($this->pax, NotificationType::PassengerExitedDriverDelay, params: ['name' => 'X']);
 
@@ -485,7 +554,7 @@ it('keeps the card on scheduled four minutes after departure, and only then says
 });
 
 it('says delayed when the car set off but has not reached her five minutes after her pickup time', function () {
-    runLeavingIn($this->tripId, -20);
+    runLeavingIn($this->tripId, -120);
     asHomeDriver($this->driverToken, 'POST', "/api/v1/trips/{$this->tripId}/start")->assertStatus(201);
     asHomeDriver($this->driverToken, 'POST', "/api/v1/trips/{$this->tripId}/status", ['status' => 'EN_ROUTE'])->assertOk();
 

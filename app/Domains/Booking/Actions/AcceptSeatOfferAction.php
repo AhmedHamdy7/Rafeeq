@@ -7,6 +7,7 @@ use App\Domains\Booking\Enums\BookingEventType;
 use App\Domains\Booking\Enums\BookingStatus;
 use App\Domains\Booking\Enums\CancelCode;
 use App\Domains\Booking\Enums\SeatOfferClosedReason;
+use App\Domains\Booking\Enums\SeatOfferSource;
 use App\Domains\Booking\Enums\SeatOfferStatus;
 use App\Domains\Booking\Enums\SeatRequestStatus;
 use App\Domains\Booking\Enums\SwitchReason;
@@ -165,7 +166,9 @@ final readonly class AcceptSeatOfferAction
 
             $request = $offer->seatRequest;
 
-            if ($request === null || $request->status !== SeatRequestStatus::Waitlisted) {
+            $groupedDay = $offer->source === SeatOfferSource::DriverResume && $request?->status === SeatRequestStatus::Approved;
+
+            if ($request === null || ($request->status !== SeatRequestStatus::Waitlisted && ! $groupedDay)) {
                 throw DomainException::of(ErrorCode::SeatOfferClosed, fields: [
                     'status' => [SeatOfferStatus::Ineligible->value],
                 ]);
@@ -323,10 +326,13 @@ final readonly class AcceptSeatOfferAction
              *    nobody is left holding an offer for a seat that no longer exists even if this
              *    rolls back.
              */
+            $seatsLeft = max(0, (int) $trip->seats_total - (int) $trip->seats_taken);
+
             $losers = $replaced !== null ? collect() : SeatOffer::query()
                 ->where('scheduled_trip_id', $trip->id)
                 ->whereKeyNot($offer->id)
                 ->whereNull('replaces_booking_id')
+                ->whereHas('seatRequest', fn ($query) => $query->where('seats', '>', $seatsLeft))
                 ->open()
                 ->pluck('id');
 

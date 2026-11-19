@@ -72,7 +72,7 @@ final readonly class ProposeCommuteChangeAction
          */
         $live = ChangeProposal::query()
             ->where('commute_offer_id', $offer->getKey())
-            ->whereIn('status', [ChangeProposalStatus::Pending->value, ChangeProposalStatus::Rejected->value])
+            ->where('status', ChangeProposalStatus::Pending->value)
             ->exists();
 
         if ($live) {
@@ -84,6 +84,14 @@ final readonly class ProposeCommuteChangeAction
         $affected = $this->affectedCount($offer, $trip, $scope, $input);
 
         return DB::transaction(function () use ($offer, $trip, $scope, $changes, $input, $affected): ChangeProposal {
+            ChangeProposal::query()
+                ->where('commute_offer_id', $offer->getKey())
+                ->where('status', ChangeProposalStatus::Rejected->value)
+                ->update([
+                    'status' => ChangeProposalStatus::Withdrawn->value,
+                    'withdrawn_at' => now(),
+                ]);
+
             $proposal = new ChangeProposal;
 
             $proposal->forceFill([
@@ -189,9 +197,10 @@ final readonly class ProposeCommuteChangeAction
      *
      * @return int how many expired
      */
-    public static function expireOverdue(): int
+    public static function expireOverdue(?string $proposalId = null): int
     {
         return ChangeProposal::query()
+            ->when($proposalId !== null, fn ($query) => $query->whereKey($proposalId))
             ->whereIn('status', [ChangeProposalStatus::Pending->value, ChangeProposalStatus::Rejected->value])
             ->where('expires_at', '<=', now())
             ->update(['status' => ChangeProposalStatus::Expired->value]);

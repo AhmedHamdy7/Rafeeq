@@ -15,6 +15,7 @@ use App\Domains\Commute\Enums\CommuteLocationType;
 use App\Domains\Commute\Enums\CommuteOfferStatus;
 use App\Domains\Commute\Enums\CommuteType;
 use App\Domains\Commute\Enums\ScheduledTripStatus;
+use App\Domains\Commute\Enums\TripCancelledBy;
 use App\Domains\Commute\Models\CommuteLocation;
 use App\Domains\Commute\Models\CommuteOffer;
 use App\Domains\Commute\Models\CommuteSchedule;
@@ -41,10 +42,14 @@ use App\Domains\Payment\Support\SettlementWeek;
 use App\Domains\Shared\Exceptions\DomainException;
 use App\Domains\Shared\Support\ErrorCode;
 use App\Domains\Shared\Support\TestAccounts;
+use App\Domains\Shared\Testing\HiddenInstapay;
 use App\Domains\Shared\Testing\LocationFreeze;
 use App\Domains\Shared\Testing\TestingFaults;
 use App\Domains\Shared\ValueObjects\Coordinate;
+use App\Domains\Trip\Actions\SweepDelayedTripsAction;
+use App\Domains\Trip\Enums\AttendanceStatus;
 use App\Domains\Trip\Enums\TripSessionStatus;
+use App\Domains\Trip\Models\Attendance;
 use App\Domains\Trip\Models\TripSession;
 use App\Domains\Trip\Support\LiveLocationStore;
 use App\Domains\Trip\Support\TripSettings;
@@ -75,7 +80,21 @@ final class TestingDataController extends Controller
         'EXPIRED' => BookingStatus::Expired,
         'ENDED_EARLY' => BookingStatus::EndedEarly,
         'EXITED_DUE_TO_DRIVER_DELAY' => BookingStatus::ExitedDueToDriverDelay,
+        'DRIVER_CANCELLED_DAY' => BookingStatus::CancelledByDriver,
+        'NEVER_STARTED' => BookingStatus::ExitedDueToDriverDelay,
     ];
+
+    public const array HISTORY_ALIASES = [
+        'EXITED_DRIVER_LATE' => 'EXITED_DUE_TO_DRIVER_DELAY',
+        'DRIVER_LATE' => 'EXITED_DUE_TO_DRIVER_DELAY',
+        'CANCELLED_BY_THE_DRIVER' => 'CANCELLED_BY_DRIVER',
+        'CANCELLED_BY_THE_PASSENGER' => 'CANCELLED_BY_PASSENGER',
+        'DAY_CANCELLED' => 'DRIVER_CANCELLED_DAY',
+        'TRIP_EXPIRED' => 'NEVER_STARTED',
+        'DRIVER_NO_SHOW' => 'NEVER_STARTED',
+    ];
+
+    public const array DEBT_KINDS = ['commission', 'fee', 'no_show_fee', 'late_cancel_fee', 'late_fee', 'coupon', 'credit', 'payment', 'adjustment', 'write_off'];
 
     private const array CANCELLED = [
         BookingStatus::CancelledByPassenger,
@@ -193,6 +212,8 @@ final class TestingDataController extends Controller
             app(SuspendForDebtAction::class)->liftIfPaid($user->id, $side);
         }
 
+        HiddenInstapay::show($user->id);
+
         $keptNames = [];
 
         foreach (self::KEEPABLE as $name) {
@@ -229,13 +250,18 @@ final class TestingDataController extends Controller
     {
         $user = TestAccounts::assertAllowed($request->user());
 
+        if (is_string($request->input('ending'))) {
+            $ending = str_replace('CANCELED', 'CANCELLED', trim((string) preg_replace('/[^A-Z0-9]+/', '_', strtoupper($request->input('ending'))), '_'));
+            $request->merge(['ending' => self::HISTORY_ALIASES[$ending] ?? $ending]);
+        }
+
         $data = $request->validate([
             'count' => ['required', 'integer', 'between:1,60'],
             'ending' => ['sometimes', 'nullable', 'string', Rule::in(array_keys(self::HISTORY_ENDINGS))],
         ]);
 
         $count = (int) $data['count'];
-        $endings = array_values(self::HISTORY_ENDINGS);
+        $endings = array_slice(array_keys(self::HISTORY_ENDINGS), 0, 7);
 
         $ids = DB::transaction(function () use ($user, $count, $data, $endings): array {
             $driver = $this->historyDriver();
@@ -245,11 +271,11 @@ final class TestingDataController extends Controller
             $ids = [];
 
             for ($i = 0; $i < $count; $i++) {
-                $status = isset($data['ending']) && $data['ending'] !== null
-                    ? self::HISTORY_ENDINGS[$data['ending']]
+                $ending = isset($data['ending']) && $data['ending'] !== null
+                    ? (string) $data['ending']
                     : $endings[$i % count($endings)];
 
-                $ids[] = $this->pastBooking($user, $driver, $offer, $schedule, $i + 1, $status);
+                $ids[] = $this->pastBooking($user, $driver, $offer, $schedule, $i + 1, $ending);
             }
 
             return $ids;
@@ -294,6 +320,7 @@ final class TestingDataController extends Controller
             'createdAt' => $found->created_at?->toIso8601String(),
             'decidedAt' => $found->responded_at?->toIso8601String(),
             'expiresAt' => $found->expires_at?->toIso8601String(),
+            'endedAt' => ($found->responded_at ?? $found->updated_at)?->toIso8601String(),
         ]);
     }
 
@@ -304,11 +331,13 @@ final class TestingDataController extends Controller
 
         $data = $request->validate([
             'side' => ['required', 'string', Rule::in(['driver', 'passenger'])],
-            'kind' => ['required', 'string', Rule::in(['commission', 'no_show_fee', 'late_cancel_fee', 'late_fee'])],
-            'amountPiastres' => ['required', 'integer', 'between:100,500000'],
+            'kind' => ['required', 'string', Rule::in(self::DEBT_KINDS)],
+            'amountPiastres' => [Rule::requiredIf(fn (): bool => $request->input('kind') !== 'write_off'), 'nullable', 'integer', 'between:1,500000'],
             'count' => ['sometimes', 'integer', 'between:1,10'],
             'bookingId' => ['sometimes', 'nullable', 'string', 'size:26'],
             'disputed' => ['sometimes', 'boolean'],
+            'direction' => ['sometimes', 'string', Rule::in(['increase', 'decrease'])],
+            'reasonCode' => ['sometimes', 'nullable', 'string', 'regex:/^[a-z][a-z0-9_]{1,49}$/'],
         ]);
 
         $side = DebtSide::from($data['side']);
@@ -325,10 +354,26 @@ final class TestingDataController extends Controller
             [DebtSide::Passenger, 'no_show_fee'] => [DebtEntryType::Fee, 'no_show'],
             [DebtSide::Passenger, 'late_cancel_fee'] => [DebtEntryType::Fee, 'late_cancel'],
             [DebtSide::Passenger, 'late_fee'] => [DebtEntryType::Fee, 'late_boarding'],
+            [DebtSide::Driver, 'fee'] => [DebtEntryType::Fee, 'driver_cancel'],
+            [DebtSide::Passenger, 'fee'] => [DebtEntryType::Fee, 'no_show'],
+            [DebtSide::Driver, 'coupon'], [DebtSide::Passenger, 'coupon'] => [DebtEntryType::Coupon, 'coupon'],
+            [DebtSide::Driver, 'credit'], [DebtSide::Passenger, 'credit'] => [DebtEntryType::Credit, 'staff_credit'],
+            [DebtSide::Driver, 'payment'], [DebtSide::Passenger, 'payment'] => [DebtEntryType::Payment, 'instapay_payment'],
+            [DebtSide::Driver, 'adjustment'], [DebtSide::Passenger, 'adjustment'] => [DebtEntryType::Adjustment, 'staff_adjustment'],
+            [DebtSide::Driver, 'write_off'], [DebtSide::Passenger, 'write_off'] => [DebtEntryType::WriteOff, 'staff_write_off'],
             default => throw DomainException::of(ErrorCode::ValidationFailed, fields: [
                 'kind' => ['A commission is only ever on the driver side.'],
             ]),
         };
+
+        $reason = $data['reasonCode'] ?? $reason;
+        $decreases = ! $type->mayIncrease() || ($type === DebtEntryType::Adjustment && ($data['direction'] ?? 'increase') === 'decrease');
+
+        if ($decreases && ($data['disputed'] ?? false)) {
+            throw DomainException::of(ErrorCode::ValidationFailed, fields: [
+                'disputed' => ['Only a line that adds to the debt can be disputed.'],
+            ]);
+        }
 
         $booking = null;
 
@@ -350,16 +395,24 @@ final class TestingDataController extends Controller
             $at = CarbonImmutable::now()->subDays($i);
             $key = 'test_seed:'.Str::ulid();
 
-            $line = DB::transaction(function () use ($user, $side, $type, $reason, $data, $booking, $at, $key, $disputed): DebtEntry {
+            $line = DB::transaction(function () use ($user, $side, $type, $reason, $data, $booking, $at, $key, $disputed, $decreases): ?DebtEntry {
                 if ($disputed) {
                     DebtLedger::lockedAccount($user->id, $side);
+                }
+
+                $amount = $type === DebtEntryType::WriteOff && empty($data['amountPiastres'])
+                    ? DebtStanding::of($user, $side)->owedPiastres()
+                    : (int) $data['amountPiastres'];
+
+                if ($amount === 0) {
+                    return null;
                 }
 
                 $line = DebtLedger::record(
                     $user->id,
                     $side,
                     $type,
-                    (int) $data['amountPiastres'],
+                    $decreases ? -$amount : $amount,
                     $reason,
                     bookingId: $booking?->id,
                     meta: ['rule' => 'TEST'],
@@ -380,7 +433,9 @@ final class TestingDataController extends Controller
                 return $line;
             });
 
-            $lineIds[] = $line->id;
+            if ($line !== null) {
+                $lineIds[] = $line->id;
+            }
         }
 
         if ($side === DebtSide::Passenger) {
@@ -400,19 +455,21 @@ final class TestingDataController extends Controller
         $user = TestAccounts::assertAllowed($request->user());
 
         $data = $request->validate([
-            'amountPiastres' => ['required', 'integer', 'between:100,500000'],
-            'reason' => ['sometimes', 'string', 'regex:/^[a-z][a-z0-9_]{1,39}$/'],
+            'amountPiastres' => ['required', 'integer', 'between:1,500000'],
+            'reason' => ['sometimes', 'nullable', 'string', 'max:255'],
             'side' => ['sometimes', 'string', Rule::in(['driver', 'passenger'])],
         ]);
 
         $side = DebtSide::from($data['side'] ?? 'passenger');
+        $reason = trim((string) ($data['reason'] ?? ''));
+        $code = $reason === '' ? 'driver_cancelled' : (preg_match('/^[a-z][a-z0-9_]{1,49}$/', $reason) === 1 ? $reason : 'staff_credit');
 
         $line = DebtLedger::credit(
             $user,
             DebtEntryType::Credit,
             (int) $data['amountPiastres'],
-            $data['reason'] ?? 'driver_cancelled',
-            meta: ['rule' => 'TEST'],
+            $code,
+            meta: ['rule' => 'TEST', ...($code !== $reason && $reason !== '' ? ['note' => $reason] : [])],
             side: $side,
             idempotencyKey: 'test_credit:'.Str::ulid(),
         );
@@ -426,6 +483,7 @@ final class TestingDataController extends Controller
         return ApiResponse::success([
             'creditId' => $line->id,
             'side' => $side->value,
+            'reasonCode' => $code,
             'creditPiastres' => (int) max(0, -$balance),
             'balancePiastres' => $balance,
         ], status: 201);
@@ -436,8 +494,14 @@ final class TestingDataController extends Controller
     {
         $user = TestAccounts::assertAllowed($request->user());
 
+        if (is_string($request->input('paymentStatus'))) {
+            $request->merge(['paymentStatus' => strtoupper(trim($request->input('paymentStatus')))]);
+        }
+
         $data = $request->validate([
             'paymentStatus' => ['sometimes', 'string', Rule::in(array_map(fn (PaymentStatus $s): string => strtoupper($s->value), PaymentStatus::cases()))],
+            'feeLinePiastres' => ['sometimes', 'integer', 'between:-500000,500000'],
+            'feeLineReason' => ['sometimes', 'nullable', 'string', 'regex:/^[a-z][a-z0-9_]{1,39}$/'],
             'cancellationReason' => ['sometimes', 'string', Rule::in(array_map(fn (CancelCode $c): string => $c->value, CancelCode::cases()))],
             'cancelledNote' => ['sometimes', 'nullable', 'string', 'max:255'],
             'pickupLabel' => ['sometimes', 'nullable', 'string', 'max:120'],
@@ -469,6 +533,17 @@ final class TestingDataController extends Controller
 
         if (array_key_exists('pickupLabel', $data)) {
             $sets['pickup_label'] = $data['pickupLabel'];
+        }
+
+        if (array_key_exists('feeLinePiastres', $data)) {
+            $sets['fee_line_piastres'] = (int) $data['feeLinePiastres'];
+            $sets['fee_line_reason'] = $data['feeLineReason'] ?? match (true) {
+                (int) $data['feeLinePiastres'] < 0 => 'credit',
+                (int) $data['feeLinePiastres'] > 0 => 'no_show',
+                default => null,
+            };
+        } elseif (array_key_exists('feeLineReason', $data)) {
+            $sets['fee_line_reason'] = $data['feeLineReason'];
         }
 
         if (array_key_exists('dropoffLabel', $data)) {
@@ -724,14 +799,16 @@ final class TestingDataController extends Controller
         return [$offer, $schedule];
     }
 
-    private function pastBooking(User $passenger, User $driver, CommuteOffer $offer, CommuteSchedule $schedule, int $daysBack, BookingStatus $status): string
+    private function pastBooking(User $passenger, User $driver, CommuteOffer $offer, CommuteSchedule $schedule, int $daysBack, string $ending): string
     {
+        $status = self::HISTORY_ENDINGS[$ending];
         $date = CarbonImmutable::today('Africa/Cairo')->subDays($daysBack);
         $local = CarbonImmutable::parse($date->toDateString().' 07:30:00', 'Africa/Cairo');
         $departure = $local->utc();
 
-        $tripStatus = match ($status) {
-            BookingStatus::Expired => ScheduledTripStatus::Expired,
+        $tripStatus = match ($ending) {
+            'EXPIRED', 'NEVER_STARTED' => ScheduledTripStatus::Expired,
+            'DRIVER_CANCELLED_DAY' => ScheduledTripStatus::Cancelled,
             default => ScheduledTripStatus::Completed,
         };
 
@@ -749,6 +826,17 @@ final class TestingDataController extends Controller
             'commission_piastres' => 500,
             'driver_share_piastres' => 4000,
             'status' => $tripStatus,
+            ...match ($tripStatus) {
+                ScheduledTripStatus::Expired => [
+                    'expired_at' => $departure->addMinutes(SweepDelayedTripsAction::expiryMinutes()),
+                    'delay_violation_at' => $departure->addMinutes(SweepDelayedTripsAction::violationMinutes()),
+                ],
+                ScheduledTripStatus::Cancelled => [
+                    'cancelled_reason' => 'driver_cancelled_day',
+                    'cancelled_by' => TripCancelledBy::Driver->value,
+                ],
+                default => [],
+            },
         ])->save();
 
         if ($tripStatus === ScheduledTripStatus::Completed) {
@@ -762,7 +850,14 @@ final class TestingDataController extends Controller
             ])->save();
         }
 
-        $cancelled = in_array($status, self::CANCELLED, true);
+        [$cancelledAt, $reason, $code] = match ($ending) {
+            'CANCELLED_BY_PASSENGER' => [$departure->subHours(3), 'plans_changed', CancelCode::PassengerCancelled],
+            'CANCELLED_BY_DRIVER' => [$departure->subHours(3), 'plans_changed', CancelCode::RemovedByDriver],
+            'DRIVER_CANCELLED_DAY' => [$departure->subHours(3), 'driver_cancelled_day', CancelCode::DayCancelled],
+            'EXITED_DUE_TO_DRIVER_DELAY' => [$departure->addMinutes(8), 'not_started', CancelCode::NotStarted],
+            'NEVER_STARTED' => [$departure->addMinutes(SweepDelayedTripsAction::expiryMinutes()), 'trip_expired', CancelCode::TripExpired],
+            default => [null, null, null],
+        };
 
         $booking = new Booking;
         $booking->forceFill([
@@ -788,10 +883,24 @@ final class TestingDataController extends Controller
             'dropoff_lat' => 30.0135,
             'dropoff_lng' => 31.4080,
             'dropoff_label' => 'Fifth Settlement',
-            'cancelled_at' => $cancelled ? $departure->subHours(3) : null,
-            'cancelled_reason' => $cancelled ? 'plans_changed' : null,
+            'cancelled_at' => $cancelledAt,
+            'cancelled_reason' => $reason,
+            'cancel_code' => $code?->value,
+            'cancellation_fee_piastres' => 0,
             'outcome_seen_at' => now(),
         ])->save();
+
+        $attendance = match ($ending) {
+            'EXITED_DUE_TO_DRIVER_DELAY' => AttendanceStatus::Cancelled,
+            'NEVER_STARTED' => AttendanceStatus::DriverNoShow,
+            default => null,
+        };
+
+        if ($attendance !== null) {
+            $row = Attendance::query()->firstOrNew(['booking_id' => $booking->id]);
+            $row->status = $attendance->value;
+            $row->save();
+        }
 
         DB::table('bookings')->where('id', $booking->id)->update([
             'created_at' => $departure->subDays(2),

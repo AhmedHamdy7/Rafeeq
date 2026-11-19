@@ -119,6 +119,11 @@ final class TripSettings
         return max(1, (int) self::get('trip.live_route_off_meters'));
     }
 
+    public static function passedStopMeters(): int
+    {
+        return max(1, (int) self::get('trip.passed_stop_meters'));
+    }
+
     private static function get(string $key): mixed
     {
         return PlatformSetting::value($key, config("rafeeq.{$key}"));

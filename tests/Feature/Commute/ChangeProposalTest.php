@@ -373,6 +373,28 @@ it('refuses a second proposal while one is still out', function () {
         ->assertJsonPath('error.code', 'CHANGE_PROPOSAL_ALREADY_OPEN');
 });
 
+it('lets the driver send a new proposal after one was rejected, and closes the rejected one', function () {
+    $rider = riderFor($this->driverToken, $this->commuteId, $this->tripId, '01112223344', 'pax-1');
+
+    $rejectedId = proposeChange($this->driverToken, $this->commuteId, [
+        'scheduledTripId' => $this->tripId,
+        'scope' => 'only_this_occurrence',
+        'departureTime' => '07:30:00',
+    ])->assertStatus(201)->json('data.id');
+
+    answerProposal($rider['token'], $rejectedId, 'rejected')->assertOk();
+
+    proposeChange($this->driverToken, $this->commuteId, [
+        'scheduledTripId' => $this->tripId,
+        'scope' => 'only_this_occurrence',
+        'departureTime' => '07:45:00',
+    ])
+        ->assertStatus(201)
+        ->assertJsonPath('data.status', 'PENDING');
+
+    expect(ChangeProposal::query()->findOrFail($rejectedId)->status)->toBe(ChangeProposalStatus::Withdrawn);
+});
+
 /**
  * 🔴 A pickup change cannot be scoped to one morning: the commute has one advertised route across
  * its weekdays, so moving the stops for Tuesday alone would change every other morning as a side

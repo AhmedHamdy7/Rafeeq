@@ -18,7 +18,7 @@ return [
     'throttle' => 'Too many login attempts. Please try again in :seconds seconds.',
 
     // F1-6: the OTP text message. Never logged.
-    'otp_sms' => 'Your Rafeeq code is :code. Do not share it with anyone.',
+    'otp_sms' => 'Your YuGo code is :code. Do not share it with anyone.',
 
     /*
      * Why an account is on hold, as the member reads it (screen 35). A category, never the

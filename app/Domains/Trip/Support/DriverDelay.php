@@ -4,12 +4,18 @@ namespace App\Domains\Trip\Support;
 
 use App\Domains\Booking\Models\Booking;
 use App\Domains\Commute\Models\ScheduledTrip;
+use App\Domains\Geo\Support\Polyline;
+use App\Domains\Geo\Support\RouteRemainder;
+use App\Domains\Shared\ValueObjects\Coordinate;
+use App\Domains\Trip\Actions\BuildNavigationItineraryAction;
+use App\Domains\Trip\Actions\RecordTripLocationAction;
 use App\Domains\Trip\Enums\AttendanceStatus;
 use App\Domains\Trip\Enums\NavigationStopKind;
 use App\Domains\Trip\Models\Attendance;
 use App\Domains\Trip\Models\NavigationStop;
 use App\Domains\Trip\Models\TripWaitTimer;
 use Carbon\CarbonImmutable;
+use Illuminate\Support\Collection;
 
 /**
  * Has the driver let this passenger down badly enough that leaving should cost her nothing?
@@ -105,17 +111,14 @@ final class DriverDelay
     /**
      * The car has gone past her stop without collecting her.
      *
-     * Decided on `reached_at` alone: a stop further along her route is marked reached and hers is
-     * not. No ETA, no clock, no tolerance — the driver's own progress through her own itinerary
-     * says it.
+     * Either a stop further along her route is marked reached and hers is not, or the car's own
+     * GPS position is more than `trip.passed_stop_meters` further along the day's route than her
+     * stop, while it is on that route.
      */
-    public static function drovePastHer(Booking $booking): bool
+    public static function drovePastHer(Booking $booking, ?ScheduledTrip $trip = null): bool
     {
-        $stops = NavigationStop::query()
-            ->where('scheduled_trip_id', $booking->scheduled_trip_id)
-            ->orderBy('sequence')
-            ->orderBy('id')
-            ->get(['id', 'booking_id', 'kind', 'sequence', 'reached_at']);
+        $trip ??= $booking->scheduledTrip;
+        $stops = self::stopsFor($booking, $trip);
 
         $hers = $stops->first(fn (NavigationStop $stop): bool => $stop->booking_id === $booking->getKey()
             && $stop->kind === NavigationStopKind::PassengerPickup);
@@ -124,10 +127,70 @@ final class DriverDelay
             return false;
         }
 
-        // Anything after her pickup that the car has already reached.
-        return $stops
-            ->contains(fn (NavigationStop $stop): bool => $stop->sequence > $hers->sequence
-                && $stop->reached_at !== null);
+        $laterReached = $stops->contains(fn (NavigationStop $stop): bool => $stop->sequence > $hers->sequence
+            && $stop->reached_at !== null);
+
+        return $laterReached || ($trip !== null && self::positionPastHer($booking, $trip, $hers));
+    }
+
+    /**
+     * @return Collection<int, NavigationStop>
+     */
+    private static function stopsFor(Booking $booking, ?ScheduledTrip $trip): Collection
+    {
+        $session = $trip?->tripSession;
+
+        if ($trip !== null && $session !== null && $session->started_at !== null && ! $session->current_status->isTerminal()) {
+            return app(BuildNavigationItineraryAction::class)->forTrip($trip);
+        }
+
+        return NavigationStop::query()
+            ->where('scheduled_trip_id', $booking->scheduled_trip_id)
+            ->orderBy('sequence')
+            ->orderBy('id')
+            ->get();
+    }
+
+    private static function positionPastHer(Booking $booking, ScheduledTrip $trip, NavigationStop $hers): bool
+    {
+        $session = $trip->tripSession;
+
+        if ($session === null || ! $session->current_status->isUnderway() || $hers->lat === null || $hers->lng === null) {
+            return false;
+        }
+
+        $arrived = TripWaitTimer::query()
+            ->where('trip_session_id', $session->getKey())
+            ->where('booking_id', $booking->getKey())
+            ->whereNotNull('arrived_at')
+            ->exists();
+
+        if ($arrived) {
+            return false;
+        }
+
+        $position = app(RecordTripLocationAction::class)->current($session);
+
+        if ($position === null) {
+            return false;
+        }
+
+        $polyline = $trip->itinerary_polyline ?? $trip->commuteOffer?->route_polyline;
+
+        if ($polyline === null || ! Polyline::isReadable($polyline)) {
+            return false;
+        }
+
+        $route = Polyline::decode($polyline);
+        $car = RouteRemainder::from($route, new Coordinate($position->lat, $position->lng));
+
+        if ($car->offMetres > TripSettings::arrivalRadiusMeters()) {
+            return false;
+        }
+
+        $stop = RouteRemainder::from($route, new Coordinate((float) $hers->lat, (float) $hers->lng));
+
+        return $stop->remainingMetres - $car->remainingMetres >= TripSettings::passedStopMeters();
     }
 
     /**
@@ -145,7 +208,7 @@ final class DriverDelay
 
         return match (true) {
             self::neverSetOff($trip) => 'not_started',
-            self::drovePastHer($booking) => 'passed_your_stop',
+            self::drovePastHer($booking, $trip) => 'passed_your_stop',
             self::lateForPickup($booking, $trip) => 'late_for_pickup',
             default => null,
         };

@@ -14,7 +14,7 @@
 >
 > **Base URL:** `{host}/api/v1` · **Auth:** bearer token · **Format:** JSON only.
 
-**Last updated:** 2026-11-16 · **272 endpoints live** · Phases 0–7, 9 and 11 complete · 10, 12 and 13 all but a decision each
+**Last updated:** 2026-11-16 · **282 endpoints live** · Phases 0–7, 9 and 11 complete · 10, 12 and 13 all but a decision each
 
 ---
 
@@ -22,7 +22,7 @@
 
 ### What is ready
 
-**272 endpoints live** and tested, across the 47 designed screens:
+**282 endpoints live** and tested, across the 47 designed screens:
 
 | | Count | Covers |
 |---|---|---|
@@ -926,6 +926,12 @@ fails if this list and the running routes ever disagree in either direction.
 | `DELETE /testing/content/{key}` | 4.17 Testing (staging only) |
 | `POST /testing/trips/{trip}/location/age` | 4.17 Testing (staging only) |
 | `POST /testing/push` | 4.17 Testing (staging only) |
+| `POST /testing/change-proposals/{proposal}/expire` | 4.17 Testing (staging only) |
+| `POST /testing/seat-requests/{seatRequest}/close` | 4.17 Testing (staging only) |
+| `POST /testing/trips/{trip}/cancel-by-platform` | 4.17 Testing (staging only) |
+| `POST /testing/driver/application/state` | 4.17 Testing (staging only) |
+| `POST /testing/driver/blocker` | 4.17 Testing (staging only) |
+| `DELETE /testing/driver/blocker` | 4.17 Testing (staging only) |
 | `POST /testing/notifications` | 4.17 Testing (staging only) |
 | `DELETE /safety/live-shares/{share}` | 4.12 Safety |
 | `POST /trips/{trip}/live-share` | 4.12 Safety |
@@ -2544,7 +2550,7 @@ as "she stopped qualifying", not "the seat stopped existing" — keep showing it
 The caller's own requests. See 4.7 for the shape. Everything her Requests and Waiting list cards
 draw is on each row (TRIPS-12): `kind` (`seat_request` · `waitlist_application`), `availableToday`,
 `pickup` / `dropoff` (`label`, `lat`, `lng`, `source`), `counteroffer` (when `COUNTEROFFERED`),
-`respondedAt`, **`joinedWaitlistAt`** (when the driver put her on the waiting list; `null`
+`respondedAt`, **`endedAt`** (when the request ended: `respondedAt`, or when it closed without an answer; `null` while `PENDING`, `APPROVED`, `WAITLISTED` or `COUNTEROFFERED`; use it for "Ended · shown for 7 days"), `updatedAt`, **`joinedWaitlistAt`** (when the driver put her on the waiting list; `null`
 otherwise), and `commute` — `originLabel`, `destinationLabel`, **`commuteGroupId`**, `driver`
 (person, first name only), `vehicle` (`make`, `model`, `colour`, `tier`, `hasAc`).
 
@@ -2699,7 +2705,7 @@ confirmed on those days it applies at once**, answering `201` with `status: APPL
 
 | Refusal | When |
 |---|---|
-| `409 CHANGE_PROPOSAL_ALREADY_OPEN` | She already has one out. Edit that one. |
+| `409 CHANGE_PROPOSAL_ALREADY_OPEN` | She already has one `PENDING`. Edit that one. A `REJECTED` one does not block: sending a new proposal closes it as `WITHDRAWN`. |
 | `422 COMMUTE_ROUTE_INVALID` | A pickup point is too far from the route: `fields["pickups.{index}"]`. |
 | `422` | Nothing actually changed, or `pickupPoints` with `only_this_occurrence`: the commute has **one** advertised route across its weekdays, so moving the stops applies to all future occurrences of that weekday. |
 
@@ -4044,6 +4050,7 @@ no trail row and sends no `location.updated`.
 | `pickupEtaAt` | **Passenger with a confirmed seat, before her pickup:** when the car should reach her. The same number the driver sees as `etaAt` on her stop in `navigation-route`, and as `nextJourney.live.pickupEtaAt` on `/home`. Null for the driver, before the start, once he marked arrival, and after she boarded. |
 | `carToPickupPolyline` | Encoded road from the car to her pickup, **only while her pickup is the next stop** and a position is current. Null otherwise: draw it yourself or not at all. |
 | `stopsBeforeYou` | **Passenger with a confirmed seat:** how many pickups and drop-offs the car still makes before hers. `0` when she is next and after the arrival tap. A count only. Null for the driver, before the start and after she boarded. Same value as `nextJourney.live.stopsBeforeYou`. |
+| `graceStartsAt`, `graceEndsAt` | **Passenger:** her 5-minute grace (TRIP-11), from the later of the driver's GPS arrival and her agreed pickup time. Set while the driver has arrived for her and nothing is recorded yet; `null` otherwise. Count down to `graceEndsAt`; it is the driver's `expiresAt`. |
 
 A late batch never moves the car back: when no point in a batch is newer than the newest one
 already received, the points join the trail but `position` and `lastLocationAt` stay as they were,
@@ -4217,7 +4224,7 @@ they explain.
 | `nextJourney.daysMask` | The days she rides — her requested days, or the commute's days. Sat 1 … Fri 64. |
 | `nextJourney.pickup` | `{label, at, local, lat, lng, isExact}` — "Your agreed pickup · Rehab Gate 2 · 07:05". `label`/`lat`/`lng`/`isExact` are `meetingPoint`'s (fuzzed, label `null`, until confirmed). **`at` is her pickup time** — departure plus the drive to her stop — and is the same instant her arrival grace counts from. `meetingPoint` stays. |
 | `nextJourney.dropoff` | `{label, promisedArrivalAt, promisedArrivalLocal}`. The promise is the day's; `null` when the driver promised no arrival. |
-| `nextJourney.live` | `{pickupEtaAt, arrivalEtaAt, progressPercent, driverArrivedAt, boardedAt, stopsBeforeYou}` (`stopsBeforeYou`: stops before her pickup on en-route, `0` on arrived, `null` on board), **only** while `phase` is `driver_en_route` / `driver_arrived` / `on_board`, or `driver_delayed` on a run that has started (filled as en route); `null` otherwise. `pickupEtaAt` + `progressPercent` (to her pickup) on en-route; `driverArrivedAt` and `progressPercent: 100` on arrived; `arrivalEtaAt` + `progressPercent` (to her drop-off) + `boardedAt` on board. `pickupEtaAt` is the same live time as `navigation-route` (routed from the car's latest position, 4.9); otherwise ETAs are counted from the last stop the car reached plus the itinerary's measured leg times, never in the past; `null` when no itinerary was built. `progressPercent` stops at 99 until the car is recorded there. **Poll `/home` every 30 s while `live` is not null**, and not otherwise. |
+| `nextJourney.live` | `{pickupEtaAt, arrivalEtaAt, progressPercent, driverArrivedAt, graceStartsAt, graceEndsAt, boardedAt, stopsBeforeYou}` (`graceStartsAt` / `graceEndsAt`: her 5-minute grace on arrived, as on `GET /trips/{trip}/location`; `null` in other phases. `stopsBeforeYou`: stops before her pickup on en-route, `0` on arrived, `null` on board), **only** while `phase` is `driver_en_route` / `driver_arrived` / `on_board`, or `driver_delayed` on a run that has started (filled as en route); `null` otherwise. `pickupEtaAt` + `progressPercent` (to her pickup) on en-route; `driverArrivedAt` and `progressPercent: 100` on arrived; `arrivalEtaAt` + `progressPercent` (to her drop-off) + `boardedAt` on board. `pickupEtaAt` is the same live time as `navigation-route` (routed from the car's latest position, 4.9); otherwise ETAs are counted from the last stop the car reached plus the itinerary's measured leg times, never in the past; `null` when no itinerary was built. `progressPercent` stops at 99 until the car is recorded there. **Poll `/home` every 30 s while `live` is not null**, and not otherwise. |
 | `nextJourney.canLeaveWithoutFee` | Show **Leave Without Fee** only when `true`. It calls `POST /bookings/{booking}/exit-without-fee` (4.9) — the same server finding, so it is never refused when this is `true`. Also `true` mid-run when the driver has not arrived 5 min after her pickup time, or the car has passed her stop. |
 | `nextJourney.checkIn` | `{groupId, answer, cutoffAt, canAnswer}` (TRIP-26). `answer` is `coming` or `null` (no answer = coming; "I can't make it" cancels the day, so it never shows here). `cutoffAt` is 2 h before departure; show the two buttons only while `canAnswer`. Answer with `POST /groups/{group}/attendance` `{tripId, status: "coming" \| "away"}`. |
 | `nextJourney.endedAt` | When it was cancelled / expired / she exited; `null` otherwise. With `cancellationFeePiastres` (`0` → "no fee to you" / "no penalty"). |
@@ -4230,7 +4237,7 @@ they explain.
 | `nextJourney.meetingPoint` | `null` means the standard point — which is the run's own origin, already in `originLabel`. A non-null value is a specifically agreed pickup. |
 | `demandAlert` | "**3** new commutes match your demand" — `{demandId, newMatchesCount, originLabel, destinationLabel, daysMask, arrivalTimeLocal, arrivalWindowEndLocal}` for the active demand with the most **unopened** matches, or `null` (no card). Opened = `POST /matches/{match}/opened`. Hide it on F3P-01 yourself if the design says so; the server sends it whenever there is news. |
 | `topMatches[]` | Up to 3, **ordered by score** rather than recency. Same shape as `GET /matches`, plus three Home-only fields: `demandTitle` ("New Cairo → Smart Village", `null` if the demand has no labels → "Matches your demand"), `seatsAvailable` (on the commute's soonest open day; `null` if none), `driver.completedTrips` (`0` → "New driver"). |
-| `savedSearches[]` | Up to 5 — `{id, title, lastSearchedAt}`. `lastSearchedAt` is when she last ran that exact search ("You searched this on Tuesday"), `null` if not since saving. **No match count**: that would mean running the most expensive query in the product several times per home load. |
+| `savedSearches[]` | Up to 5 — `{id, title, lastSearchedAt}`. `lastSearchedAt` is when she last ran a point search whose origin, destination, days, arrival window, walk, detour and `minRating` equal the saved filters (other filters are ignored) ("You searched this on Tuesday"), `null` if not since saving. **No match count**: that would mean running the most expensive query in the product several times per home load. |
 
 #### `POST /bookings/{booking}/seen` — signed-in, passenger only
 
@@ -5338,6 +5345,10 @@ status is unchanged. Both send `driver_item_approved` / `driver_item_rejected` w
 verificationStatus, approvedSeats, tier, hasAc, declaredAc, isActive, rejectedItem, rejectionReason}`.
 `422 VEHICLE_NOT_ALLOWED` if the car isn't pending or the driver isn't approved.
 
+**Reject also works on an approved car, the active one included** (approved driver only): it becomes `REJECTED`
+with `rejectedItem` and `rejectionReason`, `GET /driver/verification` reads `overall: action_required` with
+`actionItem.key` = that item, and `GET /driver/vehicles` shows the car as `REJECTED`. Approve still needs a pending car.
+
 Approve takes the reviewer's three values, each optional: `approvedSeats` (the dashboard's range, 3 to 7 today;
 default: the seats she typed, up to 7), `tier` (`standard` · `comfort`, default `comfort`) and `hasAc` (default: what
 she declared). Outside the range: `422 VALIDATION_FAILED` with `fields.approvedSeats`.
@@ -5414,6 +5425,9 @@ appeal (`appeal.id` from `GET /account/reliability`), made the same way as on th
   `evidence_does_not_match` · `within_member_control` · `other`, default `other`), and `appeal_declined` is sent.
   While a round is left, a new 48-hour window opens from the decision and the next appeal needs new evidence
   (`appealRefusal: NEW_EVIDENCE_REQUIRED` until a file is added).
+- **`skipEvidence: true`** (with `declined`) attaches a placeholder photo to the event (and its group) as if she
+  had added one, so `appealRefusal` is `null` and the second appeal can be sent at once. Decline that one too and
+  the event reads `appealsLeft: 0`, `appealRefusal: NO_APPEALS_LEFT` ("No appeals left for this event").
 
 Answers the event as `GET /account/reliability` lists it. `409 APPEAL_NOT_PENDING` once decided; `404` for
 somebody else's appeal.
@@ -5601,11 +5615,26 @@ GET    /testing/faults → [ …open rules… ]
 DELETE /testing/faults → { cleared }
 ```
 
-- `path` is a prefix after `/api/v1`, matched on whole segments (`/bookings` matches `/bookings/01J…/cancel`, not `/bookingsx`). `method` optional (any when left out).
+- `path` is a prefix after `/api/v1`, matched on whole segments (`/bookings` matches `/bookings/01J…/cancel`, not `/bookingsx`). `method` optional (any when left out). A `*` segment matches any one segment, for ids you don't know yet: `{ "path": "/incidents/*/evidence", "method": "POST", "mode": "error", "status": 500 }` fails the next photo upload on any of her reports (the photo after an incident report).
+- `fields` (optional, `error` only): an object copied into the answer's `error.fields`, each value a string or a list of strings: `"fields": {"phone": "Not this one."}` → `error.fields.phone: ["Not this one."]`. Shown back as `fields` on the rule.
 - `delay`: `delayMs` 500–15000, then the real answer. `error`: `status` one of 404, 409, 422, 429, 500, 503; the body is the normal error envelope with `code` (defaults to the status's own code). A `429` carries `Retry-After` (`retryAfterSeconds`, default 30). Every faked answer has the header `X-Testing-Fault: <id>`.
 - Used up after `count` matches (1–10), and gone by itself 5 minutes after it was made.
-- `/testing/*` and `/auth/*` are never matched, except `/auth/otp/request` and `/auth/otp/verify` named exactly. Those two have no token, so the rule matches by **phone**: the caller's own number, or `phone` in the body if it is a test number.
+- `/testing/*` and `/auth/*` are never matched, except `/auth/me`, `/auth/otp/request` and `/auth/otp/verify` named exactly. `/auth/me` matches by the caller's token like any other path. The two OTP paths have no token, so the rule matches by **phone**: the caller's own number, or `phone` in the body if it is a test number.
 - Refusals: `422 VALIDATION_FAILED` (path, mode, status, delay or count), `409 FAULT_LIMIT_REACHED` (10 open rules), `403 TEST_NUMBER_ONLY`.
+
+#### `POST /testing/faults/by-phone` · `GET /testing/faults/by-phone` · `DELETE /testing/faults/by-phone` (both take `?phone=`)
+
+**No token**, for a signed-out device. The same body as `POST /testing/faults` plus `phone` (test numbers only,
+else `403 TEST_NUMBER_ONLY`); same answer. The rule matches a request that carries that number: `phone` in the body
+(`/auth/otp/request`), the code's number (`/auth/otp/verify` by `challengeId`), or a token of the account with that
+number, so it keeps working once the device signs in (`/auth/me`, then any other path). 10 open rules per number.
+`GET` lists that number's open rules; `DELETE` → `{ cleared }`.
+
+```
+POST /testing/faults/by-phone
+{ "phone": "01055501234", "path": "/auth/otp/request", "mode": "error", "status": 422,
+  "code": "AUTH_PHONE_INVALID", "fields": { "phone": "Not this one." } }
+```
 
 #### `POST /testing/rate-limit`
 
@@ -5644,7 +5673,17 @@ Deletes the caller's own commutes and their days, requests, bookings, waiting-li
 
 #### `POST /testing/seed/past-bookings`
 
-`{ "count": 25, "ending": "COMPLETED" }` → `201 { bookingIds, count }`. Finished bookings for the caller as a passenger, one per day back from yesterday, on a new archived commute (never in Discover) driven by the shared test driver `+201020009999`. `count` 1–60. `ending` one of `COMPLETED`, `CANCELLED_BY_PASSENGER`, `CANCELLED_BY_DRIVER`, `NO_SHOW`, `EXPIRED`, `ENDED_EARLY`, `EXITED_DUE_TO_DRIVER_DELAY`; left out, they rotate through all seven. `paymentStatus`: `PAID` for completed and ended early, `WAIVED` for exited, `NOT_DUE` otherwise. No reliability events, no debt, no pushes.
+`{ "count": 25, "ending": "COMPLETED" }` → `201 { bookingIds, count }`. Finished bookings for the caller as a passenger, one per day back from yesterday, on a new archived commute (never in Discover) driven by the shared test driver `+201020009999`. `count` 1–60. `paymentStatus`: `PAID` for completed and ended early, `WAIVED` for both exits, `NOT_DUE` otherwise. No reliability events, no debt, no pushes. Left out, `ending` rotates through the seven statuses (`COMPLETED` … `EXITED_DUE_TO_DRIVER_DELAY`, not `DRIVER_CANCELLED_DAY` or `NEVER_STARTED`). Case, spaces and `CANCELED` are accepted (`"canceled by the driver"`, `"exited (driver late)"`, `"never started"`).
+
+| `ending` | Booking | `cancelledReason` | The day |
+|---|---|---|---|
+| `COMPLETED` · `ENDED_EARLY` · `NO_SHOW` | that status | `null` | completed |
+| `CANCELLED_BY_PASSENGER` | `CANCELLED_BY_PASSENGER` | `passenger_cancelled` | completed |
+| `CANCELLED_BY_DRIVER` | `CANCELLED_BY_DRIVER` | `removed_by_driver` (he cancelled her seat) | completed |
+| `DRIVER_CANCELLED_DAY` (`DAY_CANCELLED`) | `CANCELLED_BY_DRIVER` | `day_cancelled` | cancelled by the driver |
+| `EXITED_DUE_TO_DRIVER_DELAY` (`EXITED_DRIVER_LATE`, `DRIVER_LATE`) | `EXITED_DUE_TO_DRIVER_DELAY` | `not_started` (she left, 8 min after departure) | completed |
+| `NEVER_STARTED` (`TRIP_EXPIRED`, `DRIVER_NO_SHOW`) | `EXITED_DUE_TO_DRIVER_DELAY` | `trip_expired`, attendance `driver_no_show` | expired, never started |
+| `EXPIRED` | `EXPIRED` | `null` | expired |
 
 #### `POST /testing/seat-requests/{seatRequest}/age`
 
@@ -5654,20 +5693,30 @@ Deletes the caller's own commutes and their days, requests, bookings, waiting-li
 
 ```
 POST /testing/debt/seed
-{ "side": "driver" | "passenger", "kind": "commission" | "no_show_fee" | "late_cancel_fee" | "late_fee",
-  "amountPiastres": 11000, "count": 1, "bookingId": "01J…", "disputed": false }
+{ "side": "driver" | "passenger",
+  "kind": "commission" | "fee" | "no_show_fee" | "late_cancel_fee" | "late_fee"
+        | "coupon" | "credit" | "payment" | "adjustment" | "write_off",
+  "amountPiastres": 11000, "count": 1, "bookingId": "01J…", "disputed": false,
+  "direction": "increase" | "decrease", "reasonCode": "…" }
 → 201 { lineIds, side, owedPiastres, balancePiastres, overduePiastres, lateFeePiastres, dueAt, blocked,
         suspended, suspendedAt, oldestUnpaidAt, openDisputes, suspensionOnHold }
 ```
 
 - Real ledger lines: on the statement, in `GET /account/debt`, on the next ride's fee line, in the sweep. `count` 1–10, one per day back (the last one today). Combine with `debt/age` and `debt/deadline` for overdue, +10 % and suspension.
 - `commission` is driver side only (`422`). `side: driver` needs an approved driver (`403 DRIVER_NOT_APPROVED`). `bookingId` must be the caller's upcoming booking (`404`); a passenger's whole balance still rides on her **next** ride, as in real life.
+- Each kind writes the ledger line of that `type` with the server's own `reasonCode`: `fee` (driver `driver_cancel`, passenger `no_show`), `late_fee` (driver +10 % `paid_after_friday`, passenger `late_boarding`), `coupon` (`coupon`), `credit` (`staff_credit`), `payment` (`instapay_payment`, "payment received"), `adjustment` (`staff_adjustment`, up by default, `direction: decrease` takes it down), `write_off` (`staff_write_off`; leave out `amountPiastres` to forgive everything owed on that side). `reasonCode` overrides the code. Coupon, credit, payment and write-off take the debt **down** (a negative line; past zero is a credit). They write the statement line only: no `payments[]` or `coupons[]` row. `disputed` only on a line that adds (`422`).
 - `disputed: true` opens a dispute on each line, so it never suspends (`openDisputes` lists them).
-- `POST /testing/credits` `{ amountPiastres, reason?, side? }` (side defaults to passenger) → `201 { creditId, side, creditPiastres, balancePiastres }`. `balancePiastres` is signed: a credit is **negative**; `creditPiastres` is the positive credit left after any debt it paid off.
+- `POST /testing/credits` `{ amountPiastres, reason?, side? }` (`amountPiastres` from 1, side defaults to passenger) → `201 { creditId, side, reasonCode, creditPiastres, balancePiastres }`. `reason` is a code (`driver_cancelled`, the default) or any text up to 255 (kept as the note; the line's code is then `staff_credit`). On the passenger side the credit lands on her next upcoming ride as `feeLinePiastres < 0`, `feeLineReason: credit` (the Trips card). `balancePiastres` is signed: a credit is **negative**; `creditPiastres` is the positive credit left after any debt it paid off.
 
 #### `POST /testing/bookings/{booking}/fields`
 
-`{ "paymentStatus": "WAIVED", "cancellationReason": "day_cancelled", "cancelledNote": "…", "pickupLabel": null, "dropoffLabel": null }` → the booking as `GET /bookings/{booking}` returns it. Only the keys sent change. The caller must be the passenger. `cancellationReason` is any value `cancelledReason` can take (the server never sends any other, so an unknown one can't be made); it and `cancelledNote` need a cancelled booking (`409 BOOKING_NOT_CANCELLED`). Labels are shown only on a confirmed booking, as always.
+`{ "paymentStatus": "WAIVED", "cancellationReason": "day_cancelled", "cancelledNote": "…", "pickupLabel": null, "dropoffLabel": null, "feeLinePiastres": -1500, "feeLineReason": "credit" }` → the booking as `GET /bookings/{booking}` returns it. `paymentStatus` in any case (`waived` works; `WAIVED` is what History reads as "No payment due · waived"). `feeLinePiastres` (−500000…500000) sets the fee line on any of her bookings, past ones too (the credit or fee on a History row); `feeLineReason` defaults to `credit` below zero, `no_show` above, `null` at zero. Only the keys sent change. The caller must be the passenger. `cancellationReason` is any value `cancelledReason` can take (the server never sends any other, so an unknown one can't be made); it and `cancelledNote` need a cancelled booking (`409 BOOKING_NOT_CANCELLED`). Labels are shown only on a confirmed booking, as always.
+
+#### `POST /testing/payments/instapay`
+
+`{ "enabled": false }` → `{ enabled }`. Hides RAFEEQ's InstaPay account from **the caller only**: `GET /account/debt`
+answers `instapay: null` for her (the pay-debt steps read "Contact support for the account"), everyone else still
+gets it. `{ "enabled": true }` puts it back; `POST /testing/reset` does too.
 
 #### `PUT /testing/content/{key}` · `DELETE /testing/content/{key}`
 
@@ -5680,6 +5729,30 @@ POST /testing/debt/seed
 #### `POST /testing/push`
 
 `{ "type": "pickup_change_requested", "data": { "bookingId": "01J…" }, "params": {} }` → `202 { type, sent, tokens }`. A push to the caller's own devices with **no inbox row**. Any notification type; ids in `data` must be the caller's own (`422`). Simulators get no APNs push; Android emulators do.
+
+#### `POST /testing/change-proposals/{proposal}/expire`
+
+No body → the proposal as the driver's list shows it, now `status: "EXPIRED"`. The driver of the commute, or a passenger with a booking on it. Only a `PENDING` (or `REJECTED`) one, else `409 CHANGE_PROPOSAL_NOT_LIVE`. `expiresAt` becomes now, and the same sweep that runs every minute (`requests:expire`) closes it. Both sides then read it as expired on `GET /driver/change-proposals` and `GET /change-proposals/{proposal}`.
+
+#### `POST /testing/seat-requests/{seatRequest}/close`
+
+`{ "status": "CLOSED_DATE_PASSED" }` → `{ id, status, scheduledTripId }`. Closes a one-day request (a `trial`, or a waiting-list place on one day) as if its day passed with no answer, the same way the nightly job does. The passenger or the commute's driver. `409 SEAT_REQUEST_NOT_PENDING` when it is no longer open; `422` for a recurring request.
+
+#### `POST /testing/trips/{trip}/cancel-by-platform`
+
+`{ "reason": "Road closed" }` → `{ id, status: "CANCELLED", cancelledBy: "PLATFORM", cancelledReason, bookingsCancelled }`. Staff call the day off. The driver of the run or a passenger with a booking on it; only a run that has not started (`409 TRIP_NOT_CANCELLABLE`). The driver's History row has `cancelledBy: "PLATFORM"`; each booking becomes `CANCELLED_BY_DRIVER` with `cancelledReason: "commute_stopped"`. No fee and no reliability event for the driver, and no push.
+
+#### `POST /testing/driver/application/state`
+
+`{ "state": "action_required", "item": "driving_licence", "reason": "Blurry photo", "count": 3 }` → what `GET /driver/verification` returns. Wipes the caller's driver application (ID, selfie, licence, car) and builds it again in that state, through the real submit and review steps:
+
+- `not_started` · `in_progress` (`count` 1–4 items filled in, default 2; the ID and selfie come approved, so `completed` is at most 2) · `ready_to_submit` (all five in, not sent) · `submitted` or `under_review` (the same: sent, `overall: "under_review"`) · `action_required`.
+- `action_required` takes `item`: `government_id` · `selfie` · `driving_licence` · `vehicle_registration` · `vehicle_details` · `application` (default). Staff always give a reason, so one is always set; `reason` left out uses a default.
+- `409 CONFLICT` when the caller already has commutes. Use a fresh test account.
+
+#### `POST /testing/driver/blocker` · `DELETE /testing/driver/blocker`
+
+`{ "kind": "under_age" | "generic" }` → what `GET /driver/eligibility` returns. `under_age` sets her date of birth to one month short of the minimum age (`below_minimum_age`). `generic` adds a blocker with `reason: "not_eligible"`, `nextStep: "CONTACT_SUPPORT"`. `DELETE` removes both and puts the date of birth back.
 
 Cancel Active Trip needs no testing call: the real `POST /trips/{trip}/cancel-active` on a started
 test run gives `active_trip_cancelled`. Check one in first (`POST /trips/{trip}/check-in`) to get
@@ -5908,6 +5981,8 @@ exist, and every live endpoint must be named here.
 
 | Date | Change |
 |---|---|
+| 2026-11-19 | 🧪 **Patrol run requests of 2026-11-19.** `nextJourney.live` is filled from the same itinerary as `GET /trips/{trip}/location`, and `driverDelay: "passed_your_stop"` also comes from the car's GPS (300 m past her stop along the route). New **`graceStartsAt` / `graceEndsAt`** on `nextJourney.live` and `GET /trips/{trip}/location`. Seat requests gain **`endedAt`** and `updatedAt`. A `REJECTED` change proposal no longer blocks a new one. `lastSearchedAt` matches on the saved filters only. 🔴 A driver's "offer to all" now gives each member **one offer per morning** in one `offerGroupId`, and accepting the group books every morning still open. Member-facing texts say YuGo. New and changed testing calls in 4.17. |
+| 2026-11-19 | 🧪 **More testing calls for Patrol (staging only, 4.17).** `POST /testing/change-proposals/{proposal}/expire`, `POST /testing/seat-requests/{seatRequest}/close`, `POST /testing/trips/{trip}/cancel-by-platform`, `POST /testing/driver/application/state`, `POST`/`DELETE /testing/driver/blocker`. A change proposal past its `expiresAt` now turns `EXPIRED` within a minute. New eligibility blocker `not_eligible` (testing only). |
 | 2026-11-17 | ⏸️ **Staff can pause a commute (C04). No new endpoint, no field changed or removed.** New `pausedReason` value **`by_staff`** and a new commute field **`pausedMessage`** (staff's text for the driver; `null` otherwise). Upcoming confirmed seats are cancelled with no fee, as with the other automatic reasons. Only staff resume it: the driver's Resume and Publish answer the existing `409 COMMUTE_INVALID_TRANSITION`, with `fields.pausedReason: ["by_staff"]`. The driver also gets a `staff_message` in the inbox. `pausedCommuteReasons` on `GET /driver/home` can carry `by_staff` (and `gender_review`). Staff warnings to a member (D20) arrive as an ordinary `staff_message` titled "A warning from RAFEEQ". |
 | 2026-11-16 | 💬 **Rating prompt and inbox text.** Every notification `body` now reads on its own without the `title`, in English and Arabic, and names the driver, passenger or day where it matters (38 types reworded; `seat_offered` and `seats_offered_by_driver` now carry the driver's name, `rating_reminder` the trip's day). Stated: a booked next commute never holds `ratingPrompt` back; `POST /testing/reset` clears the rating-prompt history; `POST /testing/bookings/{booking}/age` moves the weekly rule's "last rating". Testing: **`GET /testing/rating-prompt`** says why each recent booking is or isn't prompted. |
 | 2026-11-16 | 🎨 **Designer follow-ups of 2026-11-16.** `ratingPrompt` on `GET /home` gains `pickupLocal`, `pickupLabel` and `unusualKind` (`dispute` · `report` · `late` · `ended_early`). `GET /my-bookings` takes `groupId` and `includeCancelled=1` (with `scope=upcoming`). `sharedWithName` on live shares. `account.banned` frame shape stated (6.3). New **`409 BOOKING_NOT_RATEABLE`**. Testing: **`POST /testing/bookings/{booking}/rating-prompt`**, **`POST /testing/realtime/account-banned`**. |

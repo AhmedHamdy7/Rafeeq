@@ -13,6 +13,8 @@ use App\Domains\Trip\Actions\BuildNavigationItineraryAction;
 use App\Domains\Trip\Actions\RecordTripLocationAction;
 use App\Domains\Trip\Enums\NavigationStopKind;
 use App\Domains\Trip\Models\NavigationStop;
+use App\Domains\Trip\Models\TripSession;
+use App\Domains\Trip\Models\TripWaitTimer;
 use App\Domains\Trip\Support\LiveStopEtas;
 use App\Domains\Trip\ValueObjects\TripPosition;
 use App\Http\Controllers\Controller;
@@ -116,7 +118,32 @@ final class TripLocationController extends Controller
             'pickupEtaAt' => $towards['pickupEtaAt'],
             'carToPickupPolyline' => $towards['carToPickupPolyline'],
             'stopsBeforeYou' => $towards['stopsBeforeYou'],
+            ...$this->grace($request, $occurrence, $session),
         ]);
+    }
+
+    /**
+     * @return array{graceStartsAt: string|null, graceEndsAt: string|null}
+     */
+    private function grace(Request $request, ScheduledTrip $occurrence, TripSession $session): array
+    {
+        $timer = TripWaitTimer::query()
+            ->where('trip_session_id', $session->getKey())
+            ->whereNotNull('arrived_at')
+            ->whereNull('outcome')
+            ->whereIn('booking_id', Booking::query()
+                ->where('scheduled_trip_id', $occurrence->id)
+                ->where('passenger_user_id', $request->user()->id)
+                ->where('status', BookingStatus::Confirmed)
+                ->select('id'))
+            ->latest('arrived_at')
+            ->orderByDesc('id')
+            ->first();
+
+        return [
+            'graceStartsAt' => ($timer?->grace_starts_at ?? $timer?->started_at)?->toIso8601String(),
+            'graceEndsAt' => $timer?->expiresAt()->toIso8601String(),
+        ];
     }
 
     /**

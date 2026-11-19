@@ -57,6 +57,16 @@ final readonly class CancelTripDayAction
 {
     public function execute(ScheduledTrip $trip, User $driver, ?string $reason = null): ScheduledTrip
     {
+        return $this->cancel($trip, $driver, $reason ?? 'driver_cancelled_day');
+    }
+
+    public function byPlatform(ScheduledTrip $trip, string $reason): ScheduledTrip
+    {
+        return $this->cancel($trip, null, $reason);
+    }
+
+    private function cancel(ScheduledTrip $trip, ?User $driver, string $reason): ScheduledTrip
+    {
         return DB::transaction(function () use ($trip, $driver, $reason): ScheduledTrip {
             $trip = ScheduledTrip::query()->whereKey($trip->id)->lockForUpdate()->firstOrFail();
 
@@ -68,8 +78,8 @@ final readonly class CancelTripDayAction
 
             $trip->forceFill([
                 'status' => ScheduledTripStatus::Cancelled->value,
-                'cancelled_reason' => $reason ?? 'driver_cancelled_day',
-                'cancelled_by' => TripCancelledBy::Driver->value,
+                'cancelled_reason' => $reason,
+                'cancelled_by' => $driver === null ? TripCancelledBy::Platform->value : TripCancelledBy::Driver->value,
                 'seats_taken' => 0,
             ])->save();
 
@@ -89,8 +99,8 @@ final readonly class CancelTripDayAction
                 $booking->forceFill([
                     'status' => BookingStatus::CancelledByDriver->value,
                     'cancelled_at' => now(),
-                    'cancelled_reason' => 'driver_cancelled_day',
-                    'cancel_code' => CancelCode::DayCancelled->value,
+                    'cancelled_reason' => $driver === null ? 'platform_cancelled_day' : 'driver_cancelled_day',
+                    'cancel_code' => $driver === null ? CancelCode::CommuteStopped->value : CancelCode::DayCancelled->value,
                     'cancellation_fee_piastres' => 0,
                 ])->save();
 
@@ -99,8 +109,8 @@ final readonly class CancelTripDayAction
                 BookingEventLog::record(
                     $booking,
                     BookingEventType::Cancelled,
-                    BookingActorType::Driver,
-                    $driver->id,
+                    $driver === null ? BookingActorType::System : BookingActorType::Driver,
+                    $driver?->id,
                     from: $from,
                     metadata: ['trip_cancelled' => true, 'seats_released' => $booking->seats_reserved],
                 );
@@ -116,6 +126,10 @@ final readonly class CancelTripDayAction
                  * cancelling the whole morning is at least not a decision about a particular woman.
                  */
                 // PAY-23 (C-6): the driver-cancel fee by the notice he gave, per confirmed seat.
+                if ($driver === null) {
+                    continue;
+                }
+
                 if ($wasConfirmed) {
                     DriverFees::chargeCancellation($booking->setRelation('scheduledTrip', $trip));
                 }

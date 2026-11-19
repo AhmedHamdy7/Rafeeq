@@ -254,6 +254,6 @@ it('writes the message in her app language', function () {
 
     expect($sent)->toHaveCount(2)
         ->and($sent[0])->toContain('YuGo')
-        ->and($sent[1])->toContain('رفيق')
+        ->and($sent[1])->toContain('YuGo')
         ->and($sent[1])->toContain('/s/');
 });

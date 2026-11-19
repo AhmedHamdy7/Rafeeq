@@ -62,7 +62,7 @@ it('refuses testing and auth paths, bad input and more than ten open rules', fun
 
     test()->flushHeaders()->withToken($mine)->postJson('/api/v1/testing/faults', ['path' => '/testing/reset', 'mode' => 'delay', 'delayMs' => 600])
         ->assertStatus(422)->assertJsonPath('error.code', 'VALIDATION_FAILED');
-    test()->flushHeaders()->withToken($mine)->postJson('/api/v1/testing/faults', ['path' => '/auth/me', 'mode' => 'delay', 'delayMs' => 600])
+    test()->flushHeaders()->withToken($mine)->postJson('/api/v1/testing/faults', ['path' => '/auth/logout', 'mode' => 'delay', 'delayMs' => 600])
         ->assertStatus(422);
     test()->flushHeaders()->withToken($mine)->postJson('/api/v1/testing/faults', ['path' => '/bookings', 'mode' => 'error', 'status' => 418])
         ->assertStatus(422);

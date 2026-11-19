@@ -9,14 +9,15 @@ return [
      * what the check was called.
      */
     'eligibility' => [
-        'account_not_active' => 'Your account needs attention before you can drive with Rafeeq.',
+        'account_not_active' => 'Your account needs attention before you can drive with YuGo.',
         'phone_not_verified' => 'Please verify your mobile number first.',
         'profile_incomplete' => 'Please finish your profile first.',
         'date_of_birth_missing' => 'Please add your date of birth to your profile.',
-        'below_minimum_age' => 'You need to be older to drive with Rafeeq.',
+        'below_minimum_age' => 'You need to be older to drive with YuGo.',
         'already_a_driver' => 'You are already an approved driver.',
         'application_under_review' => 'Your application is being reviewed. This usually takes 24 to 48 hours.',
         'driver_suspended' => 'Your driver account is suspended. Please contact support.',
+        'not_eligible' => 'You can\'t drive with YuGo right now. Please contact support.',
     ],
 
     'application' => [

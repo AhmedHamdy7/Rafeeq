@@ -3,6 +3,7 @@
 namespace App\Http\Resources;
 
 use App\Domains\Booking\Enums\SeatRequestKind;
+use App\Domains\Booking\Enums\SeatRequestStatus;
 use App\Domains\Booking\Models\SeatRequest;
 use App\Domains\Booking\Support\OtherConfirmedCommutes;
 use App\Domains\Booking\Support\PickupEta;
@@ -221,6 +222,10 @@ final class SeatRequestResource extends JsonResource
             'availableToday' => StandbyAvailability::isAvailableToday($this->resource),
             'responseNote' => $this->response_note,
             'respondedAt' => $this->responded_at?->toIso8601String(),
+            'endedAt' => in_array($this->status, [SeatRequestStatus::Pending, SeatRequestStatus::Approved, SeatRequestStatus::Waitlisted, SeatRequestStatus::Counteroffered], true)
+                ? null
+                : ($this->responded_at ?? $this->updated_at)?->toIso8601String(),
+            'updatedAt' => $this->updated_at?->toIso8601String(),
             // TRIPS-12: when the driver put her on the waiting list — the moment she joined it — or
             // null when she is not on one.
             // TRIPS-22: while she has paused her seat — `pausedUntil` is the last day of the pause

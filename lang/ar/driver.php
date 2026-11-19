@@ -8,14 +8,15 @@ return [
      * إيه — مش اسم الفحص اللي وقع.
      */
     'eligibility' => [
-        'account_not_active' => 'حسابك محتاج مراجعة قبل ما تقدر تقود مع رفيق.',
+        'account_not_active' => 'حسابك محتاج مراجعة قبل ما تقدر تقود مع YuGo.',
         'phone_not_verified' => 'وثّق رقم موبايلك الأول.',
         'profile_incomplete' => 'أكمل بيانات حسابك الأساسية الأول.',
         'date_of_birth_missing' => 'ضيف تاريخ ميلادك في بياناتك.',
-        'below_minimum_age' => 'لازم تكون أكبر سنًا عشان تقود مع رفيق.',
+        'below_minimum_age' => 'لازم تكون أكبر سنًا عشان تقود مع YuGo.',
         'already_a_driver' => 'إنت سائق معتمَد بالفعل.',
         'application_under_review' => 'طلبك تحت المراجعة. عادة بياخد 24 لـ 48 ساعة.',
         'driver_suspended' => 'حساب السائق بتاعك موقوف. تواصل مع الدعم.',
+        'not_eligible' => 'مش هتقدر تقود مع YuGo دلوقتي. تواصل مع الدعم.',
     ],
 
     'application' => [

@@ -43,7 +43,7 @@ final class InjectTestingFaults
             'error' => [
                 'code' => $rule->code ?? $fallback->value,
                 'message' => ($code ?? $fallback)->message(),
-                'fields' => null,
+                'fields' => TestingFaults::fieldsOf($rule),
             ],
         ], $status, $headers);
     }

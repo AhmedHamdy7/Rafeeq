@@ -21,7 +21,7 @@ return [
 
     // P-1: the price is automatic, so a request that sends one is refused.
     'price' => [
-        'set_by_rafeeq' => 'RAFEEQ sets the seat price from your route and your car. It cannot be sent or changed.',
+        'set_by_rafeeq' => 'YuGo sets the seat price from your route and your car. It cannot be sent or changed.',
     ],
 
     'seats' => [

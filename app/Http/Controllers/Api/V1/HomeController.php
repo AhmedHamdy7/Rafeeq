@@ -730,32 +730,22 @@ final class HomeController extends Controller
             ->limit(self::SAVED_SEARCHES)
             ->get();
 
-        $signatures = [];
-
-        foreach ($searches as $search) {
-            $signatures[$search->id] = $this->searchSignature($search, $userId);
-        }
-
-        /*
-         * "You searched this on Tuesday" (HOME-9). When she last RAN this search, from her own
-         * recent-search history — matched on the same signature that history and the result cache
-         * use, so "the same search" means one thing across the feature. One query for the strip.
-         */
-        $lastSearched = SearchHistory::query()
+        $history = SearchHistory::query()
             ->where('user_id', $userId)
-            ->whereIn('signature', array_values(array_filter($signatures)))
-            ->pluck('searched_at', 'signature');
+            ->orderByDesc('searched_at')
+            ->get(['criteria', 'searched_at']);
 
         $cards = [];
 
         foreach ($searches as $search) {
-            $signature = $signatures[$search->id];
-            $at = $signature === null ? null : $lastSearched->get($signature);
+            $key = $this->savedSearchKey((array) $search->filters);
+            $at = $key === null ? null : $history
+                ->first(fn (SearchHistory $row): bool => $this->savedSearchKey((array) $row->criteria, (array) $search->filters) === $key)
+                ?->searched_at;
 
             $cards[] = [
                 'id' => $search->id,
                 'title' => $search->title,
-                // Null when she saved it and has not run it since (history is pruned after a while).
                 'lastSearchedAt' => $at === null ? null : Carbon::parse($at)->toIso8601String(),
             ];
         }
@@ -764,16 +754,31 @@ final class HomeController extends Controller
     }
 
     /**
-     * The recent-search signature of a saved search's filters, or null for filters saved before
-     * the current search shape that no longer parse — such a card simply has no "last searched".
+     * @param  array<string, mixed>  $criteria
+     * @param  array<string, mixed>|null  $only  the saved search's own filters, whose keys are compared
      */
-    private function searchSignature(SavedSearch $search, string $userId): ?string
+    private function savedSearchKey(array $criteria, ?array $only = null): ?string
     {
+        $only ??= $criteria;
+
         try {
-            return SearchCriteria::fromArray($search->filters)->signature($userId);
+            $parsed = SearchCriteria::fromArray($criteria);
         } catch (Throwable) {
             return null;
         }
+
+        return implode('|', [
+            round($parsed->origin->lat, 3),
+            round($parsed->origin->lng, 3),
+            round($parsed->destination->lat, 3),
+            round($parsed->destination->lng, 3),
+            $parsed->days->value,
+            $parsed->arrivalWindowStart,
+            $parsed->arrivalWindowEnd,
+            $parsed->maxWalk->minutes,
+            $parsed->maxDetourMinutes,
+            array_key_exists('minRating', $only) && $only['minRating'] !== null ? (string) $parsed->minRating : 'any',
+        ]);
     }
 
     /**

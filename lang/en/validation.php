@@ -184,7 +184,7 @@ return [
             'rule-name' => 'custom-message',
         ],
         'date_of_birth' => [
-            'minimum_age' => 'You must be at least :age years old to use Rafeeq.',
+            'minimum_age' => 'You must be at least :age years old to use YuGo.',
         ],
         'full_name' => [
             'format' => 'Please enter your name using Arabic or English letters only.',

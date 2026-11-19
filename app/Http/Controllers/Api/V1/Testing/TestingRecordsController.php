@@ -29,7 +29,10 @@ use App\Domains\Reliability\Models\ReliabilityAppealEvidence;
 use App\Domains\Reliability\Models\ReliabilityEvent;
 use App\Domains\Reliability\Models\ReliabilityEventAppeal;
 use App\Domains\Reliability\Support\EventFee;
+use App\Domains\Reliability\Support\ReliabilityAppeals;
 use App\Domains\Reliability\Support\ReliabilityLedger;
+use App\Domains\Safety\Enums\EvidenceKind;
+use App\Domains\Safety\Support\SafetySettings;
 use App\Domains\Shared\Exceptions\DomainException;
 use App\Domains\Shared\Support\ErrorCode;
 use App\Domains\Shared\Support\TestAccounts;
@@ -50,7 +53,7 @@ use Illuminate\Support\Facades\DB;
 final class TestingRecordsController extends Controller
 {
     #[ApiErrors(ErrorCode::AppealNotPending, ErrorCode::ServiceUnavailable, ErrorCode::ValidationFailed, ErrorCode::NotFound)]
-    public function decideAppeal(DecideAppealRequest $request, string $appeal, AppealReliabilityEventAction $appeals): JsonResponse
+    public function decideAppeal(DecideAppealRequest $request, string $appeal, AppealReliabilityEventAction $appeals, DocumentStorage $storage): JsonResponse
     {
         $user = TestAccounts::assertAllowed($request->user());
 
@@ -77,9 +80,34 @@ final class TestingRecordsController extends Controller
                 $note,
                 AppealDeclineReason::from((string) ($request->validated('declineReasonCode') ?? AppealDeclineReason::Other->value)),
             );
+
+            if ((bool) $request->validated('skipEvidence')) {
+                $this->attachPlaceholderEvidence($user, $event->refresh(), $storage);
+            }
         }
 
         return ApiResponse::success(ReliabilityResource::event($event->refresh()));
+    }
+
+    private function attachPlaceholderEvidence(User $user, ReliabilityEvent $event, DocumentStorage $storage): void
+    {
+        $stored = $storage->put($user, (string) base64_decode('/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDAAMCAgICAgMCAgIDAwMDBAYEBAQEBAgGBgUGCQgKCgkICQkKDA8MCgsOCwkJDRENDg8QEBEQCgwSExIQEw8QEBD/yQALCAABAAEBAREA/8wABgAQEAX/2gAIAQEAAD8A0s8g/9k='));
+
+        foreach ([$event, ...AppealReliabilityEventAction::siblings($event, lock: false)->all()] as $target) {
+            if (! ReliabilityAppeals::acceptsEvidence($target)) {
+                continue;
+            }
+
+            $evidence = new ReliabilityAppealEvidence;
+            $evidence->fill([
+                'reliability_event_id' => $target->getKey(),
+                'file_path' => $stored['path'],
+                'kind' => EvidenceKind::Photo->value,
+                'file_hash' => $stored['hash'],
+                'purge_after' => now()->addDays(SafetySettings::evidenceRetentionDays())->toDateString(),
+            ]);
+            $evidence->save();
+        }
     }
 
     public function resetReliability(Request $request, DocumentStorage $storage): JsonResponse

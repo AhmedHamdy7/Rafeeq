@@ -260,6 +260,7 @@ final class TestingController extends Controller
             $this->reviewer(),
             VehicleRejectedItem::from((string) ($request->validated('item') ?? VehicleRejectedItem::Details->value)),
             (string) ($request->validated('reason') ?? 'Rejected by the test run.'),
+            evenIfApproved: true,
         );
 
         return ApiResponse::success($this->vehicleState($rejected));

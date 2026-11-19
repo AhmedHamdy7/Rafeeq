@@ -138,7 +138,7 @@ it('is not available while a late car is still within five minutes of her pickup
 });
 
 it('lets her leave for free when the car has not reached her five minutes after her pickup time', function () {
-    runLeavingIn($this->tripId, -20);
+    runLeavingIn($this->tripId, -120);
 
     runStartedLate($this->driverToken, $this->tripId);
 

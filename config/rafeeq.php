@@ -762,6 +762,8 @@ return [
         'live_route_refresh_seconds' => 300,
 
         'live_route_off_meters' => 75,
+
+        'passed_stop_meters' => 300,
     ],
 
     /*

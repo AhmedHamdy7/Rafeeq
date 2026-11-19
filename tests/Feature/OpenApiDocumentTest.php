@@ -292,8 +292,18 @@ it('generates a document describing every /v1 route', function () {
         'POST /v1/testing/credits',
         'POST /v1/testing/bookings/{booking}/fields',
         'POST /v1/testing/trips/{trip}/location/age',
+        'POST /v1/testing/change-proposals/{proposal}/expire',
+        'POST /v1/testing/seat-requests/{seatRequest}/close',
+        'POST /v1/testing/trips/{trip}/cancel-by-platform',
+        'POST /v1/testing/driver/application/state',
+        'POST /v1/testing/driver/blocker',
+        'DELETE /v1/testing/driver/blocker',
         'POST /v1/testing/otp/expire',
         'POST /v1/testing/otp/unlock',
+        'POST /v1/testing/faults/by-phone',
+        'GET /v1/testing/faults/by-phone',
+        'DELETE /v1/testing/faults/by-phone',
+        'POST /v1/testing/payments/instapay',
         'DELETE /v1/safety/live-shares/{share}',
         // Ratings (Phase 10). Nothing here returns somebody else's rating — see RatingController.
         'GET /v1/ratings/pending',
@@ -553,7 +563,7 @@ it('marks public endpoints as public and everything else as bearer-protected', f
     expect($document['security'])->toBe([['bearerAuth' => []]])
         ->and($document['components']['securitySchemes']['bearerAuth']['scheme'])->toBe('bearer');
 
-    $public = ['POST /v1/auth/otp/request', 'POST /v1/auth/otp/verify', 'POST /v1/auth/session/refresh', 'POST /v1/testing/otp/expire', 'POST /v1/testing/otp/unlock'];
+    $public = ['POST /v1/auth/otp/request', 'POST /v1/auth/otp/verify', 'POST /v1/auth/session/refresh', 'POST /v1/testing/otp/expire', 'POST /v1/testing/otp/unlock', 'POST /v1/testing/faults/by-phone', 'GET /v1/testing/faults/by-phone', 'DELETE /v1/testing/faults/by-phone'];
 
     foreach (openApiOperations() as $name => $operation) {
         if (in_array($name, $public, true)) {
