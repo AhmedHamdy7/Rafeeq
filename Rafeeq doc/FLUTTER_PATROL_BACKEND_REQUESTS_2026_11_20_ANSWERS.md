@@ -8,7 +8,7 @@ Each section says what you asked, what we found, and what the app should do now.
 
 | # | Answer |
 |---|---|
-| B1 | ✅ **Fixed.** An edit refuses a pickup more than 3 km from the current route |
+| B1 | ✅ **Fixed.** An edit refuses a pickup more than 3 km from the current route, and a draft refuses one more than 3 km from the road |
 | B2 | ✅ **Fixed.** The car switch checks the seats each day really offers |
 | B3 | ✅ **New `conflictingSeatRequestId`.** One correction to the copy: the request is not moved to the waiting list, it becomes a request to join it |
 | B4 | ✅ **Both.** `nextJourney.tripSessionId` on Home, and `?tripId=` on `GET /safety/live-shares` |
@@ -31,7 +31,7 @@ Each section says what you asked, what we found, and what the app should do now.
 
 The index is the point's place in `pickupPoints`. The detour-minutes check still runs on points that pass the 3 km check, with the same field key. Your "This change can't be saved" screen works as it is.
 
-**Drafts did not change.** `PUT /commutes/{commute}/route` still checks detour minutes only. Your Create picker's "Too far from your route" is the app's own check, so drafts already behave like edits in the app. The 3 km figure is the passenger-point limit from D-0042. The business repo doesn't say whether it also applies to a driver's suggested points. So this is **interim** until product confirms. If they want the server to refuse at 3 km on drafts too, it's a small change.
+**Drafts refuse the same way.** `PUT /commutes/{commute}/route` now also refuses a suggested pickup or drop-off more than **3 km** from the road between origin and destination, with `pickups.{index}` or `dropoffs.{index}` and the same text. So the server agrees with your Create picker's "Too far from your route". The 3 km figure is the passenger-point limit from D-0042. The business repo doesn't say it applies to a driver's suggested points, so this is **interim** until product confirms.
 
 ### B2 · Switching car with per-day seats
 

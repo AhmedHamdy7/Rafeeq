@@ -171,20 +171,35 @@ it('refuses a pickup further out of the way than the platform allows', function 
  * without a deploy. The driver can no longer send his own.
  */
 it('accepts the same pickup once the platform allows a longer detour', function () {
-    setRouteLimit('commute.far_trip_minutes', 2);
+    setRouteLimit('commute.far_trip_minutes', 1);
 
     $id = createCommute($this->token, $this->vehicleId)->assertStatus(201)->json('data.id');
 
-    // ~10km north of the direct line, which is about a 7-minute detour: inside a
-    // 30-minute tolerance and well outside a 2-minute one. A point nearer the
-    // line would pass both and prove nothing.
-    $pickup = ['pickups' => [['lat' => 30.1500, 'lng' => 31.2000]]];
+    $pickup = ['pickups' => [['lat' => 30.0814, 'lng' => 31.4500]]];
 
     saveRoute($this->token, $id, $pickup)->assertStatus(422);
 
     setRouteLimit('commute.far_trip_minutes', 30);
 
     saveRoute($this->token, $id, $pickup)->assertOk();
+});
+
+it('refuses a suggested point more than 3 km from the road, whatever the detour limit', function () {
+    setRouteLimit('commute.far_trip_minutes', 120);
+
+    $id = createCommute($this->token, $this->vehicleId)->assertStatus(201)->json('data.id');
+
+    $fields = saveRoute($this->token, $id, [
+        'pickups' => [['lat' => 30.0624, 'lng' => 31.3614], ['lat' => 30.1500, 'lng' => 31.2000]],
+        'dropoffs' => [['lat' => 30.1500, 'lng' => 31.1000]],
+    ])->assertStatus(422)
+        ->assertJsonPath('error.code', 'COMMUTE_ROUTE_INVALID')
+        ->json('error.fields');
+
+    expect($fields)->toBe([
+        'pickups.1' => ['That pickup point is more than 3 km from your route. Move it closer to your route.'],
+        'dropoffs.0' => ['That drop-off point is more than 3 km from your route. Move it closer to your route.'],
+    ]);
 });
 
 it('refuses a detour or walking limit sent by the driver', function () {

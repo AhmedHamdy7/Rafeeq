@@ -155,7 +155,7 @@ final readonly class SaveCommuteRouteAction
             foreach ($stops as $index => $stop) {
                 $point = new Coordinate((float) $stop['lat'], (float) $stop['lng']);
 
-                if ($current !== null && $this->geo->distanceFromRoute($current, $point)->metres > $maxMetres) {
+                if ($this->geo->distanceFromRoute($direct, $point)->metres > $maxMetres) {
                     $fields["{$list}.{$index}"] = [__($list === 'pickups' ? 'commute.route.pickup_too_far' : 'commute.route.dropoff_too_far', [
                         'km' => rtrim(rtrim(number_format($maxMetres / 1000, 1, '.', ''), '0'), '.'),
                     ])];
