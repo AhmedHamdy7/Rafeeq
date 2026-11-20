@@ -149,6 +149,7 @@ Route::prefix('v1')->group(function (): void {
         Route::put('content/{key}', [TestingToolsController::class, 'writeContent']);
         Route::delete('content/{key}', [TestingToolsController::class, 'removeContent']);
         Route::post('push', [TestingTripsController::class, 'push']);
+        Route::get('push-log', [TestingTripsController::class, 'pushLog']);
         Route::post('reset', [TestingDataController::class, 'reset']);
         Route::post('seed/past-bookings', [TestingDataController::class, 'seedHistory']);
         Route::post('seat-requests/{seatRequest}/age', [TestingDataController::class, 'ageSeatRequest']);
@@ -159,6 +160,9 @@ Route::prefix('v1')->group(function (): void {
         Route::post('change-proposals/{proposal}/expire', [TestingStatesController::class, 'expireProposal']);
         Route::post('pickup-requests/{pickupRequest}/expire', [TestingStatesController::class, 'expirePickupRequest']);
         Route::post('seat-requests/{seatRequest}/close', [TestingStatesController::class, 'closeSeatRequest']);
+        Route::patch('account/fields', [TestingStatesController::class, 'accountFields']);
+        Route::post('commutes/{commute}/pause', [TestingStatesController::class, 'pauseCommute']);
+        Route::delete('commutes/{commute}/pause', [TestingStatesController::class, 'resumeCommute']);
         Route::post('trips/{trip}/cancel-by-platform', [TestingStatesController::class, 'cancelByPlatform']);
         Route::post('driver/application/state', [TestingStatesController::class, 'applicationState']);
         Route::post('driver/blocker', [TestingStatesController::class, 'setBlocker']);

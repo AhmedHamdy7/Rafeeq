@@ -12,8 +12,14 @@ use App\Domains\Booking\Models\PickupPointRequest;
 use App\Domains\Booking\Models\SeatRequest;
 use App\Domains\Booking\Support\PickupRequestContext;
 use App\Domains\Booking\Support\PickupRequestExpiry;
+use App\Domains\Booking\Support\WaitlistPositions;
 use App\Domains\Commute\Actions\CancelTripDayAction;
+use App\Domains\Commute\Actions\ChangeCommuteStatusAction;
+use App\Domains\Commute\Actions\GenerateScheduledTripsAction;
 use App\Domains\Commute\Actions\ProposeCommuteChangeAction;
+use App\Domains\Commute\Enums\CommuteAudience;
+use App\Domains\Commute\Enums\CommuteOfferStatus;
+use App\Domains\Commute\Enums\CommutePausedReason;
 use App\Domains\Commute\Models\ChangeProposal;
 use App\Domains\Commute\Models\CommuteOffer;
 use App\Domains\Commute\Models\ScheduledTrip;
@@ -29,6 +35,7 @@ use App\Domains\Driver\Models\Vehicle;
 use App\Domains\Driver\Models\VehicleDocument;
 use App\Domains\Driver\Support\DriverChecklist;
 use App\Domains\Driver\Support\DriverEligibility;
+use App\Domains\Identity\Enums\Gender;
 use App\Domains\Identity\Models\User;
 use App\Domains\Shared\Exceptions\DomainException;
 use App\Domains\Shared\Support\ErrorCode;
@@ -122,9 +129,12 @@ final class TestingStatesController extends Controller
     {
         $user = TestAccounts::assertAllowed($request->user());
 
-        $request->validate([
-            'status' => ['required', 'string', Rule::in([strtoupper(SeatRequestStatus::ClosedDatePassed->value)])],
-        ]);
+        $status = SeatRequestStatus::from(strtolower((string) $request->validate([
+            'status' => ['required', 'string', Rule::in(array_map(
+                fn (SeatRequestStatus $status): string => strtoupper($status->value),
+                [SeatRequestStatus::ClosedDatePassed, SeatRequestStatus::Expired, SeatRequestStatus::Ended],
+            ))],
+        ])['status']));
 
         $target = SeatRequest::query()
             ->whereKey($seatRequest)
@@ -139,6 +149,25 @@ final class TestingStatesController extends Controller
         if (! in_array($target->status, $open, true)) {
             throw DomainException::of(ErrorCode::SeatRequestNotPending, fields: [
                 'status' => [strtoupper($target->status->value)],
+            ]);
+        }
+
+        if ($status !== SeatRequestStatus::ClosedDatePassed) {
+            $wasWaiting = $target->status === SeatRequestStatus::Waitlisted;
+
+            $target->forceFill([
+                'status' => $status->value,
+                'waitlist_position' => null,
+            ])->save();
+
+            if ($wasWaiting) {
+                WaitlistPositions::renumber((string) $target->commute_offer_id);
+            }
+
+            return ApiResponse::success([
+                'id' => $target->id,
+                'status' => strtoupper($target->status->value),
+                'scheduledTripId' => $target->scheduled_trip_id,
             ]);
         }
 
@@ -160,6 +189,91 @@ final class TestingStatesController extends Controller
             'status' => strtoupper($target->status->value),
             'scheduledTripId' => $target->scheduled_trip_id,
         ]);
+    }
+
+    #[ApiErrors(ErrorCode::ValidationFailed, ErrorCode::ServiceUnavailable)]
+    public function accountFields(Request $request): JsonResponse
+    {
+        $user = TestAccounts::assertAllowed($request->user());
+
+        $data = $request->validate([
+            'gender' => ['present', 'nullable', 'string', Rule::in([Gender::Woman->value, Gender::Man->value])],
+        ]);
+
+        $user->forceFill(['gender' => $data['gender'] ?? Gender::PreferNotToSay->value])->save();
+
+        return ApiResponse::success([
+            'id' => $user->id,
+            'gender' => $user->gender === Gender::PreferNotToSay ? null : $user->gender?->value,
+        ]);
+    }
+
+    #[ApiErrors(ErrorCode::NotFound, ErrorCode::ValidationFailed, ErrorCode::ServiceUnavailable)]
+    public function pauseCommute(Request $request, string $commute, ChangeCommuteStatusAction $commutes): JsonResponse
+    {
+        $user = TestAccounts::assertAllowed($request->user());
+
+        $request->validate([
+            'reason' => ['required', 'string', Rule::in(['women_only_check', CommutePausedReason::GenderReview->value])],
+        ]);
+
+        $offer = $this->ownCommute($user, $commute);
+
+        if ($offer->audience !== CommuteAudience::WomenOnly) {
+            throw DomainException::of(ErrorCode::ValidationFailed, fields: [
+                'commute' => ['Only a women-only commute is paused for the gender check.'],
+            ]);
+        }
+
+        if ($offer->status !== CommuteOfferStatus::Paused || $offer->paused_reason !== CommutePausedReason::GenderReview) {
+            $commutes->pause($offer, CommutePausedReason::GenderReview);
+        }
+
+        $offer->refresh();
+
+        return ApiResponse::success([
+            'id' => $offer->id,
+            'status' => strtoupper($offer->status->value),
+            'pausedReason' => $offer->paused_reason?->value,
+            'pausedAt' => $offer->paused_at?->toIso8601String(),
+        ]);
+    }
+
+    #[ApiErrors(ErrorCode::NotFound, ErrorCode::ServiceUnavailable)]
+    public function resumeCommute(Request $request, string $commute): JsonResponse
+    {
+        $user = TestAccounts::assertAllowed($request->user());
+
+        $offer = $this->ownCommute($user, $commute);
+
+        if ($offer->status === CommuteOfferStatus::Paused && $offer->paused_reason === CommutePausedReason::GenderReview) {
+            $offer->forceFill([
+                'status' => CommuteOfferStatus::Published->value,
+                'paused_at' => null,
+                'paused_reason' => null,
+                'paused_message' => null,
+            ])->save();
+
+            app(GenerateScheduledTripsAction::class)->execute($offer->refresh());
+        }
+
+        $offer->refresh();
+
+        return ApiResponse::success([
+            'id' => $offer->id,
+            'status' => strtoupper($offer->status->value),
+            'pausedReason' => $offer->paused_reason?->value,
+            'pausedAt' => $offer->paused_at?->toIso8601String(),
+        ]);
+    }
+
+    private function ownCommute(User $user, string $commute): CommuteOffer
+    {
+        return CommuteOffer::query()
+            ->whereKey($commute)
+            ->where('driver_profile_id', $user->id)
+            ->first()
+            ?? throw DomainException::of(ErrorCode::NotFound);
     }
 
     #[ApiErrors(ErrorCode::NotFound, ErrorCode::TripNotCancellable, ErrorCode::ValidationFailed, ErrorCode::ServiceUnavailable)]

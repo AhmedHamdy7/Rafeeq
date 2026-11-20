@@ -463,6 +463,8 @@ final class HomeController extends Controller
             // The state the card switches on (HOME-2). `status` and `trip.status` are unchanged.
             'phase' => $phase,
 
+            'tripSessionId' => $trip->tripSession === null ? null : (string) $trip->tripSession->id,
+
             ...$route,
             ...JourneyCard::timing($trip),
             'attendance' => JourneyCard::attendance($booking->commuteGroup, $trip),

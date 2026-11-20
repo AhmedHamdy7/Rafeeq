@@ -350,10 +350,15 @@ final class SafetyController extends Controller
     public function liveShares(Request $request): JsonResponse
     {
         $tripSessionId = $request->query('tripSessionId');
+        $tripId = $request->query('tripId');
 
         $shares = LiveShare::query()
             ->where('user_id', $request->user()->id)
             ->when(is_string($tripSessionId) && $tripSessionId !== '', fn ($query) => $query->where('trip_session_id', $tripSessionId))
+            ->when(is_string($tripId) && $tripId !== '', fn ($query) => $query->whereIn(
+                'trip_session_id',
+                TripSession::query()->where('scheduled_trip_id', $tripId)->select('id'),
+            ))
             ->with('sharedWithContact')
             ->latest('created_at')
             ->orderByDesc('id')

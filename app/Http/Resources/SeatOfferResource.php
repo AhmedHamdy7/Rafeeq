@@ -9,6 +9,7 @@ use App\Domains\Booking\Enums\SeatRequestStatus;
 use App\Domains\Booking\Models\Booking;
 use App\Domains\Booking\Models\SeatOffer;
 use App\Domains\Booking\Support\PickupEta;
+use App\Domains\Booking\Support\RequestKinds;
 use App\Domains\Booking\Support\SameTimeBookings;
 use App\Domains\Geo\Contracts\GeoQueryEngine;
 use App\Domains\Matching\Support\PassengerStanding;
@@ -117,6 +118,13 @@ final class SeatOfferResource extends JsonResource
             'conflictingBookingId' => $trip === null || $seatRequest === null || $this->status !== SeatOfferStatus::Open
                 ? null
                 : SameTimeBookings::overlapping($trip, (string) $seatRequest->passenger_user_id)->first()?->id,
+
+            'conflictingSeatRequestId' => $trip === null || $seatRequest === null || $this->status !== SeatOfferStatus::Open
+                ? null
+                : RequestKinds::pendingClashing(
+                    (string) $seatRequest->passenger_user_id,
+                    collect([$trip->loadMissing('commuteOffer')]),
+                )->first()?->id,
         ];
     }
 

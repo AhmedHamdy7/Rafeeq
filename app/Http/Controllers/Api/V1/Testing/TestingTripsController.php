@@ -12,13 +12,16 @@ use App\Domains\Booking\Support\SeatOfferClosure;
 use App\Domains\Commute\Models\ChangeProposal;
 use App\Domains\Commute\Models\CommuteOffer;
 use App\Domains\Commute\Models\ScheduledTrip;
+use App\Domains\Identity\Models\Device;
 use App\Domains\Matching\Actions\SaveCommuteDemandAction;
 use App\Domains\Matching\Enums\CommuteDemandStatus;
 use App\Domains\Matching\Models\CommuteDemand;
+use App\Domains\Notification\Contracts\PushSender;
 use App\Domains\Notification\Enums\NotificationChannel;
 use App\Domains\Notification\Enums\NotificationType;
 use App\Domains\Notification\Jobs\DeliverPushNotification;
 use App\Domains\Notification\Models\Notification;
+use App\Domains\Notification\Support\NotificationPreferences;
 use App\Domains\Notification\Support\Notifier;
 use App\Domains\Shared\Exceptions\DomainException;
 use App\Domains\Shared\Support\ErrorCode;
@@ -131,14 +134,82 @@ final class TestingTripsController extends Controller
 
         $this->assertOwnIds($user->id, $payload);
 
+        $type = NotificationType::from($data['type']);
+        $startedAt = now()->startOfSecond();
+
         $notification = Notifier::send(
             $user,
-            NotificationType::from($data['type']),
+            $type,
             params: [...['name' => 'Nour', 'date' => now()->format('j/n'), 'days' => '3'], ...($data['params'] ?? [])],
             data: $payload,
         );
 
-        return ApiResponse::success($notification === null ? null : new NotificationResource($notification), status: 201);
+        $pushIds = Notification::query()
+            ->where('user_id', $user->id)
+            ->where('channel', NotificationChannel::Push->value)
+            ->where('type', $type->value)
+            ->where('created_at', '>=', $startedAt)
+            ->orderBy('id')
+            ->pluck('id')
+            ->all();
+
+        return ApiResponse::success(
+            $notification === null ? null : new NotificationResource($notification),
+            meta: [
+                'inboxWritten' => $notification !== null,
+                'pushAllowed' => NotificationPreferences::allows($user, $type->category(), NotificationChannel::Push),
+                'pushTokens' => $user->devices()->whereNull('revoked_at')->whereNotNull('push_token')->count(),
+                'pushIds' => $pushIds,
+            ],
+            status: 201,
+        );
+    }
+
+    public function pushLog(Request $request): JsonResponse
+    {
+        $user = TestAccounts::assertAllowed($request->user());
+
+        $devices = $user->devices()
+            ->orderByDesc('last_seen_at')
+            ->get()
+            ->map(fn (Device $device): array => [
+                'id' => $device->id,
+                'platform' => $device->platform,
+                'deviceModel' => $device->device_model,
+                'appVersion' => $device->app_version,
+                'hasPushToken' => $device->push_token !== null,
+                'pushTokenEnd' => $device->push_token === null ? null : substr((string) $device->push_token, -8),
+                'lastSeenAt' => $device->last_seen_at?->toIso8601String(),
+                'revokedAt' => $device->revoked_at?->toIso8601String(),
+            ])
+            ->all();
+
+        $pushes = Notification::query()
+            ->where('user_id', $user->id)
+            ->where('channel', NotificationChannel::Push->value)
+            ->orderByDesc('id')
+            ->limit(20)
+            ->get()
+            ->map(fn (Notification $push): array => [
+                'id' => $push->id,
+                'type' => $push->type,
+                'title' => $push->title,
+                'createdAt' => $push->created_at?->toIso8601String(),
+                'sentAt' => $push->sent_at?->toIso8601String(),
+                'failedReason' => $push->failed_reason,
+                'state' => match (true) {
+                    $push->sent_at !== null => 'sent',
+                    $push->failed_reason !== null => 'failed',
+                    default => 'queued',
+                },
+            ])
+            ->all();
+
+        return ApiResponse::success([
+            'pushProviderConfigured' => app(PushSender::class)->delivers(),
+            'devices' => $devices,
+            'pushes' => $pushes,
+        ]);
     }
 
     #[ApiErrors(ErrorCode::NotFound, ErrorCode::ValidationFailed)]

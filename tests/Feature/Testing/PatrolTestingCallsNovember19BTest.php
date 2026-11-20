@@ -94,7 +94,7 @@ it('closes a one-day request as if its day passed, and refuses one that is not o
     $pax = verifiedPassenger('01112223344', device: 'pax-1');
     $requestId = requestSeat($pax, $commuteId, ['scheduledTripId' => $tripId])->assertStatus(201)->json('data.id');
 
-    test()->flushHeaders()->withToken($pax)->postJson("/api/v1/testing/seat-requests/{$requestId}/close", ['status' => 'EXPIRED'])
+    test()->flushHeaders()->withToken($pax)->postJson("/api/v1/testing/seat-requests/{$requestId}/close", ['status' => 'APPROVED'])
         ->assertStatus(422);
 
     test()->flushHeaders()->withToken($pax)->postJson("/api/v1/testing/seat-requests/{$requestId}/close", ['status' => 'CLOSED_DATE_PASSED'])

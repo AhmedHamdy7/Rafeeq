@@ -11,6 +11,8 @@ return [
         'too_many_stops' => 'That is more pickup or drop-off points than a commute can have.',
         'pickup_off_route' => 'That pickup point is more than :minutes minutes out of your way. Move it closer to your route.',
         'dropoff_off_route' => 'That drop-off point is more than :minutes minutes out of your way. Move it closer to your route.',
+        'pickup_too_far' => 'That pickup point is more than :km km from your route. Move it closer to your route.',
+        'dropoff_too_far' => 'That drop-off point is more than :km km from your route. Move it closer to your route.',
     ],
 
     'schedule' => [

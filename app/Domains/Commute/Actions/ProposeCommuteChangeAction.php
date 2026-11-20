@@ -10,11 +10,14 @@ use App\Domains\Commute\Models\ChangeProposal;
 use App\Domains\Commute\Models\CommuteOffer;
 use App\Domains\Commute\Models\CommuteWeekdaySchedule;
 use App\Domains\Commute\Models\ScheduledTrip;
+use App\Domains\Geo\Support\Polyline;
+use App\Domains\Geo\ValueObjects\Route;
 use App\Domains\Notification\Enums\NotificationType;
 use App\Domains\Notification\Support\Notifier;
 use App\Domains\Shared\Exceptions\DomainException;
 use App\Domains\Shared\Support\ErrorCode;
 use App\Domains\Shared\ValueObjects\Coordinate;
+use App\Domains\Shared\ValueObjects\Distance;
 use Carbon\CarbonImmutable;
 use Illuminate\Support\Facades\DB;
 
@@ -260,6 +263,20 @@ final readonly class ProposeCommuteChangeAction
             new Coordinate((float) $destination->lat, (float) $destination->lng),
             $changes['pickupPoints'],
             [],
+            $this->publishedRoute($offer),
+        );
+    }
+
+    private function publishedRoute(CommuteOffer $offer): ?Route
+    {
+        if ($offer->route_polyline === null || ! Polyline::isReadable($offer->route_polyline)) {
+            return null;
+        }
+
+        return new Route(
+            polyline: $offer->route_polyline,
+            distance: Distance::fromMetres((int) $offer->route_distance_meters),
+            durationSeconds: (int) $offer->route_duration_seconds,
         );
     }
 

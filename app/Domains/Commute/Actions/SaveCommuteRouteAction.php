@@ -7,6 +7,7 @@ use App\Domains\Commute\Models\CommuteLocation;
 use App\Domains\Commute\Models\CommuteOffer;
 use App\Domains\Commute\Support\RouteSettings;
 use App\Domains\Geo\Contracts\GeoQueryEngine;
+use App\Domains\Geo\ValueObjects\Route;
 use App\Domains\Shared\Exceptions\DomainException;
 use App\Domains\Shared\Support\ErrorCode;
 use App\Domains\Shared\ValueObjects\Coordinate;
@@ -139,18 +140,28 @@ final readonly class SaveCommuteRouteAction
         Coordinate $destination,
         array $pickups,
         array $dropoffs,
+        ?Route $current = null,
     ): void {
         if ($pickups === [] && $dropoffs === []) {
             return;
         }
 
-        $direct = $this->geo->routeBetween($origin, $destination);
+        $direct = $current ?? $this->geo->routeBetween($origin, $destination);
         $maxDetourMinutes = RouteSettings::maxTripDetourMinutes();
+        $maxMetres = RouteSettings::farRadiusMeters();
         $fields = [];
 
         foreach (['pickups' => $pickups, 'dropoffs' => $dropoffs] as $list => $stops) {
             foreach ($stops as $index => $stop) {
                 $point = new Coordinate((float) $stop['lat'], (float) $stop['lng']);
+
+                if ($current !== null && $this->geo->distanceFromRoute($current, $point)->metres > $maxMetres) {
+                    $fields["{$list}.{$index}"] = [__($list === 'pickups' ? 'commute.route.pickup_too_far' : 'commute.route.dropoff_too_far', [
+                        'km' => rtrim(rtrim(number_format($maxMetres / 1000, 1, '.', ''), '0'), '.'),
+                    ])];
+
+                    continue;
+                }
 
                 if ($this->geo->detourMinutes($direct, $point) > $maxDetourMinutes) {
                     $fields["{$list}.{$index}"] = [__($list === 'pickups' ? 'commute.route.pickup_off_route' : 'commute.route.dropoff_off_route', [

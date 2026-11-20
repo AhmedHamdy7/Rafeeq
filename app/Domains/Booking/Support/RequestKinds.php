@@ -148,7 +148,23 @@ final class RequestKinds
             return 0;
         }
 
-        $others = SeatRequest::query()
+        $changed = 0;
+
+        foreach (self::pendingClashing($passengerUserId, $trips) as $request) {
+            $request->forceFill(['kind' => SeatRequestKind::WaitlistApplication->value])->save();
+            $changed++;
+        }
+
+        return $changed;
+    }
+
+    /**
+     * @param  Collection<int, ScheduledTrip>  $trips  each with its commute loaded
+     * @return Collection<int, SeatRequest>
+     */
+    public static function pendingClashing(string $passengerUserId, Collection $trips): Collection
+    {
+        return SeatRequest::query()
             ->where('passenger_user_id', $passengerUserId)
             ->where('status', SeatRequestStatus::Pending->value)
             ->where('kind', SeatRequestKind::SeatRequest->value)
@@ -156,18 +172,9 @@ final class RequestKinds
             ->where('requested_during_ride', false)
             ->whereNotIn('commute_offer_id', $trips->pluck('commute_offer_id')->unique()->all())
             ->orderBy('id')
-            ->get();
-
-        $changed = 0;
-
-        foreach ($others as $request) {
-            if (self::clashesWith($request, $trips)) {
-                $request->forceFill(['kind' => SeatRequestKind::WaitlistApplication->value])->save();
-                $changed++;
-            }
-        }
-
-        return $changed;
+            ->get()
+            ->filter(fn (SeatRequest $request): bool => self::clashesWith($request, $trips))
+            ->values();
     }
 
     /**

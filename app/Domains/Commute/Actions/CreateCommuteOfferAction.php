@@ -183,9 +183,13 @@ final readonly class CreateCommuteOfferAction
      */
     public static function assertCommuteFitsVehicle(CommuteOffer $offer, Vehicle $vehicle): void
     {
-        self::assertSeatsFitVehicle($vehicle, (int) ($offer->seats_total ?? $vehicle->approved_seats));
+        $perDay = $offer->weekdaySchedules()->pluck('seats_total');
 
-        foreach ($offer->weekdaySchedules()->whereNotNull('seats_total')->pluck('seats_total') as $seats) {
+        if ($perDay->isEmpty() || $perDay->contains(null)) {
+            self::assertSeatsFitVehicle($vehicle, (int) ($offer->seats_total ?? $vehicle->approved_seats));
+        }
+
+        foreach ($perDay->filter(fn ($seats) => $seats !== null) as $seats) {
             self::assertSeatsFitVehicle($vehicle, (int) $seats);
         }
     }

@@ -933,6 +933,10 @@ fails if this list and the running routes ever disagree in either direction.
 | `POST /testing/driver/blocker` | 4.17 Testing (staging only) |
 | `DELETE /testing/driver/blocker` | 4.17 Testing (staging only) |
 | `POST /testing/notifications` | 4.17 Testing (staging only) |
+| `GET /testing/push-log` | 4.17 Testing (staging only) |
+| `PATCH /testing/account/fields` | 4.17 Testing (staging only) |
+| `POST /testing/commutes/{commute}/pause` | 4.17 Testing (staging only) |
+| `DELETE /testing/commutes/{commute}/pause` | 4.17 Testing (staging only) |
 | `DELETE /safety/live-shares/{share}` | 4.12 Safety |
 | `POST /trips/{trip}/live-share` | 4.12 Safety |
 | `POST /sos` | 4.12 Safety |
@@ -1712,7 +1716,10 @@ missing, so gating it would leave them with a refusal and no explanation.
 | Field | Meaning |
 |---|---|
 | `eligible` | Whether they can start an application at all. |
-| `blockers[]` | Machine codes for what is missing, e.g. `GOVERNMENT_ID_NOT_VERIFIED`, `UNDER_MINIMUM_AGE`. Render your own copy per code. |
+| `blockers[]` | Objects, not plain codes: `{reason, nextStep, message}`. Empty when `eligible` is true. |
+| `blockers[].reason` | Lower-case code: `account_not_active` · `phone_not_verified` · `profile_incomplete` · `date_of_birth_missing` · `below_minimum_age` · `already_a_driver` · `application_under_review` · `driver_suspended` · `not_eligible`. |
+| `blockers[].nextStep` | The button to offer: `CONTACT_SUPPORT` · `VERIFY_PHONE` · `COMPLETE_PROFILE` · `OPEN_DRIVER_DASHBOARD` · `WAIT_FOR_REVIEW` · `NONE`. |
+| `blockers[].message` | One sentence in the caller's language, ready to show. |
 
 #### `GET` / `POST` / `DELETE /driver/application` — active, profile complete
 
@@ -2706,7 +2713,7 @@ confirmed on those days it applies at once**, answering `201` with `status: APPL
 | Refusal | When |
 |---|---|
 | `409 CHANGE_PROPOSAL_ALREADY_OPEN` | She already has one `PENDING`. Edit that one. A `REJECTED` one does not block: sending a new proposal closes it as `WITHDRAWN`. |
-| `422 COMMUTE_ROUTE_INVALID` | A pickup point is too far from the route: `fields["pickups.{index}"]`. |
+| `422 COMMUTE_ROUTE_INVALID` | A pickup point is too far from the route: `fields["pickups.{index}"]`. Two checks, both against the route the commute drives today: more than **3 km** from it (`commute.far_radius_meters`), or more than the platform's detour minutes out of the way. The same refusal when the change would apply at once. |
 | `422` | Nothing actually changed, or `pickupPoints` with `only_this_occurrence`: the commute has **one** advertised route across its weekdays, so moving the stops applies to all future occurrences of that weekday. |
 
 **`GET /driver/change-proposals`** — her pending view, optional `?commuteId=`. Adds `affectedCount`, `acceptedCount`, and
@@ -2835,6 +2842,7 @@ paged with `perPage`, and an unknown status → `422`.
 | `pickup.label` · `dropoff.label` | The points on her waiting request. |
 | `promisedArrivalLocal` | The arrival the driver promised that day (`HH:MM`), or `null`. |
 | `conflictingBookingId` | Her own booking that overlaps this seat in time (R-3), the one **Switch Commute** replaces, or `null`. Only on an `OPEN` offer. |
+| `conflictingSeatRequestId` | Her own **pending** seat request on another commute that overlaps this seat in time, or `null`. Read its driver and date with `GET /seat-requests/{seatRequest}`. Accepting this seat turns that request into a request to join that driver's waiting list (`kind: "waitlist_application"`, still `PENDING`); the driver then decides. Only on an `OPEN` offer. |
 | `pickup.estimatedLocal` | `HH:MM`, when the car should pass her pickup that day, along the published route. `null` when the route can't be read. |
 | `dropoff.estimatedLocal` | `HH:MM`, the promised arrival (`promisedArrivalLocal` as a clock). |
 | `source` | `seat_freed` (a seat came free, everybody waiting was offered it) · `driver_resume` (the driver chose her on resume, COM-33) · `replacement` (the driver offered her a named passenger's seat). |
@@ -4231,6 +4239,7 @@ they explain.
 | `ratingPrompt` | `null`, or `{bookingId, tripId, driverName, tripDate, pickupLocal, pickupLabel, reason, unusualKind}` (owner decision 2026-11-16). `pickupLocal` is her agreed pickup on that day, commute wall clock, `HH:mm`; `pickupLabel` her meeting point's label or `null`. `unusualKind` (only with `reason: unusual`, otherwise `null`): `dispute` · `report` · `late` · `ended_early`, the first that applies in that order. `reason`: `first_ride` (her first finished ride with that driver), `weekly` (at most once a week per driver, counted from the last prompt, dismissal or rating with that driver; a rating counts from the departure of the ride she rated, not the moment she pressed submit. A booked next commute never holds it back), `unusual` (the driver was more than 5 minutes late at her pickup, she left early, or a dispute or report was opened; asked at once). It stays until she rates that booking or calls **`POST /bookings/{booking}/rating-prompt/dismiss`** → `{dismissed: true}`; a dismissed booking never comes back. |
 | `nextJourney` | The journey the card is about, or **`null`** (F3P-01). Contains the full booking (4.7) plus `originLabel`, `destinationLabel`, `departureAt`, `departureLocal`, `departsInMinutes`, `isToday`, `attendance`, `noShow` (the same object and rules as on the booking, 4.7: `null` unless the driver marked her a no-show), `isTrial`, `driver` (5.1), `vehicle`, and the state fields below. **Which journey**, the first that exists: ① the one **happening now** (run started, or departure passed and the driver has not started — today only); ② one that **ended and she has not seen** — cancelled by the driver, expired, she left for a driver delay, or completed and not yet rated — until you send `POST /bookings/{booking}/seen`, for up to 7 days; ③ the **soonest upcoming confirmed** one — a `PENDING` request is never on the card (TRIP-01); ④ a **completed ride still waiting for her stars**, inside the rating window, only when nothing is upcoming. A ride she cancelled herself is not shown. |
 | `nextJourney.phase` | **The state the card switches on**, decided by the server: `scheduled` (F3P-02/03) · `driver_en_route` (F3P-04, the run has started) · `driver_arrived` (F3P-05, the driver's GPS-checked "I've arrived" for her) · `on_board` (F3P-06, she is checked in and not yet dropped off) · `driver_delayed` (F3P-07: 5 min after departure with the run not started, or the run started but the driver has not arrived 5 min after her pickup time, or the car passed her stop) · `cancelled_by_driver` (F3P-08) · `expired` (F3P-09, the driver never started and the day was closed) · `exited` (F3P-10, she pressed Leave Without Fee) · `completed` (F3P-11). `status` and `trip.status` are unchanged — switch on `phase`, not on them. |
+| `nextJourney.tripSessionId` | The run's **session** id, once the driver has started it; `null` before. Not the trip id. Use it for `GET /safety/live-shares?tripSessionId=`, SOS and the `private-trip.{tripSessionId}` channel. |
 | `nextJourney.daysMask` | The days she rides — her requested days, or the commute's days. Sat 1 … Fri 64. |
 | `nextJourney.pickup` | `{label, at, local, lat, lng, isExact}` — "Your agreed pickup · Rehab Gate 2 · 07:05". `label`/`lat`/`lng`/`isExact` are `meetingPoint`'s (fuzzed, label `null`, until confirmed). **`at` is her pickup time** — departure plus the drive to her stop — and is the same instant her arrival grace counts from. `meetingPoint` stays. |
 | `nextJourney.dropoff` | `{label, promisedArrivalAt, promisedArrivalLocal}`. The promise is the day's; `null` when the driver promised no arrival. |
@@ -4639,7 +4648,7 @@ Answers `201`.
 | `url` | 🔴 **The whole thing. Shown once.** Hand it to the share sheet. Shape: `https://<host>/s/<token>`. |
 | `token` | The same credential on its own, for a client that wants to build its own copy string. Treat it exactly like `url`. |
 | `id` | The share, for revoking it later. **This is safe to keep**; the token is not. |
-| `tripSessionId` | The run it describes. |
+| `tripSessionId` | The run it describes: the run's **session** id, not the trip id. |
 | `sharedWithContactId` | The contact, when one was named (also on an automatic share). |
 | `sharedWithName` | That contact's name, or `null`. |
 | `expiresAt` | When the link stops working. **Show it** — the person should know how long they have exposed. |
@@ -4659,7 +4668,7 @@ this run: only the driver, or a passenger holding a live seat, may share it.
 
 #### `GET /safety/live-shares` — paginated · `DELETE /safety/live-shares/{share}`
 
-The caller's own links, newest first. `?tripSessionId=` keeps one run's links. Each has
+The caller's own links, newest first. `?tripSessionId=` keeps one run's links; `?tripId=` does the same by the trip id. Each has
 `source`: `MANUAL` (Share live trip) or `AUTO` (auto-share). 🔒 **Without tokens, and that is not an oversight** — being able to re-read
 them would mean a stolen access token could harvest every link a person ever made. The list gives
 `isActive`, `expiresAt`, `viewCount` and `lastViewedAt`.
@@ -5518,6 +5527,19 @@ three must be the caller's own (`422` with `fields.data.<key>` otherwise). `para
 (`name`, `date`, `days`; defaults `Nour`, today, `3`). Answers the notification, or `null` when her
 in-app setting for that category is off.
 
+`meta` says where it went: `inboxWritten`, `pushAllowed` (her push setting for that category),
+`pushTokens` (her signed-in devices with a push token) and `pushIds` (one push row per token). The push
+is sent by the queue worker a moment later; read the outcome with `GET /testing/push-log`.
+
+#### `GET /testing/push-log`
+
+No body → `{ pushProviderConfigured, devices[], pushes[] }`. `devices[]`: `id`, `platform`,
+`deviceModel`, `appVersion`, `hasPushToken`, `pushTokenEnd` (its last 8 characters, to match the
+token the app holds), `lastSeenAt`, `revokedAt`. `pushes[]`: her latest 20 push rows, newest first,
+with `id`, `type`, `title`, `createdAt`, `sentAt`, `failedReason` and `state`: `sent` (FCM accepted
+it), `failed` (`device_unavailable`, `no_push_provider`, `token_rejected`, or the provider's error) or
+`queued` (the worker has not sent it yet).
+
 #### `POST /testing/bookings/{booking}/dispute/decide`
 
 `{ "resolution": "upheld" | "overturned" | "refunded", "note"?: "…" }` (`note` up to 255). Staff's
@@ -5755,7 +5777,18 @@ No body → the proposal as the driver's list shows it, now `status: "EXPIRED"`.
 
 #### `POST /testing/seat-requests/{seatRequest}/close`
 
-`{ "status": "CLOSED_DATE_PASSED" }` → `{ id, status, scheduledTripId }`. Closes a one-day request (a `trial`, or a waiting-list place on one day) as if its day passed with no answer, the same way the nightly job does. The passenger or the commute's driver. `409 SEAT_REQUEST_NOT_PENDING` when it is no longer open; `422` for a recurring request.
+`{ "status": "CLOSED_DATE_PASSED" | "EXPIRED" | "ENDED" }` → `{ id, status, scheduledTripId }`. The passenger or the commute's driver. `409 SEAT_REQUEST_NOT_PENDING` when it is no longer open.
+
+- `CLOSED_DATE_PASSED` closes a one-day request (a `trial`, or a waiting-list place on one day) as if its day passed with no answer, the same way the nightly job does. `422` for a recurring request.
+- `EXPIRED` and `ENDED` close any open request (one-day or recurring) with that status, and take it off the waiting list. `endedAt` is set. Use them for the generic "This request ended" card.
+
+#### `PATCH /testing/account/fields`
+
+`{ "gender": null | "woman" | "man" }` → `{ id, gender }`. `null` means "not set": every read of the account then shows `gender: null`, and a seat request on a women-only commute answers `403 SEAT_REQUEST_WOMEN_ONLY` with `error.fields.reason: ["GENDER_NOT_SET"]`, so the app asks "Tell us your gender". It is stored as the old `prefer_not_to_say`, because a finished profile cannot hold no gender. `PUT /account/profile/basic` puts it back.
+
+#### `POST /testing/commutes/{commute}/pause` · `DELETE /testing/commutes/{commute}/pause`
+
+`POST { "reason": "women_only_check" }` (or `"gender_review"`) → `{ id, status: "PAUSED", pausedReason: "gender_review", pausedAt }`. The caller's own **women-only** commute, paused as staff do when a driver's gender is under review: its confirmed seats are cancelled the same way. `422` on a commute open to everyone; `404` if it isn't the caller's. `DELETE` resumes it without the review (`status: "PUBLISHED"`, `pausedReason: null`) and fills in the days that went by.
 
 #### `POST /testing/trips/{trip}/cancel-by-platform`
 
@@ -6000,6 +6033,7 @@ exist, and every live endpoint must be named here.
 
 | Date | Change |
 |---|---|
+| 2026-11-20 | 🧪 **Patrol run requests of 2026-11-20.** 🔴 A change proposal (or a change applied at once) refuses a pickup more than **3 km** from the commute's current route with `422 COMMUTE_ROUTE_INVALID` and `fields["pickups.{index}"]`. Switching car compares the seats each day offers: the commute's default counts only when some day has no seats of its own. Seat offers gain **`conflictingSeatRequestId`**. `nextJourney` gains **`tripSessionId`**; `GET /safety/live-shares` takes `?tripId=`. `GET /driver/eligibility` documented as it is sent: `blockers[]` are objects. Testing (4.17): `/testing/seat-requests/{seatRequest}/close` takes `EXPIRED` and `ENDED`; new `PATCH /testing/account/fields`, `POST`/`DELETE /testing/commutes/{commute}/pause`, `GET /testing/push-log`; `POST /testing/notifications` answers `meta` with the push facts. |
 | 2026-11-19 | 🧪 **Patrol run requests of 2026-11-19.** `nextJourney.live` is filled from the same itinerary as `GET /trips/{trip}/location`, and `driverDelay: "passed_your_stop"` also comes from the car's GPS (300 m past her stop along the route). New **`graceStartsAt` / `graceEndsAt`** on `nextJourney.live` and `GET /trips/{trip}/location`. Seat requests gain **`endedAt`** and `updatedAt`. A `REJECTED` change proposal no longer blocks a new one. `lastSearchedAt` matches on the saved filters only. 🔴 A driver's "offer to all" now gives each member **one offer per morning** in one `offerGroupId`, and accepting the group books every morning still open. Member-facing texts say YuGo. New and changed testing calls in 4.17. *Later the same day (D-0049):* pickup-change rows gain `expiresAt` / `expiredAt` and the status **`EXPIRED`** (notifications `pickup_change_expired`, `pickup_change_expired_for_driver`; testing call `POST /testing/pickup-requests/{pickupRequest}/expire`). A day cancelled by staff gives each passenger `trip_day_cancelled_by_platform` and `cancelledReason: "cancelled_by_platform"`. |
 | 2026-11-19 | 🧪 **More testing calls for Patrol (staging only, 4.17).** `POST /testing/change-proposals/{proposal}/expire`, `POST /testing/seat-requests/{seatRequest}/close`, `POST /testing/trips/{trip}/cancel-by-platform`, `POST /testing/driver/application/state`, `POST`/`DELETE /testing/driver/blocker`. A change proposal past its `expiresAt` now turns `EXPIRED` within a minute. New eligibility blocker `not_eligible` (testing only). |
 | 2026-11-17 | ⏸️ **Staff can pause a commute (C04). No new endpoint, no field changed or removed.** New `pausedReason` value **`by_staff`** and a new commute field **`pausedMessage`** (staff's text for the driver; `null` otherwise). Upcoming confirmed seats are cancelled with no fee, as with the other automatic reasons. Only staff resume it: the driver's Resume and Publish answer the existing `409 COMMUTE_INVALID_TRANSITION`, with `fields.pausedReason: ["by_staff"]`. The driver also gets a `staff_message` in the inbox. `pausedCommuteReasons` on `GET /driver/home` can carry `by_staff` (and `gender_review`). Staff warnings to a member (D20) arrive as an ordinary `staff_message` titled "A warning from RAFEEQ". |
