@@ -132,3 +132,42 @@ it('says where a test notification went', function () {
         ->and($log['pushes'][0]['state'])->toBeIn(['sent', 'failed', 'queued'])
         ->and($log)->toHaveKey('pushProviderConfigured');
 });
+
+it('reads the push log when a stored token can no longer be decrypted', function () {
+    $rider = verifiedPassenger('01112223344', device: 'pax-1');
+    $userId = User::query()->where('phone_e164', '+201112223344')->value('id');
+
+    Device::query()->where('user_id', $userId)->update(['push_token' => 'written-under-an-old-app-key']);
+
+    $response = test()->flushHeaders()->withToken($rider)->postJson('/api/v1/testing/notifications', ['type' => 'waitlist_cleared_by_change'])
+        ->assertStatus(201)
+        ->assertJsonPath('meta.pushTokens', 1);
+
+    $log = test()->flushHeaders()->withToken($rider)->getJson('/api/v1/testing/push-log')->assertOk()->json('data');
+
+    expect($log['devices'][0]['hasPushToken'])->toBeFalse()
+        ->and($log['devices'][0]['pushTokenReadable'])->toBeFalse()
+        ->and($log['devices'][0]['pushTokenEnd'])->toBeNull()
+        ->and($log['pushes'][0]['id'])->toBe($response->json('meta.pushIds.0'))
+        ->and($log['pushes'][0]['state'])->toBe('failed')
+        ->and($log['pushes'][0]['failedReason'])->toBe('token_unreadable');
+});
+
+it('reads the push log when the push provider cannot start', function () {
+    config(['rafeeq.notifications.push_driver' => 'fcm', 'services.fcm.credentials_json' => '', 'services.fcm.credentials' => '']);
+
+    $rider = verifiedPassenger('01112223344', device: 'pax-1');
+    $userId = User::query()->where('phone_e164', '+201112223344')->value('id');
+    Device::query()->where('user_id', $userId)->sole()->forceFill(['push_token' => 'fcm-token-for-the-test-abcdefgh'])->save();
+
+    test()->flushHeaders()->withToken($rider)->postJson('/api/v1/testing/notifications', ['type' => 'waitlist_cleared_by_change'])
+        ->assertStatus(201);
+
+    $log = test()->flushHeaders()->withToken($rider)->getJson('/api/v1/testing/push-log')->assertOk()->json('data');
+
+    expect($log['pushProviderConfigured'])->toBeFalse()
+        ->and($log['pushProviderError'])->toBe('RuntimeException')
+        ->and($log['devices'][0]['pushTokenEnd'])->toBe('abcdefgh')
+        ->and($log['pushes'][0]['state'])->toBe('failed')
+        ->and($log['pushes'][0]['failedReason'])->toBe('push_provider_error: RuntimeException');
+});

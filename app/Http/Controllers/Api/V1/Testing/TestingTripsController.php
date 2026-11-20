@@ -32,9 +32,11 @@ use App\Http\Resources\CommuteDemandResource;
 use App\Http\Resources\NotificationResource;
 use App\Http\Resources\SeatOfferResource;
 use App\Http\Responses\ApiResponse;
+use Illuminate\Contracts\Encryption\DecryptException;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
+use Throwable;
 
 final class TestingTripsController extends Controller
 {
@@ -136,6 +138,7 @@ final class TestingTripsController extends Controller
 
         $type = NotificationType::from($data['type']);
         $startedAt = now()->startOfSecond();
+        $pushTokens = $user->devices()->whereNull('revoked_at')->whereNotNull('push_token')->count();
 
         $notification = Notifier::send(
             $user,
@@ -158,7 +161,7 @@ final class TestingTripsController extends Controller
             meta: [
                 'inboxWritten' => $notification !== null,
                 'pushAllowed' => NotificationPreferences::allows($user, $type->category(), NotificationChannel::Push),
-                'pushTokens' => $user->devices()->whereNull('revoked_at')->whereNotNull('push_token')->count(),
+                'pushTokens' => $pushTokens,
                 'pushIds' => $pushIds,
             ],
             status: 201,
@@ -177,8 +180,9 @@ final class TestingTripsController extends Controller
                 'platform' => $device->platform,
                 'deviceModel' => $device->device_model,
                 'appVersion' => $device->app_version,
-                'hasPushToken' => $device->push_token !== null,
-                'pushTokenEnd' => $device->push_token === null ? null : substr((string) $device->push_token, -8),
+                'hasPushToken' => $device->getRawOriginal('push_token') !== null,
+                'pushTokenReadable' => self::readableToken($device) !== null,
+                'pushTokenEnd' => ($token = self::readableToken($device)) === null ? null : substr($token, -8),
                 'lastSeenAt' => $device->last_seen_at?->toIso8601String(),
                 'revokedAt' => $device->revoked_at?->toIso8601String(),
             ])
@@ -205,8 +209,17 @@ final class TestingTripsController extends Controller
             ])
             ->all();
 
+        try {
+            $providerConfigured = app(PushSender::class)->delivers();
+            $providerError = null;
+        } catch (Throwable $e) {
+            $providerConfigured = false;
+            $providerError = class_basename($e);
+        }
+
         return ApiResponse::success([
-            'pushProviderConfigured' => app(PushSender::class)->delivers(),
+            'pushProviderConfigured' => $providerConfigured,
+            'pushProviderError' => $providerError,
             'devices' => $devices,
             'pushes' => $pushes,
         ]);
@@ -254,6 +267,17 @@ final class TestingTripsController extends Controller
             'sent' => $devices->isEmpty() ? 0 : 1,
             'tokens' => $devices->count(),
         ], status: 202);
+    }
+
+    private static function readableToken(Device $device): ?string
+    {
+        try {
+            $token = $device->push_token;
+        } catch (DecryptException) {
+            return null;
+        }
+
+        return $token === null ? null : (string) $token;
     }
 
     /**

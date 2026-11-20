@@ -5533,12 +5533,16 @@ is sent by the queue worker a moment later; read the outcome with `GET /testing/
 
 #### `GET /testing/push-log`
 
-No body → `{ pushProviderConfigured, devices[], pushes[] }`. `devices[]`: `id`, `platform`,
-`deviceModel`, `appVersion`, `hasPushToken`, `pushTokenEnd` (its last 8 characters, to match the
-token the app holds), `lastSeenAt`, `revokedAt`. `pushes[]`: her latest 20 push rows, newest first,
-with `id`, `type`, `title`, `createdAt`, `sentAt`, `failedReason` and `state`: `sent` (FCM accepted
-it), `failed` (`device_unavailable`, `no_push_provider`, `token_rejected`, or the provider's error) or
-`queued` (the worker has not sent it yet).
+No body → `{ pushProviderConfigured, pushProviderError, devices[], pushes[] }`. `pushProviderError` is
+`null`, or the error class when the push provider cannot start (for example missing FCM credentials).
+`devices[]`: `id`, `platform`, `deviceModel`, `appVersion`, `hasPushToken`, `pushTokenReadable`
+(`false` when the stored token can't be decrypted), `pushTokenEnd` (its last 8 characters, to match
+the token the app holds), `lastSeenAt`, `revokedAt`. `pushes[]`: her latest 20 push rows, newest
+first, with `id`, `type`, `title`, `createdAt`, `sentAt`, `failedReason` and `state`: `sent` (FCM
+accepted it), `failed` (`device_unavailable`, `no_push_provider`, `token_rejected`,
+`token_unreadable`, `push_provider_error: …`, or the provider's error) or `queued` (the worker has not
+sent it yet). A `token_unreadable` push also clears the token; the app sends a fresh one the next
+time it registers the device.
 
 #### `POST /testing/bookings/{booking}/dispute/decide`
 
@@ -6033,6 +6037,7 @@ exist, and every live endpoint must be named here.
 
 | Date | Change |
 |---|---|
+| 2026-11-20 | 🔧 **`GET /testing/push-log` no longer answers `500`** when a stored push token can't be decrypted or the push provider can't start. It gains `pushProviderError` and `devices[].pushTokenReadable`. Push rows can fail with `token_unreadable` (the token is cleared) or `push_provider_error: …` instead of the job crashing. `meta.pushTokens` on `POST /testing/notifications` counts the tokens before sending (4.17). |
 | 2026-11-20 | 🧪 **Patrol run requests of 2026-11-20.** 🔴 A stop more than **3 km** from the road is refused with `422 COMMUTE_ROUTE_INVALID`: on a draft (`PUT /commutes/{commute}/route`, `pickups.{index}` / `dropoffs.{index}`, measured from the road between origin and destination) and on a change proposal or a change applied at once (`pickups.{index}`, measured from the commute's current route). Switching car compares the seats each day offers: the commute's default counts only when some day has no seats of its own. Seat offers gain **`conflictingSeatRequestId`**. `nextJourney` gains **`tripSessionId`**; `GET /safety/live-shares` takes `?tripId=`. `GET /driver/eligibility` documented as it is sent: `blockers[]` are objects. Testing (4.17): `/testing/seat-requests/{seatRequest}/close` takes `EXPIRED` and `ENDED`; new `PATCH /testing/account/fields`, `POST`/`DELETE /testing/commutes/{commute}/pause`, `GET /testing/push-log`; `POST /testing/notifications` answers `meta` with the push facts. |
 | 2026-11-19 | 🧪 **Patrol run requests of 2026-11-19.** `nextJourney.live` is filled from the same itinerary as `GET /trips/{trip}/location`, and `driverDelay: "passed_your_stop"` also comes from the car's GPS (300 m past her stop along the route). New **`graceStartsAt` / `graceEndsAt`** on `nextJourney.live` and `GET /trips/{trip}/location`. Seat requests gain **`endedAt`** and `updatedAt`. A `REJECTED` change proposal no longer blocks a new one. `lastSearchedAt` matches on the saved filters only. 🔴 A driver's "offer to all" now gives each member **one offer per morning** in one `offerGroupId`, and accepting the group books every morning still open. Member-facing texts say YuGo. New and changed testing calls in 4.17. *Later the same day (D-0049):* pickup-change rows gain `expiresAt` / `expiredAt` and the status **`EXPIRED`** (notifications `pickup_change_expired`, `pickup_change_expired_for_driver`; testing call `POST /testing/pickup-requests/{pickupRequest}/expire`). A day cancelled by staff gives each passenger `trip_day_cancelled_by_platform` and `cancelledReason: "cancelled_by_platform"`. |
 | 2026-11-19 | 🧪 **More testing calls for Patrol (staging only, 4.17).** `POST /testing/change-proposals/{proposal}/expire`, `POST /testing/seat-requests/{seatRequest}/close`, `POST /testing/trips/{trip}/cancel-by-platform`, `POST /testing/driver/application/state`, `POST`/`DELETE /testing/driver/blocker`. A change proposal past its `expiresAt` now turns `EXPIRED` within a minute. New eligibility blocker `not_eligible` (testing only). |

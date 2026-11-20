@@ -6,6 +6,7 @@ use App\Domains\Identity\Models\Device;
 use App\Domains\Notification\Contracts\PushSender;
 use App\Domains\Notification\Models\Notification;
 use App\Domains\Notification\Support\PushTokenRejected;
+use Illuminate\Contracts\Encryption\DecryptException;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Queue\Queueable;
 use Illuminate\Support\Str;
@@ -30,7 +31,7 @@ final class DeliverPushNotification implements ShouldQueue
         public readonly ?string $inboxNotificationId = null,
     ) {}
 
-    public function handle(PushSender $sender): void
+    public function handle(): void
     {
         $push = Notification::query()->whereKey($this->notificationId)->first();
         $device = Device::query()->whereKey($this->deviceId)->first();
@@ -40,8 +41,25 @@ final class DeliverPushNotification implements ShouldQueue
         }
 
         // Signed out or uninstalled since the message was queued: nobody to reach.
-        if ($device === null || $device->revoked_at !== null || $device->push_token === null) {
+        if ($device === null || $device->revoked_at !== null || $device->getRawOriginal('push_token') === null) {
             $push->forceFill(['failed_reason' => 'device_unavailable'])->save();
+
+            return;
+        }
+
+        try {
+            $token = (string) $device->push_token;
+        } catch (DecryptException) {
+            $device->forceFill(['push_token' => null])->save();
+            $push->forceFill(['failed_reason' => 'token_unreadable'])->save();
+
+            return;
+        }
+
+        try {
+            $sender = app(PushSender::class);
+        } catch (Throwable $e) {
+            $push->forceFill(['failed_reason' => Str::limit('push_provider_error: '.class_basename($e), 250)])->save();
 
             return;
         }
@@ -58,7 +76,7 @@ final class DeliverPushNotification implements ShouldQueue
              * a seat request, a cancellation and a chat message alike. So every push also carries
              * the notification's `type` and `category`, the same values the inbox returns.
              */
-            $sender->send($device->push_token, $push->title, $push->body, [
+            $sender->send($token, $push->title, $push->body, [
                 ...($push->data ?? []),
                 'type' => (string) $push->type,
                 'category' => (string) $push->category?->value,
