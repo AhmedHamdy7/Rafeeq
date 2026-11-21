@@ -130,7 +130,7 @@
     store("yugo-theme", theme);
   }
 
-  applyTheme(root.dataset.theme || "dark");
+  applyTheme(root.dataset.theme || "light");
   if (root.lang === "ar") applyLang("ar");
 
   var langBtn = document.getElementById("lang-btn");

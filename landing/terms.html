@@ -14,10 +14,10 @@
 <script>
 (function () {
   try {
-    var t = localStorage.getItem("yugo-theme") || (matchMedia("(prefers-color-scheme: light)").matches ? "light" : "dark");
+    var t = localStorage.getItem("yugo-theme") || "light";
     document.documentElement.dataset.theme = t;
     if (localStorage.getItem("yugo-lang") === "ar") { document.documentElement.lang = "ar"; document.documentElement.dir = "rtl"; }
-  } catch (e) { document.documentElement.dataset.theme = "dark"; }
+  } catch (e) { document.documentElement.dataset.theme = "light"; }
 })();
 </script>
 </head>
