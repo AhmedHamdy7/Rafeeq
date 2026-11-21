@@ -131,7 +131,10 @@
   }
 
   applyTheme(root.dataset.theme || "light");
-  if (root.lang === "ar") applyLang("ar");
+  var wanted = null;
+  try { wanted = new URLSearchParams(window.location.search).get("lang"); } catch (e) {}
+  if (wanted === "ar" || wanted === "en") applyLang(wanted);
+  else if (root.lang === "ar") applyLang("ar");
 
   var langBtn = document.getElementById("lang-btn");
   if (langBtn) langBtn.addEventListener("click", function () { applyLang(root.lang === "ar" ? "en" : "ar"); });

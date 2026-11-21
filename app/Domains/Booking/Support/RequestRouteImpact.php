@@ -52,17 +52,17 @@ final readonly class RequestRouteImpact
             'extraMinutes' => $detour->extraMinutes(),
             'promisedArrivalLocal' => PassengerStanding::promisedArrivalLocal($day),
             'projectedArrivalLocal' => PickupEta::local($day, $arrival),
-            'canAccept' => ! $blocked,
-            'blockReason' => $blocked ? 'promised_arrival' : null,
+            'canAccept' => $blocked === null,
+            'blockReason' => $blocked,
         ];
     }
 
-    private function blocksAccept(SeatRequest $request): bool
+    private function blocksAccept(SeatRequest $request): ?string
     {
         if ($request->kind === SeatRequestKind::WaitlistApplication) {
-            return false;
+            return null;
         }
 
-        return $this->approve->breaksFrozenPromise($request);
+        return $this->approve->frozenBlockReason($request);
     }
 }

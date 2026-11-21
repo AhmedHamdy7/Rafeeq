@@ -120,7 +120,7 @@ it('stays open for the grace period after the journey, and then closes', functio
     // The run's end moved back rather than the clock forward: travelling two hours would expire
     // the fifteen-minute access token and the test would be about that instead.
     TripSession::query()->where('scheduled_trip_id', $this->tripId)
-        ->update(['completed_at' => now()->subMinutes(121)]);
+        ->update(['completed_at' => now()->subMinutes(61)]);
 
     sendChat($this->paxToken, $this->booking->id)->assertStatus(409);
 });

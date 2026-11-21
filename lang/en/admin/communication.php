@@ -60,7 +60,11 @@ return [
     'pages' => [
         'help' => 'Help articles and FAQ',
         'support_contact' => 'Support contact details',
-        'terms' => 'Terms and privacy',
+        'help_verification' => 'Help: verification',
+        'help_contributions' => 'Help: contributions',
+        'help_cancellations' => 'Help: cancellations',
+        'terms' => 'Terms of Service',
+        'privacy' => 'Privacy Policy',
         'guidelines' => 'Community guidelines',
     ],
     'not_written' => 'Not written yet',

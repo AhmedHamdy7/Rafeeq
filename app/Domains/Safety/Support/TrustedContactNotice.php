@@ -29,6 +29,15 @@ final class TrustedContactNotice
             'to_e164' => $contact->phone_e164,
         ]);
 
+        if (SilentNumberMessenger::isSilent($contact->phone_e164)) {
+            $message->channel = 'sms';
+            $message->status = AutoShareMessageStatus::Sent;
+            $message->sent_at = now();
+            $message->save();
+
+            return $message;
+        }
+
         if (! AutoShare::messengerReady()) {
             $message->status = AutoShareMessageStatus::Failed;
             $message->failure_reason = 'MESSENGER_UNAVAILABLE';

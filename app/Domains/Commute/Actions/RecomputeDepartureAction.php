@@ -37,7 +37,7 @@ use Illuminate\Support\Facades\DB;
  */
 final readonly class RecomputeDepartureAction
 {
-    private const int MINIMUM_CHANGE_SECONDS = 60;
+    private const int MINIMUM_CHANGE_SECONDS = 300;
 
     public function __construct(
         private ComputedDeparture $departure,
@@ -131,7 +131,7 @@ final readonly class RecomputeDepartureAction
             $was = $before[$booking->getKey()] ?? null;
             $now = PickupEta::forBooking($this->geo, $booking);
 
-            if ($booking->passenger === null || $was === null || $now === null || abs($was->diffInSeconds($now, false)) < self::MINIMUM_CHANGE_SECONDS) {
+            if ($booking->passenger === null || $was === null || $now === null || abs($was->diffInSeconds($now, false)) <= self::MINIMUM_CHANGE_SECONDS) {
                 continue;
             }
 

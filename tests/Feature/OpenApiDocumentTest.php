@@ -568,7 +568,7 @@ it('marks public endpoints as public and everything else as bearer-protected', f
     expect($document['security'])->toBe([['bearerAuth' => []]])
         ->and($document['components']['securitySchemes']['bearerAuth']['scheme'])->toBe('bearer');
 
-    $public = ['POST /v1/auth/otp/request', 'POST /v1/auth/otp/verify', 'POST /v1/auth/session/refresh', 'POST /v1/testing/otp/expire', 'POST /v1/testing/otp/unlock', 'POST /v1/testing/faults/by-phone', 'GET /v1/testing/faults/by-phone', 'DELETE /v1/testing/faults/by-phone'];
+    $public = ['POST /v1/auth/otp/request', 'POST /v1/auth/otp/verify', 'POST /v1/auth/session/refresh', 'GET /v1/content/{key}', 'POST /v1/testing/otp/expire', 'POST /v1/testing/otp/unlock', 'POST /v1/testing/faults/by-phone', 'GET /v1/testing/faults/by-phone', 'DELETE /v1/testing/faults/by-phone'];
 
     foreach (openApiOperations() as $name => $operation) {
         if (in_array($name, $public, true)) {

@@ -16,13 +16,13 @@ use Illuminate\Http\JsonResponse;
  * The texts staff write on the dashboard's Content page: help, how to reach support, terms
  * and privacy, community guidelines. Both languages come back; the app shows the one it is in.
  *
- * Signed-in tier, not active: a member whose account is on hold must still be able to read
- * the guidelines and how to reach support.
+ * Public tier: the Phone screen links to terms and privacy before anyone has signed in, and a member
+ * whose account is on hold must still be able to read the guidelines and how to reach support.
  */
 final class ContentController extends Controller
 {
     /**
-     * GET /v1/content/{key} — one text. `key` is one of help, support_contact, terms, guidelines.
+     * GET /v1/content/{key} — one text. `key` is one of help, help_verification, help_contributions, help_cancellations, support_contact, terms, privacy, guidelines.
      * 404 until staff have written it.
      */
     #[ApiErrors(ErrorCode::NotFound)]

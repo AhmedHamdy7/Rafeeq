@@ -220,6 +220,13 @@ enum ErrorCode: string
      */
     case BookingBreaksFrozenPromise = 'BOOKING_BREAKS_FROZEN_PROMISE';
 
+    /**
+     * Inside the lock, one more rider would move a passenger already on board to a pickup time more
+     * than five minutes from the one she was given (owner decision 18). Fields: `maxShiftMinutes`,
+     * `allowedShiftMinutes`, `lockedFrom`. Names nobody.
+     */
+    case BookingMovesFrozenPickup = 'BOOKING_MOVES_FROZEN_PICKUP';
+
     /*
      * ---- Changing a commute people have booked (Feature 03 v5 §6) -------
      */
@@ -485,6 +492,7 @@ enum ErrorCode: string
              */
             self::ScheduleLocked,
             self::BookingBreaksFrozenPromise,
+            self::BookingMovesFrozenPickup,
             // Also state refusals: the proposal's own state, or the commute's, is what says no.
             self::ChangeProposalAlreadyOpen,
             self::ReplacementAlreadyOpen,

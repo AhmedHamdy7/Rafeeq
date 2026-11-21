@@ -17,7 +17,7 @@ use Carbon\CarbonImmutable;
  * chapter says this is not. So the window is the JOURNEY's, not the booking's:
  *
  *   opens   departure − `chat.opens_hours_before` (24h)
- *   closes  end of the run + `chat.grace_minutes` (2h), where the end is when the driver
+ *   closes  end of the run + `chat.grace_minutes` (1h), where the end is when the driver
  *           completed it, or — if nobody ever did — departure + `chat.max_hours_after_departure`
  *
  * And a cancelled booking has no conversation at all: the two people are not travelling

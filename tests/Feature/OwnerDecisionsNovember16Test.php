@@ -208,23 +208,28 @@ it('D8: records a run where nobody showed up as finished with no passengers, and
     expect(ReliabilityEvent::query()->where('user_id', $driverId)->count())->toBe(0);
 });
 
-it('D9: texts a contact once when added, and auto-shares to exactly one chosen contact', function () {
+it('D9: texts only the contact picked for auto-share, once, and auto-shares to exactly one', function () {
     $token = verifiedPassenger('01112223344');
 
     $first = od16As($token)->postJson('/api/v1/safety/emergency-contacts', ['name' => 'Mama', 'phone' => '01099998888'])->assertStatus(201)->json('data.id');
     $second = od16As($token)->postJson('/api/v1/safety/emergency-contacts', ['name' => 'Sara', 'phone' => '01099997777'])->assertStatus(201)->json('data.id');
 
+    expect(od16As($token)->getJson('/api/v1/testing/safety/contact-messages')->assertOk()->json('data'))->toBeEmpty();
+
+    od16As($token)->patchJson("/api/v1/safety/emergency-contacts/{$first}", ['autoShareTrips' => true])->assertOk()->assertJsonPath('data.autoShareTrips', true);
+
     $messages = od16As($token)->getJson('/api/v1/testing/safety/contact-messages')->assertOk()->json('data');
 
-    expect($messages)->toHaveCount(2)
+    expect($messages)->toHaveCount(1)
         ->and($messages[0]['contactId'])->toBe($first)
         ->and($messages[0]['status'])->toBe('SENT')
         ->and($messages[0]['text'])->toContain('trusted contact on YuGo');
 
-    od16As($token)->patchJson("/api/v1/safety/emergency-contacts/{$first}", ['autoShareTrips' => true])->assertOk()->assertJsonPath('data.autoShareTrips', true);
+    od16As($token)->patchJson("/api/v1/safety/emergency-contacts/{$first}", ['autoShareTrips' => true])->assertOk();
     od16As($token)->patchJson("/api/v1/safety/emergency-contacts/{$second}", ['autoShareTrips' => true])->assertOk();
 
-    expect(EmergencyContact::query()->findOrFail($first)->auto_share_trips)->toBeFalse()
+    expect(od16As($token)->getJson('/api/v1/testing/safety/contact-messages')->json('data'))->toHaveCount(2)
+        ->and(EmergencyContact::query()->findOrFail($first)->auto_share_trips)->toBeFalse()
         ->and(EmergencyContact::query()->findOrFail($second)->auto_share_trips)->toBeTrue();
 
     od16As($token)->getJson('/api/v1/safety/emergency-contacts')->assertOk()->assertJsonPath('meta.autoShareContactId', $second);

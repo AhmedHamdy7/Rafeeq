@@ -9,6 +9,7 @@ use App\Domains\Shared\Exceptions\DomainException;
 use App\Domains\Shared\Support\ErrorCode;
 use App\Domains\Shared\ValueObjects\Coordinate;
 use App\Domains\Trip\Actions\BuildNavigationItineraryAction;
+use App\Domains\Trip\Enums\NavigationStopKind;
 use Carbon\CarbonImmutable;
 
 /**
@@ -39,6 +40,16 @@ use Carbon\CarbonImmutable;
  */
 final readonly class ScheduleLock
 {
+    /**
+     * How far a confirmed passenger's pickup may move once the day is locked (owner decision 18).
+     */
+    public const int PICKUP_SHIFT_LIMIT_SECONDS = 300;
+
+    public static function pickupShiftLimitSeconds(): int
+    {
+        return (int) config('rafeeq.booking.frozen_pickup_shift_seconds', self::PICKUP_SHIFT_LIMIT_SECONDS);
+    }
+
     /**
      * How many hours before departure the day stops changing.
      *
@@ -125,7 +136,7 @@ final readonly class ScheduleLock
         Coordinate $dropoff,
         ?string $dropoffLabel,
     ): void {
-        if (! self::isLocked($trip) || $trip->promised_arrival_at === null) {
+        if (! self::isLocked($trip)) {
             return;
         }
 
@@ -136,15 +147,47 @@ final readonly class ScheduleLock
          */
         $proposed = $itinerary->preview($trip, $pickup, $pickupLabel, $dropoff, $dropoffLabel);
 
-        $arrival = CarbonImmutable::parse($trip->departure_at)->addSeconds($proposed->durationSeconds);
+        if ($trip->promised_arrival_at !== null) {
+            $arrival = CarbonImmutable::parse($trip->departure_at)->addSeconds($proposed->durationSeconds);
 
-        if ($arrival->lessThanOrEqualTo(CarbonImmutable::parse($trip->promised_arrival_at))) {
+            if ($arrival->greaterThan(CarbonImmutable::parse($trip->promised_arrival_at))) {
+                throw DomainException::of(ErrorCode::BookingBreaksFrozenPromise, fields: [
+                    'promisedArrivalAt' => [(string) CarbonImmutable::parse($trip->promised_arrival_at)->toIso8601String()],
+                    'projectedArrivalAt' => [(string) $arrival->toIso8601String()],
+                    'lockedFrom' => [(string) self::lockedFrom($trip)?->toIso8601String()],
+                ]);
+            }
+        }
+
+        $before = [];
+        $offset = 0;
+
+        foreach ($itinerary->forTrip($trip) as $stop) {
+            $offset += (int) $stop->leg_duration_seconds;
+
+            if ($stop->kind === NavigationStopKind::PassengerPickup && $stop->booking_id !== null) {
+                $before[$stop->booking_id] = $offset;
+            }
+        }
+
+        $worst = 0;
+        $offset = 0;
+
+        foreach ($proposed->stops as $stop) {
+            $offset += $stop->legDurationSeconds;
+
+            if ($stop->kind === NavigationStopKind::PassengerPickup && isset($before[$stop->bookingId])) {
+                $worst = max($worst, abs($offset - $before[$stop->bookingId]));
+            }
+        }
+
+        if ($worst <= self::pickupShiftLimitSeconds()) {
             return;
         }
 
-        throw DomainException::of(ErrorCode::BookingBreaksFrozenPromise, fields: [
-            'promisedArrivalAt' => [(string) CarbonImmutable::parse($trip->promised_arrival_at)->toIso8601String()],
-            'projectedArrivalAt' => [(string) $arrival->toIso8601String()],
+        throw DomainException::of(ErrorCode::BookingMovesFrozenPickup, fields: [
+            'maxShiftMinutes' => [(string) (int) ceil($worst / 60)],
+            'allowedShiftMinutes' => [(string) intdiv(self::pickupShiftLimitSeconds(), 60)],
             'lockedFrom' => [(string) self::lockedFrom($trip)?->toIso8601String()],
         ]);
     }

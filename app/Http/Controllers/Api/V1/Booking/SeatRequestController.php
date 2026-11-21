@@ -222,6 +222,7 @@ final class SeatRequestController extends Controller
          * lock only when compatible with frozen commitments").
          */
         ErrorCode::BookingBreaksFrozenPromise,
+        ErrorCode::BookingMovesFrozenPickup,
         // Last week's commission is unpaid past its Friday: no new riders until it is (PAY-12).
         ErrorCode::DriverCommissionOverdue,
         ErrorCode::NotFound,
@@ -317,6 +318,7 @@ final class SeatRequestController extends Controller
         ErrorCode::AlreadyBooked,
         ErrorCode::BookingDeadlinePassed,
         ErrorCode::BookingBreaksFrozenPromise,
+        ErrorCode::BookingMovesFrozenPickup,
         ErrorCode::NotFound,
     )]
     public function acceptCounteroffer(Request $request, string $seatRequest, CounterofferAction $action): JsonResponse

@@ -112,6 +112,9 @@ final class CommuteDemandController extends Controller
     /**
      * GET /v1/matches — commutes the platform found for the caller's saved
      * requests since they last looked.
+     *
+     * `?demandId=` narrows it to one saved request: the screen behind a demand's `matchCount`.
+     * A demand that is not hers is not an error, it simply matches nothing.
      */
     public function matches(Request $request): JsonResponse
     {
@@ -129,6 +132,7 @@ final class CommuteDemandController extends Controller
              * the upcoming days, the driver's `person`, the rules. See MatchNotificationResource for
              * why a notification without them names no commute in particular.
              */
+            ->when($request->query('demandId'), fn ($query, $demandId) => $query->where('commute_demand_id', (string) $demandId))
             ->with(MatchNotificationResource::relations())
             ->latest('created_at')
             ->orderByDesc('id')

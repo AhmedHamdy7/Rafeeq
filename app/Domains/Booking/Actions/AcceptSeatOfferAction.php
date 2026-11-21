@@ -436,7 +436,6 @@ final readonly class AcceptSeatOfferAction
 
         $trip = ScheduledTrip::query()
             ->whereKey($offer->scheduled_trip_id)
-            ->whereNotNull('promised_arrival_at')
             ->with('commuteOffer.locations')
             ->first();
 

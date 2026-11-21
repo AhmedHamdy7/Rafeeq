@@ -17,7 +17,7 @@ final class ContentPageResource extends JsonResource
     public function toArray(Request $request): array
     {
         return [
-            /** One of help, support_contact, terms, guidelines. */
+            /** One of help, help_verification, help_contributions, help_cancellations, support_contact, terms, privacy, guidelines. */
             'key' => (string) $this->key,
             /** Goes up by one on every save. */
             'version' => (int) $this->version,

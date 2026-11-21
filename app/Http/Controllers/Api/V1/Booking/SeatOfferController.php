@@ -169,6 +169,7 @@ final class SeatOfferController extends Controller
         ErrorCode::SeatOfferClosed,
         ErrorCode::AlreadyBooked,
         ErrorCode::BookingBreaksFrozenPromise,
+        ErrorCode::BookingMovesFrozenPickup,
         // PAY-46: suspended for debt until she pays.
         ErrorCode::RidingSuspendedForDebt,
     )]

@@ -60,7 +60,11 @@ return [
     'pages' => [
         'help' => 'مقالات المساعدة والأسئلة الشائعة',
         'support_contact' => 'بيانات التواصل مع الدعم',
-        'terms' => 'الشروط والخصوصية',
+        'help_verification' => 'المساعدة: التوثيق',
+        'help_contributions' => 'المساعدة: المساهمات',
+        'help_cancellations' => 'المساعدة: الإلغاء',
+        'terms' => 'شروط الاستخدام',
+        'privacy' => 'سياسة الخصوصية',
         'guidelines' => 'إرشادات المجتمع',
     ],
     'not_written' => 'لسه ماتكتبش',

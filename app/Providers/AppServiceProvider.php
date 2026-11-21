@@ -27,6 +27,7 @@ use App\Domains\Safety\Support\AutoShare;
 use App\Domains\Safety\Support\HttpSmsContactMessenger;
 use App\Domains\Safety\Support\LogContactMessenger;
 use App\Domains\Safety\Support\SafetySettings;
+use App\Domains\Safety\Support\SilentNumberMessenger;
 use App\Domains\Shared\Support\RateLimits;
 use App\Domains\Verification\Contracts\VirusScanner;
 use App\Domains\Verification\Enums\VerificationStatus;
@@ -71,11 +72,11 @@ class AppServiceProvider extends ServiceProvider
             default => new LogPushSender,
         });
 
-        $this->app->bind(ContactMessenger::class, fn () => match (AutoShare::driver()) {
+        $this->app->bind(ContactMessenger::class, fn () => new SilentNumberMessenger(match (AutoShare::driver()) {
             'http' => HttpSmsContactMessenger::fromConfig(),
             'log' => new LogContactMessenger,
             default => throw new InvalidArgumentException('Unsupported auto-share driver ['.AutoShare::driver().'].'),
-        });
+        }));
 
         $this->app->bind(OtpSender::class, fn () => match (config('rafeeq.auth.otp.driver')) {
             'log' => new LogOtpSender,

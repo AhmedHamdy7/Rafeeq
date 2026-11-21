@@ -196,7 +196,7 @@ final readonly class ApproveSeatRequestAction
             foreach ($trips as $trip) {
                 if (isset($breaking[$trip->getKey()])) {
                     $skipped[$trip->trip_date->toDateString()] = SeatApproval::BREAKS_ARRIVAL;
-                    $codes[$trip->trip_date->toDateString()] = ErrorCode::BookingBreaksFrozenPromise->value;
+                    $codes[$trip->trip_date->toDateString()] = $breaking[$trip->getKey()]->errorCode->value;
                     $waiting[] = $trip;
 
                     continue;
@@ -294,19 +294,36 @@ final readonly class ApproveSeatRequestAction
      */
     public function breaksFrozenPromise(SeatRequest $request): bool
     {
+        return $this->frozenBlockReason($request) !== null;
+    }
+
+    /**
+     * Why accepting is blocked by the lock: `promised_arrival`, `frozen_pickup`, or null.
+     */
+    public function frozenBlockReason(SeatRequest $request): ?string
+    {
         $tripIds = $this->candidateTripIds($request);
 
         try {
             $breaking = $this->daysBreakingThePromise($request, $tripIds);
         } catch (DomainException $refused) {
-            if ($refused->errorCode === ErrorCode::BookingBreaksFrozenPromise) {
-                return true;
-            }
-
-            throw $refused;
+            return $this->reasonFor($refused);
         }
 
-        return $tripIds !== [] && count($breaking) === count($tripIds);
+        if ($tripIds === [] || count($breaking) !== count($tripIds)) {
+            return null;
+        }
+
+        return $this->reasonFor(reset($breaking));
+    }
+
+    private function reasonFor(DomainException $refused): string
+    {
+        return match ($refused->errorCode) {
+            ErrorCode::BookingMovesFrozenPickup => 'frozen_pickup',
+            ErrorCode::BookingBreaksFrozenPromise => 'promised_arrival',
+            default => throw $refused,
+        };
     }
 
     /**
@@ -316,7 +333,6 @@ final readonly class ApproveSeatRequestAction
     {
         $locked = ScheduledTrip::query()
             ->whereIn('id', $tripIds)
-            ->whereNotNull('promised_arrival_at')
             ->with('commuteOffer.locations')
             ->get()
             ->filter(fn (ScheduledTrip $trip): bool => ScheduleLock::isLocked($trip));

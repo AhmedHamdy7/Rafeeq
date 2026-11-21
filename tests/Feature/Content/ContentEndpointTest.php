@@ -23,6 +23,9 @@ it('answers 404 for a text nobody has written, and for an unknown key', function
     $this->withToken($this->token)->getJson('/api/v1/content/secrets')->assertNotFound();
 });
 
-it('needs a signed-in member', function () {
-    $this->getJson('/api/v1/content/help')->assertUnauthorized();
+it('is readable before sign-in, for terms, privacy and the help topics', function () {
+    foreach (['terms', 'privacy', 'help_verification', 'help_contributions', 'help_cancellations'] as $key) {
+        ContentPage::factory()->create(['key' => $key, 'body_ar' => 'ع', 'body_en' => 'e']);
+        $this->getJson("/api/v1/content/{$key}")->assertOk()->assertJsonPath('data.key', $key)->assertJsonPath('data.en', 'e');
+    }
 });

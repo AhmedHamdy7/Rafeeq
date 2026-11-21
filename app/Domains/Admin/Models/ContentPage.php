@@ -18,7 +18,7 @@ class ContentPage extends Model
     /** @use HasFactory<ContentPageFactory> */
     use HasFactory;
 
-    public const array KEYS = ['help', 'support_contact', 'terms', 'guidelines'];
+    public const array KEYS = ['help', 'help_verification', 'help_contributions', 'help_cancellations', 'support_contact', 'terms', 'privacy', 'guidelines'];
 
     protected $primaryKey = 'key';
 

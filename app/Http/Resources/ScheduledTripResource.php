@@ -35,6 +35,7 @@ final class ScheduledTripResource extends JsonResource
             // Cast on the outside: `max()` returns the wider of its arguments'
             // types, which the API contract would describe as untyped.
             'seatsAvailable' => (int) max(0, $this->seats_total - $this->seats_taken),
+            'isFull' => $this->seats_taken >= $this->seats_total,
             /*
              * What one seat on this day costs, computed by RAFEEQ and frozen when the day was
              * generated (P-1, PAY-44): a later settings change does not move it.

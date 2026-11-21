@@ -85,6 +85,8 @@ use Illuminate\Support\Facades\Route;
 
 Route::prefix('v1')->group(function (): void {
 
+    Route::get('content/{key}', [ContentController::class, 'show']);
+
     Route::prefix('auth')->group(function (): void {
         Route::post('otp/request', [OtpController::class, 'request']);
         Route::post('otp/verify', [OtpController::class, 'verify']);
@@ -515,7 +517,6 @@ Route::prefix('v1')->group(function (): void {
          * journeys it travelled on, and the other person is owed the rating as much as before.
          */
         // Content staff write on the dashboard (help, support contact, terms, guidelines).
-        Route::get('content/{key}', [ContentController::class, 'show']);
         Route::get('support/contact', [ContentController::class, 'supportContact']);
 
         /*

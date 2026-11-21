@@ -60,8 +60,6 @@ final readonly class ManageEmergencyContactsAction
 
         $contact->save();
 
-        TrustedContactNotice::send($user, $contact);
-
         if (($attributes['autoShareTrips'] ?? false) === true) {
             $this->choose($contact);
         }
@@ -152,6 +150,8 @@ final readonly class ManageEmergencyContactsAction
 
     public function choose(EmergencyContact $contact, bool $share = true): EmergencyContact
     {
+        $wasChosen = (bool) $contact->auto_share_trips;
+
         DB::transaction(function () use ($contact): void {
             EmergencyContact::query()
                 ->where('user_id', $contact->user_id)
@@ -161,6 +161,10 @@ final readonly class ManageEmergencyContactsAction
 
             $contact->forceFill(['auto_share_trips' => true])->save();
         });
+
+        if (! $wasChosen) {
+            TrustedContactNotice::send($contact->user, $contact);
+        }
 
         if ($share && $contact->user->auto_share_trips) {
             $this->autoShare->forCurrentRun($contact->user);

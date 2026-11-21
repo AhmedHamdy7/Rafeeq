@@ -261,6 +261,16 @@ final class BookingResource extends JsonResource
              *
              * An estimate either way; the promise is the arrival. Present wherever `trip` is.
              */
+            /** The scheduled departure of her day, ISO 8601 (owner decision 18). Present wherever `trip` is. */
+            'departureAt' => $this->when(
+                $this->resource->relationLoaded('scheduledTrip') && $this->scheduledTrip !== null,
+                fn (): ?string => $this->scheduledTrip->departure_at?->toIso8601String(),
+            ),
+            /** The same instant on the commute's own wall clock, `Y-m-d H:i:s`. */
+            'departureLocal' => $this->when(
+                $this->resource->relationLoaded('scheduledTrip') && $this->scheduledTrip !== null,
+                fn (): ?string => $this->scheduledTrip->departure_local?->format('Y-m-d H:i:s'),
+            ),
             'pickupEta' => $this->when(
                 $this->resource->relationLoaded('scheduledTrip') && $this->scheduledTrip !== null,
                 fn (): ?string => $this->pickupEta()?->toIso8601String(),

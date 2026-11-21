@@ -293,6 +293,9 @@ return [
     ],
 
     'booking' => [
+        // Owner decision 18: inside the 12-hour lock a new rider may not move an existing pickup by more than this.
+        'frozen_pickup_shift_seconds' => 300,
+
         /*
          * DEPLOY-ONLY. Whether a seat may be requested with `paymentType: online` (P-4, PAY-01).
          * The beta is cash only: there is no payment provider, so an online booking would be a
@@ -836,7 +839,7 @@ return [
 
         // How long after the journey ends it stays open — "the trip plus a grace period", for
         // "I left my umbrella in your car".
-        'grace_minutes' => 120,
+        'grace_minutes' => 60,
 
         // When a run never records its end, how long after departure the conversation closes
         // anyway. Without this a run nobody completed would keep its chat open for ever.
@@ -960,6 +963,13 @@ return [
         'auto_share_enabled' => 1,
 
         'auto_share_driver' => env('RAFEEQ_AUTO_SHARE_DRIVER', 'log'),
+
+        /*
+         * Reserved test numbers (owner decision, 2026-11-21): they can be added as trusted
+         * contacts and picked for auto-share like any other, and no SMS is ever sent to them,
+         * for the "added you" notice or for a live-trip share. Comma-separated E.164.
+         */
+        'silent_phones' => array_values(array_filter(array_map('trim', explode(',', (string) env('RAFEEQ_SILENT_PHONES', '+201000000000'))))),
     ],
 
     /*

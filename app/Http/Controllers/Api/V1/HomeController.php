@@ -158,6 +158,7 @@ final class HomeController extends Controller
             'suspension' => $this->suspension($user),
             'ratingPrompt' => $prompts->for($user),
             'nextJourney' => $this->nextJourney($request, $ratings, $alternatives),
+            'canceledTrip' => $this->canceledTrip($user->id, $alternatives),
             'demandAlert' => $this->demandAlert($user->id),
             'topMatches' => $this->topMatches($request),
             'savedSearches' => $this->savedSearches($user->id),
@@ -296,6 +297,81 @@ final class HomeController extends Controller
             ?? $this->awaitingRating($userId, $ratings);
 
         return $booking === null ? null : $this->journeyCard($request, $booking, $ratings, $alternatives);
+    }
+
+    /**
+     * Today's trip the driver cancelled after the run had started (owner decision 8).
+     *
+     * Stays on Home until the day ends (on the commute's own clock) or she books an alternative:
+     * a confirmed seat, or a request, made after the cancellation. Independent of `nextJourney`
+     * and of whether she has seen the outcome there.
+     *
+     * `searchedFrom` is the origin the alternatives search starts from, with the same fields the
+     * request points carry, so the app can open the search from where she actually is.
+     *
+     * @return array<string, mixed>|null
+     */
+    private function canceledTrip(string $userId, SuggestAlternativesAction $alternatives): ?array
+    {
+        $booking = $this->journeyQuery()
+            ->where('bookings.passenger_user_id', $userId)
+            ->where('bookings.status', BookingStatus::CancelledByDriver)
+            ->whereNotNull('scheduled_trips.cancelled_reason')
+            ->where('scheduled_trips.departure_at', '>=', now()->subDay())
+            ->orderByDesc('bookings.cancelled_at')
+            ->orderByDesc('bookings.id')
+            ->get()
+            ->first(fn (Booking $candidate): bool => $candidate->scheduledTrip->tripSession !== null
+                && $this->isTodayFor($candidate->scheduledTrip)
+                && ! $this->bookedAlternativeSince($userId, $candidate));
+
+        if ($booking === null) {
+            return null;
+        }
+
+        $trip = $booking->scheduledTrip;
+        $driver = $trip->commuteOffer->driverProfile->user;
+
+        try {
+            $from = $alternatives->requestPoints($booking)['pickup'] ?? null;
+        } catch (Throwable) {
+            $from = null;
+        }
+
+        return [
+            'bookingId' => (string) $booking->getKey(),
+            'tripId' => (string) $trip->getKey(),
+            'commuteId' => (string) $trip->commute_offer_id,
+            ...JourneyCard::route($trip->commuteOffer),
+            'driverName' => $driver->public_first_name,
+            'date' => $trip->trip_date->toDateString(),
+            'departureAt' => $trip->departure_at->toIso8601String(),
+            'departureLocal' => $trip->departure_local->format('Y-m-d H:i:s'),
+            'cancelledAt' => $booking->cancelled_at?->toIso8601String(),
+            'searchedFrom' => $from,
+        ];
+    }
+
+    private function bookedAlternativeSince(string $userId, Booking $cancelled): bool
+    {
+        $since = $cancelled->cancelled_at ?? $cancelled->updated_at;
+
+        $booked = Booking::query()
+            ->where('passenger_user_id', $userId)
+            ->whereIn('status', [BookingStatus::Confirmed, BookingStatus::Pending])
+            ->where('created_at', '>=', $since)
+            ->whereKeyNot($cancelled->getKey())
+            ->exists();
+
+        if ($booked) {
+            return true;
+        }
+
+        return SeatRequest::query()
+            ->where('passenger_user_id', $userId)
+            ->where('status', SeatRequestStatus::Pending)
+            ->where('created_at', '>=', $since)
+            ->exists();
     }
 
     /**
