@@ -1,0 +1,273 @@
+<!doctype html>
+<html lang="en" dir="ltr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>YuGo — Share your daily commute in Greater Cairo</title>
+<meta name="description" content="YuGo matches you with verified neighbours who make the same commute every day. Recurring seats, fair route contribution, women-only groups.">
+<meta name="theme-color" content="#0f766e">
+<meta property="og:title" content="YuGo — Share your daily commute">
+<meta property="og:description" content="Verified, recurring commute groups across Greater Cairo. Fair route contribution, never surge pricing.">
+<meta property="og:type" content="website">
+<meta property="og:image" content="assets/img/icon-256.png">
+<link rel="icon" type="image/png" href="assets/img/icon-256.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Arabic:wght@400;500;600;700&family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="assets/css/style.css">
+<script>
+(function () {
+  try {
+    var t = localStorage.getItem("yugo-theme") || (matchMedia("(prefers-color-scheme: light)").matches ? "light" : "dark");
+    document.documentElement.dataset.theme = t;
+    var l = localStorage.getItem("yugo-lang");
+    if (l === "ar") { document.documentElement.lang = "ar"; document.documentElement.dir = "rtl"; }
+  } catch (e) { document.documentElement.dataset.theme = "dark"; }
+})();
+</script>
+</head>
+<body>
+<div id="site-header"></div>
+
+<main>
+<section class="hero">
+  <div class="container hero-grid">
+    <div>
+      <span class="eyebrow" data-i18n="hero.badge">Private beta · Greater Cairo</span>
+      <h1 data-i18n="hero.title">Your daily commute, <em>shared with people you trust.</em></h1>
+      <p class="lead" data-i18n="hero.lead">YuGo matches you with verified neighbours who make the same trip every day. Split the cost fairly, skip the stress, and ride with a group that feels like yours.</p>
+      <div class="hero-cta">
+        <a class="btn btn-primary" href="#how"><span data-i18n="hero.cta2">See how it works</span><svg class="i" width="20" height="20"><use href="#i-arrow"/></svg></a>
+        <a class="btn btn-ghost" href="contact.html" data-i18n="foot.contact">Contact us</a>
+      </div>
+      <div class="hero-proof">
+        <div class="avatars"><span>A</span><span>M</span><span>S</span><span>N</span></div>
+        <span data-i18n="hero.proof">Verified members · women-only groups · no surge pricing</span>
+      </div>
+    </div>
+
+    <div class="phone-wrap">
+      <div class="float-card fc-1"><svg class="i"><use href="#i-shield"/></svg><div><span data-i18n="fc1.t">ID verified</span><small data-i18n="fc1.s">Driver and vehicle checked</small></div></div>
+      <div class="phone" aria-hidden="true">
+        <div class="screen">
+          <div class="notch"></div>
+          <div class="screen-map">
+            <svg viewBox="0 0 280 300" preserveAspectRatio="xMidYMid slice">
+              <defs><linearGradient id="rg" x1="0" y1="1" x2="1" y2="0"><stop offset="0" style="stop-color:var(--ph-g1)"/><stop offset="1" style="stop-color:var(--ph-g2)"/></linearGradient></defs>
+              <g class="rd" stroke-width="10" fill="none" stroke-linecap="round">
+                <path d="M-10 90 L120 110 L300 60"/><path d="M40 -10 L80 160 L60 320"/><path d="M-10 230 L150 200 L300 240"/><path d="M200 -10 L180 150 L230 320"/>
+              </g>
+              <g class="rd2" stroke-width="3" fill="none"><path d="M-10 150 L300 140"/><path d="M130 -10 L140 320"/></g>
+              <path class="route-line" d="M62 250 C70 200 90 190 120 160 S 180 120 205 62" fill="none" stroke="url(#rg)" stroke-width="5" stroke-linecap="round"/>
+              <circle class="p-start" cx="62" cy="250" r="7"/><circle class="pulse p-pulse" cx="62" cy="250" r="7"/>
+              <circle class="p-end" cx="205" cy="62" r="7"/><circle class="p-dot" cx="205" cy="62" r="3"/>
+            </svg>
+          </div>
+          <div class="screen-sheet">
+            <div class="sheet-title"><span data-i18n="ph.title">Matches for your commute</span><b>3</b></div>
+            <div class="match best"><div class="m-av" style="background:#5eead4">S</div><div class="m-info"><div class="m-name">Sara · Rehab → Smart Village</div><div class="m-meta" data-i18n="ph.m1">92% route overlap · 4 min walk</div></div><div class="m-score">9.4</div></div>
+            <div class="match"><div class="m-av" style="background:#7dd3fc">K</div><div class="m-info"><div class="m-name">Karim · Madinaty</div><div class="m-meta" data-i18n="ph.m2">85% overlap · 7 min walk</div></div><div class="m-score" style="background:var(--ph-score2)">8.8</div></div>
+            <div class="screen-cta" data-i18n="ph.cta">Request a trial ride</div>
+          </div>
+        </div>
+      </div>
+      <div class="float-card fc-2"><svg class="i"><use href="#i-wallet"/></svg><div><span data-i18n="fc2.t">Fair split</span><small data-i18n="fc2.s">Route cost shared, no surge</small></div></div>
+    </div>
+  </div>
+</section>
+
+<section class="stats">
+  <div class="container stats-grid">
+    <div class="stat reveal"><b>0</b><span data-i18n="st.1">Surge pricing, ever</span></div>
+    <div class="stat reveal"><b>ID</b><span data-i18n="st.2">Verified before the first ride</span></div>
+    <div class="stat reveal"><b data-i18n="st.3n">Daily</b><span data-i18n="st.3">Same people, same route</span></div>
+    <div class="stat reveal"><b>5</b><span data-i18n="st.4">Corridors at launch</span></div>
+  </div>
+</section>
+
+<section class="section" id="why">
+  <div class="container">
+    <div class="section-head center reveal">
+      <span class="eyebrow" data-i18n="why.eyebrow">The problem</span>
+      <h2 data-i18n="why.title">Commuting in Cairo shouldn't cost a salary.</h2>
+      <p class="lead" data-i18n="why.lead">Ride-hailing solved one-off trips. Nobody solved the commute you make every single day.</p>
+    </div>
+    <div class="compare">
+      <div class="card bad reveal">
+        <div class="icon-box"><svg class="i"><use href="#i-x"/></svg></div>
+        <h3 data-i18n="why.bad">Today</h3>
+        <ul>
+          <li><svg class="i"><use href="#i-x"/></svg><span data-i18n="why.b1">Ride-hailing twice a day is unaffordable as a habit.</span></li>
+          <li><svg class="i"><use href="#i-x"/></svg><span data-i18n="why.b2">Public transport doesn't reach the new cities.</span></li>
+          <li><svg class="i"><use href="#i-x"/></svg><span data-i18n="why.b3">WhatsApp carpools: no verification, no recourse.</span></li>
+          <li><svg class="i"><use href="#i-x"/></svg><span data-i18n="why.b4">No-shows, silent route changes, vague money-splitting.</span></li>
+        </ul>
+      </div>
+      <div class="card reveal">
+        <div class="icon-box"><svg class="i"><use href="#i-check"/></svg></div>
+        <h3 data-i18n="why.good">With YuGo</h3>
+        <ul>
+          <li><svg class="i"><use href="#i-check"/></svg><span data-i18n="why.g1">A transparent route contribution, split fairly.</span></li>
+          <li><svg class="i"><use href="#i-check"/></svg><span data-i18n="why.g2">Matched on real route overlap, walk and timing.</span></li>
+          <li><svg class="i"><use href="#i-check"/></svg><span data-i18n="why.g3">Every member ID-verified before riding.</span></li>
+          <li><svg class="i"><use href="#i-check"/></svg><span data-i18n="why.g4">Reliability scores and reports hold everyone accountable.</span></li>
+        </ul>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section class="section" id="how" style="padding-top:0">
+  <div class="container">
+    <div class="section-head center reveal">
+      <span class="eyebrow" data-i18n="how.eyebrow">How it works</span>
+      <h2 data-i18n="how.title">From your door to your desk in three steps.</h2>
+    </div>
+    <div class="steps">
+      <div class="card step reveal"><div class="icon-box"><svg class="i"><use href="#i-pin"/></svg></div><h3 data-i18n="how.1t">Publish your commute</h3><p data-i18n="how.1d">Set where you start, where you go, your time window and the days you travel. Drivers add their car and open seats.</p></div>
+      <div class="card step reveal"><div class="icon-box"><svg class="i"><use href="#i-route"/></svg></div><h3 data-i18n="how.2t">Get matched</h3><p data-i18n="how.2d">We rank matches by route overlap, walking distance, detour, timing, reliability and the atmosphere you prefer.</p></div>
+      <div class="card step reveal"><div class="icon-box"><svg class="i"><use href="#i-repeat"/></svg></div><h3 data-i18n="how.3t">Try it, then join</h3><p data-i18n="how.3d">Take a single trial ride. Like it? Lock in a recurring seat in the group and commute with the same verified people.</p></div>
+    </div>
+  </div>
+</section>
+
+<section class="section" id="features" style="padding-top:0">
+  <div class="container">
+    <div class="section-head center reveal">
+      <span class="eyebrow" data-i18n="ft.eyebrow">Features</span>
+      <h2 data-i18n="ft.title">Built for the commute, not the one-off ride.</h2>
+    </div>
+    <div class="features">
+      <div class="card wide reveal"><div class="icon-box"><svg class="i"><use href="#i-users"/></svg></div><h3 data-i18n="ft.1t">Groups, not trips</h3><p data-i18n="ft.1d">A confirmed seat makes you part of a persistent commute group with its own rules (quiet mornings, A/C on, non-smoking, women-only), members, chat and shared history.</p></div>
+      <div class="card reveal"><div class="icon-box"><svg class="i"><use href="#i-clock"/></svg></div><h3 data-i18n="ft.2t">Trial ride first</h3><p data-i18n="ft.2d">Test the fit with one ride before committing to a recurring seat.</p></div>
+      <div class="card reveal"><div class="icon-box"><svg class="i"><use href="#i-wallet"/></svg></div><h3 data-i18n="ft.3t">Fair route contribution</h3><p data-i18n="ft.3d">The route cost is split across confirmed passengers, with a visible breakdown.</p></div>
+      <div class="card reveal"><div class="icon-box"><svg class="i"><use href="#i-chat"/></svg></div><h3 data-i18n="ft.4t">Group chat</h3><p data-i18n="ft.4d">Coordinate pickups and changes in one place instead of a messy WhatsApp thread.</p></div>
+      <div class="card reveal"><div class="icon-box"><svg class="i"><use href="#i-star"/></svg></div><h3 data-i18n="ft.5t">Reliability you can see</h3><p data-i18n="ft.5d">Every member carries a rating, trip count and reliability score. No-shows and late cancellations are recorded events, not something to argue about in a group chat.</p></div>
+    </div>
+  </div>
+</section>
+
+<section class="section" style="padding-top:0">
+  <div class="container">
+    <div class="section-head center reveal">
+      <span class="eyebrow" data-i18n="rl.eyebrow">Who it's for</span>
+      <h2 data-i18n="rl.title">One app, two ways to commute.</h2>
+    </div>
+    <div class="roles-head">
+      <div class="tabs" role="tablist">
+        <button class="tab active" data-tab="pax" role="tab" data-i18n="rl.pax">I'm a passenger</button>
+        <button class="tab" data-tab="drv" role="tab" data-i18n="rl.drv">I'm a driver</button>
+      </div>
+    </div>
+    <div class="panel active" id="panel-pax">
+      <div class="card"><div class="icon-box"><svg class="i"><use href="#i-wallet"/></svg></div><h3 data-i18n="rl.p1t">Predictable monthly cost</h3><p data-i18n="rl.p1d">Know what your commute costs before the month starts.</p></div>
+      <div class="card"><div class="icon-box"><svg class="i"><use href="#i-calendar"/></svg></div><h3 data-i18n="rl.p2t">A seat you can rely on</h3><p data-i18n="rl.p2d">Recurring seats mean you're not hunting for a ride every morning.</p></div>
+      <div class="card"><div class="icon-box"><svg class="i"><use href="#i-pin"/></svg></div><h3 data-i18n="rl.p3t">Short walk to pickup</h3><p data-i18n="rl.p3d">Matches are ranked by how little you walk and how little the driver detours.</p></div>
+    </div>
+    <div class="panel" id="panel-drv">
+      <div class="card"><div class="icon-box"><svg class="i"><use href="#i-car"/></svg></div><h3 data-i18n="rl.d1t">Offset fuel and wear</h3><p data-i18n="rl.d1d">Share the trip you already make and cover your running costs.</p></div>
+      <div class="card"><div class="icon-box"><svg class="i"><use href="#i-check"/></svg></div><h3 data-i18n="rl.d2t">You stay in control</h3><p data-i18n="rl.d2d">Approve seat requests and custom pickup points. Waitlists handle full groups.</p></div>
+      <div class="card"><div class="icon-box"><svg class="i"><use href="#i-shield"/></svg></div><h3 data-i18n="rl.d3t">Not a gig job</h3><p data-i18n="rl.d3d">No strangers to unknown addresses, only verified people on your own route.</p></div>
+    </div>
+  </div>
+</section>
+
+<section class="section safety" id="safety">
+  <div class="container safety-grid">
+    <div class="shield reveal">
+      <svg viewBox="0 0 320 320" role="img" aria-label="Shield">
+        <defs><linearGradient id="sg" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#14958a"/><stop offset="1" stop-color="#0a4f4a"/></linearGradient></defs>
+        <circle cx="160" cy="160" r="150" fill="none" stroke="var(--border)" stroke-width="1.5" stroke-dasharray="4 8"/>
+        <circle cx="160" cy="160" r="112" fill="var(--glow)"/>
+        <path d="M160 52c26 18 52 22 74 22v84c0 56-40 84-74 100-34-16-74-44-74-100V74c22 0 48-4 74-22z" fill="url(#sg)"/>
+        <path d="M122 160l28 28 50-56" fill="none" stroke="#5eead4" stroke-width="14" stroke-linecap="round" stroke-linejoin="round"/>
+      </svg>
+    </div>
+    <div>
+      <div class="reveal">
+        <span class="eyebrow" data-i18n="sf.eyebrow">Safety first</span>
+        <h2 data-i18n="sf.title">Safety isn't a settings page. It's the foundation.</h2>
+        <p class="lead" style="margin:18px 0 32px" data-i18n="sf.lead">We built identity and accountability into every step, because trust is the reason a carpool survives.</p>
+      </div>
+      <div class="safety-list">
+        <div class="safety-item reveal"><div class="icon-box"><svg class="i"><use href="#i-id"/></svg></div><div><h3 data-i18n="sf.1t">Identity verification</h3><p data-i18n="sf.1d">Government ID, workplace and vehicle registration checks for drivers.</p></div></div>
+        <div class="safety-item reveal"><div class="icon-box"><svg class="i"><use href="#i-users"/></svg></div><div><h3 data-i18n="sf.2t">Women-only matching</h3><p data-i18n="sf.2d">Restrict your matches and groups to women.</p></div></div>
+        <div class="safety-item reveal"><div class="icon-box"><svg class="i"><use href="#i-check"/></svg></div><div><h3 data-i18n="sf.3t">Pre-trip check-in</h3><p data-i18n="sf.3d">Confirm driver, vehicle and plate before you get in.</p></div></div>
+        <div class="safety-item reveal"><div class="icon-box"><svg class="i"><use href="#i-heart"/></svg></div><div><h3 data-i18n="sf.4t">Trusted contacts</h3><p data-i18n="sf.4d">Share trip visibility with people you trust.</p></div></div>
+        <div class="safety-item reveal"><div class="icon-box"><svg class="i"><use href="#i-flag"/></svg></div><div><h3 data-i18n="sf.5t">Reports and blocking</h3><p data-i18n="sf.5d">Report an incident with evidence, or block anyone, in a few taps.</p></div></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section class="section">
+  <div class="container">
+    <div class="section-head center reveal">
+      <span class="eyebrow" data-i18n="pr.eyebrow">Transparent pricing</span>
+      <h2 data-i18n="pr.title">You see exactly what you pay and why.</h2>
+      <p class="lead" data-i18n="pr.lead">No surge pricing. The route cost is shared across the group.</p>
+    </div>
+    <div class="pricing">
+      <div class="card breakdown reveal">
+        <h3 data-i18n="pr.ex">Example breakdown</h3>
+        <div class="row"><span data-i18n="pr.r1">Route cost (per day)</span><b>200 EGP</b></div>
+        <div class="row"><span data-i18n="pr.r2">Shared by</span><b data-i18n="pr.r2v">4 passengers</b></div>
+        <div class="row total"><span data-i18n="pr.r5">You pay</span><b>50 EGP</b></div>
+        <p style="font-size:13px;color:var(--text-3);margin-top:10px" data-i18n="pr.note">Illustrative example only. Final pricing is shown in the app before you confirm.</p>
+      </div>
+      <div class="card reveal">
+        <h3 data-i18n="pr.w">What that means</h3>
+        <ul class="checks">
+          <li><svg class="i"><use href="#i-check"/></svg><span data-i18n="pr.c1">Costs are split by the confirmed route, never inflated by demand.</span></li>
+          <li><svg class="i"><use href="#i-check"/></svg><span data-i18n="pr.c2">You see your share before you confirm.</span></li>
+          <li><svg class="i"><use href="#i-check"/></svg><span data-i18n="pr.c3">Pay with local rails: InstaPay and cards.</span></li>
+          <li><svg class="i"><use href="#i-check"/></svg><span data-i18n="pr.c4">A weekly seat gives you a stable monthly cost.</span></li>
+        </ul>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section class="section" style="padding-top:0">
+  <div class="container">
+    <div class="section-head center reveal">
+      <span class="eyebrow" data-i18n="co.eyebrow">Where we start</span>
+      <h2 data-i18n="co.title">The new-city corridors Cairo's commuters know.</h2>
+    </div>
+    <div class="corridors reveal">
+      <div class="corridor"><svg class="i" width="18" height="18"><use href="#i-pin"/></svg><span data-i18n="co.1">Rehab</span></div>
+      <div class="corridor"><svg class="i" width="18" height="18"><use href="#i-pin"/></svg><span data-i18n="co.2">Madinaty</span></div>
+      <div class="corridor"><svg class="i" width="18" height="18"><use href="#i-pin"/></svg><span data-i18n="co.3">New Cairo</span></div>
+      <div class="corridor"><svg class="i" width="18" height="18"><use href="#i-pin"/></svg><span data-i18n="co.4">Katameya</span></div>
+      <div class="corridor"><svg class="i" width="18" height="18"><use href="#i-pin"/></svg><span data-i18n="co.5">6th of October · Smart Village</span></div>
+    </div>
+    <p class="soon" data-i18n="co.soon">More corridors open as groups form.</p>
+  </div>
+</section>
+
+<section class="section" id="faq" style="padding-top:0">
+  <div class="container">
+    <div class="section-head center reveal">
+      <span class="eyebrow" data-i18n="fq.eyebrow">FAQ</span>
+      <h2 data-i18n="fq.title">Questions, answered.</h2>
+    </div>
+    <div class="faq reveal">
+      <div class="faq-item"><button class="faq-q"><span data-i18n="fq.1q">Is YuGo a taxi or ride-hailing app?</span><svg class="i"><use href="#i-plus"/></svg></button><div class="faq-a"><p data-i18n="fq.1a">No. YuGo is built for the commute you make every day. Drivers share a trip they already make, and passengers join a recurring group of verified people.</p></div></div>
+      <div class="faq-item"><button class="faq-q"><span data-i18n="fq.2q">How is the price decided?</span><svg class="i"><use href="#i-plus"/></svg></button><div class="faq-a"><p data-i18n="fq.2a">By route contribution: the cost of the route is split across confirmed passengers and shown as a clear breakdown, </p></div></div>
+      <div class="faq-item"><button class="faq-q"><span data-i18n="fq.3q">How do you keep members safe?</span><svg class="i"><use href="#i-plus"/></svg></button><div class="faq-a"><p data-i18n="fq.3a">Members are ID-verified, drivers also verify their vehicle, and riders can use women-only matching, trusted contacts, pre-trip check-in, incident reports and blocking. Read our Safety page for the details.</p></div></div>
+      <div class="faq-item"><button class="faq-q"><span data-i18n="fq.4q">Can I try before committing?</span><svg class="i"><use href="#i-plus"/></svg></button><div class="faq-a"><p data-i18n="fq.4a">Yes. Request a single trial ride first, then choose a recurring seat if the group works for you.</p></div></div>
+      <div class="faq-item"><button class="faq-q"><span data-i18n="fq.5q">Who can become a driver?</span><svg class="i"><use href="#i-plus"/></svg></button><div class="faq-a"><p data-i18n="fq.5a">Anyone already driving a commute who completes identity, licence and vehicle verification. You approve each seat request and pickup point.</p></div></div>
+      <div class="faq-item"><button class="faq-q"><span data-i18n="fq.6q">When can I get the app?</span><svg class="i"><use href="#i-plus"/></svg></button><div class="faq-a"><p data-i18n="fq.6a">YuGo is in private beta in Greater Cairo. Contact us and we'll let you know as your corridor opens.</p></div></div>
+      <div class="faq-item"><button class="faq-q"><span data-i18n="fq.7q">How do I delete my account and data?</span><svg class="i"><use href="#i-plus"/></svg></button><div class="faq-a"><p><span data-i18n="fq.7a">You can request deletion at any time. See the</span> <a href="delete-account.html" style="color:var(--primary);text-decoration:underline" data-i18n="fq.7l">account deletion page</a>.</p></div></div>
+    </div>
+  </div>
+</section>
+
+</main>
+
+<div id="site-footer"></div>
+
+<script src="assets/js/i18n.js"></script>
+<script src="assets/js/main.js"></script>
+</body>
+</html>
