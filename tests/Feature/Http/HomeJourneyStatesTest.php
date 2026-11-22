@@ -13,6 +13,8 @@ use App\Domains\Matching\Models\MatchNotification;
 use App\Domains\Notification\Enums\NotificationType;
 use App\Domains\Notification\Support\Notifier;
 use App\Domains\Shared\ValueObjects\DaysMask;
+use App\Domains\Trip\Models\Attendance;
+use App\Domains\Trip\Models\TripSession;
 use Illuminate\Support\Facades\Storage;
 
 /**
@@ -325,6 +327,60 @@ it('drops an ended journey she never saw after seven days', function () {
     ScheduledTrip::query()->whereKey($this->tripId)->update(['departure_at' => $eightDaysAgo, 'departure_local' => $eightDaysAgo]);
 
     expect(homeCard($this->paxToken))->toBeNull();
+});
+
+it('stamps a day the driver cancelled more than a day ago as seen and moves on', function () {
+    runLeavingIn($this->tripId, 120);
+
+    asHomeDriver($this->driverToken, 'POST', "/api/v1/trips/{$this->tripId}/cancel", ['reason' => 'Car in the garage'])
+        ->assertOk();
+
+    Booking::query()->whereKey($this->bookingId)->update(['cancelled_at' => now()->subHours(30)]);
+
+    expect(homeCard($this->paxToken))->toBeNull()
+        ->and(Booking::query()->whereKey($this->bookingId)->value('outcome_seen_at'))->not->toBeNull();
+
+    $past = asHomeDriver($this->paxToken, 'GET', '/api/v1/my-bookings?scope=past')->assertOk()->json('data');
+
+    expect(collect($past)->pluck('id')->all())->toContain($this->bookingId);
+});
+
+it('returns only the newest ended journey and stamps the older one', function () {
+    runLeavingIn($this->tripId, 120);
+
+    asHomeDriver($this->driverToken, 'POST', "/api/v1/trips/{$this->tripId}/cancel", ['reason' => 'Car in the garage'])
+        ->assertOk();
+
+    $otherTrip = ScheduledTrip::query()->whereKeyNot($this->tripId)->orderBy('trip_date')->firstOrFail();
+    $older = Booking::query()->whereKey($this->bookingId)->sole()->replicate();
+    $older->offsetUnset('live_booking_key');
+    $older->scheduled_trip_id = $otherTrip->id;
+    $older->cancelled_at = now()->subDays(2);
+    $older->save();
+
+    Booking::query()->whereKey($this->bookingId)->update(['cancelled_at' => now()->subHours(3)]);
+
+    expect(homeCard($this->paxToken)['id'])->toBe($this->bookingId)
+        ->and(Booking::query()->whereKey($older->id)->value('outcome_seen_at'))->not->toBeNull()
+        ->and(Booking::query()->whereKey($this->bookingId)->value('outcome_seen_at'))->toBeNull();
+
+    asHomeDriver($this->paxToken, 'POST', "/api/v1/bookings/{$this->bookingId}/seen")->assertOk();
+
+    expect(homeCard($this->paxToken))->toBeNull();
+});
+
+it('keeps a completed ride older than a day on the card while it can still be rated', function () {
+    journeyCompleted($this->driverToken, $this->tripId);
+
+    $at = now()->subHours(30);
+    ScheduledTrip::query()->whereKey($this->tripId)->update(['departure_at' => $at, 'departure_local' => $at]);
+    TripSession::query()->where('scheduled_trip_id', $this->tripId)->update(['completed_at' => $at]);
+    Attendance::query()->where('booking_id', $this->bookingId)->update(['checked_out_at' => $at]);
+
+    $card = homeCard($this->paxToken);
+
+    expect($card['phase'])->toBe('completed')
+        ->and($card['canRate'])->toBeTrue();
 });
 
 it('marks only her own ended journey as seen', function () {

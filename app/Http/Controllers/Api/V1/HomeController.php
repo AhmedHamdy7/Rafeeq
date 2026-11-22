@@ -50,6 +50,7 @@ use App\Http\Resources\SeatRequestResource;
 use App\Http\Resources\SuspensionSummary;
 use App\Http\Responses\ApiResponse;
 use Carbon\CarbonImmutable;
+use Carbon\CarbonInterface;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -274,7 +275,9 @@ final class HomeController extends Controller
      *    seat is still held. A car on the way to her outranks anything else she could be shown.
      * 2. **A journey that ended and she has not seen** — cancelled by the driver, expired, she left
      *    because the driver was late, or completed and not rated — until the app sends
-     *    `POST /bookings/{booking}/seen`, for up to seven days.
+     *    `POST /bookings/{booking}/seen`, for up to seven days. Only the newest one is shown: older
+     *    unseen ones are stamped seen on the server, and so is the newest when it ended more than
+     *    `rafeeq.home.ended_journey_fresh_hours` ago.
      * 3. **The soonest journey that has not started** — what this card has always been.
      * 4. **A completed journey she has not rated**, while the rating window is open — but only when
      *    there is nothing upcoming to show. A ride from four days ago asking for stars must not hide
@@ -426,19 +429,46 @@ final class HomeController extends Controller
 
     private function unseenOutcome(string $userId, SubmitRatingAction $ratings): ?Booking
     {
-        $outcome = $this->journeyQuery()
+        $candidates = $this->journeyQuery()
             ->where('bookings.passenger_user_id', $userId)
             ->whereIn('bookings.status', BookingStatus::OUTCOMES_TO_SEE)
             ->whereNull('bookings.outcome_seen_at')
             ->where('scheduled_trips.departure_at', '>=', now()->subDays(self::UNSEEN_OUTCOME_DAYS))
-            ->orderByDesc('bookings.updated_at')
-            ->orderByDesc('bookings.id')
-            ->limit(10)
             ->get()
-            ->first(fn (Booking $candidate): bool => $candidate->status !== BookingStatus::Completed
-                || HomeJourney::for($candidate, $ratings, $userId)->canRate());
+            ->filter(fn (Booking $candidate): bool => $candidate->status !== BookingStatus::Completed
+                || HomeJourney::for($candidate, $ratings, $userId)->canRate())
+            ->map(fn (Booking $candidate): array => [
+                'booking' => $candidate,
+                'endedAt' => $this->endedAt($candidate, $ratings, $userId),
+            ])
+            ->sortByDesc(fn (array $row): string => $row['endedAt']->format('Y-m-d H:i:s.u').'|'.$row['booking']->getKey())
+            ->values();
 
-        if ($outcome === null || $outcome->status !== BookingStatus::CancelledByDriver) {
+        if ($candidates->isEmpty()) {
+            return null;
+        }
+
+        $outcome = $candidates->first()['booking'];
+        $batchIds = CancellationBatch::of($outcome)->pluck('bookings.id')->all();
+
+        $older = $candidates
+            ->pluck('booking.id')
+            ->reject(fn (string $id): bool => in_array($id, $batchIds, true))
+            ->values()
+            ->all();
+
+        $stale = $candidates->first()['endedAt']->lt(now()->subHours(max(1, (int) config('rafeeq.home.ended_journey_fresh_hours'))));
+
+        Booking::query()
+            ->whereIn('id', $stale ? array_unique([...$older, ...$batchIds]) : $older)
+            ->whereNull('outcome_seen_at')
+            ->update(['outcome_seen_at' => now()]);
+
+        if ($stale) {
+            return null;
+        }
+
+        if ($outcome->status !== BookingStatus::CancelledByDriver) {
             return $outcome;
         }
 
@@ -448,6 +478,15 @@ final class HomeController extends Controller
             ->orderBy('scheduled_trips.departure_at')
             ->orderBy('bookings.id')
             ->first() ?? $outcome;
+    }
+
+    private function endedAt(Booking $booking, SubmitRatingAction $ratings, string $userId): CarbonInterface
+    {
+        $at = $booking->status === BookingStatus::Completed
+            ? HomeJourney::for($booking, $ratings, $userId)->completedAt() ?? $booking->scheduledTrip->departure_at
+            : $booking->cancelled_at ?? $booking->updated_at;
+
+        return $at ?? $booking->scheduledTrip->departure_at;
     }
 
     /**

@@ -383,6 +383,8 @@ Real response after the driver cancelled her day (5 days ahead):
 
 **The ended card stays until the app calls `POST /bookings/{id}/seen`** (§3), for up to 7 days. After that `/home` moves on (here, `nextJourney: null`).
 
+**Only the newest ended journey is returned (HOME-1).** Older unseen ones are stamped seen by the server, and so is the newest when it ended more than 24 hours ago (`RAFEEQ_HOME_ENDED_FRESH_HOURS`). They stay in `GET /my-bookings?scope=past`.
+
 ### 1.7 `completed` (F3P-11)
 
 ```json

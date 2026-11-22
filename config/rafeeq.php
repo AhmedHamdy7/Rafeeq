@@ -341,6 +341,10 @@ return [
         'recurring_horizon_days' => 30,
     ],
 
+    'home' => [
+        'ended_journey_fresh_hours' => (int) env('RAFEEQ_HOME_ENDED_FRESH_HOURS', 24),
+    ],
+
     'api' => [
         /*
          * Paging for every list that grows with use.
