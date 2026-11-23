@@ -117,6 +117,17 @@ final class GoogleRoutesGeoEngine implements GeoQueryEngine
         return $traffic;
     }
 
+    public function routeLeavingAt(Coordinate $from, Coordinate $to, array $via, CarbonImmutable $departAt): Route
+    {
+        $plain = $this->routeBetween($from, $to, $via);
+
+        if ($plain->isFallback || ! $departAt->isFuture()) {
+            return $plain;
+        }
+
+        return $this->compute($from, $to, $via, $departAt) ?? $plain;
+    }
+
     /**
      * The extra time this one stop adds — estimated locally, never asked of Google.
      *

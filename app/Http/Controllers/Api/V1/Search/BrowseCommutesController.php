@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Api\V1\Search;
 
 use App\Domains\Commute\Enums\CommuteAudience;
+use App\Domains\Commute\Enums\CommuteDirection;
 use App\Domains\Commute\Enums\ScheduledTripStatus;
 use App\Domains\Commute\Models\CommuteOffer;
 use App\Domains\Commute\Models\ScheduledTrip;
@@ -29,6 +30,7 @@ final class BrowseCommutesController extends Controller
         $womenOnly = filter_var($filters['womenOnly'] ?? false, FILTER_VALIDATE_BOOLEAN);
         $tier = $filters['tier'] ?? null;
         $daysMask = isset($filters['daysMask']) ? (int) $filters['daysMask'] : null;
+        $direction = CommuteDirection::fromInput($filters['direction'] ?? null) ?? CommuteDirection::Going;
 
         $upcoming = fn (Builder $trips) => $trips
             ->where('status', ScheduledTripStatus::Scheduled->value)
@@ -39,6 +41,7 @@ final class BrowseCommutesController extends Controller
 
         $offers = CommuteOffer::query()
             ->tap(fn (Builder $offer) => HardFilters::applyEligibility($offer, $passenger))
+            ->where('direction', $direction->value)
             ->when($womenOnly, fn (Builder $offer) => $offer->where('audience', CommuteAudience::WomenOnly->value))
             ->when($tier !== null, fn (Builder $offer) => $offer->whereHas('vehicle', fn (Builder $vehicle) => $vehicle->where('tier', $tier)))
             ->whereHas('scheduledTrips', $upcoming)

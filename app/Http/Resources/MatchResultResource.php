@@ -92,6 +92,8 @@ final class MatchResultResource extends JsonResource
         return [
             'commuteId' => $offer->id,
             'isOwn' => $offer->driver_profile_id === $request->user()?->id,
+            // B3: the published Return of a Going commute, or null.
+            'returnCommute' => CommuteLink::returnOf($offer, passenger: true),
             // The day this card was matched on — the soonest one that fits.
             'tripId' => $this->trip->id,
             'tripDate' => $this->trip->trip_date->toDateString(),
@@ -105,6 +107,7 @@ final class MatchResultResource extends JsonResource
              */
             'promisedArrivalAt' => $this->trip->promised_arrival_at?->toIso8601String(),
             'promisedArrivalLocal' => PassengerStanding::promisedArrivalLocal($this->trip),
+            ...TripTimes::fields($this->trip),
 
             /*
              * The days the commute RUNS (DISCOVER-3) — "Sun · Tue · Thu" — as the same bitmask the
@@ -245,6 +248,7 @@ final class MatchResultResource extends JsonResource
             'departureLocal' => $trip->departure_local->format('Y-m-d H:i:s'),
             'promisedArrivalAt' => $trip->promised_arrival_at?->toIso8601String(),
             'promisedArrivalLocal' => PassengerStanding::promisedArrivalLocal($trip),
+            ...TripTimes::fields($trip),
             'seatsAvailable' => (int) max(0, $trip->seats_total - $trip->seats_taken),
             'isFull' => $trip->seats_taken >= $trip->seats_total,
             // Per DATE, like the card's own: see `myStatus` and `overlapsBooking` on the card.

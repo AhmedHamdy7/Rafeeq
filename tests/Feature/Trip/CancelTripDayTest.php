@@ -76,7 +76,7 @@ it('tells every passenger on the day, without the reason', function () {
     $note = Notification::query()->where('user_id', $this->pax->id)->where('type', 'trip_day_cancelled')->where('channel', 'in_app')->sole();
 
     expect($note->title.$note->body)->not->toContain('Hospital')
-        ->and($note->data)->toBe(['tripId' => $this->tripId, 'bookingId' => $this->bookingId]);
+        ->and($note->data)->toBe(['tripId' => $this->tripId, 'bookingId' => $this->bookingId, 'direction' => 'going']);
 });
 
 it('records the driver as the one who cancelled — the record reliability will count', function () {

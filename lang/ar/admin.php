@@ -595,6 +595,8 @@ return [
             'commute__far_request_minutes' => '«بعيد شوية»: أقصى وقت يزيده راكب واحد',
             'commute__on_way_trip_minutes' => '«في طريقك»: أقصى وقت زيادة للرحلة كلها',
             'commute__far_trip_minutes' => '«بعيد شوية»: أقصى وقت زيادة للرحلة كلها',
+            'commute__return_window_minutes' => 'نافذة البحث عن مشاوير العودة',
+            'commute__min_gap_between_commutes_minutes' => 'أقل وقت بين مشوارين لنفس السواق',
             'commute__max_pickup_points' => 'أقصى عدد نقط ركوب في المشوار',
             'booking__max_waitlist_size' => 'أقصى عدد في قايمة انتظار المشوار الواحد (0 = من غير حد)',
             'commute__max_dropoff_points' => 'أقصى عدد نقط نزول في المشوار',

@@ -348,7 +348,7 @@ function createCommute(string $token, string $vehicleId, array $overrides = [])
     return test()->withToken($token)->postJson('/api/v1/commutes', array_merge([
         'commuteType' => 'recurring',
         'vehicleId' => $vehicleId,
-        'direction' => 'to_work',
+        'direction' => 'going',
         'seatsTotal' => 3,
         'audience' => 'women_only',
     ], $overrides));

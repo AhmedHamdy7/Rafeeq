@@ -197,6 +197,7 @@ return [
             'date_range' => 'Pick at most :days days in a row.',
         ],
         'demand' => [
+            'return_of_return' => 'A ride back can only be added to a Going demand.',
             'same_place' => 'The destination must be different from the origin.',
             'women_only' => 'Only a woman can ask for women-only commutes. Set your gender in your profile first.',
         ],

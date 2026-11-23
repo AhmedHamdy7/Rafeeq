@@ -7,6 +7,7 @@ use App\Domains\Booking\Models\SeatOffer;
 use App\Domains\Commute\Enums\ScheduledTripStatus;
 use App\Domains\Commute\Models\CommuteOffer;
 use App\Domains\Commute\Models\ScheduledTrip;
+use App\Http\Resources\TripTimes;
 use Illuminate\Support\Collection;
 
 final class DriverSeatOffers
@@ -99,6 +100,7 @@ final class DriverSeatOffers
             'commuteId' => $trip->commute_offer_id,
             'date' => $trip->trip_date->toDateString(),
             'departureLocal' => $trip->departure_local?->format('Y-m-d H:i:s'),
+            ...TripTimes::fields($trip),
             'status' => match (true) {
                 $someoneAccepted => self::ROUND_ACCEPTED,
                 $members->contains('status', 'OFFERED') => self::ROUND_OPEN,

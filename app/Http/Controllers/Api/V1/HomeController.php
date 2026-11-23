@@ -49,6 +49,7 @@ use App\Http\Resources\MatchNotificationResource;
 use App\Http\Resources\PersonSummary;
 use App\Http\Resources\SeatRequestResource;
 use App\Http\Resources\SuspensionSummary;
+use App\Http\Resources\TripTimes;
 use App\Http\Responses\ApiResponse;
 use Carbon\CarbonImmutable;
 use Carbon\CarbonInterface;
@@ -351,6 +352,7 @@ final class HomeController extends Controller
             'date' => $trip->trip_date->toDateString(),
             'departureAt' => $trip->departure_at->toIso8601String(),
             'departureLocal' => $trip->departure_local->format('Y-m-d H:i:s'),
+            ...TripTimes::fields($trip),
             'cancelledAt' => $booking->cancelled_at?->toIso8601String(),
             'searchedFrom' => $from,
         ];
@@ -582,6 +584,9 @@ final class HomeController extends Controller
             'tripSessionId' => $trip->tripSession === null ? null : (string) $trip->tripSession->id,
 
             ...$route,
+
+            // B1, B2: Going / Return, and a Return's promised leave time and estimated arrival.
+            ...TripTimes::fields($trip),
             ...JourneyCard::timing($trip),
             'attendance' => JourneyCard::attendance($booking->commuteGroup, $trip),
 
@@ -666,6 +671,7 @@ final class HomeController extends Controller
                         'tripId' => $result->trip->id,
                         'departureAt' => $result->trip->departure_at->toIso8601String(),
                         'departureLocal' => $result->trip->departure_local->format('Y-m-d H:i:s'),
+                        ...TripTimes::fields($result->trip),
                         ...JourneyCard::route($offer),
                         'seatsAvailable' => (int) max(0, $result->trip->seats_total - $result->trip->seats_taken),
                         // A first name and nothing else, as on every suggestion (PersonSummary).
@@ -1146,6 +1152,7 @@ final class HomeController extends Controller
                 ...JourneyCard::route($trip->commuteOffer),
                 'departureAt' => $trip->departure_at->toIso8601String(),
                 'departureLocal' => $trip->departure_local->format('Y-m-d H:i:s'),
+                ...TripTimes::fields($trip),
                 'seatsTotal' => $trip->seats_total,
                 'seatsTaken' => $trip->seats_taken,
                 'seatsOpen' => (int) max(0, $trip->seats_total - $trip->seats_taken),
@@ -1213,6 +1220,7 @@ final class HomeController extends Controller
                 'seatsOpen' => (int) max(0, $trip->seats_total - $trip->seats_taken),
                 'departureAt' => $trip->departure_at->toIso8601String(),
                 'departureLocal' => $trip->departure_local->format('Y-m-d H:i:s'),
+                ...TripTimes::fields($trip),
                 'at' => $booking->cancelled_at->toIso8601String(),
             ];
         }

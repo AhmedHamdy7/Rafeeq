@@ -48,6 +48,9 @@ final class HardFilters
 
                 self::requireMinimumRating($offer, $criteria);
 
+                // B4: only commutes of the direction she searched.
+                $offer->where('direction', $criteria->direction->value);
+
                 // The women-only FILTER she chose (BOOK-02), not an eligibility rule.
                 if ($criteria->womenOnly) {
                     $offer->where('audience', CommuteAudience::WomenOnly->value);

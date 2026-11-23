@@ -64,9 +64,25 @@ final class CommuteDemandController extends Controller
     #[ApiErrors(ErrorCode::DemandExists, ErrorCode::ValidationFailed)]
     public function store(CommuteDemandRequest $request, SaveCommuteDemandAction $action): JsonResponse
     {
-        $demand = $action->execute($request->user(), $request->criteria(), $request->places());
+        if (! $request->wantsReturnDemand()) {
+            $demand = $action->execute($request->user(), $request->criteria(), $request->places());
 
-        return ApiResponse::success(new CommuteDemandResource($demand->load(CommuteDemandResource::relations())), status: 201);
+            return ApiResponse::success(new CommuteDemandResource($demand->load(CommuteDemandResource::relations())), status: 201);
+        }
+
+        [$going, $return] = $action->executePair(
+            $request->user(),
+            $request->criteria(),
+            $request->places(),
+            $request->returnCriteria(),
+            $request->returnPlaces(),
+        );
+
+        return ApiResponse::success([
+            ...(new CommuteDemandResource($going->load(CommuteDemandResource::relations())))->resolve($request),
+            // B6: the ride back saved in the same call, so Review shows both without a second call.
+            'returnDemand' => (new CommuteDemandResource($return->load(CommuteDemandResource::relations())))->resolve($request),
+        ], status: 201);
     }
 
     /**

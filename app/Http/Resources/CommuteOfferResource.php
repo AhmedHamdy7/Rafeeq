@@ -27,6 +27,10 @@ final class CommuteOfferResource extends JsonResource
             'status' => strtoupper($this->status->value),
             'commuteType' => $this->commute_type->value,
             'direction' => $this->direction->value,
+            // B3: the Going commute this Return was made from, or the Return made from this Going one.
+            ...(SeatPriceView::viewerDrives($request, $this->driver_profile_id)
+                ? CommuteLink::forDriver($this->resource)
+                : CommuteLink::forPassenger($this->resource)),
             'vehicleId' => $this->vehicle_id,
             'seatsTotal' => $this->seats_total,
             /*

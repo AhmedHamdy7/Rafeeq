@@ -95,9 +95,14 @@ final class SeatOfferResource extends JsonResource
             ],
             'dropoff' => $seatRequest === null ? null : [
                 'label' => $seatRequest->requested_dropoff_label,
-                'estimatedLocal' => $trip === null ? null : self::clock(PassengerStanding::promisedArrivalLocal($trip)),
+                'estimatedLocal' => $trip === null ? null : self::clock(PassengerStanding::promisedArrivalLocal($trip) ?? TripTimes::fields($trip)['estimatedArrivalLocal']),
             ],
             'promisedArrivalLocal' => $trip === null ? null : PassengerStanding::promisedArrivalLocal($trip),
+            'promisedDepartureAt' => $trip?->promised_departure_at?->toIso8601String(),
+            'promisedDepartureLocal' => $trip === null ? null : TripTimes::local($trip, $trip->promised_departure_at),
+            'estimatedArrivalAt' => $trip === null ? null : TripTimes::estimatedArrival($trip)?->format(DATE_ATOM),
+            'estimatedArrivalLocal' => $trip === null ? null : TripTimes::local($trip, TripTimes::estimatedArrival($trip)),
+            'direction' => $offer?->direction->value ?? ($trip === null ? null : TripTimes::direction($trip)),
 
             'source' => $this->source()->value,
             'isPreviousPassenger' => $this->isPreviousPassenger(),

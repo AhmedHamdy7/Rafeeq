@@ -121,6 +121,12 @@ final readonly class SaveCommuteDemandAction
             ->where('days_mask', $criteria->days->value)
             ->where('preferred_arrival_start', $criteria->arrivalWindowStart)
             ->where('preferred_arrival_end', $criteria->arrivalWindowEnd)
+            ->where('direction', $criteria->direction->value)
+            ->when(
+                $criteria->isReturn() && $criteria->leaveAt !== null,
+                fn ($query) => $query->where('leave_at', $criteria->leaveAt),
+                fn ($query) => $query->whereNull('leave_at'),
+            )
             ->when($except !== null, fn ($query) => $query->whereKeyNot($except))
             ->get(['id', 'origin_lat', 'origin_lng', 'dest_lat', 'dest_lng'])
             ->first(fn (CommuteDemand $demand): bool => round((float) $demand->origin_lat, 3) === round($criteria->origin->lat, 3)
@@ -133,10 +139,32 @@ final readonly class SaveCommuteDemandAction
         }
     }
 
+    /**
+     * B6, D4: a Going demand and its Return in one call. Both are created or neither; afterwards
+     * they are separate demands that only point at each other (`paired_demand_id`).
+     *
+     * @return array{0: CommuteDemand, 1: CommuteDemand}
+     */
+    public function executePair(User $passenger, SearchCriteria $going, ?PlaceLabels $goingLabels, SearchCriteria $return, ?PlaceLabels $returnLabels): array
+    {
+        return DB::transaction(function () use ($passenger, $going, $goingLabels, $return, $returnLabels): array {
+            $first = $this->execute($passenger, $going, $goingLabels);
+            $second = $this->execute($passenger, $return, $returnLabels);
+
+            $first->forceFill(['paired_demand_id' => $second->id])->save();
+            $second->forceFill(['paired_demand_id' => $first->id])->save();
+
+            return [$first, $second];
+        });
+    }
+
     public function cancel(CommuteDemand $demand): CommuteDemand
     {
         $demand->status = CommuteDemandStatus::Cancelled->value;
+        $demand->paired_demand_id = null;
         $demand->save();
+
+        CommuteDemand::query()->where('paired_demand_id', $demand->id)->update(['paired_demand_id' => null]);
 
         return $demand;
     }
@@ -171,6 +199,8 @@ final readonly class SaveCommuteDemandAction
             'days_mask' => $criteria->days->value,
             'preferred_arrival_start' => $criteria->arrivalWindowStart,
             'preferred_arrival_end' => $criteria->arrivalWindowEnd,
+            'direction' => $criteria->direction->value,
+            'leave_at' => $criteria->isReturn() ? $criteria->leaveAt : null,
             'max_walk_minutes' => $criteria->maxWalk->minutes,
             'max_detour_minutes' => $criteria->maxDetourMinutes,
             'flexibility_minutes' => $criteria->flexibilityMinutes,

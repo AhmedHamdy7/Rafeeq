@@ -10,6 +10,7 @@ use App\Domains\Commute\Models\ChangeProposal;
 use App\Domains\Commute\Models\CommuteOffer;
 use App\Domains\Commute\Models\CommuteWeekdaySchedule;
 use App\Domains\Commute\Models\ScheduledTrip;
+use App\Domains\Commute\Support\CommuteOverlap;
 use App\Domains\Geo\Support\Polyline;
 use App\Domains\Geo\ValueObjects\Route;
 use App\Domains\Notification\Enums\NotificationType;
@@ -55,6 +56,8 @@ final readonly class ProposeCommuteChangeAction
         $trip = $this->affectedDay($offer, $input['scheduledTripId']);
         $scope = ChangeProposalScope::from($input['scope']);
 
+        $this->assertTimingFitsDirection($offer, $input);
+
         $changes = $this->changesFrom($input);
 
         if ($changes === []) {
@@ -83,6 +86,7 @@ final readonly class ProposeCommuteChangeAction
         }
 
         $this->assertPickupsOnTheWay($offer, $changes);
+        $this->assertNoOverlap($offer, $trip, $changes);
 
         $affected = $this->affectedCount($offer, $trip, $scope, $input);
 
@@ -144,6 +148,8 @@ final readonly class ProposeCommuteChangeAction
             ]);
         }
 
+        $this->assertTimingFitsDirection($proposal->commuteOffer, $input);
+
         $changes = $this->changesFrom($input);
 
         if ($changes === []) {
@@ -154,6 +160,10 @@ final readonly class ProposeCommuteChangeAction
 
         $this->assertPickupScope($proposal->scope, $changes);
         $this->assertPickupsOnTheWay($proposal->commuteOffer, $changes);
+
+        if ($proposal->scheduledTrip !== null) {
+            $this->assertNoOverlap($proposal->commuteOffer, $proposal->scheduledTrip, $changes);
+        }
 
         return DB::transaction(function () use ($proposal, $changes): ChangeProposal {
             $proposal->forceFill([
@@ -223,6 +233,13 @@ final readonly class ProposeCommuteChangeAction
             if (array_key_exists($field, $input) && $input[$field] !== null) {
                 $changes[$field] = $input[$field];
             }
+        }
+
+        // B2: a Return's leave time is its departure, and also its promise.
+        if (($input['promisedDepartureTime'] ?? null) !== null) {
+            $leave = strlen((string) $input['promisedDepartureTime']) === 5 ? $input['promisedDepartureTime'].':00' : (string) $input['promisedDepartureTime'];
+            $changes['departureTime'] = $leave;
+            $changes['promisedDepartureTime'] = $leave;
         }
 
         if (array_key_exists('pickupPoints', $input) && is_array($input['pickupPoints'])) {
@@ -343,6 +360,10 @@ final readonly class ProposeCommuteChangeAction
             $previous['promisedArrivalTime'] = $this->weekdayRow($offer, $trip)?->promised_arrival_time;
         }
 
+        if (isset($changes['promisedDepartureTime'])) {
+            $previous['promisedDepartureTime'] = $trip->departure_local?->format('H:i:s');
+        }
+
         if (isset($changes['pickupPoints'])) {
             $offer->loadMissing('locations');
 
@@ -360,6 +381,75 @@ final readonly class ProposeCommuteChangeAction
         }
 
         return $previous;
+    }
+
+    /**
+     * B2: a Return is timed by its leave time, a Going commute by its arrival.
+     *
+     * @param  array<string, mixed>  $input
+     */
+    private function assertTimingFitsDirection(CommuteOffer $offer, array $input): void
+    {
+        $refused = $offer->isReturn() ? 'promisedArrivalTime' : 'promisedDepartureTime';
+
+        if (($input[$refused] ?? null) !== null) {
+            throw DomainException::of(ErrorCode::ValidationFailed, fields: [
+                $refused => [$offer->isReturn() ? __('commute.schedule.return_timed_by_leave') : __('commute.schedule.going_timed_by_arrival')],
+            ]);
+        }
+    }
+
+    /**
+     * D3: the proposed times may not clash with another of the driver's commutes. Checked on the
+     * weekday of the affected day.
+     *
+     * @param  array<string, mixed>  $changes
+     */
+    private function assertNoOverlap(CommuteOffer $offer, ScheduledTrip $trip, array $changes): void
+    {
+        if (! isset($changes['departureTime']) && ! isset($changes['promisedArrivalTime'])) {
+            return;
+        }
+
+        $row = $this->weekdayRow($offer, $trip);
+
+        if ($row === null) {
+            return;
+        }
+
+        $day = $row->replicate();
+        $day->weekday_bit = $row->weekday_bit;
+
+        if (isset($changes['promisedArrivalTime']) && ! isset($changes['departureTime']) && $row->promised_arrival_time !== null) {
+            $shift = self::seconds((string) $changes['promisedArrivalTime']) - self::seconds((string) $row->promised_arrival_time);
+            $day->departure_time = gmdate('H:i:s', max(0, min(86_399, self::seconds((string) $row->departure_time) + $shift)));
+        }
+
+        if (isset($changes['departureTime'])) {
+            $day->departure_time = $changes['departureTime'];
+        }
+
+        if (isset($changes['promisedArrivalTime'])) {
+            $day->promised_arrival_time = $changes['promisedArrivalTime'];
+        }
+
+        if (isset($changes['promisedDepartureTime'])) {
+            $shift = self::seconds((string) $changes['promisedDepartureTime']) - self::seconds((string) ($row->promised_departure_time ?? $row->departure_time));
+            $day->promised_departure_time = $changes['promisedDepartureTime'];
+
+            if ($row->estimated_arrival_time !== null) {
+                $day->estimated_arrival_time = gmdate('H:i:s', max(0, min(86_399, self::seconds((string) $row->estimated_arrival_time) + $shift)));
+            }
+        }
+
+        CommuteOverlap::assertNone($offer, collect([$day]));
+    }
+
+    private static function seconds(string $time): int
+    {
+        $parts = array_map('intval', explode(':', $time));
+
+        return ($parts[0] ?? 0) * 3600 + ($parts[1] ?? 0) * 60 + ($parts[2] ?? 0);
     }
 
     private function weekdayRow(CommuteOffer $offer, ScheduledTrip $trip): ?CommuteWeekdaySchedule

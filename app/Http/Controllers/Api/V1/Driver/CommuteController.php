@@ -13,7 +13,6 @@ use App\Domains\Commute\Actions\ReviseCommuteOfferAction;
 use App\Domains\Commute\Actions\SaveCommuteRouteAction;
 use App\Domains\Commute\Actions\SaveCommuteScheduleAction;
 use App\Domains\Commute\Enums\CommuteAudience;
-use App\Domains\Commute\Enums\CommuteDirection;
 use App\Domains\Commute\Enums\CommuteLocationType;
 use App\Domains\Commute\Enums\CommuteOfferStatus;
 use App\Domains\Commute\Enums\CommutePausedReason;
@@ -71,7 +70,7 @@ final class CommuteController extends Controller
             ->where(fn ($query) => $query
                 ->whereNot('status', CommuteOfferStatus::Archived->value)
                 ->orWhereNotNull('published_at'))
-            ->with(['locations', 'schedule', 'weekdaySchedules', 'rules'])
+            ->with(['locations', 'schedule', 'weekdaySchedules', 'rules', 'returnCommute.weekdaySchedules', 'returnCommute.schedule', 'goingCommute.weekdaySchedules', 'goingCommute.schedule'])
             // The id is a tiebreak, not decoration: `created_at` has
             // second precision, so two commutes made in the same second have no
             // defined order without it — and an unstable sort is what makes a
@@ -105,6 +104,8 @@ final class CommuteController extends Controller
             'matchRadiusMeters' => RouteSettings::matchRadiusMeters(),
             'detourTiers' => RouteSettings::detourTiers(),
             'maxScheduleMonths' => CommuteDefaults::maxScheduleMonths(),
+            'returnWindowMinutes' => RouteSettings::returnWindowMinutes(),
+            'commuteGapMinutes' => RouteSettings::commuteGapMinutes(),
             'preferences' => [
                 CommuteRuleKey::NonSmoking->value,
                 CommuteRuleKey::Quiet->value,
@@ -115,7 +116,6 @@ final class CommuteController extends Controller
             'canMarkWomenOnly' => CommuteGuards::mayMarkWomenOnly($request->user()),
             'defaults' => [
                 'commuteType' => CommuteType::Recurring->value,
-                'direction' => CommuteDirection::ToWork->value,
                 'audience' => CommuteAudience::AnyVerified->value,
                 'allowsCustomPickup' => true,
                 'startDate' => $startDate,
@@ -207,6 +207,7 @@ final class CommuteController extends Controller
         ErrorCode::CommuteSeatsExceedApproved,
         ErrorCode::ValidationFailed,
         ErrorCode::CommuteArrivalRequired,
+        ErrorCode::CommuteScheduleOverlap,
         ErrorCode::NotFound,
     )]
     public function saveSchedule(SaveCommuteScheduleRequest $request, string $commute, SaveCommuteScheduleAction $action): JsonResponse
@@ -285,7 +286,7 @@ final class CommuteController extends Controller
      */
     #[ApiErrors(
         ErrorCode::CommuteIncomplete,
-        ErrorCode::CommuteOverlaps,
+        ErrorCode::CommuteScheduleOverlap,
         ErrorCode::CommuteAcNotAvailable,
         ErrorCode::CommuteWomenOnlyNotAllowed,
         ErrorCode::CommuteInvalidTransition,
@@ -342,6 +343,7 @@ final class CommuteController extends Controller
         ErrorCode::CommuteVehicleUnavailable,
         ErrorCode::CommuteSeatsExceedApproved,
         ErrorCode::VehicleSeatsNotApproved,
+        ErrorCode::CommuteScheduleOverlap,
         ErrorCode::DriverNotEligible,
         ErrorCode::DriverCommissionOverdue,
         ErrorCode::LicenceExpired,
@@ -413,6 +415,8 @@ final class CommuteController extends Controller
         ErrorCode::CommuteSeatsExceedApproved,
         ErrorCode::VehicleSeatsNotApproved,
         ErrorCode::ValidationFailed,
+        ErrorCode::CommuteNotGoing,
+        ErrorCode::CommuteReturnExists,
         ErrorCode::NotFound,
     )]
     public function returnTrip(Request $request, string $commute, DuplicateCommuteOfferAction $action): JsonResponse

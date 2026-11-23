@@ -94,6 +94,8 @@ final class ChangeProposalResource extends JsonResource
         return [
             'departureTime' => isset($terms['departureTime']) ? (string) $terms['departureTime'] : null,
             'promisedArrivalTime' => isset($terms['promisedArrivalTime']) ? (string) $terms['promisedArrivalTime'] : null,
+            // B2, Return commutes: the promised leave time (also sent as `departureTime`).
+            'promisedDepartureTime' => isset($terms['promisedDepartureTime']) ? (string) $terms['promisedDepartureTime'] : null,
             'pickupPoints' => $points,
         ];
     }

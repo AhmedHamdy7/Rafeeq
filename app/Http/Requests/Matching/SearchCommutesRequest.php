@@ -3,6 +3,7 @@
 namespace App\Http\Requests\Matching;
 
 use App\Domains\Commute\Enums\CommuteAudience;
+use App\Domains\Commute\Enums\CommuteDirection;
 use App\Domains\Commute\Enums\CommuteRuleKey;
 use App\Domains\Driver\Enums\VehicleTier;
 use App\Domains\Geo\Enums\PlaceType;
@@ -97,6 +98,16 @@ final class SearchCommutesRequest extends FormRequest
              */
             'arriveBy' => ['nullable', 'string', 'date_format:H:i:s,H:i'],
 
+            // B4: `going` (default) or `return`. Only commutes of that direction come back.
+            'direction' => ['nullable', 'string', Rule::in(CommuteDirection::accepted())],
+
+            /*
+             * B4, Return searches only: leave at, `HH:MM` on your own clock. A Return fits when it
+             * leaves between this time and this time plus `returnWindowMinutes` (30 by default).
+             * `arriveBy` and the arrival window are ignored on a Return search.
+             */
+            'leaveAt' => ['nullable', 'string', 'date_format:H:i:s,H:i'],
+
             // Older builds: the same arrive-by rule, start minus 30 minutes to end.
             'arrivalWindowStart' => ['nullable', 'string', 'date_format:H:i:s,H:i'],
             'arrivalWindowEnd' => ['nullable', 'string', 'date_format:H:i:s,H:i', 'required_with:arrivalWindowStart', 'after_or_equal:arrivalWindowStart'],
@@ -146,7 +157,7 @@ final class SearchCommutesRequest extends FormRequest
             // Ignored: the arrive-by window is fixed at 30 minutes.
             'flexibilityMinutes' => ['nullable', 'integer', 'min:0', 'max:60'],
 
-            // Whether you want an evening leg home as well.
+            // ⚠️ Deprecated: accepted from older builds and ignored. Search the Return direction instead.
             'wantsReturnTrip' => ['nullable', 'boolean'],
 
             // House preferences you would like, for example `["nonsmoking",

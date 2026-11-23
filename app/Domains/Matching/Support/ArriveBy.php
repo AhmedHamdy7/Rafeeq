@@ -3,6 +3,7 @@
 namespace App\Domains\Matching\Support;
 
 use App\Domains\Commute\Models\ScheduledTrip;
+use App\Domains\Commute\Support\RouteSettings;
 use Carbon\CarbonImmutable;
 
 /**
@@ -16,6 +17,10 @@ final class ArriveBy
 
     public static function fits(ScheduledTrip $trip, SearchCriteria $criteria): bool
     {
+        if ($criteria->isReturn()) {
+            return self::leavesInWindow($trip, $criteria->leaveAt);
+        }
+
         if (! $criteria->arriveBy) {
             return true;
         }
@@ -23,6 +28,34 @@ final class ArriveBy
         $arrival = self::arrivalLocal($trip);
 
         return $arrival >= self::earliest($criteria) && $arrival <= $criteria->arrivalWindowEnd;
+    }
+
+    /**
+     * B4, D1: a Return fits "Leave at T" when its promised leave time that day is in
+     * [T, T + `returnWindowMinutes`]. The leave time is the driver's at the start of his route.
+     */
+    public static function leavesInWindow(ScheduledTrip $trip, ?string $leaveAt): bool
+    {
+        if ($leaveAt === null) {
+            return true;
+        }
+
+        $leave = self::leaveLocal($trip);
+
+        return $leave >= $leaveAt && $leave <= self::latestLeave($leaveAt);
+    }
+
+    public static function latestLeave(string $leaveAt): string
+    {
+        $seconds = strtotime("1970-01-01 {$leaveAt} UTC") + RouteSettings::returnWindowMinutes() * 60;
+
+        return gmdate('H:i:s', min(86_399, $seconds));
+    }
+
+    /** The day's leave time on the commute's own clock (`HH:MM:SS`). */
+    public static function leaveLocal(ScheduledTrip $trip): string
+    {
+        return CarbonImmutable::instance($trip->departure_local)->format('H:i:s');
     }
 
     public static function earliest(SearchCriteria $criteria): string

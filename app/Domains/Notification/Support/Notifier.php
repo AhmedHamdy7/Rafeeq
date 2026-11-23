@@ -2,6 +2,10 @@
 
 namespace App\Domains\Notification\Support;
 
+use App\Domains\Booking\Models\Booking;
+use App\Domains\Commute\Enums\CommuteDirection;
+use App\Domains\Commute\Models\CommuteOffer;
+use App\Domains\Commute\Models\ScheduledTrip;
 use App\Domains\Identity\Models\User;
 use App\Domains\Notification\Enums\NotificationChannel;
 use App\Domains\Notification\Enums\NotificationType;
@@ -33,6 +37,42 @@ use App\Domains\Notification\Models\Notification;
 final class Notifier
 {
     /**
+     * B10 of 2026-11-23: every notification about a commute or a day says which way it runs, so the
+     * inbox row can carry the Going / Return tag.
+     *
+     * @param  array<string, string>  $data
+     * @return array<string, string>
+     */
+    private static function withDirection(array $data): array
+    {
+        if (isset($data['direction'])) {
+            return $data;
+        }
+
+        $direction = null;
+
+        if (isset($data['commuteId'])) {
+            $direction = CommuteOffer::query()->whereKey($data['commuteId'])->value('direction');
+        } elseif (isset($data['scheduledTripId']) || isset($data['tripId'])) {
+            $direction = CommuteOffer::query()
+                ->whereIn('id', ScheduledTrip::query()->whereKey($data['scheduledTripId'] ?? $data['tripId'])->select('commute_offer_id'))
+                ->value('direction');
+        } elseif (isset($data['bookingId'])) {
+            $direction = CommuteOffer::query()
+                ->whereIn('id', ScheduledTrip::query()
+                    ->whereIn('id', Booking::query()->whereKey($data['bookingId'])->select('scheduled_trip_id'))
+                    ->select('commute_offer_id'))
+                ->value('direction');
+        }
+
+        if ($direction instanceof CommuteDirection) {
+            $direction = $direction->value;
+        }
+
+        return $direction === null ? $data : [...$data, 'direction' => (string) $direction];
+    }
+
+    /**
      * @param  array<string, string|int>  $params  substituted into the wording
      * @param  array<string, string>  $data  deep-link payload for the client (ids, never names)
      */
@@ -45,6 +85,7 @@ final class Notifier
         $title = __("notifications.{$key}.title", $params, $locale);
         $body = __("notifications.{$key}.body", $params, $locale);
         $data = array_map('strval', $data);
+        $data = self::withDirection($data);
 
         $inbox = null;
 

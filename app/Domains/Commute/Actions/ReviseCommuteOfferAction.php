@@ -2,6 +2,7 @@
 
 namespace App\Domains\Commute\Actions;
 
+use App\Domains\Commute\Enums\CommuteDirection;
 use App\Domains\Commute\Enums\CommuteRuleKey;
 use App\Domains\Commute\Models\CommuteOffer;
 use App\Domains\Commute\Models\CommuteRule;
@@ -42,6 +43,15 @@ final readonly class ReviseCommuteOfferAction
             $attributes = $this->draftAttributes($offer, $attributes);
         } else {
             unset($attributes['formStep']);
+
+            if (array_key_exists('direction', $attributes)
+                && CommuteDirection::fromInput($attributes['direction']) !== $offer->direction) {
+                throw DomainException::of(ErrorCode::CommuteNotEditable, fields: [
+                    'direction' => [__('errors.COMMUTE_NOT_EDITABLE')],
+                ]);
+            }
+
+            unset($attributes['direction']);
         }
 
         if (! CommuteState::isEditable($offer) && array_key_exists('vehicleId', $attributes)) {
@@ -69,6 +79,15 @@ final readonly class ReviseCommuteOfferAction
 
         return DB::transaction(function () use ($offer, $attributes): CommuteOffer {
             $offer->fill($this->columns($attributes));
+
+            if (array_key_exists('direction', $attributes)) {
+                $offer->direction = CommuteDirection::fromInput($attributes['direction']) ?? $offer->direction;
+
+                if (! $offer->direction->isReturn()) {
+                    $offer->return_of_commute_id = null;
+                }
+            }
+
             $offer->save();
 
             $vehicle = $offer->vehicle()->first();

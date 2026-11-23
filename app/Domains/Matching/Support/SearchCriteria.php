@@ -3,6 +3,7 @@
 namespace App\Domains\Matching\Support;
 
 use App\Domains\Commute\Enums\CommuteAudience;
+use App\Domains\Commute\Enums\CommuteDirection;
 use App\Domains\Driver\Enums\VehicleTier;
 use App\Domains\Shared\ValueObjects\Coordinate;
 use App\Domains\Shared\ValueObjects\DaysMask;
@@ -82,7 +83,16 @@ final readonly class SearchCriteria
         /** Google area ids of each end (review item 8), for the same-area step. */
         public ?string $originAreaId = null,
         public ?string $destinationAreaId = null,
+        /** B4: only commutes of this direction come back. */
+        public CommuteDirection $direction = CommuteDirection::Going,
+        /** B4: on a Return search, the leave time (`HH:MM:SS`): a commute fits when it leaves in [T, T + window]. */
+        public ?string $leaveAt = null,
     ) {}
+
+    public function isReturn(): bool
+    {
+        return $this->direction === CommuteDirection::Return;
+    }
 
     public function hasDates(): bool
     {
@@ -144,6 +154,8 @@ final readonly class SearchCriteria
             minSeatsOpen: isset($input['minSeatsOpen']) ? (int) $input['minSeatsOpen'] : null,
             dateFrom: $dateFrom,
             dateTo: $dateFrom === null ? null : $dateTo,
+            direction: CommuteDirection::fromInput($input['direction'] ?? null) ?? CommuteDirection::Going,
+            leaveAt: isset($input['leaveAt']) ? self::withSeconds((string) $input['leaveAt']) : null,
         );
     }
 
@@ -199,6 +211,8 @@ final readonly class SearchCriteria
             'minSeatsOpen' => $this->minSeatsOpen,
             'dateFrom' => $this->dateFrom,
             'dateTo' => $this->dateTo,
+            'direction' => $this->direction->value,
+            'leaveAt' => $this->leaveAt === null ? null : substr($this->leaveAt, 0, 5),
         ], fn (mixed $value): bool => $value !== null && $value !== []);
     }
 
@@ -245,6 +259,8 @@ final readonly class SearchCriteria
             $this->dateTo ?? 'no-to',
             $this->originAreaId ?? 'no-origin-area',
             $this->destinationAreaId ?? 'no-destination-area',
+            $this->direction->value,
+            $this->leaveAt ?? 'no-leave-at',
         ]));
     }
 

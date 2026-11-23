@@ -202,6 +202,18 @@ final readonly class GenerateScheduledTripsAction
             }
         }
 
+        $promisedDepartureAt = null;
+        $estimatedArrivalAt = null;
+
+        if ($offer->isReturn()) {
+            $leave = $weekday?->promised_departure_time ?? $departureTime;
+            $departureTime = $leave;
+            $departureAt = DepartureTimeCalculator::toUtc($date->toDateString(), $leave, $schedule->timezone);
+            $promisedDepartureAt = $departureAt;
+            $estimatedArrivalAt = $this->departure->arrivingFrom($offer, $departureAt)
+                ?? $departureAt->addSeconds((int) $offer->route_duration_seconds);
+        }
+
         $trip = new ScheduledTrip;
 
         $trip->fill([
@@ -215,12 +227,15 @@ final readonly class GenerateScheduledTripsAction
              * the capacity is copied from the WEEKDAY rather than read through the offer.
              */
             'seats_total' => $weekday?->seatsFor($offer) ?? $offer->seats_total,
-            'promised_arrival_at' => $weekday?->promised_arrival_time === null ? null : DepartureTimeCalculator::toUtc(
+            'promised_arrival_at' => $offer->isReturn() || $weekday?->promised_arrival_time === null ? null : DepartureTimeCalculator::toUtc(
                 $date->toDateString(),
                 $weekday->promised_arrival_time,
                 $schedule->timezone,
             ),
+            'promised_departure_at' => $promisedDepartureAt,
         ]);
+
+        $trip->estimated_arrival_at = $estimatedArrivalAt ?? $trip->promised_arrival_at;
 
         // Not fillable: only a quote may price a day.
         $trip->forceFill($quote->toTripColumns());

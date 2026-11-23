@@ -598,6 +598,8 @@ return [
             'commute__far_request_minutes' => '“A bit far”: most extra time one rider may add',
             'commute__on_way_trip_minutes' => '“On your way”: most extra time for the whole trip',
             'commute__far_trip_minutes' => '“A bit far”: most extra time for the whole trip',
+            'commute__return_window_minutes' => 'Return search window',
+            'commute__min_gap_between_commutes_minutes' => 'Gap between two commutes of one driver',
             'commute__max_pickup_points' => 'Most pickup stops on one commute',
             'booking__max_waitlist_size' => 'Most people on one commute\'s waiting list (0 = no limit)',
             'commute__max_dropoff_points' => 'Most drop-off stops on one commute',

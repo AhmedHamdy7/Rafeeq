@@ -26,6 +26,7 @@ final class DriverDayResource extends JsonResource
             'tripDate' => $this->trip_date->toDateString(),
             'departureLocal' => $this->departure_local->format('Y-m-d H:i:s'),
             'promisedArrivalLocal' => PassengerStanding::promisedArrivalLocal($this->resource),
+            ...TripTimes::fields($this->resource),
             'status' => strtoupper($this->status->value),
             'originLabel' => $route['originLabel'],
             'destinationLabel' => $route['destinationLabel'],

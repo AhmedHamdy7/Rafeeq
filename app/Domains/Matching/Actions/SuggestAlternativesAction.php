@@ -3,6 +3,7 @@
 namespace App\Domains\Matching\Actions;
 
 use App\Domains\Booking\Models\Booking;
+use App\Domains\Commute\Enums\CommuteDirection;
 use App\Domains\Commute\Models\ScheduledTrip;
 use App\Domains\Matching\Support\AlternativeOrigin;
 use App\Domains\Matching\Support\HardFilters;
@@ -106,6 +107,7 @@ final readonly class SuggestAlternativesAction
              * ask on a women-only commute is checked on the results below.
              */
             audiencePreference: $trip->commuteOffer?->audience,
+            direction: $trip->commuteOffer?->direction ?? CommuteDirection::Going,
         ));
 
         /*

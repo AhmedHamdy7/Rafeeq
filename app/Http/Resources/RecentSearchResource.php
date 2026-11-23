@@ -78,6 +78,9 @@ final class RecentSearchResource extends JsonResource
                 'dateFrom' => $this->when(isset($this->criteria['dateFrom']), fn (): string => (string) $this->criteria['dateFrom']),
                 'dateTo' => $this->when(isset($this->criteria['dateTo']), fn (): string => (string) $this->criteria['dateTo']),
                 'wantsReturnTrip' => (bool) ($this->criteria['wantsReturnTrip'] ?? false),
+                // B4: a recent Return search reopens as one.
+                'direction' => (string) ($this->criteria['direction'] ?? 'going'),
+                'leaveAt' => isset($this->criteria['leaveAt']) ? (string) $this->criteria['leaveAt'] : null,
 
                 // Set only if she chose them, so a client can tell "no filter" from "this filter".
                 'audiencePreference' => $this->when(

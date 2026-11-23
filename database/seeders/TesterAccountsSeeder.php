@@ -224,18 +224,18 @@ final class TesterAccountsSeeder extends DriverHomeStatesSeeder
             'rules' => [CommuteRuleKey::NonSmoking, CommuteRuleKey::Ac],
         ];
 
-        $weekday = $this->commute($profile, CommuteDirection::ToHome)
+        $weekday = $this->commute($profile, CommuteDirection::Return)
             ?? $this->publishCommute($profile, $vehicle, [
                 ...$shared,
                 'time' => $spec['weekday'],
-                'direction' => CommuteDirection::ToHome,
+                'direction' => CommuteDirection::Return,
                 'originAddress' => 'القرية الذكية، مبنى B6',
                 'destinationAddress' => 'الرحاب، بوابة ٢',
                 'pickups' => [['lat' => 30.0710, 'lng' => 31.0300, 'label' => 'Smart Village main gate']],
                 'dropoffs' => [['lat' => 30.0650, 'lng' => 31.4300, 'label' => 'Ring Road, Suez Road exit'], ['lat' => 30.0590, 'lng' => 31.4700, 'label' => 'Rehab Mall 2 gate']],
             ], $corridor, $village, $rehab);
 
-        $weekend = $this->commute($profile, CommuteDirection::ToWork)
+        $weekend = $this->commute($profile, CommuteDirection::Going)
             ?? $this->publishCommute($profile, $vehicle, [
                 ...$shared,
                 'time' => $spec['weekend'],
@@ -260,6 +260,15 @@ final class TesterAccountsSeeder extends DriverHomeStatesSeeder
     private function promiseEveryDay(CommuteOffer $offer): void
     {
         foreach ($this->upcoming($offer, 40) as $day) {
+            if ($offer->isReturn()) {
+                $day->forceFill([
+                    'promised_departure_at' => $day->departure_at,
+                    'estimated_arrival_at' => $day->departure_at->copy()->addSeconds((int) $offer->route_duration_seconds),
+                ])->save();
+
+                continue;
+            }
+
             if ($day->promised_arrival_at === null) {
                 $day->forceFill(['promised_arrival_at' => $day->departure_at->copy()->addSeconds((int) $offer->route_duration_seconds + 900)])->save();
             }

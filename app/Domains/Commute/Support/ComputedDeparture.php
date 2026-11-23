@@ -76,6 +76,47 @@ final readonly class ComputedDeparture
     }
 
     /**
+     * The estimated arrival of a Return day: its promised leave time plus the route through its
+     * confirmed riders' points, timed for that evening (B2). Null on a Going day.
+     */
+    public function arrivalForTrip(ScheduledTrip $trip): ?CarbonImmutable
+    {
+        if ($trip->promised_departure_at === null) {
+            return null;
+        }
+
+        $offer = $trip->commuteOffer()->with('locations')->first();
+
+        if ($offer === null) {
+            return null;
+        }
+
+        return $this->arrivingFrom($offer, CarbonImmutable::parse($trip->promised_departure_at), $this->riderPoints($trip));
+    }
+
+    /**
+     * @param  list<array{bookingId: string|null, kind: NavigationStopKind, point: Coordinate, label: string|null, reachedAt: CarbonImmutable|null}>  $riderPoints
+     */
+    public function arrivingFrom(CommuteOffer $offer, CarbonImmutable $departAt, array $riderPoints = []): ?CarbonImmutable
+    {
+        $origin = $this->pointOf($offer, CommuteLocationType::Origin);
+        $destination = $this->pointOf($offer, CommuteLocationType::Destination);
+
+        if ($origin === null || $destination === null) {
+            return null;
+        }
+
+        $via = array_map(
+            fn (array $stop): Coordinate => $stop['point'],
+            StopOrder::along($this->geo, $origin, $destination, $riderPoints),
+        );
+
+        $route = $this->geo->routeLeavingAt($origin, $destination, $via, $departAt);
+
+        return $departAt->addSeconds($route->durationSeconds)->startOfMinute();
+    }
+
+    /**
      * Two points per confirmed booking, as agreed on the booking itself.
      *
      * @return list<array{bookingId: string|null, kind: NavigationStopKind, point: Coordinate, label: string|null, reachedAt: CarbonImmutable|null}>

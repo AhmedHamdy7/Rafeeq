@@ -41,6 +41,7 @@ final class ChangeProposalController extends Controller
      */
     #[ApiErrors(
         ErrorCode::ChangeProposalAlreadyOpen,
+        ErrorCode::CommuteScheduleOverlap,
         ErrorCode::CommuteRouteInvalid,
         ErrorCode::NotFound,
     )]
@@ -85,7 +86,7 @@ final class ChangeProposalController extends Controller
      * 🔴 Every approval stops counting. Somebody who agreed to 07:45 has not agreed to 07:30, and
      * carrying her yes across would apply a change she never saw. Warn before sending.
      */
-    #[ApiErrors(ErrorCode::ChangeProposalNotLive, ErrorCode::NotFound)]
+    #[ApiErrors(ErrorCode::ChangeProposalNotLive, ErrorCode::CommuteScheduleOverlap, ErrorCode::NotFound)]
     public function update(
         ProposeCommuteChangeRequest $request,
         string $proposal,

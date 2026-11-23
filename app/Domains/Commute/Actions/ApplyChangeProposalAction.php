@@ -131,6 +131,10 @@ final readonly class ApplyChangeProposalAction
                 );
             }
 
+            if (isset($changes['promisedDepartureTime'], $attributes['departure_at'])) {
+                $attributes['promised_departure_at'] = $attributes['departure_at'];
+            }
+
             if (isset($changes['promisedArrivalTime'])) {
                 $attributes['promised_arrival_at'] = DepartureTimeCalculator::toUtc(
                     $trip->trip_date->toDateString(),
@@ -141,12 +145,20 @@ final readonly class ApplyChangeProposalAction
 
             $trip->forceFill($attributes)->save();
 
+            if (isset($changes['promisedDepartureTime'])) {
+                $arrival = $this->departure->arrivalForTrip($trip->refresh());
+
+                if ($arrival !== null) {
+                    $trip->forceFill(['estimated_arrival_at' => $arrival])->save();
+                }
+            }
+
             if (! isset($changes['departureTime']) && isset($changes['promisedArrivalTime'])) {
                 $this->followArrival($proposal, $trip);
             }
         }
 
-        if ($proposal->scope->rewritesTheTemplate() && isset($changes['promisedArrivalTime']) && $proposal->commuteOffer !== null) {
+        if ($proposal->scope->rewritesTheTemplate() && (isset($changes['promisedArrivalTime']) || isset($changes['promisedDepartureTime'])) && $proposal->commuteOffer !== null) {
             $this->schedule->refreshEstimates($proposal->commuteOffer);
         }
     }
@@ -210,6 +222,10 @@ final readonly class ApplyChangeProposalAction
 
         if (isset($changes['promisedArrivalTime'])) {
             $attributes['promised_arrival_time'] = $changes['promisedArrivalTime'];
+        }
+
+        if (isset($changes['promisedDepartureTime'])) {
+            $attributes['promised_departure_time'] = $changes['promisedDepartureTime'];
         }
 
         $row->forceFill($attributes)->save();

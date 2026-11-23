@@ -48,6 +48,7 @@ final class DriverRun
         return [
             'promisedArrivalAt' => $trip->promised_arrival_at?->toIso8601String(),
             'promisedArrivalLocal' => self::local($trip, $trip->promised_arrival_at),
+            ...TripTimes::fields($trip),
         ];
     }
 
@@ -117,6 +118,7 @@ final class DriverRun
             ...JourneyCard::route($trip->commuteOffer),
             'departureAt' => $trip->departure_at->toIso8601String(),
             'departureLocal' => $trip->departure_local->format('Y-m-d H:i:s'),
+            ...TripTimes::fields($trip),
             'expiredAt' => $trip->expired_at?->toIso8601String(),
             'expiredLocal' => self::local($trip, $trip->expired_at),
         ];

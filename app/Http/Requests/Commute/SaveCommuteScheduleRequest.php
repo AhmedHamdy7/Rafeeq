@@ -28,7 +28,7 @@ final class SaveCommuteScheduleRequest extends FormRequest
     {
         $pad = fn (mixed $time): mixed => is_string($time) && preg_match('/^\d{2}:\d{2}$/', $time) === 1 ? $time.':00' : $time;
 
-        foreach (['departureTime', 'promisedArrivalTime'] as $key) {
+        foreach (['departureTime', 'promisedArrivalTime', 'promisedDepartureTime'] as $key) {
             if ($this->has($key)) {
                 $this->merge([$key => $pad($this->input($key))]);
             }
@@ -42,7 +42,7 @@ final class SaveCommuteScheduleRequest extends FormRequest
                     continue;
                 }
 
-                foreach (['departureTime', 'promisedArrivalTime'] as $key) {
+                foreach (['departureTime', 'promisedArrivalTime', 'promisedDepartureTime'] as $key) {
                     if (array_key_exists($key, $times)) {
                         $perDay[$day][$key] = $pad($times[$key]);
                     }
@@ -94,6 +94,13 @@ final class SaveCommuteScheduleRequest extends FormRequest
             'promisedArrivalTime' => ['sometimes', 'nullable', 'string', 'date_format:H:i:s'],
 
             /*
+             * Return commutes only (B2): when you promise to LEAVE, on your own clock. Required for
+             * every day of a Return (here or in `perDay`), refused on a Going commute. The departure
+             * never moves; the arrival is estimated from the route and moves later as riders join.
+             */
+            'promisedDepartureTime' => ['sometimes', 'nullable', 'string', 'date_format:H:i:s'],
+
+            /*
              * Per-day differences, keyed by the day's bit: `{"2": {"departureTime": "06:45:00"}}`
              * sets Sunday only. Everything you leave out follows the values above, and a day you
              * do not mention runs exactly like the rest of the week.
@@ -107,6 +114,8 @@ final class SaveCommuteScheduleRequest extends FormRequest
             'perDay.*.departureTime' => ['sometimes', 'string', 'date_format:H:i:s'],
 
             'perDay.*.promisedArrivalTime' => ['sometimes', 'nullable', 'string', 'date_format:H:i:s'],
+
+            'perDay.*.promisedDepartureTime' => ['sometimes', 'nullable', 'string', 'date_format:H:i:s'],
 
             // Do not send. RAFEEQ sets the seat price; a per-day price is refused.
             'perDay.*.pricePerSeatPiastres' => ['prohibited'],

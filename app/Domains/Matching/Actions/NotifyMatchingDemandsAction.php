@@ -2,6 +2,7 @@
 
 namespace App\Domains\Matching\Actions;
 
+use App\Domains\Commute\Enums\CommuteDirection;
 use App\Domains\Commute\Models\CommuteOffer;
 use App\Domains\Geo\Models\Area;
 use App\Domains\Matching\Enums\CommuteDemandStatus;
@@ -83,16 +84,28 @@ final readonly class NotifyMatchingDemandsAction
                  */
                 $area = $result->areaId === null ? null : Area::query()->find($result->areaId);
                 $locale = $demand->passenger->preferred_language ?: config('app.locale');
+                $isReturn = $offer->direction === CommuteDirection::Return;
+                $params = $area === null ? [] : ['area' => (string) $area->name($locale)];
+
+                if ($isReturn) {
+                    $params['time'] = self::clockFor($result->trip->departure_local->format('H:i'), (string) $locale);
+                }
 
                 Notifier::send($demand->passenger, NotificationType::MatchFound,
-                    params: $area === null ? [] : ['area' => (string) $area->name($locale)],
+                    params: $params,
                     data: array_filter([
                         'commuteId' => $offer->id,
                         'demandId' => $demand->id,
                         'matchKind' => $result->matchKind(),
                         'areaId' => $result->areaId,
+                        'direction' => $offer->direction->value,
                     ], fn (?string $value): bool => $value !== null),
-                    wording: $area === null ? null : 'match_found_in_area',
+                    wording: match (true) {
+                        $isReturn && $area !== null => 'match_found_return_in_area',
+                        $isReturn => 'match_found_return',
+                        $area !== null => 'match_found_in_area',
+                        default => null,
+                    },
                 );
             });
 
@@ -153,6 +166,21 @@ final readonly class NotifyMatchingDemandsAction
     }
 
     /**
+     * "5:10 PM" / "5:10 م" for a local `HH:MM`.
+     */
+    public static function clockFor(string $time, string $locale): string
+    {
+        [$hours, $minutes] = array_map('intval', explode(':', $time));
+        $twelve = $hours % 12 === 0 ? 12 : $hours % 12;
+
+        if ($locale === 'ar') {
+            return sprintf('%d:%02d %s', $twelve, $minutes, $hours < 12 ? 'ص' : 'م');
+        }
+
+        return sprintf('%d:%02d %s', $twelve, $minutes, $hours < 12 ? 'AM' : 'PM');
+    }
+
+    /**
      * A saved request, as the search the passenger would run. One place, so matching a new commute
      * against waiting requests and a new request against existing commutes ask the same question.
      */
@@ -176,6 +204,8 @@ final readonly class NotifyMatchingDemandsAction
             arriveBy: true,
             originAreaId: $demand->origin_area_id,
             destinationAreaId: $demand->destination_area_id,
+            direction: $demand->direction ?? CommuteDirection::Going,
+            leaveAt: $demand->leave_at === null ? null : (string) $demand->leave_at,
         );
     }
 }

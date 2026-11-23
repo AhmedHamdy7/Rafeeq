@@ -50,7 +50,7 @@ final readonly class CreateCommuteOfferAction
             'driver_profile_id' => $profile->user_id,
             'vehicle_id' => $vehicle?->id,
             'commute_type' => $attributes['commuteType'] ?? CommuteType::Recurring->value,
-            'direction' => $attributes['direction'] ?? CommuteDirection::ToWork->value,
+            'direction' => (CommuteDirection::fromInput($attributes['direction'] ?? null) ?? CommuteDirection::Going)->value,
             'seats_total' => self::draftSeats($vehicle, $attributes['seatsTotal'] ?? null),
             /*
              * The platform's limits at the time, stored for history only (C-1, COM-31). Nothing

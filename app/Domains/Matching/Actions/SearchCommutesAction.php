@@ -224,6 +224,8 @@ final readonly class SearchCommutesAction
                 // trip count and the named verification badges the match card shows.
                 'commuteOffer.driverProfile.user.stats',
                 'commuteOffer.driverProfile.user.verifications',
+                'commuteOffer.returnCommute.weekdaySchedules',
+                'commuteOffer.returnCommute.schedule',
                 'commuteSchedule',
             ])
             ->orderBy('departure_at')

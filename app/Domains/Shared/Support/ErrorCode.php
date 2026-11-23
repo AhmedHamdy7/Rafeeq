@@ -79,7 +79,9 @@ enum ErrorCode: string
     // ---- Commutes (Phase 5, Chapter 4) ---------------------------------
     case CommuteNotEditable = 'COMMUTE_NOT_EDITABLE';
     case CommuteIncomplete = 'COMMUTE_INCOMPLETE';
-    case CommuteOverlaps = 'COMMUTE_OVERLAPS';
+    case CommuteScheduleOverlap = 'COMMUTE_SCHEDULE_OVERLAP';
+    case CommuteNotGoing = 'COMMUTE_NOT_GOING';
+    case CommuteReturnExists = 'COMMUTE_RETURN_EXISTS';
     case CommuteInvalidTransition = 'COMMUTE_INVALID_TRANSITION';
     case CommuteTripInProgress = 'COMMUTE_TRIP_IN_PROGRESS';
     case CommuteRouteInvalid = 'COMMUTE_ROUTE_INVALID';
@@ -457,7 +459,7 @@ enum ErrorCode: string
             self::PaymentTypeNotAvailable => 422,
 
             self::CommuteIncomplete,
-            self::CommuteOverlaps,
+            self::CommuteNotGoing,
             self::CommuteRouteInvalid,
             self::CommuteVehicleUnavailable,
             self::RulesNotAgreed,
@@ -494,6 +496,8 @@ enum ErrorCode: string
             self::BookingBreaksFrozenPromise,
             self::BookingMovesFrozenPickup,
             // Also state refusals: the proposal's own state, or the commute's, is what says no.
+            self::CommuteScheduleOverlap,
+            self::CommuteReturnExists,
             self::ChangeProposalAlreadyOpen,
             self::ReplacementAlreadyOpen,
             self::ReplacementNotEligible,

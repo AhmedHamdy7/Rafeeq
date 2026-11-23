@@ -124,7 +124,7 @@ it('tells every passenger when the run starts', function () {
     underway($this->driverToken, $this->tripId);
 
     expect(inboxOf($this->pax)->pluck('type')->all())->toContain('trip_started')
-        ->and(inboxOf($this->pax)->firstWhere('type', 'trip_started')->data)->toBe(['tripId' => $this->tripId]);
+        ->and(inboxOf($this->pax)->firstWhere('type', 'trip_started')->data)->toBe(['tripId' => $this->tripId, 'direction' => 'going']);
 });
 
 /**

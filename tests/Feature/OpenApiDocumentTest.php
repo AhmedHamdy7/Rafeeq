@@ -295,6 +295,7 @@ it('generates a document describing every /v1 route', function () {
         'POST /v1/testing/change-proposals/{proposal}/expire',
         'POST /v1/testing/seat-requests/{seatRequest}/close',
         'PATCH /v1/testing/account/fields',
+        'POST /v1/testing/commutes/linked-pair',
         'POST /v1/testing/commutes/{commute}/pause',
         'DELETE /v1/testing/commutes/{commute}/pause',
         'GET /v1/testing/push-log',

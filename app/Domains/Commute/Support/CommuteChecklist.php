@@ -47,6 +47,15 @@ final class CommuteChecklist
             $missing[] = 'vehicle';
         }
 
+        if ($offer->schedule !== null) {
+            $days = $offer->relationLoaded('weekdaySchedules') ? $offer->weekdaySchedules : $offer->weekdaySchedules()->get();
+            $column = $offer->isReturn() ? 'promised_departure_time' : 'promised_arrival_time';
+
+            if ($days->isNotEmpty() && $days->contains(fn ($day): bool => $day->{$column} === null)) {
+                $missing[] = $offer->isReturn() ? 'promisedDepartureTime' : 'promisedArrivalTime';
+            }
+        }
+
         // A one-time commute still needs a schedule row: it is the same shape
         // with a single day in the mask and start_date == end_date, so nothing
         // downstream has to special-case it.

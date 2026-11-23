@@ -52,6 +52,14 @@ interface GeoQueryEngine
     public function routeArrivingBy(Coordinate $from, Coordinate $to, array $via, CarbonImmutable $arriveBy): Route;
 
     /**
+     * The same route, timed for a car that LEAVES at `$departAt`: the question a Return commute
+     * asks (B2 of 2026-11-23: the driver promises when he leaves, RAFEEQ estimates the arrival).
+     *
+     * @param  array<int, Coordinate>  $via  intermediate stops, in the order the car reaches them
+     */
+    public function routeLeavingAt(Coordinate $from, Coordinate $to, array $via, CarbonImmutable $departAt): Route;
+
+    /**
      * How much longer the journey becomes if it stops for this pickup. Feeds search ranking and
      * the whole-trip detour cap (COM-31), which the platform — not the driver — sets.
      */

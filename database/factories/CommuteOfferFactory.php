@@ -32,7 +32,7 @@ class CommuteOfferFactory extends Factory
             'vehicle_id' => Vehicle::factory()->for($driverProfile, 'driverProfile'),
             'commute_type' => CommuteType::Recurring,
             'status' => CommuteOfferStatus::Draft,
-            'direction' => CommuteDirection::ToWork,
+            'direction' => CommuteDirection::Going,
             'seats_total' => 3,
             'max_detour_minutes' => 10,
             'max_walk_minutes' => 10,

@@ -757,7 +757,7 @@ final class TestingDataController extends Controller
             'vehicle_id' => $vehicle->id,
             'commute_type' => CommuteType::Recurring,
             'status' => CommuteOfferStatus::Archived,
-            'direction' => CommuteDirection::ToWork,
+            'direction' => CommuteDirection::Going,
             'seats_total' => 3,
             'seat_price_piastres' => 4500,
             'driver_share_piastres' => 4000,

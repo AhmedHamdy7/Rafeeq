@@ -182,6 +182,7 @@ it('keeps the no-show when the dispute is upheld, and tells her', function () {
         'bookingId' => $this->bookingId,
         'tripId' => $this->tripId,
         'resolution' => 'upheld',
+        'direction' => 'going',
     ]);
 
     expect(MemberWarning::query()->where('booking_id', $this->bookingId)->sole()->dispute_resolution)->toBeNull()
@@ -364,6 +365,7 @@ it('sends the inbox row\'s id, type and data with the push', function () {
         'bookingId' => $this->bookingId,
         'tripId' => $this->tripId,
         'resolution' => 'overturned',
+        'direction' => 'going',
         'type' => 'no_show_dispute_decided',
         'category' => 'trip',
         'notificationId' => $inbox->id,

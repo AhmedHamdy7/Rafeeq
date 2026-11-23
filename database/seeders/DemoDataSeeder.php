@@ -290,7 +290,7 @@ class DemoDataSeeder extends Seeder
             'corridor_id' => $corridor->id,
             'commute_type' => CommuteType::Recurring,
             'status' => CommuteOfferStatus::Published,
-            'direction' => $spec['direction'] ?? CommuteDirection::ToWork,
+            'direction' => $spec['direction'] ?? CommuteDirection::Going,
             'seats_total' => $spec['seats'],
             'max_detour_minutes' => 12,
             'max_walk_minutes' => 12,

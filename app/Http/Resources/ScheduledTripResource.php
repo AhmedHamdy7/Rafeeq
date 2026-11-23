@@ -29,6 +29,7 @@ final class ScheduledTripResource extends JsonResource
             // TRIPS-20: the arrival the driver promised that day, or null on a day with no promise.
             'promisedArrivalAt' => $this->promised_arrival_at?->toIso8601String(),
             'promisedArrivalLocal' => PassengerStanding::promisedArrivalLocal($this->resource),
+            ...TripTimes::fields($this->resource),
             'status' => strtoupper($this->status->value),
             'seatsTotal' => $this->seats_total,
             'seatsTaken' => $this->seats_taken,

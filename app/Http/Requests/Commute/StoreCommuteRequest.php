@@ -41,8 +41,9 @@ final class StoreCommuteRequest extends FormRequest
             // can hold a car that isn't approved yet; publishing needs it approved and active.
             'vehicleId' => ['sometimes', 'string', 'size:26'],
 
-            // Which way this journey runs. Defaults to `to_work`; `return` flips it.
-            'direction' => ['sometimes', 'string', Rule::enum(CommuteDirection::class)],
+            // `going` (timed by the promised arrival) or `return` (timed by the promised leave time).
+            // Defaults to `going`. `to_work` / `to_home` are still accepted as `going` / `return`.
+            'direction' => ['sometimes', 'string', Rule::in(CommuteDirection::accepted())],
 
             // Seats offered to passengers, NOT counting your own. Defaults to the seats approved on
             // your car (`approvedSeats` on the vehicle), and cannot exceed them.

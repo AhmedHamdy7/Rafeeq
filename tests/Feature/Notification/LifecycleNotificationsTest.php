@@ -41,7 +41,7 @@ it('asks both sides for a rating when the run completes, the driver once for the
     expect(inboxTypes($this->pax))->toContain('rating_due')
         ->and(collect(inboxTypes($this->driver))->filter(fn ($t) => $t === 'rating_due_riders'))->toHaveCount(1)
         ->and(Notification::query()->where('user_id', $this->pax->id)->where('type', 'rating_due')->where('channel', 'in_app')->sole()->data)
-        ->toBe(['bookingId' => $this->booking->id]);
+        ->toBe(['bookingId' => $this->booking->id, 'direction' => 'going']);
 });
 
 /**
@@ -96,7 +96,7 @@ it('tells the driver when a passenger cancels, without the passenger reason', fu
 
     expect($note->body)->toContain($this->pax->public_first_name)
         ->and($note->body)->not->toContain('Doctor')
-        ->and($note->data)->toBe(['bookingId' => $this->booking->id])
+        ->and($note->data)->toBe(['bookingId' => $this->booking->id, 'direction' => 'going'])
         // The one who cancelled is not told what they just did.
         ->and(inboxTypes($this->pax))->not->toContain('booking_cancelled');
 });

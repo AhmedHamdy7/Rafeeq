@@ -55,6 +55,14 @@ final readonly class RecomputeDepartureAction
             ->whereKey($scheduledTripId)
             ->first();
 
+        if ($trip !== null
+            && $trip->status === ScheduledTripStatus::Scheduled
+            && $trip->promised_departure_at !== null) {
+            $this->refreshReturnArrival($trip);
+
+            return false;
+        }
+
         if ($trip === null
             || $trip->status !== ScheduledTripStatus::Scheduled
             || $trip->promised_arrival_at === null
@@ -101,6 +109,19 @@ final readonly class RecomputeDepartureAction
         $this->tellPassengers($trip->refresh(), $before);
 
         return true;
+    }
+
+    /**
+     * B2: a Return day never moves its departure. Riders joining or leaving only move its
+     * estimated arrival, and nobody is told.
+     */
+    private function refreshReturnArrival(ScheduledTrip $trip): void
+    {
+        $arrival = $this->departure->arrivalForTrip($trip);
+
+        if ($arrival !== null) {
+            $trip->forceFill(['estimated_arrival_at' => $arrival])->save();
+        }
     }
 
     private function pickups(ScheduledTrip $trip): array

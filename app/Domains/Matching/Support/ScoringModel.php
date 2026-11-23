@@ -98,7 +98,15 @@ final class ScoringModel
      */
     private static function schedule(ScheduledTrip $trip, SearchCriteria $criteria, ?int $pickupSeconds = null): int
     {
-        if ($criteria->arriveBy) {
+        if ($criteria->isReturn()) {
+            if ($criteria->leaveAt === null) {
+                return self::SCHEDULE_WEIGHT;
+            }
+
+            $pickup = ArriveBy::leaveLocal($trip);
+            $start = $criteria->leaveAt;
+            $end = ArriveBy::latestLeave($criteria->leaveAt);
+        } elseif ($criteria->arriveBy) {
             $pickup = ArriveBy::arrivalLocal($trip);
             $start = ArriveBy::earliest($criteria);
             $end = $criteria->arrivalWindowEnd;

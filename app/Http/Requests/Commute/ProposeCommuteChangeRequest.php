@@ -50,6 +50,10 @@ final class ProposeCommuteChangeRequest extends FormRequest
             // least one field in the whole request has to change something.
             'promisedArrivalTime' => ['nullable', 'date_format:H:i,H:i:s'],
 
+            // B2, Return commutes only: the new promised leave time. A Return refuses
+            // `promisedArrivalTime`, a Going commute refuses this.
+            'promisedDepartureTime' => ['nullable', 'date_format:H:i,H:i:s'],
+
             // The advertised pickup points, replaced as a whole list in the order you would reach
             // them. Requires the all-future scope.
             'pickupPoints' => ['sometimes', 'array', 'max:'.RouteSettings::maxPickupStops()],
@@ -66,6 +70,7 @@ final class ProposeCommuteChangeRequest extends FormRequest
         $validator->after(function (Validator $validator): void {
             $proposesSomething = $this->filled('departureTime')
                 || $this->filled('promisedArrivalTime')
+                || $this->filled('promisedDepartureTime')
                 || is_array($this->input('pickupPoints'));
 
             if (! $proposesSomething) {

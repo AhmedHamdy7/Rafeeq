@@ -2,6 +2,7 @@
 
 namespace App\Domains\Commute\Models;
 
+use App\Domains\Commute\Enums\CommuteDirection;
 use App\Domains\Shared\ValueObjects\DaysMask;
 use Database\Factories\CommuteWeekdayScheduleFactory;
 use Illuminate\Database\Eloquent\Concerns\HasUlids;
@@ -38,11 +39,14 @@ class CommuteWeekdaySchedule extends Model
 
     public static function fillFromSchedule(CommuteSchedule $schedule): void
     {
+        $isReturn = CommuteOffer::query()->whereKey($schedule->commute_offer_id)->value('direction') === CommuteDirection::Return;
+
         foreach (DaysMask::fromBits((int) $schedule->days_mask)->bits() as $bit) {
             $row = new self;
             $row->commute_offer_id = $schedule->commute_offer_id;
             $row->weekday_bit = $bit;
             $row->departure_time = $schedule->departure_time;
+            $row->promised_departure_time = $isReturn ? $schedule->departure_time : null;
             $row->save();
         }
     }

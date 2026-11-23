@@ -76,6 +76,10 @@ final class SettingsCatalogue
         'commute.max_pickup_points' => ['group' => 'commute', 'min' => 1, 'max' => 6, 'unit' => 'stops'],
         'commute.max_dropoff_points' => ['group' => 'commute', 'min' => 1, 'max' => 6, 'unit' => 'stops'],
         'commute.schedule_lock_hours' => ['group' => 'commute', 'min' => 1, 'max' => 48, 'unit' => 'hours'],
+        // D1 of 2026-11-23: a Return fits "Leave at T" when it leaves between T and T + this.
+        'commute.return_window_minutes' => ['group' => 'commute', 'min' => 0, 'max' => 120, 'unit' => 'minutes'],
+        // D3 of 2026-11-23: two commutes of one driver need this gap after the first arrives.
+        'commute.min_gap_between_commutes_minutes' => ['group' => 'commute', 'min' => 0, 'max' => 120, 'unit' => 'minutes'],
 
         // ---- Booking and the waiting list (Feature 03 R-1, BOOK-18) --------
         // How many people may wait on one commute; past it `BOOKING_WAITLIST_FULL`.

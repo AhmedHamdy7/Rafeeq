@@ -71,24 +71,38 @@ final readonly class DuplicateCommuteOfferAction
     }
 
     /**
-     * `Add Return Commute` — the same journey home.
+     * `Add Return Commute` — the same journey home (B3 of 2026-11-23).
      *
-     * 🔴 **No schedule, and that is the point of the shortcut being a different one.** A return
-     * journey leaves at a different time of day by definition; prefilling the outbound's 07:05 for
-     * the way home would be a wrong value in the one field a driver is least likely to re-read,
-     * because it is already filled in. v5 asks for a "reverse route prefill **only**", and this is
-     * why that is the right scope rather than a thin one.
+     * The reversed route, the terms, the preferences, the car, and the same days and seats per day.
+     * **No times**: a journey home leaves at a different time of day, so every day's leave time is
+     * left empty for the driver to fill in. The draft is a Return linked to the Going commute it was
+     * made from; one Going commute has at most one Return.
      */
     public function reverse(DriverProfile $profile, CommuteOffer $source): CommuteOffer
     {
+        if ($source->direction !== CommuteDirection::Going) {
+            throw DomainException::of(ErrorCode::CommuteNotGoing, fields: [
+                'direction' => $source->direction->value,
+            ]);
+        }
+
+        $existing = $source->returnCommute()->value('id');
+
+        if ($existing !== null) {
+            throw DomainException::of(ErrorCode::CommuteReturnExists, fields: [
+                'returnCommuteId' => (string) $existing,
+            ]);
+        }
+
         return DB::transaction(function () use ($profile, $source): CommuteOffer {
-            $draft = $this->draftFrom($profile, $source, match ($source->direction) {
-                CommuteDirection::ToWork => CommuteDirection::ToHome,
-                CommuteDirection::ToHome => CommuteDirection::ToWork,
-            });
+            $draft = $this->draftFrom($profile, $source, CommuteDirection::Return);
+
+            $draft->return_of_commute_id = $source->getKey();
+            $draft->save();
 
             $this->copyLocations($source, $draft, reversed: true);
             $this->copyRules($source, $draft);
+            $this->copySchedule($source, $draft, withTimes: false);
 
             return $draft->load(['locations', 'schedule', 'rules', 'weekdaySchedules']);
         });
@@ -253,7 +267,7 @@ final readonly class DuplicateCommuteOfferAction
      * where that Action had already made them agree — so the cache stays honest, and nothing here
      * computes it a second way.
      */
-    private function copySchedule(CommuteOffer $source, CommuteOffer $draft): void
+    private function copySchedule(CommuteOffer $source, CommuteOffer $draft, bool $withTimes = true): void
     {
         $schedule = $source->schedule()->first();
 
@@ -284,7 +298,7 @@ final readonly class DuplicateCommuteOfferAction
         $copy->fill([
             'commute_offer_id' => $draft->id,
             'days_mask' => $schedule->days_mask,
-            'departure_time' => $schedule->departure_time,
+            'departure_time' => $withTimes ? $schedule->departure_time : '00:00:00',
             'timezone' => $schedule->timezone,
             'start_date' => $start->toDateString(),
             'end_date' => $end->toDateString(),
@@ -297,10 +311,18 @@ final readonly class DuplicateCommuteOfferAction
 
             $dayCopy->commute_offer_id = $draft->id;
             $dayCopy->weekday_bit = $weekday->weekday_bit;
-            $dayCopy->departure_time = $weekday->departure_time;
-            $dayCopy->promised_arrival_time = $weekday->promised_arrival_time;
-            $dayCopy->departure_is_computed = $weekday->departure_is_computed;
             $dayCopy->seats_total = $weekday->seats_total;
+
+            if ($withTimes) {
+                $dayCopy->departure_time = $weekday->departure_time;
+                $dayCopy->promised_arrival_time = $weekday->promised_arrival_time;
+                $dayCopy->promised_departure_time = $weekday->promised_departure_time;
+                $dayCopy->estimated_arrival_time = $weekday->estimated_arrival_time;
+                $dayCopy->departure_is_computed = $weekday->departure_is_computed;
+            } else {
+                $dayCopy->departure_time = '00:00:00';
+                $dayCopy->departure_is_computed = false;
+            }
 
             $dayCopy->save();
         }

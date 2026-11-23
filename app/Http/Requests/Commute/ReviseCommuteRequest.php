@@ -3,6 +3,7 @@
 namespace App\Http\Requests\Commute;
 
 use App\Domains\Commute\Enums\CommuteAudience;
+use App\Domains\Commute\Enums\CommuteDirection;
 use App\Domains\Commute\Enums\CommuteRuleKey;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
@@ -21,8 +22,8 @@ use Illuminate\Validation\Rule;
  * - Lowering seats below what is already booked is refused as a conflict, not a
  *   validation error. The number is legal; the existing passengers are what make
  *   it impossible today.
- * - `commuteType` and `direction` are absent: changing either would make this a
- *   different journey, and the days already booked would no longer describe it.
+ * - `commuteType` is absent: changing it would make this a different journey. `direction` can
+ *   change on a draft only; a published commute refuses it with `COMMUTE_NOT_EDITABLE`.
  */
 final class ReviseCommuteRequest extends FormRequest
 {
@@ -52,6 +53,10 @@ final class ReviseCommuteRequest extends FormRequest
             'allowsCustomPickup' => ['sometimes', 'boolean'],
 
             'formStep' => ['sometimes', 'nullable', 'integer', 'min:1', 'max:5'],
+
+            // `going` or `return`, on a draft only. Going from `return` to `going` drops the link to
+            // the Going commute it was made from.
+            'direction' => ['sometimes', 'string', Rule::in(CommuteDirection::accepted())],
 
             /*
              * House preferences, as a map of rule to whether it applies — for

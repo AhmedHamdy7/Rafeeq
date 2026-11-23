@@ -112,7 +112,7 @@ it('defaults every value the form does not ask for', function () {
     minimalCommute($token)
         ->assertStatus(201)
         ->assertJsonPath('data.commuteType', 'recurring')
-        ->assertJsonPath('data.direction', 'to_work')
+        ->assertJsonPath('data.direction', 'going')
         ->assertJsonPath('data.audience', 'any_verified')
         ->assertJsonPath('data.allowsCustomPickup', true)
         ->assertJsonPath('data.vehicleId', Vehicle::sole()->id)

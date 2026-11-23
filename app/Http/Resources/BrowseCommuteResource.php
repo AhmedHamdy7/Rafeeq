@@ -43,6 +43,7 @@ final class BrowseCommuteResource extends JsonResource
             'departureLocal' => $trip->departure_local->format('Y-m-d H:i:s'),
             'promisedArrivalAt' => $trip->promised_arrival_at?->toIso8601String(),
             'promisedArrivalLocal' => PassengerStanding::promisedArrivalLocal($trip),
+            ...TripTimes::fields($trip),
             'daysMask' => (int) ($trip->commuteSchedule?->days_mask ?? 0),
             'seatsAvailable' => (int) max(0, $trip->seats_total - $trip->seats_taken),
             'seatPricePiastres' => (int) $trip->seat_price_piastres,

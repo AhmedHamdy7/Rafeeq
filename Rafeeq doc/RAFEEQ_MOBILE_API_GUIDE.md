@@ -14,7 +14,7 @@
 >
 > **Base URL:** `{host}/api/v1` · **Auth:** bearer token · **Format:** JSON only.
 
-**Last updated:** 2026-11-19 · **283 endpoints live** · Phases 0–7, 9 and 11 complete · 10, 12 and 13 all but a decision each
+**Last updated:** 2026-11-23 · **288 endpoints live** · Phases 0–7, 9 and 11 complete · 10, 12 and 13 all but a decision each
 
 ---
 
@@ -22,7 +22,7 @@
 
 ### What is ready
 
-**283 endpoints live** and tested, across the 47 designed screens:
+**288 endpoints live** and tested, across the 47 designed screens:
 
 | | Count | Covers |
 |---|---|---|
@@ -874,6 +874,7 @@ fails if this list and the running routes ever disagree in either direction.
 | `PUT /safety/auto-share` | 4.12 Safety |
 | `GET /safety/live-shares` | 4.12 Safety |
 | `POST /testing/driver/approve` | 4.17 Testing (staging only) |
+| `POST /testing/commutes/linked-pair` | 4.17 Testing (staging only) |
 | `DELETE /testing/account` | 4.17 Testing (staging only) |
 | `POST /testing/trips/{trip}/departure` | 4.17 Testing (staging only) |
 | `POST /testing/trips/{trip}/position` | 4.17 Testing (staging only) |
@@ -1888,7 +1889,7 @@ gate is at publish.
 |---|---|
 | `commuteType` (`recurring`/`one_time`) | `recurring`. The beta form sends nothing. |
 | `vehicleId` | The active car, or none. With no car the draft has `vehicleId: null` and `vehicle` in `missing[]`. A draft can hold any of the driver's cars; publishing needs it approved and active. Someone else's car answers `404`. |
-| `direction` (`to_work`/`to_home`) | `to_work`. `return` flips it. Nothing is matched or searched on it. |
+| `direction` (`going`/`return`) | `going`. New builds always send it. `to_work` / `to_home` from old builds are read as `going` / `return`; the answer is always `going` / `return`. A Going commute is timed by its promised arrival, a Return by its promised leave time (see **Return trips** below). It can change on a draft (`PATCH`), never after publishing (`409 COMMUTE_NOT_EDITABLE`). |
 | `seatsTotal` (1–7) | The car's `approvedSeats`, or `null` until the car has them. Never more than `approvedSeats` (`422 COMMUTE_SEATS_EXCEED_APPROVED` with `error.fields.approvedSeats`). |
 | `audience` (`women_only`/`any_verified`) | `any_verified`. |
 | `minTrustLevel` (0–4) | `0`. |
@@ -2049,7 +2050,9 @@ vehicle. An unverified driver stops here, not earlier (PROF-19).
 |---|---|---|---|
 | `VERIFICATION_REQUIRED` | 403 | `verification[]` | Show "Finish driver verification to publish". |
 | `COMMUTE_INCOMPLETE` | 422 | `missing[]` | Something isn't filled in. |
-| `COMMUTE_OVERLAPS` | 422 | `commuteId[]` (the clashing commute), `weekday[]` (`SUNDAY` …), `minGapMinutes[]` (`30`) | COM-36: another of his published or paused commutes runs on the same weekday, in overlapping dates, and the two don't leave **30 minutes** between the end (promised arrival) of one and the departure of the other. Show which commute and day clash. |
+| `COMMUTE_SCHEDULE_OVERLAP` | 409 | `commuteId` (the **other** commute), `otherDirection`, `otherOriginLabel`, `otherDestinationLabel`, `weekdayBits[]` (the clashing days), `otherStartsAtLocal`, `otherArrivesAtLocal`, `earliestStartLocal` or `latestArrivalLocal` (one is set, `HH:MM`), `gapMinutes` | D3: another published or paused commute of his runs on a shared weekday on a date both run, and one starts before the other's arrival + `gapMinutes` (10). Checked on `PUT .../schedule` of a draft, publish, resume and change proposals. Show "Your Going commute arrives at 10:00. Your return can leave from 10:10." on the clashing days. |
+| `COMMUTE_NOT_GOING` | 422 | `direction` | `POST .../return` on a Return. |
+| `COMMUTE_RETURN_EXISTS` | 409 | `returnCommuteId` | `POST .../return` on a Going commute that already has a live Return. Open that one. |
 | `COMMUTE_AC_NOT_AVAILABLE` | 422 | `rules.ac` | The reviewed car has no AC. Also on `PATCH`. Lock the chip with "Your car is registered without AC". |
 | `COMMUTE_WOMEN_ONLY_NOT_ALLOWED` | 422 | `audience` | The driver's profile gender isn't female. Also on `POST`, `PATCH` and resume. |
 | `COMMUTE_INVALID_TRANSITION` | 409 | `status[]` | It isn't a draft or can't be published from this status. |
@@ -2097,14 +2100,14 @@ riders came with her will publish the copy believing her car is full, and find o
 | | `duplicate` | `return` |
 |---|---|---|
 | Route | Identical. | **Reversed** — ends swapped, advertised stops in the opposite order, and each stop's **role flipped**. A place she picks somebody up near home on the way to work is where she sets her down on the way back. |
-| `direction` | Same. | Flipped (`to_work` ⇄ `to_home`). |
+| `direction` | Same. | Always `return`. Only on a `going` commute (`422 COMMUTE_NOT_GOING`). |
+| Link | None. | `returnOfCommuteId` = the source. One Return per Going commute: a second call answers `409 COMMUTE_RETURN_EXISTS` with `error.fields.returnCommuteId` (open that one). An archived Return doesn't count. |
 | Terms, preferences | Copied: seats, price, detour and walk limits, audience, trust level, custom-pickup, house rules. | Same. |
-| Schedule | Copied, **window moved** — see below. | **`null`.** |
+| Schedule | Copied, **window moved** — see below. | **The same days** (`daysMask`, window moved the same way) and seats per day, **no times**: every `weekdays[].promisedDepartureTime` is `null` and `missing[]` has `promisedDepartureTime`. |
 | Status | `DRAFT`. | `DRAFT`. |
 
-⚠️ **`return` deliberately prefills no times.** A journey home leaves at a different time of day, and
-a prefilled `07:05` is a wrong value in the field she is least likely to re-read, because it already
-looks filled in. v5: "reverse route prefill **only**". Open the schedule step.
+⚠️ **`return` prefills the days but no times.** A journey home leaves at a different time of day, so
+the Times step opens with every leave time empty.
 
 ⚠️ **`duplicate` moves the date window.** A schedule may not start in the past, so the start becomes
 **tomorrow** when the original's has gone by; the end date she chose is kept. If the original's window
@@ -2121,6 +2124,69 @@ last term's pattern is one of the main reasons to reach for the button.
 
 ⚠️ v5 proposes these under `/driver/commutes/{id}`; every other commute-management endpoint here
 lives under `/commutes`, so these do too.
+
+#### Return trips (2026-11-23)
+
+A commute is **Going** (`going`, ذهاب) or **Return** (`return`, عودة), never both.
+
+**Timing.** A Going commute keeps today's rule: `PUT .../schedule` takes `promisedArrivalTime` (every
+day, or per day in `perDay`) and the departure is worked out. A Return takes **`promisedDepartureTime`**
+in the same places (`{"perDay": {"2": {"promisedDepartureTime": "17:00:00"}}}`), refuses
+`promisedArrivalTime` (`422 VALIDATION_FAILED` on that field) and needs a leave time on every day
+(`422 COMMUTE_INCOMPLETE`, `missing: ["promisedDepartureTime"]`). A Going commute refuses
+`promisedDepartureTime` the same way. 🔴 A Return's departure **never moves**: no re-timing as riders
+join, no `departure_time_changed`. Its arrival is estimated from the route and that evening's traffic
+and moves later as riders join. `weekdays[]` rows carry `promisedDepartureTime` and
+`estimatedArrivalTime`; `departureIsComputed` is `false` on a Return.
+
+**Day fields.** Every day row (`upcomingTrips[]`, search results and `otherDays[]`, `/matches`, a
+booking's `trip`, Home's `nextJourney`, `nextRun`, `laterThisWeek[]`, `expiredRun`, `GET /driver/trips`,
+seat offers) adds:
+
+| Field | Meaning |
+|---|---|
+| `direction` | `going` · `return`. |
+| `promisedDepartureAt` / `promisedDepartureLocal` | A Return day's promised leave time (`Y-m-d H:i:s` like `departureLocal`). `null` on a Going day. |
+| `estimatedArrivalAt` / `estimatedArrivalLocal` | Where the run is expected to arrive at the end of the route that day. On a Going day it is the promised arrival. |
+| `promisedArrivalLocal` | Unchanged; `null` on a Return. |
+| `departureLocal` | Unchanged: when the run leaves (on a Return, the promised leave time). |
+
+On a Return day `BOOKING_BREAKS_FROZEN_PROMISE` never applies (there is no arrival promise): a seat is
+judged on capacity and detour. On time means **leaving** within 5 minutes of the promised leave time.
+Pickup times count forward from the leave time. Change proposals on a Return take
+`promisedDepartureTime` instead of `promisedArrivalTime`.
+
+**Overlap (D3).** Two of his commutes clash when they share a weekday on a date both run and one
+starts before the other's arrival + 10 minutes (`commuteGapMinutes` in `GET /commutes/options`, an
+admin setting). A Going day starts at its earliest possible departure (the worked-out one less the
+30 minutes it can still move earlier); a Return day ends at its estimated arrival. Only published and
+paused commutes count. Refused with `409 COMMUTE_SCHEDULE_OVERLAP`.
+
+**Search and demands.** `GET /search/commutes` and `/browse` take `direction` (default `going`); only
+that direction comes back. A Return search takes **`leaveAt`** (`HH:MM`): a Return fits when it leaves
+in `[leaveAt, leaveAt + returnWindowMinutes]` (30, an admin setting, in `GET /commutes/options`);
+`arriveBy` and the arrival window are ignored. Results carry `direction`, the day fields above and
+`returnCommute` (a Going result's published Return). Recent searches keep `direction` and `leaveAt`.
+`wantsReturnTrip` is still accepted and does nothing. Demands take `direction` and `leaveAt` the same
+way; a Return demand answers `arrivalWindowStart` / `End` as `null`. `POST /commute-demands` on a Going
+demand takes `returnDemand: {leaveAt}` and also saves the ride back (places swapped, same days and
+preferences): both or neither, and the answer adds `returnDemand` (the second demand in full). Each
+carries `pairedDemandId`, cleared when the other is deleted; after that they are separate.
+
+**Seat requests.** A passenger's seat request (`POST /commutes/{commute}/seat-requests`,
+`GET /seat-requests/{seatRequest}`) carries `commute.direction` and `commute.returnCommute`:
+`{id, departureLocal (HH:MM), daysMask, runsOnRequestedDays[] (weekday bits, recurring), trialTripId
+(the Return's day on the same date, trial), myStatus (booked · pending · waitlisted · null)}`, only
+while the Return is published. Any non-null `myStatus` hides the "Need a ride back too?" card.
+
+**Who rides both ways.** The driver's rows carry `alsoOnLinked` (`booked` · `pending` · `null`): she
+holds a seat or an open request on the linked commute on the same day (recurring: the same weekdays).
+On `GET /driver/seat-requests` and the driver's view of a seat request, `GET /driver/bookings`,
+`GET /driver/waitlist` and `GET /driver/commutes/{commute}/waitlist` (whose rows also carry
+`direction`).
+
+**Notifications.** Every notification about a commute, a day or a booking carries `data.direction`.
+`match_found` on a Return says "leaves at 5:10 PM".
 
 #### `DELETE /commutes/{commute}` — active, profile complete
 
@@ -2146,7 +2212,9 @@ confirmed seat (16h+: 0 · 10–16h: 10 % · < 10h: 25 %) — **show it first** 
 |---|---|
 | `id`, `status` | `DRAFT` · `PUBLISHED` · `PAUSED` · `ARCHIVED`. |
 | `commuteType` | `recurring` · `one_time`. |
-| `direction` | `to_work` · `to_home`. |
+| `direction` | `going` · `return`. |
+| `returnOfCommuteId`, `goingCommute` | On a Return made with `POST .../return`: the Going commute's id, and `{id, status, promisedArrivalLocal (HH:MM), daysMask}`. `null` on a Going or unlinked Return, and once either side is deleted. |
+| `returnCommute` | On a Going commute: its Return, `{id, status, departureLocal (HH:MM, the shared leave time or the next day's), daysMask}`, in any live state for the driver (drafts too). A passenger sees it only while the Return is `PUBLISHED`. |
 | `vehicleId`, `seatsTotal` | `seatsTotal` is bookable seats, already excluding the driver. Both can be `null` on a draft. |
 | `seatPricePiastres`, `currency` | RAFEEQ's seat price; `currency` is always `EGP` today. `pricePerSeatPiastres` is a deprecated alias with the same value (DISCOVER-15). |
 | `maxDetourMinutes` / `maxWalkMinutes` | **RAFEEQ's** limits, the same on every commute (C-1, COM-31): two tiers (COM-40). On your way: point within 1.5 km, up to 10 min for her, up to 20 min for the whole trip. A bit far: within 3 km, 15 min and 30 min. `maxDetourMinutes` is the outer limit, 30. `detourTiers` on `GET /commutes/options` has every number. Read-only — sending either when creating or revising a commute is refused with `422`. |
@@ -2156,7 +2224,7 @@ confirmed seat (16h+: 0 · 10–16h: 10 % · < 10h: 25 %) — **show it first** 
 | `createdAt`, `updatedAt` | UTC timestamps. `updatedAt` changes on every saved step. |
 | `formStep` | The form step the driver stopped at, 1 to 5, sent on `PATCH` to a draft. `null` until sent. Stored only; use `missing[]` for what's still needed. |
 | `publishedAt`, `pausedAt`, `pausedReason`, `pausedMessage`, `archivedAt` | `pausedReason` is `by_driver` · `vehicle_suspended` · `licence_expired` · `commission_unpaid` · `account_suspended` · `driver_suspended` · `gender_review` · `by_staff` — all but `by_driver` are automatic or staff decisions, so show the right copy. `by_staff` means RAFEEQ staff paused it from the dashboard: show "Paused by RAFEEQ" with `pausedMessage` (staff's text, in the language they wrote it; `null` for every other reason). Only staff resume it: Resume and Publish answer `409 COMMUTE_INVALID_TRANSITION` with `fields.pausedReason: ["by_staff"]`; hide the Resume button. `licence_expired` means her licence lapsed (COM-26): she can resume after the renewed licence is approved. `driver_suspended` means staff suspended her driving only (PROF-27): Resume answers `403 DRIVER_NOT_ELIGIBLE` and Passenger mode still works. `account_suspended` means staff suspended her account (F1-3); once it is lifted she resumes the commute herself. `commission_unpaid` means a week's commission missed two Fridays (PAY-45): show the debt screen; after paying she resumes the commute herself. |
-| `missing[]` | What still has to be done before it can be published. Drive the wizard from this. The values are `origin`, `destination`, `schedule`, `vehicle` and `one_time_single_date`. |
+| `missing[]` | What still has to be done before it can be published. Drive the wizard from this. The values are `origin`, `destination`, `schedule`, `vehicle`, `one_time_single_date`, `promisedArrivalTime` (a Going day without one) and `promisedDepartureTime` (a Return day without one). |
 | `locations[]` | `{id, type, lat, lng, address, placeId, nearPlaceId, nearLabel, nearDistanceMetres, sequence}`; type is `origin` · `pickup` · `dropoff` · `destination`. |
 | `schedule` | `{daysMask, departureTime, timezone, startDate, endDate, generatedUntil}`. `generatedUntil` is **how far ahead bookable days currently exist**, rolled forward daily — not the end of the commute. |
 | `weekdays[]` | One row per weekday, to refill the form from a draft: `{weekdayBit, promisedArrivalTime, departureTime, departureIsComputed, seatsTotal}`. A commute made before arrivals existed has `promisedArrivalTime: null` and `departureIsComputed: false`, so ask for the arrival when refilling. `seatsTotal` is `null` when the day follows the commute. |
@@ -5336,6 +5404,15 @@ block a real deletion. End a live run first with `POST /trips/{trip}/cancel-acti
 Other members still see her past seats and requests in their lists, with `person.publicFirstName: null`,
 as after a real `DELETE /account`.
 
+#### `POST /testing/commutes/linked-pair`
+
+Gives the signed-in approved driver a published **linked pair**: a Going commute arriving `08:15` and
+its Return leaving `17:00`, Sunday to Thursday from tomorrow. Optional body `{arriveBy?, leaveAt?}`
+(`HH:MM`) moves the times, and `passengerUserId?` gets a confirmed seat on the next day of both.
+Answers `201` with `{going, return, bookingIds[]}` (two commute-offer shapes). Refusals are the real
+ones: an unapproved driver, a car without approved seats, or a clash with his other commutes
+(`409 COMMUTE_SCHEDULE_OVERLAP`).
+
 #### `POST /testing/trips/{trip}/departure`
 
 Moves one day of the caller's commute: `{"minutesFromNow": 5}` or `{"departureAt": "<ISO>"}`.
@@ -6038,6 +6115,7 @@ exist, and every live endpoint must be named here.
 
 | Date | Change |
 |---|---|
+| 2026-11-23 | 🔁 **Return trips (items 38, 39, 40, 46).** `direction` is `going` · `return` (old `to_work` / `to_home` are read as aliases). A Return is timed by `promisedDepartureTime` and never re-timed; its arrival is estimated. New day fields `direction`, `promisedDepartureAt` / `Local`, `estimatedArrivalAt` / `Local`. `POST .../return` makes a **linked** Return with the same days and seats and no times; `returnOfCommuteId`, `goingCommute`, `returnCommute`; deleting either side clears the link. **`COMMUTE_OVERLAPS` is replaced by `409 COMMUTE_SCHEDULE_OVERLAP`** (10-minute gap, also on draft schedule save, resume and change proposals). New `422 COMMUTE_NOT_GOING`, `409 COMMUTE_RETURN_EXISTS`. Search and demands take `direction` and `leaveAt` (window `returnWindowMinutes`, 30); `returnDemand` saves the ride back in one call. Seat requests carry `commute.returnCommute`; driver rows carry `alsoOnLinked`. Notifications carry `data.direction`. `GET /commutes/options` drops `defaults.direction` and adds `returnWindowMinutes`, `commuteGapMinutes`. New `POST /testing/commutes/linked-pair`. |
 | 2026-11-20 | 🔧 **`GET /testing/push-log` no longer answers `500`** when a stored push token can't be decrypted or the push provider can't start. It gains `pushProviderError` and `devices[].pushTokenReadable`. Push rows can fail with `token_unreadable` (the token is cleared) or `push_provider_error: …` instead of the job crashing. `meta.pushTokens` on `POST /testing/notifications` counts the tokens before sending (4.17). |
 | 2026-11-20 | 🧪 **Patrol run requests of 2026-11-20.** 🔴 A stop more than **3 km** from the road is refused with `422 COMMUTE_ROUTE_INVALID`: on a draft (`PUT /commutes/{commute}/route`, `pickups.{index}` / `dropoffs.{index}`, measured from the road between origin and destination) and on a change proposal or a change applied at once (`pickups.{index}`, measured from the commute's current route). Switching car compares the seats each day offers: the commute's default counts only when some day has no seats of its own. Seat offers gain **`conflictingSeatRequestId`**. `nextJourney` gains **`tripSessionId`**; `GET /safety/live-shares` takes `?tripId=`. `GET /driver/eligibility` documented as it is sent: `blockers[]` are objects. Testing (4.17): `/testing/seat-requests/{seatRequest}/close` takes `EXPIRED` and `ENDED`; new `PATCH /testing/account/fields`, `POST`/`DELETE /testing/commutes/{commute}/pause`, `GET /testing/push-log`; `POST /testing/notifications` answers `meta` with the push facts. |
 | 2026-11-19 | 🧪 **Patrol run requests of 2026-11-19.** `nextJourney.live` is filled from the same itinerary as `GET /trips/{trip}/location`, and `driverDelay: "passed_your_stop"` also comes from the car's GPS (300 m past her stop along the route). New **`graceStartsAt` / `graceEndsAt`** on `nextJourney.live` and `GET /trips/{trip}/location`. Seat requests gain **`endedAt`** and `updatedAt`. A `REJECTED` change proposal no longer blocks a new one. `lastSearchedAt` matches on the saved filters only. 🔴 A driver's "offer to all" now gives each member **one offer per morning** in one `offerGroupId`, and accepting the group books every morning still open. Member-facing texts say YuGo. New and changed testing calls in 4.17. *Later the same day (D-0049):* pickup-change rows gain `expiresAt` / `expiredAt` and the status **`EXPIRED`** (notifications `pickup_change_expired`, `pickup_change_expired_for_driver`; testing call `POST /testing/pickup-requests/{pickupRequest}/expire`). A day cancelled by staff gives each passenger `trip_day_cancelled_by_platform` and `cancelledReason: "cancelled_by_platform"`. |

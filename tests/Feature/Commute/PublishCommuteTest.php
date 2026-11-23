@@ -397,17 +397,22 @@ it('requires a verified identity to publish or run a commute', function (string 
     ['POST', '/api/v1/commutes/01JABCDEFGHJKMNPQRSTVWXYZ0/duplicate'],
 ]);
 
-it('refuses a second commute on the same day that starts within 30 minutes of the first (COM-36)', function () {
+it('refuses times that start before another commute arrives plus 10 minutes (D3)', function () {
     $first = readyCommute($this->token, $this->vehicleId, schedule: ['promisedArrivalTime' => '15:00:00']);
     test()->withToken($this->token)->postJson("/api/v1/commutes/{$first}/publish")->assertOk();
 
-    $second = readyCommute($this->token, $this->vehicleId, schedule: ['promisedArrivalTime' => '15:15:00']);
+    $second = createCommute($this->token, $this->vehicleId)->assertStatus(201)->json('data.id');
+    saveRoute($this->token, $second)->assertOk();
 
-    test()->withToken($this->token)->postJson("/api/v1/commutes/{$second}/publish")
-        ->assertStatus(422)
-        ->assertJsonPath('error.code', 'COMMUTE_OVERLAPS')
-        ->assertJsonPath('error.fields.commuteId.0', $first)
-        ->assertJsonPath('error.fields.minGapMinutes.0', '30');
+    saveSchedule($this->token, $second, ['promisedArrivalTime' => '15:15:00'])
+        ->assertStatus(409)
+        ->assertJsonPath('error.code', 'COMMUTE_SCHEDULE_OVERLAP')
+        ->assertJsonPath('error.fields.commuteId', $first)
+        ->assertJsonPath('error.fields.otherDirection', 'going')
+        ->assertJsonPath('error.fields.otherArrivesAtLocal', '15:00')
+        ->assertJsonPath('error.fields.earliestStartLocal', '15:10')
+        ->assertJsonPath('error.fields.latestArrivalLocal', null)
+        ->assertJsonPath('error.fields.weekdayBits', [2, 4, 8, 16, 32]);
 
     expect(CommuteOffer::query()->whereKey($second)->value('status'))->toBe(CommuteOfferStatus::Draft);
 });

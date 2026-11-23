@@ -67,6 +67,7 @@ final readonly class AutoFinishTripsAction
         }
 
         $from = $trip->promised_arrival_at
+            ?? $trip->estimated_arrival_at
             ?? ($trip->itinerary_duration_seconds === null
                 ? null
                 : CarbonImmutable::parse($trip->departure_at)->addSeconds((int) $trip->itinerary_duration_seconds));

@@ -221,6 +221,14 @@ return [
         'title' => 'A commute in :area',
         'body' => 'A new commute runs in :area, near the trip you saved. Take a look before the seats go.',
     ],
+    'match_found_return' => [
+        'title' => 'A return commute that fits your request',
+        'body' => 'A new return commute leaves at :time. Take a look before the seats go.',
+    ],
+    'match_found_return_in_area' => [
+        'title' => 'A return commute in :area',
+        'body' => 'A new return commute leaves :area at :time, near the trip you saved. Take a look before the seats go.',
+    ],
     'rating_due' => [
         'title' => 'How was your commute today?',
         'body' => 'Rate your trip with :name. Neither of you sees the other’s rating until both have rated.',

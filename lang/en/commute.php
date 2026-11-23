@@ -19,6 +19,8 @@ return [
         'start_in_past' => 'The start date cannot be in the past.',
         'no_days_selected' => 'Choose at least one day of the week.',
         'too_far_ahead' => 'A commute can run for at most :months months.',
+        'return_timed_by_leave' => 'A return commute is timed by when you leave..',
+        'going_timed_by_arrival' => 'A going commute is timed by when you arrive..',
     ],
 
     // P-1: the price is automatic, so a request that sends one is refused.

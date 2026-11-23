@@ -7,6 +7,7 @@ use App\Domains\Commute\Models\CommuteOffer;
 use App\Domains\Commute\Models\CommuteSchedule;
 use App\Domains\Commute\Models\CommuteWeekdaySchedule;
 use App\Domains\Commute\Support\CommuteDefaults;
+use App\Domains\Commute\Support\CommuteOverlap;
 use App\Domains\Commute\Support\ComputedDeparture;
 use App\Domains\Commute\Support\DepartureTimeCalculator;
 use App\Domains\Shared\Exceptions\DomainException;
@@ -44,6 +45,7 @@ final readonly class SaveCommuteScheduleAction
 
         $this->assertUsable($offer, $startDate, $endDate, $daysMask);
         $this->assertDaySeatsFitVehicle($offer, $input);
+        $this->assertTimingFitsDirection($offer, $input);
 
         return DB::transaction(function () use ($offer, $input, $startDate, $endDate, $daysMask): CommuteOffer {
             // Replaced, not patched: a schedule is one thing, and a half-updated
@@ -56,7 +58,7 @@ final readonly class SaveCommuteScheduleAction
                 'commute_offer_id' => $offer->id,
                 'days_mask' => $daysMask,
                 // Provisional for an arrival-only schedule: rewritten from the weekdays below.
-                'departure_time' => $input['departureTime'] ?? $input['promisedArrivalTime'] ?? '00:00:00',
+                'departure_time' => $input['promisedDepartureTime'] ?? $input['departureTime'] ?? $input['promisedArrivalTime'] ?? '00:00:00',
                 'timezone' => $input['timezone'] ?? 'Africa/Cairo',
                 'start_date' => $startDate->toDateString(),
                 // A one-time commute ends the day it happens.
@@ -66,6 +68,9 @@ final readonly class SaveCommuteScheduleAction
             $schedule->save();
 
             $this->saveWeekdays($offer, $daysMask, $input);
+
+            $offer->unsetRelation('schedule')->unsetRelation('weekdaySchedules');
+            CommuteOverlap::assertNone($offer);
 
             return $offer->load(['schedule', 'weekdaySchedules']);
         });
@@ -97,6 +102,8 @@ final readonly class SaveCommuteScheduleAction
 
         $bits = DaysMask::fromBits($daysMask)->bits();
 
+        $timezone = (string) ($offer->schedule()->value('timezone') ?? 'Africa/Cairo');
+
         foreach ($bits as $bit) {
             $day = $perDay[$bit] ?? $perDay[(string) $bit] ?? [];
 
@@ -104,16 +111,23 @@ final readonly class SaveCommuteScheduleAction
 
             $weekday->commute_offer_id = $offer->id;
             $weekday->weekday_bit = $bit;
-            $weekday->promised_arrival_time = $day['promisedArrivalTime'] ?? ($input['promisedArrivalTime'] ?? null);
 
-            if ($weekday->promised_arrival_time === null) {
-                throw DomainException::of(ErrorCode::CommuteArrivalRequired, fields: [
-                    "perDay.{$bit}.promisedArrivalTime" => [__('validation.required', ['attribute' => 'promisedArrivalTime'])],
-                ]);
+            if ($offer->isReturn()) {
+                $this->fillReturnDay($offer, $weekday, $bit, $day, $input, $timezone);
+            } else {
+                $weekday->promised_arrival_time = $day['promisedArrivalTime'] ?? ($input['promisedArrivalTime'] ?? null);
+
+                if ($weekday->promised_arrival_time === null) {
+                    throw DomainException::of(ErrorCode::CommuteArrivalRequired, fields: [
+                        "perDay.{$bit}.promisedArrivalTime" => [__('validation.required', ['attribute' => 'promisedArrivalTime'])],
+                    ]);
+                }
+
+                $weekday->departure_is_computed = true;
+                $weekday->departure_time = $this->estimatedDeparture($offer, (string) $weekday->promised_arrival_time, $timezone);
+                $weekday->estimated_arrival_time = $weekday->promised_arrival_time;
             }
 
-            $weekday->departure_is_computed = true;
-            $weekday->departure_time = $this->estimatedDeparture($offer, (string) $weekday->promised_arrival_time, (string) ($offer->schedule()->value('timezone') ?? 'Africa/Cairo'));
             // Null, not a copy of the parent: null means "follow the commute", so a later change
             // reaches every day he did not deliberately set differently.
             $weekday->seats_total = $day['seatsTotal'] ?? null;
@@ -139,8 +153,70 @@ final readonly class SaveCommuteScheduleAction
         $offer->touch();
     }
 
+    /**
+     * A Return day (B2): the driver promises when he leaves, the departure never moves, and the
+     * arrival is only an estimate from the route.
+     *
+     * @param  array<string, mixed>  $day
+     * @param  array<string, mixed>  $input
+     */
+    private function fillReturnDay(CommuteOffer $offer, CommuteWeekdaySchedule $weekday, int $bit, array $day, array $input, string $timezone): void
+    {
+        $leave = $day['promisedDepartureTime'] ?? ($input['promisedDepartureTime'] ?? null);
+
+        if ($leave === null) {
+            throw DomainException::of(ErrorCode::CommuteIncomplete, fields: [
+                'missing' => ['promisedDepartureTime'],
+                "perDay.{$bit}.promisedDepartureTime" => [__('validation.required', ['attribute' => 'promisedDepartureTime'])],
+            ]);
+        }
+
+        $weekday->promised_arrival_time = null;
+        $weekday->promised_departure_time = $leave;
+        $weekday->departure_time = $leave;
+        $weekday->departure_is_computed = false;
+        $weekday->estimated_arrival_time = $this->estimatedArrival($offer, (string) $leave, $timezone);
+    }
+
+    /**
+     * B2: a Return refuses an arrival promise, and a Going commute refuses a leave-time promise.
+     *
+     * @param  array<string, mixed>  $input
+     */
+    private function assertTimingFitsDirection(CommuteOffer $offer, array $input): void
+    {
+        $refused = $offer->isReturn() ? 'promisedArrivalTime' : 'promisedDepartureTime';
+        $message = $offer->isReturn() ? __('commute.schedule.return_timed_by_leave') : __('commute.schedule.going_timed_by_arrival');
+        $fields = [];
+
+        if (($input[$refused] ?? null) !== null) {
+            $fields[$refused] = [$message];
+        }
+
+        foreach ((array) ($input['perDay'] ?? []) as $bit => $day) {
+            if (is_array($day) && ($day[$refused] ?? null) !== null) {
+                $fields["perDay.{$bit}.{$refused}"] = [$message];
+            }
+        }
+
+        if ($fields !== []) {
+            throw DomainException::of(ErrorCode::ValidationFailed, fields: $fields);
+        }
+    }
+
     public function refreshEstimates(CommuteOffer $offer): void
     {
+        if ($offer->isReturn()) {
+            $timezone = (string) ($offer->schedule()->value('timezone') ?? 'Africa/Cairo');
+
+            foreach ($offer->weekdaySchedules()->whereNotNull('promised_departure_time')->get() as $day) {
+                $day->estimated_arrival_time = $this->estimatedArrival($offer, (string) $day->promised_departure_time, $timezone);
+                $day->save();
+            }
+
+            return;
+        }
+
         $days = $offer->weekdaySchedules()
             ->where('departure_is_computed', true)
             ->whereNotNull('promised_arrival_time')
@@ -201,6 +277,24 @@ final readonly class SaveCommuteScheduleAction
 
         return $this->departure->arrivingBy($offer, $arriveBy)
             ?->setTimezone($timezone)->format('H:i:s') ?? $arrival;
+    }
+
+    /**
+     * The arrival a leave time implies on the route as saved, as a local wall clock, or null before a
+     * route exists.
+     */
+    private function estimatedArrival(CommuteOffer $offer, string $leave, string $timezone): ?string
+    {
+        $offer->loadMissing('locations');
+
+        $departAt = DepartureTimeCalculator::toUtc(
+            CarbonImmutable::tomorrow($timezone)->toDateString(),
+            $leave,
+            $timezone,
+        );
+
+        return $this->departure->arrivingFrom($offer, $departAt)
+            ?->setTimezone($timezone)->format('H:i:s');
     }
 
     /**

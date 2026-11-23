@@ -19,6 +19,8 @@ return [
         'start_in_past' => 'تاريخ البداية مايصحّش يكون في الماضي.',
         'no_days_selected' => 'اختار يوم واحد على الأقل في الأسبوع.',
         'too_far_ahead' => 'الرحلة تقدر تستمر :months شهر كحد أقصى.',
+        'return_timed_by_leave' => 'مشوار العودة بيتحدد بميعاد تحركك..',
+        'going_timed_by_arrival' => 'مشوار الذهاب بيتحدد بميعاد وصولك..',
     ],
 
     // P-1: the price is automatic, so a request that sends one is refused.

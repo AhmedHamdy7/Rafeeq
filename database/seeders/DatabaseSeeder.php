@@ -393,7 +393,7 @@ class DatabaseSeeder extends Seeder
             'corridor_id' => $corridor->id,
             'commute_type' => CommuteType::Recurring,
             'status' => CommuteOfferStatus::Published,
-            'direction' => CommuteDirection::ToWork,
+            'direction' => CommuteDirection::Going,
             'seats_total' => 3,
             'max_detour_minutes' => 10,
             'max_walk_minutes' => 10,

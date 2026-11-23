@@ -80,6 +80,18 @@ final class BookingResource extends JsonResource
                 $this->resource->relationLoaded('scheduledTrip') && $this->scheduledTrip !== null,
                 fn (): ?string => $this->scheduledTrip->commute_offer_id,
             ),
+            // B1: Going / Return, for the tag on every booking card.
+            'direction' => $this->when(
+                $this->resource->relationLoaded('scheduledTrip') && $this->scheduledTrip !== null,
+                fn (): string => TripTimes::direction($this->scheduledTrip),
+            ),
+            // B9, the driver's view only: `booked` / `pending` on the linked commute that day, or null.
+            'alsoOnLinked' => $this->when(
+                $this->resource->relationLoaded('scheduledTrip')
+                    && $this->scheduledTrip !== null
+                    && SeatPriceView::viewerDrives($request, $this->driver_profile_id),
+                fn (): ?string => LinkedRiders::forTrip((string) $this->passenger_user_id, $this->scheduledTrip),
+            ),
             'originLabel' => $this->when(
                 $this->routeLoaded(),
                 fn (): ?string => JourneyCard::route($this->scheduledTrip->commuteOffer)['originLabel'],

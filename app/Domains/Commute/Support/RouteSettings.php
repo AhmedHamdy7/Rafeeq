@@ -78,6 +78,18 @@ final class RouteSettings
         return max(1, (int) self::get('commute.schedule_lock_hours'));
     }
 
+    /** D1: a Return fits "Leave at T" when it leaves between T and T + this many minutes. */
+    public static function returnWindowMinutes(): int
+    {
+        return min(120, max(0, (int) self::get('commute.return_window_minutes')));
+    }
+
+    /** D3: the gap one commute of a driver needs after another one's arrival. */
+    public static function commuteGapMinutes(): int
+    {
+        return min(120, max(0, (int) self::get('commute.min_gap_between_commutes_minutes')));
+    }
+
     private static function get(string $key): mixed
     {
         return PlatformSetting::value($key, config("rafeeq.{$key}"));

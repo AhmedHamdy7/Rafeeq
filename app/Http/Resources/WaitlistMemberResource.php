@@ -44,6 +44,10 @@ final class WaitlistMemberResource
             // `mixed` they cannot generate a client from: `getKey()` is untyped to Scramble.
             'seatRequestId' => (string) $member->getKey(),
             'commuteId' => $member->commute_offer_id,
+            // B1, item 45: the commute's direction, for the group header's Going / Return tag.
+            'direction' => $member->commuteOffer?->direction->value,
+            // B9: `booked` / `pending` on the linked commute on the same days, or null.
+            'alsoOnLinked' => LinkedRiders::forSeatRequest($member),
 
             // Recurring, or one day. v5 asks for the intent on the card because they are different
             // offers: a recurring member is being invited back into the group, a trial to one

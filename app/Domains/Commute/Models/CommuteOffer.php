@@ -127,6 +127,33 @@ class CommuteOffer extends Model
         return $this->hasMany(SeatRequest::class);
     }
 
+    /**
+     * The Going commute this Return was made from (B3). Null on a Going commute or an unlinked Return.
+     */
+    public function goingCommute(): BelongsTo
+    {
+        return $this->belongsTo(self::class, 'return_of_commute_id');
+    }
+
+    /**
+     * The Return made from this Going commute, while it is a draft, published or paused (B3).
+     */
+    public function returnCommute(): HasOne
+    {
+        return $this->hasOne(self::class, 'return_of_commute_id')
+            ->whereIn('status', [
+                CommuteOfferStatus::Draft->value,
+                CommuteOfferStatus::Published->value,
+                CommuteOfferStatus::Paused->value,
+            ])
+            ->latest('created_at');
+    }
+
+    public function isReturn(): bool
+    {
+        return $this->direction === CommuteDirection::Return;
+    }
+
     public function isPublished(): bool
     {
         return $this->status === CommuteOfferStatus::Published;

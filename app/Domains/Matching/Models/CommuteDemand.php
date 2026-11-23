@@ -3,6 +3,7 @@
 namespace App\Domains\Matching\Models;
 
 use App\Domains\Commute\Enums\CommuteAudience;
+use App\Domains\Commute\Enums\CommuteDirection;
 use App\Domains\Commute\Enums\CommuteType;
 use App\Domains\Driver\Enums\VehicleTier;
 use App\Domains\Geo\Models\Place;
@@ -28,6 +29,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
     'max_detour_minutes', 'audience_preference', 'wants_return_trip',
     'origin_place_id', 'destination_place_id', 'women_only', 'required_rules', 'vehicle_tier',
     'origin_google_place_id', 'destination_google_place_id', 'origin_area_id', 'destination_area_id',
+    'direction', 'leave_at',
 ])]
 class CommuteDemand extends Model
 {
@@ -44,6 +46,7 @@ class CommuteDemand extends Model
             'dest_lat' => 'decimal:7',
             'dest_lng' => 'decimal:7',
             'commute_type' => CommuteType::class,
+            'direction' => CommuteDirection::class,
             'days_mask' => 'integer',
             'flexibility_minutes' => 'integer',
             'max_walk_minutes' => 'integer',

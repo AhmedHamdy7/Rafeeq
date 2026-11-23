@@ -399,6 +399,12 @@ final readonly class CompleteTripAction
     {
         $trip = $session->scheduledTrip;
 
+        if ($trip->promised_departure_at !== null) {
+            return $session->departed_at !== null
+                && $trip->promised_departure_at->diffInMinutes($session->departed_at, absolute: false)
+                    <= (int) config('rafeeq.trip.arrival_tolerance_minutes');
+        }
+
         $leftOnTime = $trip->departure_at
             ->diffInMinutes($session->departed_at, absolute: false) <= $departureThreshold;
 

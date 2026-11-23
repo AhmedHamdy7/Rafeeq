@@ -84,6 +84,8 @@ final class PassengerCommuteResource extends JsonResource
             'status' => strtoupper($offer->status->value),
             'commuteType' => $offer->commute_type->value,
             'direction' => $offer->direction->value,
+            // B3: the linked commute, only while it is published (S10).
+            ...CommuteLink::forPassenger($offer),
             'audience' => $offer->audience->value,
             // Shown to everybody; only a woman may ask for a seat (C-11, `403 SEAT_REQUEST_WOMEN_ONLY`).
             'womenOnly' => $offer->audience === CommuteAudience::WomenOnly,

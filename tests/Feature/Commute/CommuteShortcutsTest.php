@@ -104,7 +104,7 @@ it('copies the terms, the route and the weekly pattern into a draft', function (
         // 🔒 No price on a draft: RAFEEQ prices it from the route when it is published (P-1).
         ->assertJsonPath('data.seatPricePiastres', null)
         ->assertJsonPath('data.audience', 'women_only')
-        ->assertJsonPath('data.direction', 'to_work')
+        ->assertJsonPath('data.direction', 'going')
         ->json('data');
 
     expect($copy['id'])->not->toBe($this->commuteId);
@@ -236,7 +236,7 @@ it('reverses the route, the order of the stops and each stop’s role', function
         ->assertStatus(201)
         ->assertJsonPath('data.status', 'DRAFT')
         // Home, not to work.
-        ->assertJsonPath('data.direction', 'to_home')
+        ->assertJsonPath('data.direction', 'return')
         ->json('data.id');
 
     $draft = CommuteOffer::query()->whereKey($copyId)->with('locations')->sole();
@@ -267,11 +267,16 @@ it('reverses the route, the order of the stops and each stop’s role', function
  * leaves at a different time of day; a prefilled 07:05 is a wrong value in the field she is least
  * likely to re-read, because it already looks filled in.
  */
-it('prefills no times for the journey home', function () {
-    test()->withToken($this->driverToken)
+it('prefills the days but no times for the journey home', function () {
+    $draft = test()->withToken($this->driverToken)
         ->postJson("/api/v1/commutes/{$this->commuteId}/return")
         ->assertStatus(201)
-        ->assertJsonPath('data.schedule', null);
+        ->assertJsonPath('data.schedule.daysMask', 62)
+        ->json('data');
+
+    expect(collect($draft['weekdays'])->pluck('promisedDepartureTime')->unique()->all())->toBe([null])
+        ->and(collect($draft['weekdays'])->pluck('promisedArrivalTime')->unique()->all())->toBe([null])
+        ->and($draft['missing'])->toContain('promisedDepartureTime');
 });
 
 it('carries the terms and preferences home with her', function () {

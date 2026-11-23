@@ -87,7 +87,7 @@ it('tells the other person a message arrived, without the message', function () 
     $note = Notification::query()->where('user_id', $this->driver->id)->where('type', 'chat_message')->where('channel', 'in_app')->sole();
 
     expect($note->title.$note->body)->not->toContain('north gate')
-        ->and($note->data)->toBe(['bookingId' => $this->booking->id]);
+        ->and($note->data)->toBe(['bookingId' => $this->booking->id, 'direction' => 'going']);
 });
 
 it('keeps everybody else out, with a 404', function () {

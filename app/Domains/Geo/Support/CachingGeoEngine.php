@@ -105,6 +105,29 @@ final readonly class CachingGeoEngine implements GeoQueryEngine
         return $route;
     }
 
+    public function routeLeavingAt(Coordinate $from, Coordinate $to, array $via, CarbonImmutable $departAt): Route
+    {
+        $key = self::trafficCacheKey($from, $to, $via, $departAt, 'leave');
+
+        $cached = RouteCache::query()->whereKey($key)->first();
+
+        if ($cached !== null && $cached->expires_at->isFuture()) {
+            $cached->increment('hit_count');
+
+            return new Route(
+                polyline: $cached->polyline,
+                distance: Distance::fromMetres($cached->distance_meters),
+                durationSeconds: $cached->duration_seconds,
+            );
+        }
+
+        $route = $this->engine->routeLeavingAt($from, $to, $via, $departAt);
+
+        $this->remember($key, $from, $to, $route, now()->addHours((int) config('rafeeq.geo.traffic_cache_hours')));
+
+        return $route;
+    }
+
     public function detourMinutes(Route $original, Coordinate $pickup): float
     {
         return $this->engine->detourMinutes($original, $pickup);
@@ -153,7 +176,7 @@ final readonly class CachingGeoEngine implements GeoQueryEngine
      *
      * @param  array<int, Coordinate>  $via
      */
-    public static function trafficCacheKey(Coordinate $from, Coordinate $to, array $via, CarbonImmutable $arriveBy): string
+    public static function trafficCacheKey(Coordinate $from, Coordinate $to, array $via, CarbonImmutable $arriveBy, string $kind = 'arrive'): string
     {
         $bucket = max(1, (int) config('rafeeq.geo.traffic_bucket_minutes'));
 
@@ -161,7 +184,7 @@ final readonly class CachingGeoEngine implements GeoQueryEngine
 
         $minuteOfDay = intdiv($local->hour * 60 + $local->minute, $bucket) * $bucket;
 
-        return hash('sha256', self::cacheKey($from, $to, $via).'|arrive:'.$local->dayOfWeek.':'.$minuteOfDay);
+        return hash('sha256', self::cacheKey($from, $to, $via).'|'.$kind.':'.$local->dayOfWeek.':'.$minuteOfDay);
     }
 
     private function remember(string $key, Coordinate $from, Coordinate $to, Route $route, mixed $expiresAt): void

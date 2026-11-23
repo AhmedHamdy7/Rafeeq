@@ -105,6 +105,7 @@ final readonly class ChangeCommuteStatusAction
         $vehicle = CreateCommuteOfferAction::usableVehicle($offer->driverProfile, $offer->vehicle_id);
         // C-3: the car's approved seats may have been lowered while the commute was paused.
         CreateCommuteOfferAction::assertCommuteFitsVehicle($offer, $vehicle);
+        CommuteGuards::assertNoOverlap($offer);
 
         return DB::transaction(function () use ($offer): CommuteOffer {
             $offer->forceFill([
@@ -129,7 +130,12 @@ final readonly class ChangeCommuteStatusAction
             $offer->forceFill([
                 'status' => CommuteOfferStatus::Archived->value,
                 'archived_at' => now(),
+                'return_of_commute_id' => null,
             ])->save();
+
+            CommuteOffer::query()
+                ->where('return_of_commute_id', $offer->getKey())
+                ->update(['return_of_commute_id' => null]);
 
             /*
              * 1. Every confirmed upcoming seat, through the one displacement path pause and vehicle

@@ -24,7 +24,7 @@ use Illuminate\Database\Eloquent\Relations\HasOne;
  */
 #[Fillable([
     'commute_offer_id', 'commute_schedule_id', 'trip_date', 'departure_at',
-    'departure_local', 'promised_arrival_at', 'seats_total',
+    'departure_local', 'promised_arrival_at', 'promised_departure_at', 'seats_total',
 ])]
 class ScheduledTrip extends Model
 {
@@ -40,6 +40,10 @@ class ScheduledTrip extends Model
             // The arrival promised for this day. Null means no promise was made, which is not the
             // same as a promise of "any time" — nothing is scored against null.
             'promised_arrival_at' => 'datetime',
+            // B2: a Return day's promised leave time. Null on a Going day.
+            'promised_departure_at' => 'datetime',
+            // B2: where the run is expected to arrive. On a Return day the only arrival there is.
+            'estimated_arrival_at' => 'datetime',
             'seats_total' => 'integer',
             'seats_taken' => 'integer',
             /*

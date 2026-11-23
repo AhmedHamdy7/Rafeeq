@@ -224,7 +224,7 @@ it('lists the driver own commutes, newest first', function () {
     // database breaks however it likes.
     $this->travel(1)->second();
 
-    $second = readyCommute($this->token, $this->vehicleId);
+    $second = readyCommute($this->token, $this->vehicleId, schedule: ['promisedArrivalTime' => '18:00:00']);
 
     $listed = $this->withToken($this->token)->getJson('/api/v1/commutes')->assertOk()->json('data');
 

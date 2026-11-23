@@ -2,6 +2,7 @@
 
 namespace App\Http\Resources;
 
+use App\Domains\Commute\Enums\CommuteDirection;
 use App\Domains\Geo\Models\Area;
 use App\Domains\Geo\Models\Place;
 use App\Domains\Matching\Models\CommuteDemand;
@@ -75,8 +76,14 @@ final class CommuteDemandResource extends JsonResource
             ],
             'commuteType' => $this->commute_type->value,
             'daysMask' => $this->days_mask,
-            'arrivalWindowStart' => $this->preferred_arrival_start,
-            'arrivalWindowEnd' => $this->preferred_arrival_end,
+            // B6: `going` (timed by arrive-by) or `return` (timed by `leaveAt`).
+            'direction' => ($this->direction ?? CommuteDirection::Going)->value,
+            // Return demands only, `HH:MM`; null on a Going demand.
+            'leaveAt' => $this->leave_at === null ? null : substr((string) $this->leave_at, 0, 5),
+            // The other demand of a Going + Return pair made in one call; null once either is deleted.
+            'pairedDemandId' => $this->paired_demand_id,
+            'arrivalWindowStart' => $this->direction === CommuteDirection::Return ? null : $this->preferred_arrival_start,
+            'arrivalWindowEnd' => $this->direction === CommuteDirection::Return ? null : $this->preferred_arrival_end,
             // Screen 18's "Flexibility ± 15 min" — how far outside the window still works.
             'flexibilityMinutes' => $this->flexibility_minutes,
             'maxWalkMinutes' => $this->max_walk_minutes,

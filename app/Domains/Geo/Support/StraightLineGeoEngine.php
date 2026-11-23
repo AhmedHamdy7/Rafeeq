@@ -60,6 +60,11 @@ final class StraightLineGeoEngine implements GeoQueryEngine
         return $this->routeBetween($from, $to, $via);
     }
 
+    public function routeLeavingAt(Coordinate $from, Coordinate $to, array $via, CarbonImmutable $departAt): Route
+    {
+        return $this->routeBetween($from, $to, $via);
+    }
+
     public function detourMinutes(Route $original, Coordinate $pickup): float
     {
         $points = $original->points();

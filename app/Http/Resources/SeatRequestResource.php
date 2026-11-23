@@ -185,6 +185,13 @@ final class SeatRequestResource extends JsonResource
                 'promisedArrivalLocal' => $day === null ? null : PassengerStanding::promisedArrivalLocal($day),
             ],
 
+            // B1: the commute's direction, for the Going / Return tag.
+            'direction' => $this->relationLoaded('commuteOffer') ? $this->commuteOffer?->direction->value : null,
+
+            // B9, driver only: `booked` / `pending` when she also holds a seat or an open request on
+            // the linked Going / Return commute on the same days; null otherwise.
+            'alsoOnLinked' => $this->when(! $hers, fn (): ?string => LinkedRiders::forSeatRequest($this->resource)),
+
             /*
              * The place the driver proposed instead, while it is waiting on the passenger (v5 §2).
              *
@@ -304,6 +311,13 @@ final class SeatRequestResource extends JsonResource
 
         return [
             ...JourneyCard::route($offer),
+            'promisedDepartureAt' => $day?->promised_departure_at?->toIso8601String(),
+            'promisedDepartureLocal' => $day === null ? null : TripTimes::local($day, $day->promised_departure_at),
+            'estimatedArrivalAt' => $day === null ? null : TripTimes::estimatedArrival($day)?->format(DATE_ATOM),
+            'estimatedArrivalLocal' => $day === null ? null : TripTimes::local($day, TripTimes::estimatedArrival($day)),
+            'direction' => $offer->direction->value,
+            // B3, S6: the published Return of this Going commute, for "Need a ride back too?".
+            'returnCommute' => ReturnSuggestion::for($this->resource, $offer),
             // TRIPS-12: the commute's group, so the card can open the group once she is in it.
             'commuteGroupId' => $offer->group?->id,
             'tripId' => $day?->id,

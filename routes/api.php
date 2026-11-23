@@ -50,6 +50,7 @@ use App\Http\Controllers\Api\V1\Testing\TestingDataController;
 use App\Http\Controllers\Api\V1\Testing\TestingPaymentsController;
 use App\Http\Controllers\Api\V1\Testing\TestingPromptsController;
 use App\Http\Controllers\Api\V1\Testing\TestingRecordsController;
+use App\Http\Controllers\Api\V1\Testing\TestingReturnTripsController;
 use App\Http\Controllers\Api\V1\Testing\TestingSafetyController;
 use App\Http\Controllers\Api\V1\Testing\TestingScenarioController;
 use App\Http\Controllers\Api\V1\Testing\TestingStatesController;
@@ -106,6 +107,7 @@ Route::prefix('v1')->group(function (): void {
 
     Route::prefix('testing')->middleware(['testing.api', 'auth:sanctum'])->group(function (): void {
         Route::post('driver/approve', [TestingController::class, 'approveDriver']);
+        Route::post('commutes/linked-pair', [TestingReturnTripsController::class, 'linkedPair']);
         Route::delete('account', [TestingController::class, 'destroyAccount']);
         Route::post('trips/{trip}/departure', [TestingController::class, 'moveDeparture']);
         Route::post('trips/{trip}/position', [TestingController::class, 'placeCar']);

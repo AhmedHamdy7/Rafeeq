@@ -143,6 +143,8 @@ final class SameTimeBookings
 
         if ($trip->promised_arrival_at !== null) {
             $end = CarbonImmutable::parse($trip->promised_arrival_at);
+        } elseif ($trip->estimated_arrival_at !== null) {
+            $end = CarbonImmutable::parse($trip->estimated_arrival_at);
         } else {
             $seconds = $trip->itinerary_duration_seconds
                 ?? ($trip->relationLoaded('commuteOffer') ? $trip->commuteOffer?->route_duration_seconds : null)
