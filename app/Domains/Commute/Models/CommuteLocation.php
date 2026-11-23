@@ -3,6 +3,7 @@
 namespace App\Domains\Commute\Models;
 
 use App\Domains\Commute\Enums\CommuteLocationType;
+use App\Domains\Geo\Models\Area;
 use App\Domains\Geo\Models\Place;
 use App\Domains\Shared\Casts\SpatialPoint;
 use Database\Factories\CommuteLocationFactory;
@@ -12,7 +13,7 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
-#[Fillable(['commute_offer_id', 'place_id', 'type', 'point', 'lat', 'lng', 'address', 'sequence', 'is_exact'])]
+#[Fillable(['commute_offer_id', 'place_id', 'google_place_id', 'area_id', 'type', 'point', 'lat', 'lng', 'address', 'sequence', 'is_exact'])]
 class CommuteLocation extends Model
 {
     /** @use HasFactory<CommuteLocationFactory> */
@@ -33,6 +34,11 @@ class CommuteLocation extends Model
     public function commuteOffer(): BelongsTo
     {
         return $this->belongsTo(CommuteOffer::class);
+    }
+
+    public function area(): BelongsTo
+    {
+        return $this->belongsTo(Area::class, 'area_id', 'google_place_id');
     }
 
     public function place(): BelongsTo

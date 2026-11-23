@@ -432,8 +432,8 @@ function searchCriteria(array $overrides = []): array
         'origin' => ['lat' => 30.0594, 'lng' => 31.4913],
         'destination' => ['lat' => 30.0714, 'lng' => 30.9716],
         'daysMask' => DaysMask::weekdaysSunToThu()->value,
-        'arrivalWindowStart' => '06:45:00',
-        'arrivalWindowEnd' => '08:00:00',
+        'arrivalWindowStart' => '08:30:00',
+        'arrivalWindowEnd' => '09:00:00',
         'maxWalkMinutes' => 15,
         'maxDetourMinutes' => 15,
     ], $overrides);

@@ -5,7 +5,6 @@ namespace App\Domains\Matching\Actions;
 use App\Domains\Booking\Enums\DetourTier;
 use App\Domains\Booking\Support\PickupEta;
 use App\Domains\Commute\Enums\CommuteLocationType;
-use App\Domains\Commute\Enums\CommuteRuleKey;
 use App\Domains\Commute\Models\CommuteLocation;
 use App\Domains\Commute\Models\CommuteOffer;
 use App\Domains\Commute\Models\ScheduledTrip;
@@ -17,6 +16,7 @@ use App\Domains\Geo\Support\Polyline;
 use App\Domains\Geo\ValueObjects\Route;
 use App\Domains\Identity\Models\User;
 use App\Domains\Matching\Models\MatchScore;
+use App\Domains\Matching\Support\ArriveBy;
 use App\Domains\Matching\Support\HardFilters;
 use App\Domains\Matching\Support\MatchResult;
 use App\Domains\Matching\Support\ScoreBreakdown;
@@ -26,6 +26,7 @@ use App\Domains\Matching\Support\SearchCriteria;
 use App\Domains\Shared\ValueObjects\Coordinate;
 use App\Domains\Shared\ValueObjects\Distance;
 use App\Domains\Shared\ValueObjects\WalkTime;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Support\Facades\Log;
 
@@ -59,6 +60,8 @@ final readonly class SearchCommutesAction
 
     private const int RESULT_LIMIT = 20;
 
+    private const int AREA_STEP_BELOW = 3;
+
     public function __construct(private GeoQueryEngine $geo) {}
 
     /**
@@ -86,13 +89,125 @@ final readonly class SearchCommutesAction
     }
 
     /**
+     * Point first, then same area (review item 8): when the point match finds fewer than three
+     * commutes, commutes whose start or a pickup is in her origin's Google area and whose end or a
+     * drop-off is in her destination's area (or near her destination) come back as `areaMatches`.
+     *
+     * @return array{0: array<int, MatchResult>, 1: array<int, MatchResult>}
+     */
+    public function executeWithAreas(User $passenger, SearchCriteria $criteria, bool $includeFull = false): array
+    {
+        $results = $this->execute($passenger, $criteria, $includeFull);
+
+        if (count($results) >= self::AREA_STEP_BELOW || $criteria->originAreaId === null) {
+            return [$results, []];
+        }
+
+        $exclude = array_map(fn (MatchResult $result): string => $result->offer->id, $results);
+
+        return [$results, $this->sameArea($passenger, $criteria, $exclude, $includeFull)];
+    }
+
+    /**
+     * @param  array<int, string>  $exclude
+     * @return array<int, MatchResult>
+     */
+    private function sameArea(User $passenger, SearchCriteria $criteria, array $exclude, bool $includeFull): array
+    {
+        $originArea = (string) $criteria->originAreaId;
+        $destinationArea = $criteria->destinationAreaId;
+        $starts = [CommuteLocationType::Origin->value, CommuteLocationType::Pickup->value];
+        $ends = [CommuteLocationType::Dropoff->value, CommuteLocationType::Destination->value];
+
+        $candidates = $this->stageOneHardFilters($passenger, $criteria, $includeFull, function (Builder $offer) use ($exclude, $originArea, $destinationArea, $starts, $ends, $criteria): void {
+            $offer->whereNotIn('commute_offers.id', $exclude)
+                ->whereHas('locations', fn (Builder $location) => $location->where('area_id', $originArea)->whereIn('type', $starts))
+                ->where(function (Builder $end) use ($destinationArea, $ends, $criteria): void {
+                    if ($destinationArea !== null) {
+                        $end->whereHas('locations', fn (Builder $location) => $location->where('area_id', $destinationArea)->whereIn('type', $ends))
+                            ->orWhere(fn (Builder $box) => HardFilters::boxContains($box, $criteria->destination));
+
+                        return;
+                    }
+
+                    HardFilters::boxContains($end, $criteria->destination);
+                });
+        });
+
+        $survivors = [];
+
+        foreach ($candidates as $trip) {
+            if (! ArriveBy::fits($trip, $criteria)) {
+                continue;
+            }
+
+            $offer = $trip->commuteOffer;
+            $meeting = $this->nearestIn($offer, $criteria->origin, $originArea, [CommuteLocationType::Origin, CommuteLocationType::Pickup]);
+            $dropOff = $destinationArea === null ? null : $this->nearestIn($offer, $criteria->destination, $destinationArea, [CommuteLocationType::Dropoff, CommuteLocationType::Destination]);
+
+            if ($dropOff === null) {
+                $route = $this->routeOf($offer);
+
+                if ($route === null || $this->geo->distanceFromRoute($route, $criteria->destination)->metres > RouteSettings::farRadiusMeters()) {
+                    continue;
+                }
+
+                $dropOff = $this->nearestDropOff($offer, $criteria->destination)[0] ?? null;
+            }
+
+            if ($meeting === null || $dropOff === null) {
+                continue;
+            }
+
+            $survivors[] = [
+                'trip' => $trip,
+                'meetingPoint' => $meeting,
+                'walk' => Haversine::between($criteria->origin, $this->coordinateOf($meeting))->asWalkTime(),
+                'dropOff' => [$dropOff, Haversine::between($criteria->destination, $this->coordinateOf($dropOff))],
+                'criteria' => $criteria->withEnds($this->coordinateOf($meeting), $this->coordinateOf($dropOff)),
+                'areaId' => $originArea,
+            ];
+        }
+
+        if ($survivors === []) {
+            return [];
+        }
+
+        return $this->groupByCommute($this->stageThreeAndFour($survivors, $criteria, $passenger), $criteria->seatsNeeded);
+    }
+
+    /**
+     * @param  list<CommuteLocationType>  $types
+     */
+    private function nearestIn(CommuteOffer $offer, Coordinate $from, string $areaId, array $types): ?CommuteLocation
+    {
+        $best = null;
+        $bestMetres = null;
+
+        foreach ($offer->locations as $location) {
+            if ($location->area_id !== $areaId || ! in_array($location->type, $types, true)) {
+                continue;
+            }
+
+            $metres = Haversine::between($from, $this->coordinateOf($location))->metres;
+
+            if ($bestMetres === null || $metres < $bestMetres) {
+                $best = $location;
+                $bestMetres = $metres;
+            }
+        }
+
+        return $best;
+    }
+
+    /**
      * Stage 1 — everything the passenger may not see, gone in SQL.
      *
      * @return Collection<int, ScheduledTrip>
      */
-    private function stageOneHardFilters(User $passenger, SearchCriteria $criteria, bool $includeFull = false)
+    private function stageOneHardFilters(User $passenger, SearchCriteria $criteria, bool $includeFull = false, ?callable $near = null)
     {
-        return HardFilters::apply(ScheduledTrip::query(), $passenger, $criteria, $includeFull)
+        return HardFilters::apply(ScheduledTrip::query(), $passenger, $criteria, $includeFull, $near)
             // Eager-loaded because the next stages read all of it, and
             // `preventLazyLoading` would otherwise turn this into an exception —
             // which is exactly the N+1 it exists to catch.
@@ -131,6 +246,10 @@ final readonly class SearchCommutesAction
         $survivors = [];
 
         foreach ($candidates as $trip) {
+            if (! ArriveBy::fits($trip, $criteria)) {
+                continue;
+            }
+
             $own = $this->criteriaFor($trip->commuteOffer, $criteria);
 
             if ($own === null) {
@@ -372,6 +491,7 @@ final readonly class SearchCommutesAction
                     Haversine::between($criteria->origin, $this->coordinateOf($candidate['meetingPoint']))->metres,
                 ),
                 dropOffSeconds: $dropOff === null ? null : PickupEta::secondsAlong($this->geo, $offer, $this->coordinateOf($dropOff)),
+                areaId: $candidate['areaId'] ?? null,
             );
         }
 
@@ -420,14 +540,10 @@ final readonly class SearchCommutesAction
     {
         $keys = [];
 
-        foreach ($offer->rules as $rule) {
-            if ($rule->rule_value && $rule->rule_key !== CommuteRuleKey::Ac) {
-                $keys[] = $rule->rule_key->value;
+        foreach ($offer->rulesMap() as $key => $value) {
+            if ($value) {
+                $keys[] = $key;
             }
-        }
-
-        if ($offer->vehicle?->has_ac) {
-            $keys[] = CommuteRuleKey::Ac->value;
         }
 
         return $keys;

@@ -2,6 +2,7 @@
 
 namespace App\Http\Requests\Booking;
 
+use App\Domains\Geo\Support\PointArea;
 use Illuminate\Contracts\Validation\Validator;
 use Illuminate\Foundation\Http\FormRequest;
 
@@ -35,6 +36,7 @@ final class CounterofferSeatRequestRequest extends FormRequest
             'pickup.lat' => ['nullable', 'numeric', 'between:-90,90'],
             'pickup.lng' => ['nullable', 'numeric', 'between:-180,180'],
             'pickup.label' => ['nullable', 'string', 'max:255'],
+            ...PointArea::rules('pickup'),
 
             // Where you would rather set her down. Omit to keep the drop-off she asked for.
             'dropoff' => ['sometimes', 'nullable', 'array'],
@@ -42,6 +44,7 @@ final class CounterofferSeatRequestRequest extends FormRequest
             'dropoff.lat' => ['nullable', 'numeric', 'between:-90,90'],
             'dropoff.lng' => ['nullable', 'numeric', 'between:-180,180'],
             'dropoff.label' => ['nullable', 'string', 'max:255'],
+            ...PointArea::rules('dropoff'),
 
             // Why, in a line she will read before deciding. Optional.
             'note' => ['nullable', 'string', 'max:255'],

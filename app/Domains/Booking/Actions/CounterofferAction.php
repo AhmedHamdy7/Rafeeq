@@ -120,8 +120,10 @@ final readonly class CounterofferAction
         }
 
         RequestedPoints::assertUsablePair($this->geo, $offer, $pickup, $dropoff);
+        $pickupArea = $pickupMoved ? RequestedPoints::area($offer, $input['pickup'], $input['pickup']['suggestionId'] ?? null, $pickup) : [];
+        $dropoffArea = $dropoffMoved ? RequestedPoints::area($offer, $input['dropoff'], $input['dropoff']['suggestionId'] ?? null, $dropoff) : [];
 
-        return DB::transaction(function () use ($request, $driver, $input, $pickup, $pickupLabel, $pickupMoved, $dropoff, $dropoffLabel, $dropoffMoved): SeatRequest {
+        return DB::transaction(function () use ($request, $driver, $input, $pickup, $pickupLabel, $pickupMoved, $dropoff, $dropoffLabel, $dropoffMoved, $pickupArea, $dropoffArea): SeatRequest {
             $request->forceFill([
                 'status' => SeatRequestStatus::Counteroffered->value,
                 'responded_by' => $driver->id,
@@ -145,6 +147,10 @@ final readonly class CounterofferAction
                 'counteroffer_dropoff_lat' => $dropoffMoved ? $dropoff->lat : null,
                 'counteroffer_dropoff_lng' => $dropoffMoved ? $dropoff->lng : null,
                 'counteroffer_dropoff_label' => $dropoffMoved ? $dropoffLabel : null,
+                'counteroffer_pickup_google_place_id' => $pickupArea['google_place_id'] ?? null,
+                'counteroffer_pickup_area_id' => $pickupArea['area_id'] ?? null,
+                'counteroffer_dropoff_google_place_id' => $dropoffArea['google_place_id'] ?? null,
+                'counteroffer_dropoff_area_id' => $dropoffArea['area_id'] ?? null,
 
                 /*
                  * No deadline (Feature 03 R-4): a counteroffer stays open until she accepts or
@@ -208,6 +214,8 @@ final readonly class CounterofferAction
             $moved["requested_{$kind}_lat"] = $request->{"counteroffer_{$kind}_lat"};
             $moved["requested_{$kind}_lng"] = $request->{"counteroffer_{$kind}_lng"};
             $moved["requested_{$kind}_label"] = $request->{"counteroffer_{$kind}_label"};
+            $moved["requested_{$kind}_google_place_id"] = $request->{"counteroffer_{$kind}_google_place_id"};
+            $moved["requested_{$kind}_area_id"] = $request->{"counteroffer_{$kind}_area_id"};
             /*
              * 🔴 `driver_counteroffer`, not `custom_map`. The agreed place was the DRIVER's idea,
              * and a dispute about somebody waiting at the wrong corner turns on whose idea it was.

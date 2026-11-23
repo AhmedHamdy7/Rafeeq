@@ -47,7 +47,7 @@ it('remembers a search she ran', function () {
          * useless — the one thing a recent search is for is being tapped.
          */
         ->assertJsonPath('data.0.criteria.daysMask', DaysMask::weekdaysSunToThu()->value)
-        ->assertJsonPath('data.0.criteria.arrivalWindowStart', '06:45:00')
+        ->assertJsonPath('data.0.criteria.arrivalWindowStart', '08:30:00')
         ->assertJsonPath('data.0.criteria.origin.lat', 30.0594);
 });
 

@@ -67,7 +67,7 @@ it('describes the arrangement, not a single trip', function () {
         ->and($group['minCommitmentDaysPerWeek'])->toBe(3)
         ->and($group['memberCount'])->toBe(2)
         // The rules somebody agreed to when they joined, looked up months later.
-        ->and($group['commute']['rules'])->toBe(['quiet' => true])
+        ->and($group['commute']['rules'])->toBe(['quiet' => true, 'ac' => true])
         // Two of three seats left on the next day, computed rather than read from a
         // denormalised counter nobody owns.
         ->and($group['seatsOpenNextTrip'])->toBe(2);

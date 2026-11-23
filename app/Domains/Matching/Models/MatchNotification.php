@@ -10,7 +10,7 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
-#[Fillable(['commute_demand_id', 'commute_offer_id', 'score', 'delivered_at'])]
+#[Fillable(['commute_demand_id', 'commute_offer_id', 'score', 'match_kind', 'area_id', 'delivered_at'])]
 class MatchNotification extends Model
 {
     /** @use HasFactory<MatchNotificationFactory> */

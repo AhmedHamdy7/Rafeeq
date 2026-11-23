@@ -85,12 +85,6 @@ final class CommuteOfferResource extends JsonResource
             return [];
         }
 
-        $map = [];
-
-        foreach ($this->rules as $rule) {
-            $map[$rule->rule_key->value] = (bool) $rule->rule_value;
-        }
-
-        return $map;
+        return $this->resource->rulesMap();
     }
 }

@@ -1,6 +1,5 @@
 <?php
 
-use App\Domains\Booking\Models\Booking;
 use App\Domains\Commute\Models\ScheduledTrip;
 use App\Domains\Driver\Models\Vehicle;
 use App\Domains\Safety\Models\AutoShareMessage;
@@ -90,8 +89,8 @@ it('D29: lists the matches of one saved demand', function () {
         'origin' => ['lat' => 30.0594, 'lng' => 31.4913],
         'destination' => ['lat' => 30.0714, 'lng' => 30.9716],
         'daysMask' => 31,
-        'arrivalWindowStart' => '06:45:00',
-        'arrivalWindowEnd' => '08:00:00',
+        'arrivalWindowStart' => '08:30:00',
+        'arrivalWindowEnd' => '09:00:00',
         'maxWalkMinutes' => 15,
         'maxDetourMinutes' => 15,
     ])->assertStatus(201)->json('data.id');

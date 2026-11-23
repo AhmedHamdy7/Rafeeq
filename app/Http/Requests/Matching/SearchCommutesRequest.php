@@ -7,11 +7,15 @@ use App\Domains\Commute\Enums\CommuteRuleKey;
 use App\Domains\Driver\Enums\VehicleTier;
 use App\Domains\Geo\Enums\PlaceType;
 use App\Domains\Geo\Models\Place;
+use App\Domains\Geo\Support\AreaRegistry;
+use App\Domains\Geo\Support\PointArea;
 use App\Domains\Matching\Support\PlaceLabels;
 use App\Domains\Matching\Support\SearchArea;
 use App\Domains\Matching\Support\SearchCriteria;
+use Carbon\CarbonImmutable;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
+use Illuminate\Validation\Validator;
 
 /**
  * Searching for a commute (Chapter 5).
@@ -61,6 +65,7 @@ final class SearchCommutesRequest extends FormRequest
             'origin.label' => ['nullable', 'string', 'max:120'],
             'origin.placeId' => ['nullable', 'string', 'max:26'],
             'origin.areaPlaceId' => ['nullable', 'string', Rule::exists('places', 'id')->whereIn('type', PlaceType::areaValues())],
+            ...PointArea::rules('origin'),
 
             // Where you need to get to.
             'destination' => ['required', 'array'],
@@ -69,19 +74,32 @@ final class SearchCommutesRequest extends FormRequest
             'destination.label' => ['nullable', 'string', 'max:120'],
             'destination.placeId' => ['nullable', 'string', 'max:26'],
             'destination.areaPlaceId' => ['nullable', 'string', Rule::exists('places', 'id')->whereIn('type', PlaceType::areaValues())],
+            ...PointArea::rules('destination'),
 
             /*
              * Which days you need, as a bitmask: Saturday 1, Sunday 2, Monday 4,
              * Tuesday 8, Wednesday 16, Thursday 32, Friday 64. Sunday to Thursday
              * is 62.
              */
-            'daysMask' => ['required', 'integer', 'min:1', 'max:127'],
+            'daysMask' => ['required_without:dateFrom', 'integer', 'min:1', 'max:127'],
 
-            // The earliest and latest departure you would accept, on your own
-            // clock. Commutes inside the window score full marks for timing;
-            // outside it, the score tapers.
-            'arrivalWindowStart' => ['required', 'string', 'date_format:H:i:s,H:i'],
-            'arrivalWindowEnd' => ['required', 'string', 'date_format:H:i:s,H:i', 'after_or_equal:arrivalWindowStart'],
+            /*
+             * Travel dates, `YYYY-MM-DD` on Cairo's calendar: one day, or up to 5 days in a row, from
+             * today to 90 days ahead. Returns commutes with a trip on at least one of them. They win
+             * over `daysMask` when both are sent.
+             */
+            'dateFrom' => ['nullable', 'date_format:Y-m-d'],
+            'dateTo' => ['nullable', 'date_format:Y-m-d', 'required_with:dateFrom'],
+
+            /*
+             * Arrive by, `HH:MM` on your own clock: a commute fits when its promised arrival that day
+             * is between this time minus 30 minutes and this time. Leave it out for any time.
+             */
+            'arriveBy' => ['nullable', 'string', 'date_format:H:i:s,H:i'],
+
+            // Older builds: the same arrive-by rule, start minus 30 minutes to end.
+            'arrivalWindowStart' => ['nullable', 'string', 'date_format:H:i:s,H:i'],
+            'arrivalWindowEnd' => ['nullable', 'string', 'date_format:H:i:s,H:i', 'required_with:arrivalWindowStart', 'after_or_equal:arrivalWindowStart'],
 
             // How far you are willing to walk to the meeting point. Commutes whose
             // nearest pickup is further away are not returned at all.
@@ -91,7 +109,11 @@ final class SearchCommutesRequest extends FormRequest
             // for you. Used to rank; the driver's own limit is applied separately.
             'maxDetourMinutes' => ['sometimes', 'integer', 'min:0', 'max:45'],
 
-            // How many seats you need. Commutes with fewer available are excluded.
+            // Seats open, 1 to 3: only days with at least that many free seats. Left out, full
+            // commutes come back too, with `isFull: true` and `seatsAvailable: 0`.
+            'minSeatsOpen' => ['nullable', 'integer', 'min:1', 'max:3'],
+
+            // Older builds. How many seats you need; full commutes still come back, last.
             'seatsNeeded' => ['sometimes', 'integer', 'min:1', 'max:4'],
 
             // Set to `women_only` to rank women-only commutes highest. It does not
@@ -121,7 +143,7 @@ final class SearchCommutesRequest extends FormRequest
             // higher seat price). Leave it out for any car. A filter, not a preference.
             'tier' => ['nullable', 'string', Rule::enum(VehicleTier::class)],
 
-            // How much earlier or later than your window still works for you.
+            // Ignored: the arrive-by window is fixed at 30 minutes.
             'flexibilityMinutes' => ['nullable', 'integer', 'min:0', 'max:60'],
 
             // Whether you want an evening leg home as well.
@@ -134,9 +156,40 @@ final class SearchCommutesRequest extends FormRequest
         ];
     }
 
+    public function withValidator(Validator $validator): void
+    {
+        $validator->after(function (Validator $validator): void {
+            if ($validator->errors()->isNotEmpty() || $this->input('dateFrom') === null) {
+                return;
+            }
+
+            $today = CarbonImmutable::now('Africa/Cairo')->startOfDay();
+            $from = CarbonImmutable::parse((string) $this->input('dateFrom'), 'Africa/Cairo');
+            $to = CarbonImmutable::parse((string) $this->input('dateTo'), 'Africa/Cairo');
+
+            if ($from->lt($today)) {
+                $validator->errors()->add('dateFrom', __('validation.after_or_equal', ['attribute' => 'dateFrom', 'date' => $today->toDateString()]));
+            }
+
+            if ($to->lt($from)) {
+                $validator->errors()->add('dateTo', __('validation.after_or_equal', ['attribute' => 'dateTo', 'date' => 'dateFrom']));
+            } elseif ($from->diffInDays($to) + 1 > self::MAX_TRAVEL_DAYS) {
+                $validator->errors()->add('dateTo', __('validation.custom.search.date_range', ['days' => self::MAX_TRAVEL_DAYS]));
+            }
+
+            if ($to->gt($today->addDays(self::MAX_DAYS_AHEAD))) {
+                $validator->errors()->add('dateTo', __('validation.before_or_equal', ['attribute' => 'dateTo', 'date' => $today->addDays(self::MAX_DAYS_AHEAD)->toDateString()]));
+            }
+        });
+    }
+
+    public const int MAX_TRAVEL_DAYS = 5;
+
+    public const int MAX_DAYS_AHEAD = 90;
+
     public function criteria(): SearchCriteria
     {
-        $criteria = SearchCriteria::fromArray($this->validated());
+        $criteria = $this->withAreas(SearchCriteria::fromArray($this->validated()));
 
         $originId = $this->validated('origin.areaPlaceId');
         $destinationId = $this->validated('destination.areaPlaceId');
@@ -148,6 +201,25 @@ final class SearchCommutesRequest extends FormRequest
         return $criteria->withAreas(
             $originId === null ? null : SearchArea::of(Place::query()->find($originId)),
             $destinationId === null ? null : SearchArea::of(Place::query()->find($destinationId)),
+        );
+    }
+
+    private function withAreas(SearchCriteria $criteria): SearchCriteria
+    {
+        return self::googleAreas($criteria, $this->validated('origin'), $this->validated('destination'));
+    }
+
+    /**
+     * @param  array<string, mixed>|null  $origin
+     * @param  array<string, mixed>|null  $destination
+     */
+    public static function googleAreas(SearchCriteria $criteria, ?array $origin, ?array $destination): SearchCriteria
+    {
+        $areas = app(AreaRegistry::class);
+
+        return $criteria->withGoogleAreas(
+            $areas->resolve(PointArea::from($origin), $criteria->origin),
+            $areas->resolve(PointArea::from($destination), $criteria->destination),
         );
     }
 

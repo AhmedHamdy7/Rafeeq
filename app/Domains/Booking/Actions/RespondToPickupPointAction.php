@@ -59,7 +59,13 @@ final readonly class RespondToPickupPointAction
         return DB::transaction(function () use ($pickup): PickupPointRequest {
             $pickup->forceFill(['status' => PickupPointRequestStatus::Approved->value])->save();
 
-            $this->applyToUpcomingBookings($pickup, $pickup->proposed_point, placeId: null, label: $pickup->proposed_label);
+            $this->applyToUpcomingBookings(
+                $pickup,
+                $pickup->proposed_point,
+                placeId: null,
+                label: $pickup->proposed_label,
+                area: ['google_place_id' => $pickup->proposed_google_place_id, 'area_id' => $pickup->proposed_area_id],
+            );
 
             $this->tellPassenger($pickup, NotificationType::PickupChangeApproved);
 
@@ -71,17 +77,25 @@ final readonly class RespondToPickupPointAction
      * A counter-offer. Recorded against the request so the passenger sees what was
      * suggested and by implication what was not agreed to.
      */
-    public function suggestAlternative(PickupPointRequest $pickup, Place $place): PickupPointRequest
+    /**
+     * @param  array{place_id: string|null, lat: float, lng: float, label: string|null, google_place_id: string|null, area_id: string|null}  $point
+     */
+    public function suggestAlternative(PickupPointRequest $pickup, array $point): PickupPointRequest
     {
         $this->assertPending($pickup);
 
         $pickup->forceFill([
             'status' => PickupPointRequestStatus::SuggestedAlternative->value,
-            'alternative_place_id' => $place->id,
+            'alternative_place_id' => $point['place_id'],
+            'alternative_lat' => $point['lat'],
+            'alternative_lng' => $point['lng'],
+            'alternative_label' => $point['label'],
+            'alternative_google_place_id' => $point['google_place_id'],
+            'alternative_area_id' => $point['area_id'],
         ])->save();
 
         $this->tellPassenger($pickup, NotificationType::PickupChangeAlternative, [
-            'place' => LocalisedLabel::place($place, null) ?? '',
+            'place' => (string) $point['label'],
         ]);
 
         return $pickup;
@@ -118,22 +132,28 @@ final readonly class RespondToPickupPointAction
 
         $place = $pickup->alternativePlace;
 
-        if ($place === null) {
-            // Only reachable if the place was deleted after being suggested; the FK
-            // is `nullOnDelete`.
+        if ($pickup->alternative_lat === null && $place === null) {
             throw DomainException::of(ErrorCode::PickupNotOnCommute);
         }
 
-        return DB::transaction(function () use ($pickup, $place): PickupPointRequest {
+        $point = $pickup->alternative_lat !== null
+            ? new Coordinate((float) $pickup->alternative_lat, (float) $pickup->alternative_lng)
+            : new Coordinate((float) $place->lat, (float) $place->lng);
+        $label = $pickup->alternative_label ?? LocalisedLabel::place($place, null);
+
+        return DB::transaction(function () use ($pickup, $point, $label): PickupPointRequest {
             $pickup->forceFill(['status' => PickupPointRequestStatus::Approved->value])->save();
 
             $this->applyToUpcomingBookings(
                 $pickup,
-                new Coordinate((float) $place->lat, (float) $place->lng),
-                placeId: $place->id,
+                $point,
+                placeId: $pickup->alternative_place_id,
+                label: $label,
+                source: PointSource::DriverCounteroffer,
+                area: ['google_place_id' => $pickup->alternative_google_place_id, 'area_id' => $pickup->alternative_area_id],
             );
 
-            $this->tellDriver($pickup, $place);
+            $this->tellDriver($pickup, (string) $label);
 
             return $pickup;
         });
@@ -152,7 +172,7 @@ final readonly class RespondToPickupPointAction
         if ($driver !== null) {
             Notifier::send($driver, NotificationType::PickupChangeAlternativeDeclined, params: [
                 'name' => $pickup->requestedBy?->public_first_name ?? '',
-                'place' => $pickup->alternativePlace === null ? '' : (LocalisedLabel::place($pickup->alternativePlace, null) ?? ''),
+                'place' => $pickup->alternative_label ?? ($pickup->alternativePlace === null ? '' : (LocalisedLabel::place($pickup->alternativePlace, null) ?? '')),
             ], data: array_filter([
                 'pickupRequestId' => $pickup->id,
                 'commuteId' => PickupRequestContext::commuteId($pickup),
@@ -176,6 +196,8 @@ final readonly class RespondToPickupPointAction
         ?Coordinate $point,
         ?string $placeId,
         ?string $label = null,
+        PointSource $source = PointSource::CustomMap,
+        array $area = [],
     ): void {
         $bookings = Booking::query()
             ->where('passenger_user_id', $pickup->requested_by_user_id)
@@ -246,8 +268,10 @@ final readonly class RespondToPickupPointAction
                 'requested_pickup_lat' => $point->lat,
                 'requested_pickup_lng' => $point->lng,
                 'requested_pickup_label' => $label ?? $this->labelFor($placeId),
-                'requested_pickup_source' => ($placeId === null ? PointSource::CustomMap : PointSource::DriverCounteroffer)->value,
+                'requested_pickup_source' => ($placeId === null ? $source : PointSource::DriverCounteroffer)->value,
                 'requested_pickup_suggestion_id' => null,
+                'requested_pickup_google_place_id' => $area['google_place_id'] ?? null,
+                'requested_pickup_area_id' => $area['area_id'] ?? null,
             ])->save());
     }
 
@@ -305,7 +329,7 @@ final readonly class RespondToPickupPointAction
         ]));
     }
 
-    private function tellDriver(PickupPointRequest $pickup, Place $place): void
+    private function tellDriver(PickupPointRequest $pickup, string $place): void
     {
         $driver = $this->driverOf($pickup);
 
@@ -315,7 +339,7 @@ final readonly class RespondToPickupPointAction
 
         Notifier::send($driver, NotificationType::PickupChangeAlternativeAccepted, params: [
             'name' => $pickup->requestedBy?->public_first_name ?? '',
-            'place' => LocalisedLabel::place($place, null) ?? '',
+            'place' => $place,
         ], data: array_filter([
             'pickupRequestId' => $pickup->id,
             'commuteId' => PickupRequestContext::commuteId($pickup),

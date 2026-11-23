@@ -3,6 +3,7 @@
 namespace App\Domains\Matching\Actions;
 
 use App\Domains\Geo\Actions\SearchPlacesAction;
+use App\Domains\Geo\Models\Area;
 use App\Domains\Identity\Models\User;
 use App\Domains\Matching\Models\CommuteDemand;
 use App\Domains\Matching\Models\SavedSearch;
@@ -69,8 +70,8 @@ final readonly class RecordRecentSearchAction
          * and ignores both, so the round trip still works, and the row can say where she went.
          */
         $stored = $criteria->toArray();
-        $stored['origin'] += ['label' => $labels->originLabel, 'placeId' => $labels->originPlaceId];
-        $stored['destination'] += ['label' => $labels->destinationLabel, 'placeId' => $labels->destinationPlaceId];
+        $stored['origin'] += ['label' => $labels->originLabel, 'placeId' => $labels->originPlaceId, 'googlePlaceId' => $labels->originGooglePlaceId, 'area' => Area::pointOf($criteria->originAreaId)];
+        $stored['destination'] += ['label' => $labels->destinationLabel, 'placeId' => $labels->destinationPlaceId, 'googlePlaceId' => $labels->destinationGooglePlaceId, 'area' => Area::pointOf($criteria->destinationAreaId)];
 
         /*
          * The same notion of "the same search" the result cache uses, rather than a second one

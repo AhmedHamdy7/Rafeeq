@@ -37,7 +37,9 @@ final readonly class MatchDemandToExistingCommutesAction
         $threshold = (int) config('rafeeq.matching.notification_score_threshold');
         $recorded = 0;
 
-        foreach ($this->search->execute($demand->passenger, NotifyMatchingDemandsAction::criteriaFor($demand)) as $result) {
+        [$near, $sameArea] = $this->search->executeWithAreas($demand->passenger, NotifyMatchingDemandsAction::criteriaFor($demand));
+
+        foreach ([...$near, ...$sameArea] as $result) {
             if ($result->score->total() < $threshold) {
                 continue;
             }
@@ -53,6 +55,8 @@ final readonly class MatchDemandToExistingCommutesAction
                 'commute_demand_id' => $demand->id,
                 'commute_offer_id' => $result->offer->id,
                 'score' => $result->score->total(),
+                'match_kind' => $result->matchKind(),
+                'area_id' => $result->areaId,
                 'created_at' => now(),
                 'updated_at' => now(),
             ]);

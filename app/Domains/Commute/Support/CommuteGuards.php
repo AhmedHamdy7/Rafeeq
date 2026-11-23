@@ -14,6 +14,8 @@ use App\Domains\Identity\Models\User;
 use App\Domains\Shared\Exceptions\DomainException;
 use App\Domains\Shared\Support\ErrorCode;
 use App\Domains\Shared\ValueObjects\DaysMask;
+use App\Domains\Verification\Enums\VerificationStatus;
+use App\Domains\Verification\Enums\VerificationType;
 
 final class CommuteGuards
 {
@@ -25,11 +27,21 @@ final class CommuteGuards
             return;
         }
 
-        if (User::query()->whereKey($driverUserId)->first()?->gender !== Gender::Woman) {
+        if (! self::mayMarkWomenOnly(User::query()->whereKey($driverUserId)->first())) {
             throw DomainException::of(ErrorCode::CommuteWomenOnlyNotAllowed, fields: [
                 'audience' => [__('errors.COMMUTE_WOMEN_ONLY_NOT_ALLOWED')],
             ]);
         }
+    }
+
+    public static function mayMarkWomenOnly(?User $driver): bool
+    {
+        return $driver !== null
+            && $driver->gender === Gender::Woman
+            && $driver->verifications()
+                ->where('type', VerificationType::GovernmentId->value)
+                ->where('status', VerificationStatus::Approved->value)
+                ->exists();
     }
 
     public static function assertCarAllowsAc(?Vehicle $vehicle, bool $wantsAc): void

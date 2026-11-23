@@ -98,10 +98,16 @@ final class ScoringModel
      */
     private static function schedule(ScheduledTrip $trip, SearchCriteria $criteria, ?int $pickupSeconds = null): int
     {
-        $pickup = CarbonImmutable::instance($trip->departure_local)->addSeconds($pickupSeconds ?? 0)->format('H:i:s');
-        $flex = max(0, $criteria->flexibilityMinutes) * 60;
-        $start = self::shift($criteria->arrivalWindowStart, -$flex);
-        $end = self::shift($criteria->arrivalWindowEnd, $flex);
+        if ($criteria->arriveBy) {
+            $pickup = ArriveBy::arrivalLocal($trip);
+            $start = ArriveBy::earliest($criteria);
+            $end = $criteria->arrivalWindowEnd;
+        } else {
+            $pickup = CarbonImmutable::instance($trip->departure_local)->addSeconds($pickupSeconds ?? 0)->format('H:i:s');
+            $flex = max(0, $criteria->flexibilityMinutes) * 60;
+            $start = self::shift($criteria->arrivalWindowStart, -$flex);
+            $end = self::shift($criteria->arrivalWindowEnd, $flex);
+        }
 
         if ($pickup >= $start && $pickup <= $end) {
             return self::SCHEDULE_WEIGHT;

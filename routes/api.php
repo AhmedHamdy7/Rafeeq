@@ -612,7 +612,7 @@ Route::prefix('v1')->group(function (): void {
         /*
          * A commute as a passenger reads it (DISCOVER-1). Not `GET /commutes/{commute}`, which is
          * the driver's own and verified-only: a passenger is never verified to search or request
-         * (D-0012). Same eligibility as the search; the route trimmed until she holds a seat.
+         * (D-0012). Same eligibility as the search; the whole route line and its real ends.
          */
         Route::get('commutes/{commute}/public', [CommuteDetailController::class, 'show']);
 

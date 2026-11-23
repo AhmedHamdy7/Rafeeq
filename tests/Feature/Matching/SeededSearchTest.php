@@ -29,8 +29,8 @@ function reportedSearch(): TestResponse
         'origin' => ['lat' => 30.0602, 'lng' => 31.4915],
         'destination' => ['lat' => 30.0724, 'lng' => 31.0116],
         'daysMask' => 62,
-        'arrivalWindowStart' => '06:45:00',
-        'arrivalWindowEnd' => '08:00:00',
+        'arrivalWindowStart' => '08:30:00',
+        'arrivalWindowEnd' => '09:00:00',
         'maxWalkMinutes' => 12,
         'maxDetourMinutes' => 15,
     ]));

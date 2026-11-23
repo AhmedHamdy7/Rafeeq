@@ -24,6 +24,9 @@ final readonly class PlaceLabels
         public ?string $originPlaceId = null,
         public ?string $destinationLabel = null,
         public ?string $destinationPlaceId = null,
+        public ?string $originGooglePlaceId = null,
+        public ?string $destinationGooglePlaceId = null,
+        public bool $fromGoogle = false,
     ) {}
 
     /**
@@ -36,7 +39,18 @@ final readonly class PlaceLabels
             originPlaceId: self::text($input['origin']['placeId'] ?? null),
             destinationLabel: self::text($input['destination']['label'] ?? null),
             destinationPlaceId: self::text($input['destination']['placeId'] ?? null),
+            originGooglePlaceId: self::text($input['origin']['googlePlaceId'] ?? null),
+            destinationGooglePlaceId: self::text($input['destination']['googlePlaceId'] ?? null),
+            fromGoogle: self::sentGoogle($input['origin'] ?? []) || self::sentGoogle($input['destination'] ?? []),
         );
+    }
+
+    /**
+     * @param  array<string, mixed>  $point
+     */
+    private static function sentGoogle(array $point): bool
+    {
+        return isset($point['googlePlaceId']) || isset($point['area']) || isset($point['areaId']);
     }
 
     /**
@@ -48,6 +62,10 @@ final readonly class PlaceLabels
      */
     public function resolved(SearchPlacesAction $places, Coordinate $origin, Coordinate $destination): self
     {
+        if ($this->fromGoogle) {
+            return $this;
+        }
+
         $originPlace = $this->originLabel === null && $this->originPlaceId === null ? $places->nearest($origin) : null;
         $destinationPlace = $this->destinationLabel === null && $this->destinationPlaceId === null ? $places->nearest($destination) : null;
 
@@ -56,6 +74,8 @@ final readonly class PlaceLabels
             originPlaceId: $this->originPlaceId ?? $originPlace?->id,
             destinationLabel: $this->destinationLabel ?? self::nameOf($destinationPlace) ?? $places->nearest($destination)?->name,
             destinationPlaceId: $this->destinationPlaceId ?? $destinationPlace?->id,
+            originGooglePlaceId: $this->originGooglePlaceId,
+            destinationGooglePlaceId: $this->destinationGooglePlaceId,
         );
     }
 

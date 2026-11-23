@@ -10,6 +10,7 @@ use App\Domains\Booking\Support\PickupDetour;
 use App\Domains\Booking\Support\PickupRequestExpiry;
 use App\Domains\Commute\Models\CommuteOffer;
 use App\Domains\Geo\Contracts\GeoQueryEngine;
+use App\Domains\Geo\Support\AreaRegistry;
 use App\Domains\Group\Models\GroupMember;
 use App\Domains\Identity\Models\User;
 use App\Domains\Notification\Enums\NotificationType;
@@ -121,6 +122,13 @@ final readonly class RequestPickupPointAction
         $detour->assertWithin();
 
         $pickup = new PickupPointRequest;
+
+        $area = app(AreaRegistry::class)->columns($input, $proposed);
+
+        $pickup->forceFill([
+            'proposed_google_place_id' => $area['google_place_id'],
+            'proposed_area_id' => $area['area_id'],
+        ]);
 
         $pickup->fill([
             'seat_request_id' => $seatRequestId,

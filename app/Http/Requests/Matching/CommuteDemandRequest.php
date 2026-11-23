@@ -15,7 +15,12 @@ class CommuteDemandRequest extends FormRequest
 {
     public function rules(): array
     {
-        return (new SearchCommutesRequest)->rules();
+        $rules = (new SearchCommutesRequest)->rules();
+
+        unset($rules['dateFrom'], $rules['dateTo'], $rules['minSeatsOpen']);
+        $rules['daysMask'] = ['required', 'integer', 'min:1', 'max:127'];
+
+        return $rules;
     }
 
     public function withValidator(Validator $validator): void
@@ -52,7 +57,7 @@ class CommuteDemandRequest extends FormRequest
             $input['audiencePreference'] = CommuteAudience::WomenOnly->value;
         }
 
-        return SearchCriteria::fromArray($input);
+        return SearchCommutesRequest::googleAreas(SearchCriteria::fromArray($input), $input['origin'] ?? null, $input['destination'] ?? null);
     }
 
     public function places(): PlaceLabels

@@ -34,8 +34,8 @@ function saveDemand(string $token, array $overrides = [])
         'origin' => ['lat' => 30.0594, 'lng' => 31.4913],
         'destination' => ['lat' => 30.0714, 'lng' => 30.9716],
         'daysMask' => DaysMask::weekdaysSunToThu()->value,
-        'arrivalWindowStart' => '06:45:00',
-        'arrivalWindowEnd' => '08:00:00',
+        'arrivalWindowStart' => '08:30:00',
+        'arrivalWindowEnd' => '09:00:00',
         'maxWalkMinutes' => 15,
         'maxDetourMinutes' => 15,
     ], $overrides));
@@ -274,8 +274,8 @@ it('collapses a saved search that is saved twice', function () {
         'origin' => ['lat' => 30.0594, 'lng' => 31.4913],
         'destination' => ['lat' => 30.0714, 'lng' => 30.9716],
         'daysMask' => 62,
-        'arrivalWindowStart' => '06:45:00',
-        'arrivalWindowEnd' => '08:00:00',
+        'arrivalWindowStart' => '08:30:00',
+        'arrivalWindowEnd' => '09:00:00',
         'maxWalkMinutes' => 15,
         'maxDetourMinutes' => 15,
     ];
@@ -303,8 +303,8 @@ it('never exposes the internal deduplication key of a saved search', function ()
             'origin' => ['lat' => 30.0594, 'lng' => 31.4913],
             'destination' => ['lat' => 30.0714, 'lng' => 30.9716],
             'daysMask' => 62,
-            'arrivalWindowStart' => '06:45:00',
-            'arrivalWindowEnd' => '08:00:00',
+            'arrivalWindowStart' => '08:30:00',
+            'arrivalWindowEnd' => '09:00:00',
             'maxWalkMinutes' => 15,
             'maxDetourMinutes' => 15,
         ],
@@ -318,8 +318,8 @@ it('lets a passenger delete only their own saved search', function () {
         'origin' => ['lat' => 30.0594, 'lng' => 31.4913],
         'destination' => ['lat' => 30.0714, 'lng' => 30.9716],
         'daysMask' => 62,
-        'arrivalWindowStart' => '06:45:00',
-        'arrivalWindowEnd' => '08:00:00',
+        'arrivalWindowStart' => '08:30:00',
+        'arrivalWindowEnd' => '09:00:00',
         'maxWalkMinutes' => 15,
         'maxDetourMinutes' => 15,
     ];
@@ -391,7 +391,7 @@ it('pauses and resumes a saved request without touching what it asks for', funct
     test()->withToken($this->paxToken)->patchJson("/api/v1/commute-demands/{$id}", ['paused' => true])
         ->assertOk()
         ->assertJsonPath('data.status', 'PAUSED')
-        ->assertJsonPath('data.arrivalWindowStart', '06:45:00');
+        ->assertJsonPath('data.arrivalWindowStart', '08:30:00');
 
     test()->withToken($this->paxToken)->patchJson("/api/v1/commute-demands/{$id}", ['paused' => false])
         ->assertOk()

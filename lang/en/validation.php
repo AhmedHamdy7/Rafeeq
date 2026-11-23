@@ -193,6 +193,9 @@ return [
             'required' => 'Change at least one of the departure time, the promised arrival or the pickup points.',
             'pickup_scope' => 'Pickup points are shared across this commute’s weekdays, so changing them applies to all future occurrences.',
         ],
+        'search' => [
+            'date_range' => 'Pick at most :days days in a row.',
+        ],
         'demand' => [
             'same_place' => 'The destination must be different from the origin.',
             'women_only' => 'Only a woman can ask for women-only commutes. Set your gender in your profile first.',

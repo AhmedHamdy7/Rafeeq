@@ -53,6 +53,10 @@ return [
         // The dashboard's maps, in the browser. A separate key, restricted to the Maps
         // JavaScript API and the dashboard's domain (HTTP referrer). See AdminMaps.
         'browser_key' => env('GOOGLE_MAPS_BROWSER_KEY'),
+        // Geocoding API, for the area check and the area backfill. Restrict it to the Geocoding API
+        // and the server's IPs. Without it the areas the app sends are kept as sent.
+        'server_key' => env('GOOGLE_MAPS_SERVER_KEY'),
+        'geocoding_endpoint' => env('GOOGLE_GEOCODING_ENDPOINT', 'https://maps.googleapis.com/maps/api/geocode/json'),
     ],
 
     'slack' => [

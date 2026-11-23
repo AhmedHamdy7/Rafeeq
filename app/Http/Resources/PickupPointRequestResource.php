@@ -6,7 +6,9 @@ use App\Domains\Booking\Enums\PickupPointRequestStatus;
 use App\Domains\Booking\Models\PickupPointRequest;
 use App\Domains\Booking\Support\PickupDetour;
 use App\Domains\Booking\Support\PickupRequestContext;
+use App\Domains\Geo\Models\Area;
 use App\Domains\Geo\Support\NearPlace;
+use App\Domains\Shared\ValueObjects\Coordinate;
 use App\Domains\Verification\Support\Avatar;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
@@ -102,17 +104,45 @@ final class PickupPointRequestResource extends JsonResource
             // Set when the driver countered with a place of their own. The passenger
             // has to accept it before anything moves.
             'alternativePlaceId' => $this->alternative_place_id,
-            'alternativePlace' => $this->alternativePlace === null ? null : [
-                'id' => $this->alternativePlace->id,
-                'label' => LocalisedLabel::place($this->alternativePlace, null),
-                'lat' => (float) $this->alternativePlace->lat,
-                'lng' => (float) $this->alternativePlace->lng,
-                'isExact' => true,
-            ],
+            'alternativePlace' => $this->alternativePoint(),
+            'alternativePoint' => $this->alternativePoint(),
 
             'expiresAt' => $this->expires_at?->toIso8601String(),
             'expiredAt' => $this->expired_at?->toIso8601String(),
             'createdAt' => $this->created_at->toIso8601String(),
+        ];
+    }
+
+    private function areaLabel(Coordinate $point): ?string
+    {
+        return Area::nameOf($this->proposed_area_id) ?? PickupRequestContext::areaLabel($point);
+    }
+
+    /**
+     * @return array<string, mixed>|null
+     */
+    private function alternativePoint(): ?array
+    {
+        if ($this->alternative_lat !== null) {
+            return [
+                'id' => $this->alternative_place_id,
+                'label' => $this->alternative_label,
+                'lat' => (float) $this->alternative_lat,
+                'lng' => (float) $this->alternative_lng,
+                'googlePlaceId' => $this->alternative_google_place_id,
+                'area' => Area::pointOf($this->alternative_area_id),
+                'isExact' => true,
+            ];
+        }
+
+        return $this->alternativePlace === null ? null : [
+            'id' => $this->alternativePlace->id,
+            'label' => LocalisedLabel::place($this->alternativePlace, null),
+            'lat' => (float) $this->alternativePlace->lat,
+            'lng' => (float) $this->alternativePlace->lng,
+            'googlePlaceId' => null,
+            'area' => null,
+            'isExact' => true,
         ];
     }
 
@@ -131,8 +161,9 @@ final class PickupPointRequestResource extends JsonResource
 
         return [
             'label' => $agreed
-                ? ($this->proposed_label ?? PickupRequestContext::areaLabel($point))
-                : PickupRequestContext::areaLabel($point),
+                ? ($this->proposed_label ?? $this->areaLabel($point))
+                : $this->areaLabel($point),
+            'area' => Area::pointOf($this->proposed_area_id),
             'lat' => $agreed ? $point->lat : round($point->lat, self::FUZZ_DECIMALS),
             'lng' => $agreed ? $point->lng : round($point->lng, self::FUZZ_DECIMALS),
             'nearPlaceId' => NearPlace::id($agreed ? $point->lat : null, $agreed ? $point->lng : null),

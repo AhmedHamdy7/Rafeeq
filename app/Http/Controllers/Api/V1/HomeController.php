@@ -19,6 +19,7 @@ use App\Domains\Commute\Models\ScheduledTrip;
 use App\Domains\Commute\Support\ComputedDeparture;
 use App\Domains\Driver\Models\DriverProfile;
 use App\Domains\Driver\Support\DriverChecklist;
+use App\Domains\Geo\Models\Area;
 use App\Domains\Group\Models\CommuteGroup;
 use App\Domains\Group\Models\GroupMember;
 use App\Domains\Identity\Enums\AccountStatus;
@@ -710,9 +711,17 @@ final class HomeController extends Controller
             return null;
         }
 
+        $unopened = MatchNotification::query()
+            ->where('commute_demand_id', $demand->id)
+            ->whereNull('clicked_at')
+            ->get(['match_kind', 'area_id']);
+        $nearby = $unopened->contains(fn (MatchNotification $match): bool => $match->match_kind !== 'sameArea');
+
         return [
             'demandId' => $demand->id,
             'newMatchesCount' => (int) $demand->unopened_count,
+            'matchKind' => $nearby ? 'near' : 'sameArea',
+            'areaName' => $nearby ? null : Area::nameOf($unopened->first()?->area_id),
             'originLabel' => LocalisedLabel::place($demand->originPlace, $demand->origin_label),
             'destinationLabel' => LocalisedLabel::place($demand->destinationPlace, $demand->destination_label),
             'daysMask' => (int) $demand->days_mask,

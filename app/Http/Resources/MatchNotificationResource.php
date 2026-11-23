@@ -10,6 +10,7 @@ use App\Domains\Commute\Models\CommuteLocation;
 use App\Domains\Commute\Models\CommuteOffer;
 use App\Domains\Commute\Models\ScheduledTrip;
 use App\Domains\Geo\Contracts\GeoQueryEngine;
+use App\Domains\Geo\Models\Area;
 use App\Domains\Geo\Support\Haversine;
 use App\Domains\Identity\Models\User;
 use App\Domains\Matching\Models\CommuteDemand;
@@ -134,6 +135,8 @@ final class MatchNotificationResource extends JsonResource
             // The score when the match was found. The commute may have changed
             // since; this records why the interruption was justified.
             'score' => $this->score,
+            'matchKind' => $this->match_kind ?? 'near',
+            'areaName' => Area::nameOf($this->area_id),
             'audience' => $offer->audience->value,
             'womenOnly' => $offer->audience === CommuteAudience::WomenOnly,
             // The commute's current automatic seat price (P-1); null only if it was never priced.
@@ -330,12 +333,6 @@ final class MatchNotificationResource extends JsonResource
      */
     private function rulesMap(CommuteOffer $offer): array
     {
-        $map = [];
-
-        foreach ($offer->rules as $rule) {
-            $map[$rule->rule_key->value] = (bool) $rule->rule_value;
-        }
-
-        return $map;
+        return $offer->rulesMap();
     }
 }

@@ -4,6 +4,7 @@ namespace App\Http\Requests\Commute;
 
 use App\Domains\Commute\Enums\CommuteAudience;
 use App\Domains\Commute\Enums\CommuteDirection;
+use App\Domains\Commute\Enums\CommuteRuleKey;
 use App\Domains\Commute\Enums\CommuteType;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
@@ -70,7 +71,26 @@ final class StoreCommuteRequest extends FormRequest
             // Whether a passenger may ask to move a confirmed pickup to a point you did not list.
             // Defaults to true.
             'allowsCustomPickup' => ['sometimes', 'boolean'],
+
+            /*
+             * House preferences, as a map of rule to whether it applies, for example
+             * `{"nonsmoking": true, "ac": true}`. `ac` is whether you run the A/C on this commute:
+             * refused when your car has no A/C, and the car's own A/C when left out.
+             */
+            'rules' => ['sometimes', 'array'],
+            'rules.*' => ['boolean'],
         ];
+    }
+
+    public function withValidator($validator): void
+    {
+        $validator->after(function ($validator): void {
+            foreach (array_keys((array) $this->input('rules', [])) as $key) {
+                if (CommuteRuleKey::tryFrom((string) $key) === null) {
+                    $validator->errors()->add("rules.{$key}", __('validation.in', ['attribute' => 'rule']));
+                }
+            }
+        });
     }
 
     /**

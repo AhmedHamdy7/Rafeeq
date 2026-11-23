@@ -6,9 +6,7 @@ use App\Domains\Commute\Models\ScheduledTrip;
 use App\Domains\Driver\Models\DriverProfile;
 use App\Domains\Driver\Models\Vehicle;
 use App\Domains\Geo\Models\Place;
-use App\Domains\Geo\Support\Haversine;
 use App\Domains\Geo\Support\Polyline;
-use App\Domains\Geo\Support\TrimmedRoute;
 use App\Domains\Identity\Models\User;
 use App\Domains\Matching\Models\CommuteDemand;
 use App\Domains\Matching\Models\MatchNotification;
@@ -184,7 +182,7 @@ it('keeps the labels she sent on a recent search, beside the coordinates', funct
     $criteria = test()->withToken($this->paxToken)->getJson('/api/v1/me/recent-searches')
         ->assertOk()->json('data.0.criteria');
 
-    expect($criteria['origin'])->toBe(['lat' => 30.0594, 'lng' => 31.4913, 'label' => 'New Cairo', 'placeId' => '01JPLACEORIGIN00000000000A'])
+    expect($criteria['origin'])->toBe(['lat' => 30.0594, 'lng' => 31.4913, 'label' => 'New Cairo', 'placeId' => '01JPLACEORIGIN00000000000A', 'googlePlaceId' => null, 'area' => null])
         ->and($criteria['destination']['label'])->toBe('Smart Village')
         ->and($criteria['destination']['placeId'])->toBeNull();
 
@@ -328,7 +326,7 @@ it('looks up the places nearest a pin without a search term, closest first', fun
 |--------------------------------------------------------------------------
 */
 
-it('lets a passenger read a commute: suggested points, weekdays, upcoming days, a trimmed route', function () {
+it('lets a passenger read a commute: suggested points, weekdays, upcoming days, the whole route', function () {
     $detail = test()->withToken($this->paxToken)
         ->getJson("/api/v1/commutes/{$this->commuteId}/public")
         ->assertOk()->json('data');
@@ -345,15 +343,17 @@ it('lets a passenger read a commute: suggested points, weekdays, upcoming days, 
         ->and($detail['upcomingTrips'][0]['seatsAvailable'])->toBe(3)
         ->and($detail['upcomingTrips'][0]['myStatus']['kind'])->toBe('none')
         ->and($detail['vehicle'])->not->toHaveKey('plateNumber')
-        ->and($detail['route']['isTrimmed'])->toBeTrue()
+        ->and($detail['route']['isTrimmed'])->toBeFalse()
         ->and($detail['route']['distanceKm'])->toBeGreaterThan(0)
-        // 🔒 Not the driver's front door: the line starts about a kilometre in.
-        ->and($detail['route']['polyline'])->not->toBe($offer->route_polyline);
+        ->and($detail['route']['polyline'])->toBe($offer->route_polyline);
 
-    $start = Polyline::decode($detail['route']['polyline'])[0];
-    $origin = Polyline::decode($offer->route_polyline)[0];
+    $origin = $offer->locations()->where('type', 'origin')->sole();
 
-    expect(Haversine::between($start, $origin)->metres)->toBeGreaterThan(900);
+    expect($detail['route']['start'])->toBe([
+        'label' => $origin->address,
+        'lat' => (float) $origin->lat,
+        'lng' => (float) $origin->lng,
+    ]);
 });
 
 it('gives the suggestion ids a seat request accepts', function () {
@@ -387,17 +387,6 @@ it('hides a commute that is not published, the same as one that does not exist',
     test()->withToken($this->paxToken)
         ->getJson("/api/v1/commutes/{$this->commuteId}/public")
         ->assertNotFound();
-});
-
-it('trims a route by distance, a kilometre off each end', function () {
-    // A straight line of about 11 km with only its two ends as vertices.
-    $line = Polyline::encode([new Coordinate(30.0, 31.0), new Coordinate(30.1, 31.0)]);
-
-    $kept = TrimmedRoute::of($line);
-
-    expect($kept)->toHaveCount(2)
-        ->and(round($kept[0]->lat, 3))->toBe(30.009)
-        ->and(round($kept[1]->lat, 3))->toBe(30.091);
 });
 
 /*

@@ -23,6 +23,7 @@ use App\Domains\Commute\Enums\ScheduledTripStatus;
 use App\Domains\Commute\Models\CommuteOffer;
 use App\Domains\Commute\Models\ScheduledTrip;
 use App\Domains\Commute\Support\CommuteDefaults;
+use App\Domains\Commute\Support\CommuteGuards;
 use App\Domains\Commute\Support\RouteSettings;
 use App\Domains\Commute\Support\SeatPricing;
 use App\Domains\Driver\Enums\DriverProfileStatus;
@@ -30,7 +31,6 @@ use App\Domains\Driver\Models\DriverProfile;
 use App\Domains\Geo\Contracts\GeoQueryEngine;
 use App\Domains\Geo\ValueObjects\Route;
 use App\Domains\Identity\Enums\Capability;
-use App\Domains\Identity\Enums\Gender;
 use App\Domains\Payment\Support\DriverFees;
 use App\Domains\Shared\Exceptions\DomainException;
 use App\Domains\Shared\Support\ErrorCode;
@@ -112,7 +112,7 @@ final class CommuteController extends Controller
                 CommuteRuleKey::NoFood->value,
                 CommuteRuleKey::Music->value,
             ],
-            'canMarkWomenOnly' => $request->user()->gender === Gender::Woman,
+            'canMarkWomenOnly' => CommuteGuards::mayMarkWomenOnly($request->user()),
             'defaults' => [
                 'commuteType' => CommuteType::Recurring->value,
                 'direction' => CommuteDirection::ToWork->value,

@@ -16,6 +16,7 @@ use App\Domains\Commute\Models\CommuteWeekdaySchedule;
 use App\Domains\Commute\Models\ScheduledTrip;
 use App\Domains\Commute\Support\ComputedDeparture;
 use App\Domains\Commute\Support\DepartureTimeCalculator;
+use App\Domains\Geo\Support\AreaRegistry;
 use App\Domains\Notification\Enums\NotificationType;
 use App\Domains\Notification\Support\Notifier;
 use App\Domains\Shared\ValueObjects\Coordinate;
@@ -242,15 +243,17 @@ final readonly class ApplyChangeProposalAction
 
         foreach ($points as $point) {
             $location = new CommuteLocation;
+            $coordinate = new Coordinate((float) $point['lat'], (float) $point['lng']);
 
             $location->fill([
                 'commute_offer_id' => $offer->getKey(),
                 'type' => CommuteLocationType::Pickup->value,
-                'point' => new Coordinate((float) $point['lat'], (float) $point['lng']),
+                'point' => $coordinate,
                 'lat' => $point['lat'],
                 'lng' => $point['lng'],
-                'address' => $point['address'] ?? null,
+                'address' => $point['address'] ?? $point['label'] ?? null,
                 'sequence' => $sequence++,
+                ...app(AreaRegistry::class)->columns($point, $coordinate),
             ]);
 
             $location->save();

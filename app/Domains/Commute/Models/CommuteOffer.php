@@ -7,6 +7,7 @@ use App\Domains\Commute\Enums\CommuteAudience;
 use App\Domains\Commute\Enums\CommuteDirection;
 use App\Domains\Commute\Enums\CommuteOfferStatus;
 use App\Domains\Commute\Enums\CommutePausedReason;
+use App\Domains\Commute\Enums\CommuteRuleKey;
 use App\Domains\Commute\Enums\CommuteType;
 use App\Domains\Driver\Models\DriverProfile;
 use App\Domains\Driver\Models\Vehicle;
@@ -134,5 +135,35 @@ class CommuteOffer extends Model
     public function acceptsWomenOnly(): bool
     {
         return $this->audience === CommuteAudience::WomenOnly;
+    }
+
+    public function runsAc(): bool
+    {
+        $rules = $this->relationLoaded('rules') ? $this->rules : $this->rules()->get();
+        $rule = $rules->first(fn (CommuteRule $rule): bool => $rule->rule_key === CommuteRuleKey::Ac);
+
+        if ($rule !== null) {
+            return (bool) $rule->rule_value;
+        }
+
+        $vehicle = $this->relationLoaded('vehicle') ? $this->vehicle : $this->vehicle()->first();
+
+        return (bool) $vehicle?->has_ac;
+    }
+
+    /**
+     * @return array<string, bool>
+     */
+    public function rulesMap(): array
+    {
+        $map = [];
+
+        foreach ($this->relationLoaded('rules') ? $this->rules : $this->rules()->get() as $rule) {
+            $map[$rule->rule_key->value] = (bool) $rule->rule_value;
+        }
+
+        $map[CommuteRuleKey::Ac->value] = $this->runsAc();
+
+        return $map;
     }
 }

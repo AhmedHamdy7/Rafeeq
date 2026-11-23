@@ -36,13 +36,14 @@ final class Notifier
      * @param  array<string, string|int>  $params  substituted into the wording
      * @param  array<string, string>  $data  deep-link payload for the client (ids, never names)
      */
-    public static function send(User $user, NotificationType $type, array $params = [], array $data = [], bool $quiet = false): ?Notification
+    public static function send(User $user, NotificationType $type, array $params = [], array $data = [], bool $quiet = false, ?string $wording = null): ?Notification
     {
         $category = $type->category();
         $locale = $user->preferred_language ?: config('app.locale');
+        $key = $wording ?? $type->value;
 
-        $title = __("notifications.{$type->value}.title", $params, $locale);
-        $body = __("notifications.{$type->value}.body", $params, $locale);
+        $title = __("notifications.{$key}.title", $params, $locale);
+        $body = __("notifications.{$key}.body", $params, $locale);
         $data = array_map('strval', $data);
 
         $inbox = null;

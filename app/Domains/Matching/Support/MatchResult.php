@@ -33,7 +33,30 @@ final readonly class MatchResult
         public ?int $meetingPointSeconds = null,
         public ?int $dropOffSeconds = null,
         public ?int $distanceMetres = null,
+        public ?string $areaId = null,
     ) {}
+
+    public function matchKind(): string
+    {
+        return $this->areaId === null ? 'near' : 'sameArea';
+    }
+
+    /**
+     * @return array<int, string>
+     */
+    public function matchedDates(): array
+    {
+        $dates = [$this->trip->trip_date->toDateString()];
+
+        foreach ($this->otherDays as $day) {
+            $dates[] = $day->trip_date->toDateString();
+        }
+
+        $dates = array_values(array_unique($dates));
+        sort($dates);
+
+        return $dates;
+    }
 
     public function withOtherDays(array $otherDays): self
     {
@@ -48,6 +71,7 @@ final readonly class MatchResult
             $this->meetingPointSeconds,
             $this->dropOffSeconds,
             $this->distanceMetres,
+            $this->areaId,
         );
     }
 }

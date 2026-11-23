@@ -27,6 +27,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
     'preferred_arrival_start', 'preferred_arrival_end', 'flexibility_minutes', 'max_walk_minutes',
     'max_detour_minutes', 'audience_preference', 'wants_return_trip',
     'origin_place_id', 'destination_place_id', 'women_only', 'required_rules', 'vehicle_tier',
+    'origin_google_place_id', 'destination_google_place_id', 'origin_area_id', 'destination_area_id',
 ])]
 class CommuteDemand extends Model
 {

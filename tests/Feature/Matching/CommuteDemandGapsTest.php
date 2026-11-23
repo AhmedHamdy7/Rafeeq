@@ -145,7 +145,7 @@ it('answers the create with the matches already found', function () {
     $commuteId = readyCommute($driverToken, Vehicle::sole()->id);
     test()->withToken($driverToken)->postJson("/api/v1/commutes/{$commuteId}/publish")->assertOk();
 
-    postDemand($this->paxToken, ['arrivalWindowStart' => '07:05:00', 'arrivalWindowEnd' => '07:05:00'])
+    postDemand($this->paxToken, ['arrivalWindowStart' => '09:00:00', 'arrivalWindowEnd' => '09:00:00'])
         ->assertStatus(201)
         ->assertJsonPath('data.matchCount', 1);
 });

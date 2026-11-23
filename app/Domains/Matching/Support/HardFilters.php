@@ -12,6 +12,7 @@ use App\Domains\Driver\Enums\DriverProfileStatus;
 use App\Domains\Identity\Enums\AccountStatus;
 use App\Domains\Identity\Enums\Gender;
 use App\Domains\Identity\Models\User;
+use App\Domains\Shared\ValueObjects\Coordinate;
 use Illuminate\Database\Eloquent\Builder;
 
 /**
@@ -35,15 +36,15 @@ final class HardFilters
     /**
      * @return Builder<ScheduledTrip>
      */
-    public static function apply(Builder $query, User $passenger, SearchCriteria $criteria, bool $includeFull = false): Builder
+    public static function apply(Builder $query, User $passenger, SearchCriteria $criteria, bool $includeFull = false, ?callable $near = null): Builder
     {
         return $query
-            ->whereHas('commuteOffer', function (Builder $offer) use ($passenger, $criteria): void {
+            ->whereHas('commuteOffer', function (Builder $offer) use ($passenger, $criteria, $near): void {
                 self::applyEligibility($offer, $passenger);
 
                 // Relevance, as opposed to eligibility: whether this journey is
                 // anywhere near the one being searched for.
-                self::intersectBoundingBox($offer, $criteria);
+                $near === null ? self::intersectBoundingBox($offer, $criteria) : $near($offer);
 
                 self::requireMinimumRating($offer, $criteria);
 
@@ -54,7 +55,7 @@ final class HardFilters
                 self::requireTier($offer, $criteria);
 
                 if (in_array(CommuteRuleKey::Ac->value, $criteria->requiredRules, true)) {
-                    $offer->whereHas('vehicle', fn (Builder $vehicle) => $vehicle->where('has_ac', true));
+                    self::requireAc($offer);
                 }
             })
             // Only days that can still be booked — up to the departure itself, since there is
@@ -66,8 +67,12 @@ final class HardFilters
             // the database does the arithmetic and the index still applies.
             ->when(! $includeFull, fn (Builder $days) => $days
                 ->whereRaw('(seats_total - seats_taken) >= ?', [$criteria->seatsNeeded]))
-            ->whereHas('commuteSchedule', fn (Builder $schedule) => $schedule
-                ->whereRaw('(days_mask & ?) > 0', [$criteria->days->value]));
+            ->when(
+                $criteria->hasDates(),
+                fn (Builder $days) => $days->whereBetween('trip_date', [$criteria->dateFrom, $criteria->dateTo]),
+                fn (Builder $days) => $days->whereHas('commuteSchedule', fn (Builder $schedule) => $schedule
+                    ->whereRaw('(days_mask & ?) > 0', [$criteria->days->value])),
+            );
     }
 
     /**
@@ -164,6 +169,17 @@ final class HardFilters
         }
     }
 
+    /**
+     * @param  Builder<CommuteOffer>  $offer
+     */
+    public static function boxContains(Builder $offer, Coordinate $point): void
+    {
+        $offer->where('bbox_min_lat', '<=', $point->lat)
+            ->where('bbox_max_lat', '>=', $point->lat)
+            ->where('bbox_min_lng', '<=', $point->lng)
+            ->where('bbox_max_lng', '>=', $point->lng);
+    }
+
     private static function excludeBlockedEitherWay(Builder $offer, User $passenger): void
     {
         $offer->whereNotExists(function ($query) use ($passenger): void {
@@ -222,6 +238,20 @@ final class HardFilters
                 ->whereNotNull('user_stats.avg_rating_as_driver')
                 ->where('user_stats.avg_rating_as_driver', '<', $criteria->minRating);
         });
+    }
+
+    /**
+     * @param  Builder<CommuteOffer>  $offer
+     */
+    private static function requireAc(Builder $offer): void
+    {
+        $offer->where(fn (Builder $ac) => $ac
+            ->whereHas('rules', fn (Builder $rule) => $rule
+                ->where('rule_key', CommuteRuleKey::Ac->value)
+                ->where('rule_value', true))
+            ->orWhere(fn (Builder $fallback) => $fallback
+                ->whereDoesntHave('rules', fn (Builder $rule) => $rule->where('rule_key', CommuteRuleKey::Ac->value))
+                ->whereHas('vehicle', fn (Builder $vehicle) => $vehicle->where('has_ac', true))));
     }
 
     /**

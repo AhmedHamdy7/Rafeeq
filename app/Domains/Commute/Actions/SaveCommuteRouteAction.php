@@ -7,6 +7,7 @@ use App\Domains\Commute\Models\CommuteLocation;
 use App\Domains\Commute\Models\CommuteOffer;
 use App\Domains\Commute\Support\RouteSettings;
 use App\Domains\Geo\Contracts\GeoQueryEngine;
+use App\Domains\Geo\Support\AreaRegistry;
 use App\Domains\Geo\ValueObjects\Route;
 use App\Domains\Shared\Exceptions\DomainException;
 use App\Domains\Shared\Support\ErrorCode;
@@ -34,6 +35,7 @@ final readonly class SaveCommuteRouteAction
     public function __construct(
         private GeoQueryEngine $geo,
         private SaveCommuteScheduleAction $schedule,
+        private AreaRegistry $areas,
     ) {}
 
     /**
@@ -182,16 +184,18 @@ final readonly class SaveCommuteRouteAction
     private function store(CommuteOffer $offer, CommuteLocationType $type, array $input, int $sequence): void
     {
         $location = new CommuteLocation;
+        $point = new Coordinate((float) $input['lat'], (float) $input['lng']);
 
         $location->fill([
             'commute_offer_id' => $offer->id,
             'place_id' => $input['placeId'] ?? null,
             'type' => $type->value,
-            'point' => new Coordinate((float) $input['lat'], (float) $input['lng']),
+            'point' => $point,
             'lat' => $input['lat'],
             'lng' => $input['lng'],
-            'address' => $input['address'] ?? null,
+            'address' => $input['address'] ?? $input['label'] ?? null,
             'sequence' => $sequence,
+            ...$this->areas->columns($input, $point),
         ]);
 
         $location->save();

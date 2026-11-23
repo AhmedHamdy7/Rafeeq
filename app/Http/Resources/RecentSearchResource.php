@@ -2,6 +2,7 @@
 
 namespace App\Http\Resources;
 
+use App\Domains\Geo\Models\Area;
 use App\Domains\Matching\Models\SearchHistory;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
@@ -52,12 +53,16 @@ final class RecentSearchResource extends JsonResource
                     'lng' => (float) ($this->criteria['origin']['lng'] ?? 0),
                     'label' => $this->text($this->criteria['origin']['label'] ?? null),
                     'placeId' => $this->text($this->criteria['origin']['placeId'] ?? null),
+                    'googlePlaceId' => $this->text($this->criteria['origin']['googlePlaceId'] ?? null),
+                    'area' => $this->area($this->criteria['origin']['area'] ?? null),
                 ],
                 'destination' => [
                     'lat' => (float) ($this->criteria['destination']['lat'] ?? 0),
                     'lng' => (float) ($this->criteria['destination']['lng'] ?? 0),
                     'label' => $this->text($this->criteria['destination']['label'] ?? null),
                     'placeId' => $this->text($this->criteria['destination']['placeId'] ?? null),
+                    'googlePlaceId' => $this->text($this->criteria['destination']['googlePlaceId'] ?? null),
+                    'area' => $this->area($this->criteria['destination']['area'] ?? null),
                 ],
                 'daysMask' => (int) ($this->criteria['daysMask'] ?? 0),
                 'arrivalWindowStart' => (string) ($this->criteria['arrivalWindowStart'] ?? ''),
@@ -66,6 +71,12 @@ final class RecentSearchResource extends JsonResource
                 'maxDetourMinutes' => (int) ($this->criteria['maxDetourMinutes'] ?? 0),
                 'seatsNeeded' => (int) ($this->criteria['seatsNeeded'] ?? 1),
                 'flexibilityMinutes' => (int) ($this->criteria['flexibilityMinutes'] ?? 0),
+                'minSeatsOpen' => $this->when(
+                    isset($this->criteria['minSeatsOpen']),
+                    fn (): int => (int) $this->criteria['minSeatsOpen'],
+                ),
+                'dateFrom' => $this->when(isset($this->criteria['dateFrom']), fn (): string => (string) $this->criteria['dateFrom']),
+                'dateTo' => $this->when(isset($this->criteria['dateTo']), fn (): string => (string) $this->criteria['dateTo']),
                 'wantsReturnTrip' => (bool) ($this->criteria['wantsReturnTrip'] ?? false),
 
                 // Set only if she chose them, so a client can tell "no filter" from "this filter".
@@ -99,6 +110,16 @@ final class RecentSearchResource extends JsonResource
     /**
      * A stored label, or null — rows recorded before labels existed have none.
      */
+    /**
+     * @return array{placeId: string, name: string|null, city: string|null}|null
+     */
+    private function area(mixed $stored): ?array
+    {
+        $id = is_array($stored) ? $this->text($stored['placeId'] ?? null) : null;
+
+        return $id === null ? null : (Area::pointOf($id) ?? ['placeId' => $id, 'name' => $stored['name'] ?? null, 'city' => $stored['city'] ?? null]);
+    }
+
     private function text(mixed $value): ?string
     {
         return is_string($value) && $value !== '' ? $value : null;

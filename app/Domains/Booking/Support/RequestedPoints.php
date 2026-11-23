@@ -10,6 +10,7 @@ use App\Domains\Commute\Enums\CommuteLocationType;
 use App\Domains\Commute\Models\CommuteLocation;
 use App\Domains\Commute\Models\CommuteOffer;
 use App\Domains\Geo\Contracts\GeoQueryEngine;
+use App\Domains\Geo\Support\AreaRegistry;
 use App\Domains\Shared\Exceptions\DomainException;
 use App\Domains\Shared\Support\ErrorCode;
 use App\Domains\Shared\ValueObjects\Coordinate;
@@ -70,6 +71,8 @@ final readonly class RequestedPoints
         public ?string $dropoffSuggestionId,
         /** What the pair costs the driver, so the request can show her before she answers. */
         public PickupDetour $detour,
+        public array $pickupArea = [],
+        public array $dropoffArea = [],
     ) {}
 
     /**
@@ -91,6 +94,8 @@ final readonly class RequestedPoints
         );
 
         $detour = self::assertUsablePair($geo, $offer, $pickup, $dropoff);
+        $pickupArea = self::area($offer, $input['pickup'], $pickupSuggestion, $pickup);
+        $dropoffArea = self::area($offer, $input['dropoff'], $dropoffSuggestion, $dropoff);
 
         return new self(
             pickup: $pickup,
@@ -102,6 +107,8 @@ final readonly class RequestedPoints
             dropoffSource: $dropoffSource,
             dropoffSuggestionId: $dropoffSuggestion,
             detour: $detour,
+            pickupArea: $pickupArea,
+            dropoffArea: $dropoffArea,
         );
     }
 
@@ -159,7 +166,26 @@ final readonly class RequestedPoints
             'requested_dropoff_label' => $this->dropoffLabel,
             'requested_dropoff_source' => $this->dropoffSource->value,
             'requested_dropoff_suggestion_id' => $this->dropoffSuggestionId,
+            'requested_pickup_google_place_id' => $this->pickupArea['google_place_id'] ?? null,
+            'requested_pickup_area_id' => $this->pickupArea['area_id'] ?? null,
+            'requested_dropoff_google_place_id' => $this->dropoffArea['google_place_id'] ?? null,
+            'requested_dropoff_area_id' => $this->dropoffArea['area_id'] ?? null,
         ];
+    }
+
+    /**
+     * @param  array<string, mixed>  $input
+     * @return array{google_place_id: string|null, area_id: string|null}
+     */
+    public static function area(CommuteOffer $offer, array $input, ?string $suggestionId, Coordinate $point): array
+    {
+        if ($suggestionId !== null) {
+            $suggestion = $offer->locations->firstWhere('id', $suggestionId);
+
+            return ['google_place_id' => $suggestion?->google_place_id, 'area_id' => $suggestion?->area_id];
+        }
+
+        return app(AreaRegistry::class)->columns($input, $point);
     }
 
     /**

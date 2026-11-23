@@ -2,8 +2,6 @@
 
 namespace App\Http\Controllers\Api\V1\Search;
 
-use App\Domains\Booking\Enums\BookingStatus;
-use App\Domains\Booking\Models\Booking;
 use App\Domains\Commute\Enums\CommuteOfferStatus;
 use App\Domains\Commute\Enums\ScheduledTripStatus;
 use App\Domains\Commute\Models\CommuteOffer;
@@ -31,9 +29,8 @@ use Illuminate\Http\Request;
  * behind a signed-in, active, complete profile. A scraper's index of every driver's daily movement
  * is exactly what this view is built not to be.
  *
- * 🔒 The route before booking is trimmed by about a kilometre at each end and its ends are named
- * by AREA only (Q2, SAFE-18): enough to see the commute goes her way, not enough to find the
- * driver's front door. The full line comes once she holds a confirmed seat on it.
+ * The whole route line and the real start and end, before and after a confirmed seat (owner's
+ * decision of 2026-11-23, review item 20).
  */
 final class CommuteDetailController extends Controller
 {
@@ -72,18 +69,10 @@ final class CommuteDetailController extends Controller
             ->limit(self::UPCOMING_DAYS)
             ->get();
 
-        // A confirmed seat on it, now or ahead, earns the whole route (SAFE-18).
-        $booked = Booking::query()
-            ->where('passenger_user_id', $viewer->id)
-            ->where('status', BookingStatus::Confirmed->value)
-            ->whereIn('scheduled_trip_id', ScheduledTrip::query()->where('commute_offer_id', $offer->id)->select('id'))
-            ->exists();
-
         return ApiResponse::success(new PassengerCommuteResource(
             $offer,
             $upcoming->all(),
             PassengerStanding::for($viewer, $upcoming),
-            fullRoute: $booked,
         ));
     }
 }

@@ -10,14 +10,11 @@ use App\Domains\Commute\Models\CommuteLocation;
 use App\Domains\Commute\Models\CommuteOffer;
 use App\Domains\Commute\Models\ScheduledTrip;
 use App\Domains\Commute\Support\RouteSettings;
-use App\Domains\Geo\Actions\SearchPlacesAction;
 use App\Domains\Geo\Contracts\GeoQueryEngine;
 use App\Domains\Geo\Support\NearPlace;
 use App\Domains\Geo\Support\Polyline;
-use App\Domains\Geo\Support\TrimmedRoute;
 use App\Domains\Matching\Support\PassengerStanding;
 use App\Domains\Shared\ValueObjects\Coordinate;
-use App\Domains\Shared\ValueObjects\Distance;
 use Carbon\CarbonImmutable;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
@@ -41,7 +38,6 @@ final class PassengerCommuteResource extends JsonResource
         CommuteOffer $offer,
         private readonly array $upcoming,
         private readonly PassengerStanding $standing,
-        private readonly bool $fullRoute,
     ) {
         parent::__construct($offer);
     }
@@ -200,50 +196,32 @@ final class PassengerCommuteResource extends JsonResource
     }
 
     /**
-     * The route as she may see it: trimmed and named by area before she holds a confirmed seat,
-     * whole after (Q2 option D, SAFE-18).
-     *
      * @return array{start: array{label: string|null, lat: float, lng: float}|null, end: array{label: string|null, lat: float, lng: float}|null, distanceKm: float|null, durationMinutes: int|null, polyline: string|null, isTrimmed: bool}
      */
     private function route(CommuteOffer $offer): array
     {
-        $points = $offer->route_polyline === null
-            ? []
-            : ($this->fullRoute
-                ? (Polyline::isReadable($offer->route_polyline) ? Polyline::decode($offer->route_polyline) : [])
-                : TrimmedRoute::of($offer->route_polyline));
-
-        $start = $points[0] ?? null;
-        $end = $points === [] ? null : $points[count($points) - 1];
+        $readable = $offer->route_polyline !== null && Polyline::isReadable($offer->route_polyline);
 
         return [
-            // Area names only ("Nasr City → Smart Village"): never the driver's own address.
-            'start' => $start === null ? null : ['label' => $this->areaName($offer, CommuteLocationType::Origin, $start), 'lat' => $start->lat, 'lng' => $start->lng],
-            'end' => $end === null ? null : ['label' => $this->areaName($offer, CommuteLocationType::Destination, $end), 'lat' => $end->lat, 'lng' => $end->lng],
-            // The whole run's length and time — "27 km · about 52 min".
+            'start' => $this->end($offer->locations->firstWhere('type', CommuteLocationType::Origin)),
+            'end' => $this->end($offer->locations->firstWhere('type', CommuteLocationType::Destination)),
             'distanceKm' => $offer->route_distance_meters === null ? null : round($offer->route_distance_meters / 1000, 1),
             'durationMinutes' => $offer->route_duration_seconds === null ? null : (int) round($offer->route_duration_seconds / 60),
-            'polyline' => $points === [] ? null : Polyline::encode($points),
-            // False once she holds a confirmed seat on this commute: then the line is the whole road.
-            'isTrimmed' => ! $this->fullRoute,
+            'polyline' => $readable ? $offer->route_polyline : null,
+            'isTrimmed' => false,
         ];
     }
 
     /**
-     * What to call one end of the commute without naming the building: the district (or city) of
-     * the catalogue place it was set from, else of the catalogue place nearest it.
+     * @return array{label: string|null, lat: float, lng: float}|null
      */
-    private function areaName(CommuteOffer $offer, CommuteLocationType $type, Coordinate $near): ?string
+    private function end(?CommuteLocation $location): ?array
     {
-        $place = $offer->locations->firstWhere('type', $type)?->place
-            ?? app(SearchPlacesAction::class)->nearest($near, Distance::fromKilometres(3));
-
-        if ($place === null) {
-            return null;
-        }
-
-        return LocalisedLabel::of($place->district ?? $place->city)
-            ?? (app()->getLocale() === 'en' ? $place->name : $place->name_ar);
+        return $location === null ? null : [
+            'label' => LocalisedLabel::location($location),
+            'lat' => (float) $location->lat,
+            'lng' => (float) $location->lng,
+        ];
     }
 
     /**
@@ -251,18 +229,6 @@ final class PassengerCommuteResource extends JsonResource
      */
     private function rulesMap(CommuteOffer $offer): array
     {
-        $map = [];
-
-        foreach ($offer->rules as $rule) {
-            $map[$rule->rule_key->value] = (bool) $rule->rule_value;
-        }
-
-        if ($offer->vehicle?->has_ac) {
-            $map['ac'] = true;
-        } else {
-            unset($map['ac']);
-        }
-
-        return $map;
+        return $offer->rulesMap();
     }
 }

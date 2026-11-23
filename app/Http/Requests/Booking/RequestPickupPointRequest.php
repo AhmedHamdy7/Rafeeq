@@ -34,6 +34,11 @@ final class RequestPickupPointRequest extends FormRequest
             // What to call it, so the driver reads a place rather than a pin —
             // "the south gate", "opposite the pharmacy".
             'label' => ['nullable', 'string', 'max:150'],
+            'googlePlaceId' => ['nullable', 'string', 'max:255'],
+            'area' => ['nullable', 'array'],
+            'area.placeId' => ['nullable', 'string', 'max:255'],
+            'area.name' => ['nullable', 'string', 'max:150'],
+            'area.city' => ['nullable', 'string', 'max:150'],
         ];
     }
 }

@@ -496,7 +496,7 @@ it('counts the matches she has not opened on one demand, and opening one lowers 
     expect($alert['demandId'])->toBe($demand->id)
         ->and($alert['newMatchesCount'])->toBe(3)
         ->and($alert['daysMask'])->toBe((int) $demand->days_mask)
-        ->and($alert['arrivalTimeLocal'])->toBe('06:45');
+        ->and($alert['arrivalTimeLocal'])->toBe('08:30');
 
     test()->flushHeaders()->withToken($this->paxToken)
         ->postJson("/api/v1/matches/{$ids[0]}/opened")->assertOk()

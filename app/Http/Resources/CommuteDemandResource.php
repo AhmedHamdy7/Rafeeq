@@ -2,6 +2,7 @@
 
 namespace App\Http\Resources;
 
+use App\Domains\Geo\Models\Area;
 use App\Domains\Geo\Models\Place;
 use App\Domains\Matching\Models\CommuteDemand;
 use App\Domains\Matching\Support\DemandMatchCount;
@@ -61,12 +62,16 @@ final class CommuteDemandResource extends JsonResource
                 'lng' => (float) $this->origin_lng,
                 'label' => LocalisedLabel::place($this->loadedPlace('originPlace'), $this->origin_label),
                 'placeId' => $this->origin_place_id,
+                'googlePlaceId' => $this->origin_google_place_id,
+                'area' => Area::pointOf($this->origin_area_id),
             ],
             'destination' => [
                 'lat' => (float) $this->dest_lat,
                 'lng' => (float) $this->dest_lng,
                 'label' => LocalisedLabel::place($this->loadedPlace('destinationPlace'), $this->destination_label),
                 'placeId' => $this->destination_place_id,
+                'googlePlaceId' => $this->destination_google_place_id,
+                'area' => Area::pointOf($this->destination_area_id),
             ],
             'commuteType' => $this->commute_type->value,
             'daysMask' => $this->days_mask,

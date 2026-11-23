@@ -3,6 +3,7 @@
 namespace App\Http\Resources;
 
 use App\Domains\Commute\Models\CommuteLocation;
+use App\Domains\Geo\Models\Area;
 use App\Domains\Geo\Support\NearPlace;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
@@ -27,6 +28,9 @@ final class CommuteLocationResource extends JsonResource
             'lng' => (float) $this->lng,
             'address' => $this->address,
             'placeId' => $this->place_id,
+            'label' => $this->address,
+            'googlePlaceId' => $this->google_place_id,
+            'area' => self::area($this->resource),
             'nearPlaceId' => NearPlace::id($this->lat, $this->lng),
             'nearLabel' => NearPlace::label($this->lat, $this->lng),
             'nearDistanceMetres' => NearPlace::metres($this->lat, $this->lng),
@@ -34,5 +38,17 @@ final class CommuteLocationResource extends JsonResource
             // order they are reached.
             'sequence' => $this->sequence,
         ];
+    }
+
+    /**
+     * @return array{placeId: string, name: string|null, city: string|null}|null
+     */
+    public static function area(CommuteLocation $location): ?array
+    {
+        if ($location->area_id === null) {
+            return null;
+        }
+
+        return $location->relationLoaded('area') ? $location->area?->toPoint() : Area::pointOf($location->area_id);
     }
 }

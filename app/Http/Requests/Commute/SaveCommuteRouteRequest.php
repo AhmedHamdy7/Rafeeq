@@ -3,6 +3,7 @@
 namespace App\Http\Requests\Commute;
 
 use App\Domains\Commute\Support\RouteSettings;
+use App\Domains\Geo\Support\PointArea;
 use Illuminate\Foundation\Http\FormRequest;
 
 /**
@@ -34,6 +35,8 @@ final class SaveCommuteRouteRequest extends FormRequest
             // Optionally link to a known place, so the name shown stays
             // consistent with the rest of the platform.
             'origin.placeId' => ['nullable', 'string', 'size:26', 'exists:places,id'],
+            'origin.label' => ['nullable', 'string', 'max:255'],
+            ...PointArea::rules('origin'),
 
             // Where it ends. Must be a meaningfully different place from the
             // origin.
@@ -42,6 +45,8 @@ final class SaveCommuteRouteRequest extends FormRequest
             'destination.lng' => ['required', 'numeric', 'between:-180,180'],
             'destination.address' => ['nullable', 'string', 'max:255'],
             'destination.placeId' => ['nullable', 'string', 'size:26', 'exists:places,id'],
+            'destination.label' => ['nullable', 'string', 'max:255'],
+            ...PointArea::rules('destination'),
 
             // Suggested meeting points along the way, in the order you would reach them (at most
             // 3). Each must add no more than the platform's detour limit (10 minutes).
@@ -50,6 +55,8 @@ final class SaveCommuteRouteRequest extends FormRequest
             'pickups.*.lng' => ['required', 'numeric', 'between:-180,180'],
             'pickups.*.address' => ['nullable', 'string', 'max:255'],
             'pickups.*.placeId' => ['nullable', 'string', 'size:26', 'exists:places,id'],
+            'pickups.*.label' => ['nullable', 'string', 'max:255'],
+            ...PointArea::rules('pickups.*'),
 
             // Points where passengers may get out before the destination.
             'dropoffs' => ['sometimes', 'array', 'max:'.RouteSettings::maxDropoffStops()],
@@ -57,6 +64,8 @@ final class SaveCommuteRouteRequest extends FormRequest
             'dropoffs.*.lng' => ['required', 'numeric', 'between:-180,180'],
             'dropoffs.*.address' => ['nullable', 'string', 'max:255'],
             'dropoffs.*.placeId' => ['nullable', 'string', 'size:26', 'exists:places,id'],
+            'dropoffs.*.label' => ['nullable', 'string', 'max:255'],
+            ...PointArea::rules('dropoffs.*'),
         ];
     }
 }

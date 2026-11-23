@@ -247,7 +247,7 @@ it('gives the form its limits and defaults, moved by the admin settings', functi
         'maxDropoffStops' => 3,
         'maxDetourMinutes' => 30,
         'maxScheduleMonths' => 12,
-        'canMarkWomenOnly' => true,
+        'canMarkWomenOnly' => false,
         'preferences' => ['nonsmoking', 'quiet', 'ac', 'nofood', 'music'],
     ])->and($options['defaults']['allowsCustomPickup'])->toBeTrue()
         ->and($options['defaults']['startDate'])->toBe(CarbonImmutable::tomorrow('Africa/Cairo')->toDateString());

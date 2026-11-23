@@ -32,17 +32,7 @@ final class BrowseCommuteResource extends JsonResource
         $driver = $offer->driverProfile;
         $standing = $this->standing ?? PassengerStanding::for(null, []);
 
-        $rules = [];
-
-        foreach ($offer->rules as $rule) {
-            $rules[$rule->rule_key->value] = (bool) $rule->rule_value;
-        }
-
-        if ($offer->vehicle?->has_ac) {
-            $rules['ac'] = true;
-        } else {
-            unset($rules['ac']);
-        }
+        $rules = $offer->rulesMap();
 
         return [
             'commuteId' => $offer->id,

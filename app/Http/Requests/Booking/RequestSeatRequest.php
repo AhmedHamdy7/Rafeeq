@@ -6,6 +6,7 @@ use App\Domains\Booking\Enums\MeetingPreference;
 use App\Domains\Booking\Enums\PaymentType;
 use App\Domains\Booking\Enums\SeatRequestCommitment;
 use App\Domains\Booking\Support\RequestedPoints;
+use App\Domains\Geo\Support\PointArea;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
 
@@ -76,6 +77,7 @@ final class RequestSeatRequest extends FormRequest
             'pickup.lat' => ['exclude_without:pickup', 'required_without:pickup.suggestionId', 'numeric', 'between:-90,90'],
             'pickup.lng' => ['exclude_without:pickup', 'required_without:pickup.suggestionId', 'numeric', 'between:-180,180'],
             'pickup.label' => ['exclude_without:pickup', 'required_without:pickup.suggestionId', 'nullable', 'string', 'max:255'],
+            ...PointArea::rules('pickup'),
 
             // Where you want to be set down. Required, on the same terms as `pickup`.
             // It is never assumed to be the end of the driver's route.
@@ -84,6 +86,7 @@ final class RequestSeatRequest extends FormRequest
             'dropoff.lat' => ['exclude_without:dropoff', 'required_without:dropoff.suggestionId', 'numeric', 'between:-90,90'],
             'dropoff.lng' => ['exclude_without:dropoff', 'required_without:dropoff.suggestionId', 'numeric', 'between:-180,180'],
             'dropoff.label' => ['exclude_without:dropoff', 'required_without:dropoff.suggestionId', 'nullable', 'string', 'max:255'],
+            ...PointArea::rules('dropoff'),
 
             // A short note to the driver, so they know who is asking.
             'alternativeForBookingId' => ['sometimes', 'nullable', 'string', 'size:26'],

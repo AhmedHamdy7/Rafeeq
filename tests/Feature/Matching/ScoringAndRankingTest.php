@@ -61,31 +61,29 @@ it('returns the breakdown, not just a total', function () {
         );
 });
 
-it('loses schedule points for a departure outside the window', function () {
-    $inWindow = search($this->paxToken)->assertOk()->json('data.0.score.schedule');
+it('matches the arrive-by time against the promised arrival, 30 minutes before it to the time itself', function () {
+    $found = fn (string $time) => count(search($this->paxToken, ['arriveBy' => $time])->assertOk()->json('data'));
 
-    // The commute leaves at 07:05; ask for 07:20–07:40 with no flexibility, so it is
-    // about fifteen minutes early — half the thirty-minute span over which the score decays.
-    $outOfWindow = search($this->paxToken, [
-        'arrivalWindowStart' => '07:20:00',
-        'arrivalWindowEnd' => '07:40:00',
-        'flexibilityMinutes' => 0,
-    ])->assertOk()->json('data.0.score.schedule');
-
-    expect($inWindow)->toBe(25)
-        ->and($outOfWindow)->toBeLessThan(25)
-        ->and($outOfWindow)->toBeGreaterThan(0);
+    expect($found('09:00'))->toBe(1)
+        ->and($found('09:30'))->toBe(1)
+        ->and($found('09:31'))->toBe(0)
+        ->and($found('08:59'))->toBe(0)
+        ->and(search($this->paxToken, ['arriveBy' => '09:15'])->assertOk()->json('data.0.score.schedule'))->toBe(25);
 });
 
-it('scores nothing for timing half an hour out', function () {
-    // A commuter who has to leave half an hour early every day has not been
-    // matched, they have been inconvenienced.
-    $score = search($this->paxToken, [
-        'arrivalWindowStart' => '09:00:00',
-        'arrivalWindowEnd' => '09:30:00',
-    ])->assertOk()->json('data.0.score.schedule');
+it('reads an old pickup window as arrive-by, from 30 minutes before its start to its end, ignoring flexibility', function () {
+    $found = fn (array $window) => count(search($this->paxToken, $window)->assertOk()->json('data'));
 
-    expect($score)->toBe(0);
+    expect($found(['arrivalWindowStart' => '09:20:00', 'arrivalWindowEnd' => '09:40:00', 'flexibilityMinutes' => 60]))->toBe(1)
+        ->and($found(['arrivalWindowStart' => '07:20:00', 'arrivalWindowEnd' => '07:40:00', 'flexibilityMinutes' => 60]))->toBe(0);
+});
+
+it('matches any time when no time is sent', function () {
+    $criteria = searchCriteria();
+    unset($criteria['arrivalWindowStart'], $criteria['arrivalWindowEnd']);
+
+    expect(test()->withToken($this->paxToken)->getJson('/api/v1/search/commutes?'.http_build_query($criteria))->assertOk()->json('data'))
+        ->toHaveCount(1);
 });
 
 /**
@@ -171,8 +169,6 @@ it('returns one card per commute, with the other matching days alongside', funct
 });
 
 it('ranks a better match above a worse one', function () {
-    // A second commute on the same route but leaving an hour later, so it scores
-    // lower on schedule and nothing else.
     fakeOtpSender();
     $otherDriver = approvedDriver(phone: '01223334455', devicePublicId: 'driver-2', seed: 2);
 
@@ -180,9 +176,11 @@ it('ranks a better match above a worse one', function () {
     $later = createCommute($otherDriver, $otherVehicle->id)->assertStatus(201)->json('data.id');
 
     saveRoute($otherDriver, $later)->assertOk();
-    saveSchedule($otherDriver, $later, ['promisedArrivalTime' => '10:25:00'])->assertOk();
+    saveSchedule($otherDriver, $later)->assertOk();
 
     test()->withToken($otherDriver)->postJson("/api/v1/commutes/{$later}/publish")->assertOk();
+
+    CommuteOffer::query()->findOrFail($later)->driverProfile->forceFill(['on_time_rate' => 40])->save();
 
     $results = search($this->paxToken)->assertOk()->json('data');
 
@@ -241,20 +239,4 @@ it('marks a day full when it filled up after it was cached', function () {
     ScheduledTrip::query()->update(['seats_taken' => 3]);
 
     expect(search($this->paxToken)->assertOk()->json('data.0.isFull'))->toBeTrue();
-});
-
-it('treats one time with a flexibility like the same range', function () {
-    $single = search($this->paxToken, [
-        'arrivalWindowStart' => '07:20:00',
-        'arrivalWindowEnd' => '07:20:00',
-        'flexibilityMinutes' => 30,
-    ])->assertOk()->json('data.0.score.schedule');
-
-    $range = search($this->paxToken, [
-        'arrivalWindowStart' => '06:50:00',
-        'arrivalWindowEnd' => '07:50:00',
-        'flexibilityMinutes' => 0,
-    ])->assertOk()->json('data.0.score.schedule');
-
-    expect($single)->toBe(25)->and($range)->toBe(25);
 });

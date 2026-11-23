@@ -4,6 +4,7 @@ namespace App\Http\Requests\Commute;
 
 use App\Domains\Commute\Enums\ChangeProposalScope;
 use App\Domains\Commute\Support\RouteSettings;
+use App\Domains\Geo\Support\PointArea;
 use Illuminate\Contracts\Validation\Validator;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
@@ -55,6 +56,8 @@ final class ProposeCommuteChangeRequest extends FormRequest
             'pickupPoints.*.lat' => ['required', 'numeric', 'between:-90,90'],
             'pickupPoints.*.lng' => ['required', 'numeric', 'between:-180,180'],
             'pickupPoints.*.address' => ['nullable', 'string', 'max:255'],
+            'pickupPoints.*.label' => ['nullable', 'string', 'max:255'],
+            ...PointArea::rules('pickupPoints.*'),
         ];
     }
 

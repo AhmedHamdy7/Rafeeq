@@ -5,6 +5,7 @@ namespace App\Domains\Commute\Actions;
 use App\Domains\Commute\Enums\CommuteAudience;
 use App\Domains\Commute\Enums\CommuteDirection;
 use App\Domains\Commute\Enums\CommuteOfferStatus;
+use App\Domains\Commute\Enums\CommuteRuleKey;
 use App\Domains\Commute\Enums\CommuteType;
 use App\Domains\Commute\Models\CommuteOffer;
 use App\Domains\Commute\Support\CommuteGuards;
@@ -41,6 +42,8 @@ final readonly class CreateCommuteOfferAction
 
         $vehicle = self::draftVehicle($profile, $attributes['vehicleId'] ?? null);
 
+        CommuteGuards::assertCarAllowsAc($vehicle, (bool) ($attributes['rules'][CommuteRuleKey::Ac->value] ?? false));
+
         $offer = new CommuteOffer;
 
         $offer->fill([
@@ -66,6 +69,15 @@ final readonly class CreateCommuteOfferAction
         $offer->status = CommuteOfferStatus::Draft->value;
 
         $offer->save();
+
+        if (isset($attributes['rules'])) {
+            foreach ($attributes['rules'] as $key => $value) {
+                $offer->rules()->create([
+                    'rule_key' => CommuteRuleKey::from((string) $key)->value,
+                    'rule_value' => (bool) $value,
+                ]);
+            }
+        }
 
         return $offer;
     }

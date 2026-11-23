@@ -11,14 +11,17 @@ use App\Domains\Commute\Models\CommuteOffer;
 use App\Domains\Commute\Support\RouteSettings;
 use App\Domains\Geo\Contracts\GeoQueryEngine;
 use App\Domains\Geo\Models\Place;
+use App\Domains\Geo\Support\AreaRegistry;
 use App\Domains\Group\Models\CommuteGroup;
 use App\Domains\Group\Models\GroupMember;
 use App\Domains\Shared\Exceptions\DomainException;
 use App\Domains\Shared\Support\ErrorCode;
+use App\Domains\Shared\ValueObjects\Coordinate;
 use App\Http\Controllers\Controller;
 use App\Http\OpenApi\ApiErrors;
 use App\Http\Requests\Booking\RequestPickupPointRequest;
 use App\Http\Requests\Booking\SuggestAlternativePickupRequest;
+use App\Http\Resources\LocalisedLabel;
 use App\Http\Resources\PickupPointRequestResource;
 use App\Http\Responses\ApiResponse;
 use Illuminate\Database\Eloquent\Builder;
@@ -231,14 +234,36 @@ final class PickupPointRequestController extends Controller
         SuggestAlternativePickupRequest $request,
         string $pickupRequest,
         RespondToPickupPointAction $action,
+        AreaRegistry $areas,
     ): JsonResponse {
-        $place = Place::query()->whereKey($request->validated('placeId'))->first()
-            ?? throw DomainException::of(ErrorCode::NotFound);
+        $pickup = $this->forMyCommute($request, $pickupRequest);
+
+        if ($request->validated('lat') === null) {
+            $place = Place::query()->whereKey($request->validated('placeId'))->first()
+                ?? throw DomainException::of(ErrorCode::NotFound);
+
+            $point = [
+                'place_id' => $place->id,
+                'lat' => (float) $place->lat,
+                'lng' => (float) $place->lng,
+                'label' => LocalisedLabel::place($place, null),
+                'google_place_id' => $place->google_place_id,
+                'area_id' => null,
+            ];
+        } else {
+            $coordinate = new Coordinate((float) $request->validated('lat'), (float) $request->validated('lng'));
+
+            $point = [
+                'place_id' => null,
+                'lat' => $coordinate->lat,
+                'lng' => $coordinate->lng,
+                'label' => $request->validated('label') ?? sprintf('%.5f, %.5f', $coordinate->lat, $coordinate->lng),
+                ...$areas->columns($request->validated(), $coordinate),
+            ];
+        }
 
         return ApiResponse::success(
-            (new PickupPointRequestResource(
-                $action->suggestAlternative($this->forMyCommute($request, $pickupRequest), $place)
-            ))->forDriver()
+            (new PickupPointRequestResource($action->suggestAlternative($pickup, $point)))->forDriver()
         );
     }
 

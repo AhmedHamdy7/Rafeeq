@@ -32,12 +32,12 @@ function commuteDetail(string $token, string $commuteId, string $language = 'ar'
         ->getJson("/api/v1/commutes/{$commuteId}/public")->assertOk();
 }
 
-it('sends rules as an object even when the commute has none', function () {
+it('sends rules as an object with the commute\'s own A/C even when the commute has no other rule', function () {
     $offer = CommuteOffer::query()->findOrFail($this->commuteId);
     $offer->rules()->delete();
     Vehicle::query()->whereKey($offer->vehicle_id)->update(['has_ac' => false]);
 
-    expect(commuteDetail($this->paxToken, $this->commuteId)->getContent())->toContain('"rules":{}');
+    expect(commuteDetail($this->paxToken, $this->commuteId)->getContent())->toContain('"rules":{"ac":false}');
 });
 
 it('tells a woman she may request the commute', function () {
@@ -86,8 +86,8 @@ it('names areas and the car colour in the request language', function () {
 
     expect($ar['vehicle']['colour'])->toBe('فضي')
         ->and($en['vehicle']['colour'])->toBe('Silver')
-        ->and($ar['route']['start']['label'])->toBe('القاهرة الجديدة')
-        ->and($en['route']['start']['label'])->toBe('New Cairo');
+        ->and($ar['route']['start']['label'])->toBe($en['route']['start']['label'])
+        ->and($en['route']['start']['label'])->toBe(CommuteLocation::query()->where('commute_offer_id', $this->commuteId)->where('type', 'origin')->value('address'));
 });
 
 it('accepts music as a commute rule and returns it', function () {
@@ -143,8 +143,8 @@ it('names the demand a match came from, in the request language', function () {
         'origin' => ['lat' => 30.0594, 'lng' => 31.4913, 'placeId' => $from->id],
         'destination' => ['lat' => 30.0714, 'lng' => 30.9716, 'placeId' => $to->id],
         'daysMask' => 62,
-        'arrivalWindowStart' => '07:05',
-        'arrivalWindowEnd' => '07:05',
+        'arrivalWindowStart' => '09:00',
+        'arrivalWindowEnd' => '09:00',
         'flexibilityMinutes' => 30,
     ])->assertStatus(201);
 

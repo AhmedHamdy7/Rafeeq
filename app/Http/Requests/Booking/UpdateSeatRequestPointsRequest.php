@@ -2,6 +2,7 @@
 
 namespace App\Http\Requests\Booking;
 
+use App\Domains\Geo\Support\PointArea;
 use Illuminate\Foundation\Http\FormRequest;
 
 final class UpdateSeatRequestPointsRequest extends FormRequest
@@ -14,11 +15,13 @@ final class UpdateSeatRequestPointsRequest extends FormRequest
             'pickup.lat' => ['required_without:pickup.suggestionId', 'numeric', 'between:-90,90'],
             'pickup.lng' => ['required_without:pickup.suggestionId', 'numeric', 'between:-180,180'],
             'pickup.label' => ['required_without:pickup.suggestionId', 'nullable', 'string', 'max:255'],
+            ...PointArea::rules('pickup'),
             'dropoff' => ['required_with:pickup', 'array'],
             'dropoff.suggestionId' => ['nullable', 'string', 'size:26'],
             'dropoff.lat' => ['required_without:dropoff.suggestionId', 'numeric', 'between:-90,90'],
             'dropoff.lng' => ['required_without:dropoff.suggestionId', 'numeric', 'between:-180,180'],
             'dropoff.label' => ['required_without:dropoff.suggestionId', 'nullable', 'string', 'max:255'],
+            ...PointArea::rules('dropoff'),
             'introMessage' => ['sometimes', 'nullable', 'string', 'max:500'],
             'requestedDaysMask' => ['sometimes', 'integer', 'min:1', 'max:127'],
         ];

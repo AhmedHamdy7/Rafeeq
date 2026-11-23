@@ -208,6 +208,8 @@ final readonly class DuplicateCommuteOfferAction
         $location->fill([
             'commute_offer_id' => $draft->id,
             'place_id' => $from->place_id,
+            'google_place_id' => $from->google_place_id,
+            'area_id' => $from->area_id,
             'type' => $type->value,
             'point' => new Coordinate((float) $from->lat, (float) $from->lng),
             'lat' => $from->lat,

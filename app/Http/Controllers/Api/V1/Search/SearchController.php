@@ -35,25 +35,24 @@ final class SearchController extends Controller
 
         $criteria = $request->criteria();
 
-        $results = $action->execute($request->user(), $criteria, includeFull: true);
+        [$results, $areaMatches] = $action->executeWithAreas($request->user(), $criteria, includeFull: $criteria->minSeatsOpen === null);
 
-        /*
-         * Remembered here rather than inside the search engine, and the distinction is not
-         * tidiness: `SearchCommutesAction` is also run by the background matching that works
-         * through saved demands, so recording there would fill her Recent Searches with searches
-         * she never made every time a driver published anything near her.
-         *
-         * After the results, and it cannot fail the request — see the Action.
-         */
         if (! $criteria->isAreaSearch()) {
             $remember->execute($request->user(), $criteria, $request->places());
         }
 
-        return ApiResponse::success(
+        $response = ApiResponse::success(
             MatchResultResource::page($results, $request->user()),
-            // An empty result is not an error — Chapter 5 turns it into the offer
-            // to save a private demand, so the client needs to tell the two apart.
-            meta: ['matched' => count($results), 'scope' => $criteria->isAreaSearch() ? 'area' : 'point'],
+            meta: [
+                'matched' => count($results),
+                'areaMatched' => count($areaMatches),
+                'scope' => $criteria->isAreaSearch() ? 'area' : 'point',
+            ],
         );
+
+        $payload = $response->getData(true);
+        $payload['areaMatches'] = MatchResultResource::page($areaMatches, $request->user())->resolve($request);
+
+        return $response->setData($payload);
     }
 }

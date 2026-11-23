@@ -3,6 +3,7 @@
 namespace App\Domains\Matching\Actions;
 
 use App\Domains\Commute\Models\CommuteOffer;
+use App\Domains\Geo\Models\Area;
 use App\Domains\Matching\Enums\CommuteDemandStatus;
 use App\Domains\Matching\Models\CommuteDemand;
 use App\Domains\Matching\Models\MatchNotification;
@@ -67,6 +68,8 @@ final readonly class NotifyMatchingDemandsAction
                     // The score AT THE TIME: the commute may change later, and
                     // this records why the interruption was justified.
                     'score' => $result->score->total(),
+                    'match_kind' => $result->matchKind(),
+                    'area_id' => $result->areaId,
                 ]);
 
                 // Stamped so the cooldown holds even when several commutes are
@@ -78,8 +81,18 @@ final readonly class NotifyMatchingDemandsAction
                  * Until Phase 12 the row above was written and nobody was told. The commute id
                  * opens its match details; nothing about the driver is in the message.
                  */
+                $area = $result->areaId === null ? null : Area::query()->find($result->areaId);
+                $locale = $demand->passenger->preferred_language ?: config('app.locale');
+
                 Notifier::send($demand->passenger, NotificationType::MatchFound,
-                    data: ['commuteId' => $offer->id, 'demandId' => $demand->id],
+                    params: $area === null ? [] : ['area' => (string) $area->name($locale)],
+                    data: array_filter([
+                        'commuteId' => $offer->id,
+                        'demandId' => $demand->id,
+                        'matchKind' => $result->matchKind(),
+                        'areaId' => $result->areaId,
+                    ], fn (?string $value): bool => $value !== null),
+                    wording: $area === null ? null : 'match_found_in_area',
                 );
             });
 
@@ -128,7 +141,9 @@ final readonly class NotifyMatchingDemandsAction
             return null;
         }
 
-        foreach ($this->search->execute($demand->passenger, self::criteriaFor($demand)) as $result) {
+        [$near, $sameArea] = $this->search->executeWithAreas($demand->passenger, self::criteriaFor($demand));
+
+        foreach ([...$near, ...$sameArea] as $result) {
             if ($result->offer->id === $offer->id) {
                 return $result;
             }
@@ -158,6 +173,9 @@ final readonly class NotifyMatchingDemandsAction
             requiredRules: array_values((array) ($demand->required_rules ?? [])),
             womenOnly: (bool) $demand->women_only,
             tier: $demand->vehicle_tier,
+            arriveBy: true,
+            originAreaId: $demand->origin_area_id,
+            destinationAreaId: $demand->destination_area_id,
         );
     }
 }

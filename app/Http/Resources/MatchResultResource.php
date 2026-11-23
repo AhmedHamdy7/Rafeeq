@@ -5,6 +5,7 @@ namespace App\Http\Resources;
 use App\Domains\Booking\Support\PickupEta;
 use App\Domains\Commute\Enums\CommuteAudience;
 use App\Domains\Commute\Models\ScheduledTrip;
+use App\Domains\Geo\Models\Area;
 use App\Domains\Identity\Models\User;
 use App\Domains\Matching\Support\MatchResult;
 use App\Domains\Matching\Support\PassengerStanding;
@@ -214,6 +215,9 @@ final class MatchResultResource extends JsonResource
             ],
 
             'distanceMetres' => $this->distanceMetres,
+            'matchKind' => $this->resource->matchKind(),
+            'areaName' => Area::nameOf($this->areaId),
+            'matchedDates' => $this->matchedDates(),
 
             'detourMinutes' => round($this->score->detourMinutes, 1),
             'tier' => $this->score->tier?->value,
@@ -250,6 +254,20 @@ final class MatchResultResource extends JsonResource
     }
 
     /**
+     * @return array<int, string>
+     */
+    private function matchedDates(): array
+    {
+        $dates = [];
+
+        foreach ($this->resource->matchedDates() as $date) {
+            $dates[] = (string) $date;
+        }
+
+        return $dates;
+    }
+
+    /**
      * The card's day moved on by a point's offset into the run.
      */
     private function at(?int $seconds): ?CarbonImmutable
@@ -262,18 +280,6 @@ final class MatchResultResource extends JsonResource
      */
     private function rulesMap(): array
     {
-        $map = [];
-
-        foreach ($this->offer->rules as $rule) {
-            $map[$rule->rule_key->value] = (bool) $rule->rule_value;
-        }
-
-        if ($this->offer->vehicle?->has_ac) {
-            $map['ac'] = true;
-        } else {
-            unset($map['ac']);
-        }
-
-        return $map;
+        return $this->offer->rulesMap();
     }
 }

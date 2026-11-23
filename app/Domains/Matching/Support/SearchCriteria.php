@@ -7,6 +7,7 @@ use App\Domains\Driver\Enums\VehicleTier;
 use App\Domains\Shared\ValueObjects\Coordinate;
 use App\Domains\Shared\ValueObjects\DaysMask;
 use App\Domains\Shared\ValueObjects\WalkTime;
+use Carbon\CarbonImmutable;
 
 /**
  * What a passenger asked for, as one value.
@@ -68,7 +69,30 @@ final readonly class SearchCriteria
         public ?VehicleTier $tier = null,
         public ?SearchArea $originArea = null,
         public ?SearchArea $destinationArea = null,
+        /**
+         * The time is "arrive by" (review items 12, 16): a commute fits when its promised arrival
+         * that day is between the window's start minus 30 minutes and the window's end.
+         */
+        public bool $arriveBy = false,
+        /** "Seats open" (review item 15): only days with at least this many free seats. */
+        public ?int $minSeatsOpen = null,
+        /** Travel dates (review item 18), Cairo dates, at most 5 days. They win over `days`. */
+        public ?string $dateFrom = null,
+        public ?string $dateTo = null,
+        /** Google area ids of each end (review item 8), for the same-area step. */
+        public ?string $originAreaId = null,
+        public ?string $destinationAreaId = null,
     ) {}
+
+    public function hasDates(): bool
+    {
+        return $this->dateFrom !== null && $this->dateTo !== null;
+    }
+
+    public function withGoogleAreas(?string $originAreaId, ?string $destinationAreaId): self
+    {
+        return new self(...[...get_object_vars($this), 'originAreaId' => $originAreaId, 'destinationAreaId' => $destinationAreaId]);
+    }
 
     public function isAreaSearch(): bool
     {
@@ -92,15 +116,21 @@ final readonly class SearchCriteria
      */
     public static function fromArray(array $input): self
     {
+        $dateFrom = $input['dateFrom'] ?? null;
+        $dateTo = $input['dateTo'] ?? $dateFrom;
+        $arriveBy = isset($input['arriveBy']) ? self::withSeconds($input['arriveBy']) : null;
+
         return new self(
             origin: new Coordinate((float) $input['origin']['lat'], (float) $input['origin']['lng']),
             destination: new Coordinate((float) $input['destination']['lat'], (float) $input['destination']['lng']),
-            days: DaysMask::fromBits((int) $input['daysMask']),
-            arrivalWindowStart: self::withSeconds($input['arrivalWindowStart']),
-            arrivalWindowEnd: self::withSeconds($input['arrivalWindowEnd']),
+            days: $dateFrom !== null
+                ? self::daysOf((string) $dateFrom, (string) $dateTo)
+                : DaysMask::fromBits((int) $input['daysMask']),
+            arrivalWindowStart: $arriveBy ?? self::withSeconds($input['arrivalWindowStart'] ?? self::DAY_START),
+            arrivalWindowEnd: $arriveBy ?? self::withSeconds($input['arrivalWindowEnd'] ?? self::DAY_END),
             maxWalk: WalkTime::fromMinutes((int) ($input['maxWalkMinutes'] ?? config('rafeeq.matching.demand_default_walk_minutes'))),
             maxDetourMinutes: (int) ($input['maxDetourMinutes'] ?? config('rafeeq.matching.demand_default_detour_minutes')),
-            seatsNeeded: (int) ($input['seatsNeeded'] ?? 1),
+            seatsNeeded: (int) ($input['minSeatsOpen'] ?? $input['seatsNeeded'] ?? 1),
             audiencePreference: isset($input['audiencePreference'])
                 ? CommuteAudience::from($input['audiencePreference'])
                 : null,
@@ -110,7 +140,26 @@ final readonly class SearchCriteria
             minRating: isset($input['minRating']) ? (float) $input['minRating'] : null,
             womenOnly: filter_var($input['womenOnly'] ?? false, FILTER_VALIDATE_BOOLEAN),
             tier: isset($input['tier']) ? VehicleTier::from($input['tier']) : null,
+            arriveBy: true,
+            minSeatsOpen: isset($input['minSeatsOpen']) ? (int) $input['minSeatsOpen'] : null,
+            dateFrom: $dateFrom,
+            dateTo: $dateFrom === null ? null : $dateTo,
         );
+    }
+
+    public const string DAY_START = '00:00:00';
+
+    public const string DAY_END = '23:59:59';
+
+    private static function daysOf(string $from, string $to): DaysMask
+    {
+        $bits = 0;
+
+        for ($day = CarbonImmutable::parse($from); $day->lte(CarbonImmutable::parse($to)); $day = $day->addDay()) {
+            $bits |= DaysMask::bitForDate($day);
+        }
+
+        return DaysMask::fromBits(max(1, $bits));
     }
 
     /**
@@ -147,6 +196,9 @@ final readonly class SearchCriteria
             // Omitted when off, like every other optional field.
             'womenOnly' => $this->womenOnly ?: null,
             'tier' => $this->tier?->value,
+            'minSeatsOpen' => $this->minSeatsOpen,
+            'dateFrom' => $this->dateFrom,
+            'dateTo' => $this->dateTo,
         ], fn (mixed $value): bool => $value !== null && $value !== []);
     }
 
@@ -187,6 +239,12 @@ final readonly class SearchCriteria
             $this->womenOnly ? 'women-only' : 'any-audience',
             $this->tier?->value ?? 'any-tier',
             ...($this->isAreaSearch() ? [$this->originArea?->placeId ?? 'point', $this->destinationArea?->placeId ?? 'point'] : []),
+            $this->arriveBy ? 'arrive-by' : 'pickup',
+            $this->minSeatsOpen ?? 'any-seats',
+            $this->dateFrom ?? 'no-from',
+            $this->dateTo ?? 'no-to',
+            $this->originAreaId ?? 'no-origin-area',
+            $this->destinationAreaId ?? 'no-destination-area',
         ]));
     }
 
