@@ -90,6 +90,7 @@ final class MatchResultResource extends JsonResource
 
         return [
             'commuteId' => $offer->id,
+            'isOwn' => $offer->driver_profile_id === $request->user()?->id,
             // The day this card was matched on — the soonest one that fits.
             'tripId' => $this->trip->id,
             'tripDate' => $this->trip->trip_date->toDateString(),

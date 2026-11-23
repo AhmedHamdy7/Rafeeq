@@ -39,7 +39,6 @@ final class BrowseCommutesController extends Controller
 
         $offers = CommuteOffer::query()
             ->tap(fn (Builder $offer) => HardFilters::applyEligibility($offer, $passenger))
-            ->where('driver_profile_id', '!=', $passenger->id)
             ->when($womenOnly, fn (Builder $offer) => $offer->where('audience', CommuteAudience::WomenOnly->value))
             ->when($tier !== null, fn (Builder $offer) => $offer->whereHas('vehicle', fn (Builder $vehicle) => $vehicle->where('tier', $tier)))
             ->whereHas('scheduledTrips', $upcoming)

@@ -499,3 +499,19 @@ it('gives the place picker both detour tiers', function () {
         ->and($detail['detourTiers']['onWay'])->toBe(['pointMeters' => 1500, 'requestMinutes' => 10, 'tripMinutes' => 20])
         ->and($detail['detourTiers']['far'])->toBe(['pointMeters' => 3000, 'requestMinutes' => 15, 'tripMinutes' => 30]);
 });
+
+it('marks the signed-in driver\'s own commute isOwn on search and browse, and others false', function () {
+    $own = search($this->driverToken)->assertOk()->json('data.0');
+    $other = search($this->paxToken)->assertOk()->json('data.0');
+
+    expect($own['commuteId'])->toBe($this->commuteId)
+        ->and($own['isOwn'])->toBeTrue()
+        ->and($other['isOwn'])->toBeFalse();
+
+    $ownBrowse = test()->withToken($this->driverToken)->getJson('/api/v1/search/commutes/browse')->assertOk()->json('data.0');
+    $otherBrowse = test()->withToken($this->paxToken)->getJson('/api/v1/search/commutes/browse')->assertOk()->json('data.0');
+
+    expect($ownBrowse['commuteId'])->toBe($this->commuteId)
+        ->and($ownBrowse['isOwn'])->toBeTrue()
+        ->and($otherBrowse['isOwn'])->toBeFalse();
+});

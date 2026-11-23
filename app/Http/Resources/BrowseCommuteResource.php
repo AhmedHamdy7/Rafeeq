@@ -46,6 +46,7 @@ final class BrowseCommuteResource extends JsonResource
 
         return [
             'commuteId' => $offer->id,
+            'isOwn' => $offer->driver_profile_id === $request->user()?->id,
             'tripId' => $trip->id,
             'tripDate' => $trip->trip_date->toDateString(),
             'departureAt' => $trip->departure_at->toIso8601String(),
