@@ -114,6 +114,10 @@
                                         {{ __('admin.settings.is_default') }}
                                     @endif
                                 </span>
+                                @if ($row['key'] === 'pricing.commission_rate_percent')
+                                    @php($example = \App\Domains\Commute\Support\SeatPricing::exampleAtRate((int) $row['current']))
+                                    <span class="ad-hint ad-num" style="display:block">{{ __('admin.settings.commission_example', ['rate' => (int) $row['current'], 'share' => $egp($example['share']), 'commission' => $egp($example['commission']), 'seat' => $egp($example['seat'])]) }}</span>
+                                @endif
                             </div>
                             <div class="ad-settings__actions">
                                 @if (isset($row['entry']['locked']))
@@ -158,8 +162,12 @@
                                         <label class="ad-label" for="value-{{ $row['key'] }}">
                                             {{ __('admin.settings.bounds', ['min' => number_format($row['entry']['min']), 'max' => number_format($row['entry']['max']), 'unit' => __('admin.settings.units.'.$row['entry']['unit'])]) }}
                                         </label>
-                                        <input id="value-{{ $row['key'] }}" type="number" class="ad-input" style="max-inline-size:200px" wire:model="value"
+                                        <input id="value-{{ $row['key'] }}" type="number" class="ad-input" style="max-inline-size:200px" @if ($row['key'] === 'pricing.commission_rate_percent') wire:model.live.debounce.300ms="value" @else wire:model="value" @endif
                                                min="{{ $row['entry']['min'] }}" max="{{ $row['entry']['max'] }}" required>
+                                        @if ($row['key'] === 'pricing.commission_rate_percent' && is_numeric($value))
+                                            @php($example = \App\Domains\Commute\Support\SeatPricing::exampleAtRate(max(0, (int) $value)))
+                                            <span class="ad-hint ad-num" style="display:block">{{ __('admin.settings.commission_example', ['rate' => max(0, (int) $value), 'share' => $egp($example['share']), 'commission' => $egp($example['commission']), 'seat' => $egp($example['seat'])]) }}</span>
+                                        @endif
                                     @else
                                         <span class="ad-hint">{{ ! empty($row['text']) ? __('admin.settings.text_reset_hint') : __('admin.settings.reset_hint', ['default' => number_format((int) $row['default'])]) }}</span>
                                     @endif

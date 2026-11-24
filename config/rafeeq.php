@@ -1008,8 +1008,8 @@ return [
         // PAY-48: RAFEEQ takes at least 8 EGP a seat, so a short trip still earns something.
         'min_commission_piastres' => 800,
 
-        // PAY-43: seat prices land on 5 EGP steps.
-        'rounding_step_piastres' => 500,
+        // PAY-43, item 32 of 2026-11-23: a fraction is rounded UP to the next whole pound.
+        'rounding_step_piastres' => 100,
 
         // D-0025 (b): the share is divided by the approved seats, but never by fewer than 3.
         'min_seat_divisor' => 3,

@@ -206,6 +206,8 @@ final class GoogleRoutesGeoEngine implements GeoQueryEngine
              * both cheaper and stable, so the same commute measures the same at noon and at 8am.
              */
             'routingPreference' => $departAt === null ? 'TRAFFIC_UNAWARE' : 'TRAFFIC_AWARE',
+            // Item 51: one road per stop list, the same one the app asks Google for.
+            'computeAlternativeRoutes' => false,
             'polylineEncoding' => 'ENCODED_POLYLINE',
             'units' => 'METRIC',
         ];

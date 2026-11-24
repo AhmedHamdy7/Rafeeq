@@ -200,6 +200,25 @@ final class SeatRequestController extends Controller
     }
 
     /**
+     * GET /v1/driver/seat-requests/{seatRequest} — one request on the caller's own commute, in the
+     * same shape as a row of `GET /v1/driver/seat-requests`. Anybody else's is a 404.
+     */
+    #[ApiErrors(ErrorCode::NotFound)]
+    public function driverShow(Request $request, string $seatRequest, RequestRouteImpact $impact): JsonResponse
+    {
+        $mine = $this->forMyCommute($request, $seatRequest);
+        $mine->load(SeatRequestResource::driverRelations());
+
+        $elsewhere = OtherConfirmedCommutes::forPassengers(collect([$mine->passenger_user_id]));
+        $row = new SeatRequestResource($mine);
+
+        $row->withPassengerState(OtherConfirmedCommutes::elsewhere($elsewhere, $mine->passenger_user_id, $mine->commute_offer_id));
+        $row->asDriverRow($mine->status === SeatRequestStatus::Pending ? $impact->for($mine, $row->dayInView()) : null);
+
+        return ApiResponse::success($row);
+    }
+
+    /**
      * POST /v1/driver/seat-requests/{seatRequest}/approve — seats the passenger.
      *
      * The most concurrency-sensitive operation in the system: the trip row is
@@ -225,6 +244,7 @@ final class SeatRequestController extends Controller
         ErrorCode::BookingMovesFrozenPickup,
         // Last week's commission is unpaid past its Friday: no new riders until it is (PAY-12).
         ErrorCode::DriverCommissionOverdue,
+        ErrorCode::CommutePaused,
         ErrorCode::NotFound,
     )]
     public function approve(Request $request, string $seatRequest, ApproveSeatRequestAction $action): JsonResponse
@@ -255,7 +275,7 @@ final class SeatRequestController extends Controller
      * "I would take you, but not this week." Without it the driver's only alternative to
      * yes was no, so a full week meant refusing somebody they had already judged suitable.
      */
-    #[ApiErrors(ErrorCode::SeatRequestNotPending, ErrorCode::WaitlistFull, ErrorCode::NotFound)]
+    #[ApiErrors(ErrorCode::SeatRequestNotPending, ErrorCode::WaitlistFull, ErrorCode::CommutePaused, ErrorCode::NotFound)]
     public function waitlist(Request $request, string $seatRequest, RespondToSeatRequestAction $action): JsonResponse
     {
         $parked = $action->waitlist(
@@ -287,6 +307,7 @@ final class SeatRequestController extends Controller
         ErrorCode::PickupDetourTooLong,
         ErrorCode::PickupNotOnCommute,
         ErrorCode::DriverCommissionOverdue,
+        ErrorCode::CommutePaused,
         ErrorCode::NotFound,
     )]
     public function counteroffer(

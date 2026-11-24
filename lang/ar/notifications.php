@@ -68,6 +68,14 @@ return [
         'title' => 'حجز اتلغى',
         'body' => 'الحجز بتاع يوم :date اتلغى من :name.',
     ],
+    'passenger_removed_day' => [
+        'title' => 'اتشلت من يوم',
+        'body' => ':name شالك من يوم :date.',
+    ],
+    'removed_from_commute' => [
+        'title' => 'اتشلت من مشوار',
+        'body' => ':name شالك من المشوار ده (:days يوم).',
+    ],
     'seat_offered' => [
         'title' => 'مقعد فضي',
         'body' => 'فيه مقعد فاضي في رحلة :name يوم :date. أول حد يقبل بياخده.',

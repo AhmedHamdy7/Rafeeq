@@ -14,7 +14,7 @@
 >
 > **Base URL:** `{host}/api/v1` · **Auth:** bearer token · **Format:** JSON only.
 
-**Last updated:** 2026-11-23 · **288 endpoints live** · Phases 0–7, 9 and 11 complete · 10, 12 and 13 all but a decision each
+**Last updated:** 2026-11-24 · **290 endpoints live** · Phases 0–7, 9 and 11 complete · 10, 12 and 13 all but a decision each
 
 ---
 
@@ -22,7 +22,7 @@
 
 ### What is ready
 
-**288 endpoints live** and tested, across the 47 designed screens:
+**290 endpoints live** and tested, across the 47 designed screens:
 
 | | Count | Covers |
 |---|---|---|
@@ -774,6 +774,7 @@ fails if this list and the running routes ever disagree in either direction.
 | `POST /account/debt/entries/{entry}/appeal` | 4.16 Money |
 | `GET /groups/{group}/statement` | 4.16 Money |
 | `GET /driver/seat-requests` | 4.7 Seat requests and bookings |
+| `GET /driver/seat-requests/{seatRequest}` | 4.7 Seat requests and bookings |
 | `POST /driver/seat-requests/{seatRequest}/approve` | 4.7 Seat requests and bookings |
 | `POST /driver/seat-requests/{seatRequest}/reject` | 4.7 Seat requests and bookings |
 | `POST /driver/seat-requests/{seatRequest}/waitlist` | 4.7 Seat requests and bookings |
@@ -946,6 +947,7 @@ fails if this list and the running routes ever disagree in either direction.
 | `GET /support/contact` | 4.18 Content |
 | `GET /notifications` | 4.14 Notifications |
 | `PATCH /notifications/read` | 4.14 Notifications |
+| `DELETE /notifications` | 4.14 Notifications |
 | `GET /notifications/preferences` | 4.14 Notifications |
 | `PATCH /notifications/preferences` | 4.14 Notifications |
 | `GET /bookings/{booking}/call` | 4.15 Trip chat |
@@ -2026,6 +2028,12 @@ Replaces the old `price-suggestion` slider.
 | `distanceKm` | The road length the price was computed from, one decimal. |
 | `tier` · `approvedSeats` | The car review the price depends on. |
 
+**Rounding (item 32, 2026-11-24):** seat = share + commission (rate × share, at least 8 EGP), and only a fraction is
+rounded **up** to the next whole pound: 110 stays 110, 126.5 → 127, 146.67 → 147. The driver's share is never
+rounded up; the extra piastres are RAFEEQ's. It replaced the nearest-5-EGP rule. Each day keeps the price it was
+generated with: a rate or rounding change reaches **only days generated after it** (up to 30 days ahead), so a
+commute's existing days keep their old price until the horizon reaches new ones.
+
 `COMMUTE_INCOMPLETE` (422) with `error.fields.missing` (`route` or `vehicle`) when either isn't there
 yet. `VEHICLE_SEATS_NOT_APPROVED` (409) while the car has not been reviewed — nothing for the driver to
 fix, he waits for the review. The form carries on without a price; publishing is what's refused.
@@ -2284,7 +2292,7 @@ that is not published, answers `404`. A women-only commute is shown to everybody
 | `schedule` | `{daysMask, departureTime, timezone, startDate, endDate}` — **the days it runs** ("Every Sun · Tue · Thu"). |
 | `route` | `{start, end, distanceKm, durationMinutes, polyline, isTrimmed}`. 🔒 **Before she holds a confirmed seat the line is trimmed ~1 km at each end** and `start` / `end` are `{label, lat, lng}` of the trimmed ends, labelled by **area only** ("Nasr City"); `isTrimmed: true`. Once she has a confirmed booking on it, the whole line (`isTrimmed: false`). `distanceKm` / `durationMinutes` are the whole run's ("27 km · about 52 min"). |
 | `pickups[]` / `dropoffs[]` | The driver's suggested points, in road order: `{id, label, lat, lng, estimatedTime}`. **`id` is the `suggestionId` a seat request takes.** `estimatedTime` is `HH:MM:SS` on the commute's clock from the usual departure. Empty arrays when the driver gave none (B07) — her own pin is always the other way to choose. |
-| `upcomingTrips[]` | The next up to 20 days: the `otherDays[]` item of a match result (`id`, `tripDate`, `departureAt`, `departureLocal`, `promisedArrivalAt`, `promisedArrivalLocal`, `seatsAvailable`, `myStatus`, `overlapsBooking`) plus that day's `seatPricePiastres` and **`pointTimes[]`** — `{pointId, estimatedAt, estimatedLocal}` for each suggested point on that day (use these, not `estimatedTime`, once she picks a day). |
+| `upcomingTrips[]` | The next up to 20 days: the `otherDays[]` item of a match result (`id`, `tripDate`, `departureAt`, `departureLocal`, `promisedArrivalAt`, `promisedArrivalLocal`, `seatsAvailable`, `myStatus`, `overlapsBooking`) plus that day's `seatPricePiastres` and **`pointTimes[]`** — `{pointId, estimatedAt, estimatedLocal}` for each suggested point on that day (use these, not `estimatedTime`, once she picks a day). `promisedArrivalLocal` (`Y-m-d H:i:s`) is filled on **every** day that has a promise, booked or not (item 59). It is `null` on a Return (timed by `promisedDepartureLocal`, with `estimatedArrivalLocal`) and on a day generated without a promise; show `estimatedArrivalLocal` there, never "—". |
 | `requestEligibility` | `{canRequest, reason}` — whether she may ask for a seat on this commute. `reason`: `null` · `women_only` · `gender_not_set` · `own_commute` · `already_requested` · `account_restricted` (riding suspended for debt). Disable **Request Seat** with the reason when `canRequest` is `false`. A hint: `POST /commutes/{commute}/seat-requests` still makes the same checks. Per-day standing stays in `upcomingTrips[].myStatus`. |
 | `rules`, `vehicle`, `driver` | As on a match result. 🔒 No plate. `rules` is always an object — `{}` when the commute has none. |
 
@@ -2663,6 +2671,7 @@ list has meaning for:
 | `hasOtherConfirmedCommute` | A bare boolean: she already holds a confirmed future seat on **another** commute. Show it as a hint ("In another commute"). Nothing is blocked on it, and nothing more is published (SAFE-18, COM-29). |
 | `tripDate` · `departureLocal` | The day in view: the requested day for a trial, the next requested weekday for a recurring request. `null` when no day remains. |
 | `originLabel` · `destinationLabel` | The commute this request is on. |
+| `commuteStatus` · `commutePausedReason` | Item 44 (2026-11-24): the commute's state, `active` · `paused` · `archived` (`draft` never appears here), and on a paused one the reason as on `GET /commutes/{commute}` (`by_driver`, `commission_unpaid`, …), otherwise `null`. A paused row shows "Commute paused" and **Resume to accept** instead of Accept. |
 | `impact` | **`PENDING` rows only**, `null` otherwise, and `null` when no day remains: what accepting does to that day. See below. |
 
 **`?status=`**: a comma-separated list, any case, as on `GET /seat-requests`, e.g.
@@ -2674,6 +2683,7 @@ list has meaning for:
 |---|---|
 | `tripId` · `tripDate` | The day the numbers are for. |
 | `addedMinutes` | How much longer that day's run gets, measured against the confirmed stops. |
+| `addedMetres` | Item 47 (2026-11-24): how much longer that day's run gets in distance with her on board, by the same stops and settings ("+1.2 km"). Never negative. |
 | `maxDetourMinutes` · `withinLimit` | The outer whole-trip limit (COM-40). Use `withinLimit`, don't compare the numbers. |
 | `tier` · `extraMinutes` | `on_way` shows "On your way". `far` shows "A bit far · you'd leave about {extraMinutes} min earlier". `null` is beyond both. The same two fields are on `counteroffer-options`, `pickup-preview` and search results. |
 | `promisedArrivalLocal` · `projectedArrivalLocal` | The promised arrival, `null` on a day with no promise, and when the run would arrive with her on board. |
@@ -2688,9 +2698,19 @@ until he answers, she withdraws, or — for a one-day request — its day passes
 `CLOSED_DATE_PASSED`). The one countdown left is a request on a car **already moving**
 (`expiresAt` three minutes out, above). Do not draw a timer on any other card.
 
+#### `GET /driver/seat-requests/{seatRequest}` — active, profile complete
+
+Item 44 (2026-11-24): one request on the caller's own commute, the **same row** as `GET /driver/seat-requests`
+(with `commuteStatus`, `commutePausedReason`, `hasOtherConfirmedCommute` and, while `PENDING`, `impact`). Use it
+for a notification that opens one request. `404` for anybody else's.
+
 #### `POST /driver/seat-requests/{seatRequest}/approve` — active, profile complete
 
 One call handles both a trial and a recurring membership.
+
+🔴 **A paused commute answers `409 COMMUTE_PAUSED`** (2026-11-24), on `/approve`, `/waitlist` and
+`/counteroffer`: "This commute is paused. Resume it to accept requests." Before, `/approve` answered
+`SEAT_UNAVAILABLE`, which read as "this seat was taken".
 
 | Field | Meaning |
 |---|---|
@@ -3078,6 +3098,10 @@ current status in `error.fields.status`. Somebody else's answers **`404`**.
 The driver's whole waiting list, across all her commutes, with the same row as the per-commute list
 below. Empty, never refused, for a driver with no commute.
 
+Each row carries `commuteId`, `originLabel`, `destinationLabel`, `direction` and, since 2026-11-24 (item 45),
+**`commuteStatus`** (`active` · `paused` · `archived`) and **`commutePausedReason`** (`null` unless paused), so the
+tab can group by commute and mark a paused one "Paused · seats can't be offered until you resume".
+
 **`?tripId=`** returns the members who asked for that day, including anybody not available that day.
 `404` for a day on another driver's commute.
 
@@ -3222,6 +3246,23 @@ next requested weekday for a recurring request, and `tripDate` says which.
 Nothing is written. The official itinerary stays at its current point count until she accepts —
 four points can appear here while `navigation-route` still returns two.
 
+##### Drawing the road (items 47, 51, 2026-11-24)
+
+The app draws every road live from Google Routes through `stops[]` in order, and no longer draws `polyline`.
+The server measures the same stops with the **same request settings**, so what is drawn is what was measured:
+
+| Google Routes field | Value |
+|---|---|
+| `travelMode` | `DRIVE` |
+| `routingPreference` | `TRAFFIC_UNAWARE` |
+| `computeAlternativeRoutes` | `false` |
+| `intermediates` | the stops between the driver's start and end, in `sequence` order, as stopovers |
+
+"Your road now" is the stops without `isProposed`; "with her" is all of them. `impact.addedMinutes` and
+`impact.addedMetres` are the difference between those two, each leg measured with the settings above. `polyline`
+stays in the response for older builds. The only call that uses traffic is the computed leave time of an
+arrive-by day (`TRAFFIC_AWARE` with a departure time); nothing a map draws depends on it.
+
 > 🔒 **Both of these are driver-only, and a passenger gets `404`.** The payload is every other
 > rider's pickup and drop-off: front doors and workplaces. A passenger's own points come back on her
 > own booking and her own seat request, and nowhere else.
@@ -3262,6 +3303,11 @@ Every seat the caller has approved. The largest list in the API. Optional filter
 `tripId`, and `status` as a comma-separated list. Adds `passenger` (first name only) and
 `replacementOffer` (`null` or `{offerId, seatRequestId, passengerFirstName, status, offeredAt, closedAt}`).
 
+Every row also has (items 35, 54; 2026-11-24): `commitment` (`trial` · `recurring`), **`requestedDaysMask`** (the
+weekdays she rides; her request's mask, else her membership's `committedDaysMask`, else `null`), `pickupEtaAt` /
+`pickupEtaLocal`, **`dropoffEtaAt` / `dropoffEtaLocal`** (when the car should reach her drop-off that day, from the
+day's itinerary, else from the route; `null` when neither can say), `commuteGroupId` and `tripDate`.
+
 #### `GET /driver/trips?scope=upcoming|past` — active, profile complete, paginated
 
 One list of the driver's days across all commutes, optional `commuteId`. `upcoming` is oldest first and
@@ -3275,6 +3321,10 @@ leaves out paused commutes. `past` is newest first: `COMPLETED`, `CANCELLED` and
 
 The fee for removing or replacing this passenger now: `affectedSeats`, `feePiastres`, `reason`,
 `perTrip[]`. `409 BOOKING_NOT_CANCELLABLE` when the seat isn't confirmed.
+
+**`?scope=day|all`** (item 56, 2026-11-24; default `day`). `all` previews removing her from **every upcoming day of
+her seat on this commute**: `feePiastres` is the sum of each day's fee by its own notice, `perTrip[]` has one item per
+day. Both scopes add `scope`, `daysCount`, `firstTripDate` and `lastTripDate` ("All upcoming days · 12 days").
 
 #### `POST /driver/bookings/{booking}/replacement-offer` — active, profile complete, driver only
 
@@ -3351,6 +3401,13 @@ cannot do without. `{ "reason": "..." }` (required, 3–255; kept for support an
 sent to her**). The booking becomes `CANCELLED_BY_DRIVER`, she is told and shown alternatives, the
 seat goes to the waiting list, and he pays the driver-cancel fee by notice (16h+: 0 · 10–16h: 10 %
 · under 10h: 25 % of her seat). `404` for anybody else's booking.
+
+**`scope`** (item 56, 2026-11-24): `day` (default, as above) or `all`. `all` cancels **every upcoming confirmed
+booking of hers on this commute**, each with its own fee by notice and each freed day offered to that day's waiting
+list, **ends her recurring seat** (her request becomes `ENDED`, her membership `REMOVED`) and sends her **one**
+notification, `removed_from_commute` ("Omar removed you from this commute (12 days)."). `day` now tells her
+"Omar removed you from 8/11." (`booking_cancelled`, `data.scope: day`). Returns the booking, with
+`meta: { scope, daysCount, cancelledBookingIds[] }`.
 
 #### `POST /bookings/{booking}/dispute` — active, profile complete
 
@@ -5039,7 +5096,8 @@ hold must still be able to read the notice that says so.
 | `pickup_change_alternative_accepted` | driver | the pickup request (4.8) | `pickupRequestId`, `commuteId` (+ `commuteGroupId`) |
 | `seat_offered` | passenger on a waiting list | the offer (`GET /seat-offers/{offer}` with the `offerId`) | `offerId`, `tripId`, `commuteId` |
 | `seats_offered_by_driver` | passenger on a waiting list | her offers | `commuteId`, `seatRequestId` |
-| `booking_cancelled` | the other side | the booking | `bookingId` |
+| `booking_cancelled` | the other side | the booking | `bookingId`; when the driver removed her from one day also `commuteId`, `scope: day` ("Omar removed you from 8/11.") |
+| `removed_from_commute` | passenger, when the driver removes her from **all** upcoming days (item 56) | the commute | `commuteId`, `bookingId`, `scope: all`, `daysCount` |
 | `trip_day_cancelled` | passenger | the booking | `tripId`, `bookingId` |
 | `trip_day_cancelled_by_platform` | passenger | the booking (offer Find another commute) | `tripId`, `bookingId` |
 | `pickup_change_expired` | passenger | the pickup request | `pickupRequestId`, `commuteId`, `seatRequestId`? |
@@ -5063,16 +5121,16 @@ hold must still be able to read the notice that says so.
 | `late_boarding_warning` · `missed_commitment_warning` | passenger | warnings (4.2) | `warningId`, `bookingId` |
 | `no_show_fee` · `late_boarding_fee` · `late_cancel_fee` · `late_cancel_fee_charged` · `late_cancel_fee_waived` | passenger | warnings (4.2), with the 48-hour appeal | `warningId`, `bookingId` |
 | `no_show_dispute_decided` | passenger | Past trip for `bookingId`; the decision is in `noShow.dispute` | `bookingId`, `tripId`, `resolution` (`upheld` · `overturned` · `refunded`) |
-| `driver_cancel_fee` · `driver_ended_trip_fee` · `driver_no_show_fee` · `driver_late_fee` | driver, one per act | the debt screen (4.16), with the 48-hour appeal | *no ids* |
+| `driver_cancel_fee` · `driver_ended_trip_fee` · `driver_no_show_fee` · `driver_late_fee` | driver, one per act | the debt screen (4.16) in **driver** mode, with the 48-hour appeal | `side: driver`, `debtEntryId` (the fee line to appeal; `debtEntryIds` comma-separated when one act charged several seats) |
 | `appeal_approved` · `appeal_declined` | the one who appealed | the debt screen / reliability | as relevant (`reliabilityEventId`) |
-| ⭐ `debt_due_tomorrow` | driver, **Thursday** from the reminder hour, when this week's commission is unpaid — "commission due tomorrow" | the debt screen (4.16) | *no ids* |
-| ⭐ `debt_overdue` | driver, once a day after the Friday while anything is late — "commission overdue" | the debt screen | *no ids* |
-| `debt_late_fee_added` | driver, the day the +10 % is added | the debt screen | *no ids* |
-| ⭐ `debt_suspension_warning` | driver, the Thursday before suspension | the debt screen | *no ids* |
-| ⭐ `debt_payment_confirmed` · ⭐ `debt_payment_rejected` | whoever sent "I paid" — "commission payment confirmed / rejected" | the debt screen | *no ids* |
-| ⭐ `coupon_issued` | the harmed side, when staff give a coupon | the debt screen (coupons) | *no ids* |
-| `driving_suspended_for_debt` · `riding_suspended_for_debt` | the suspended person (**safety** — cannot be switched off) | the debt screen | *no ids* |
-| `chat_message` | the other side | the thread | as the thread (4.15) |
+| ⭐ `debt_due_tomorrow` | driver, **Thursday** from the reminder hour, when this week's commission is unpaid — "commission due tomorrow" | the debt screen (4.16) | `side: driver` |
+| ⭐ `debt_overdue` | driver, once a day after the Friday while anything is late — "commission overdue" | the debt screen | `side: driver` |
+| `debt_late_fee_added` | driver, the day the +10 % is added | the debt screen | `side: driver` |
+| ⭐ `debt_suspension_warning` | driver, the Thursday before suspension | the debt screen | `side: driver` |
+| ⭐ `debt_payment_confirmed` · ⭐ `debt_payment_rejected` | whoever sent "I paid" — "commission payment confirmed / rejected" | the debt screen in the `side`'s mode; on a confirmation with `commuteIds`, the paused commute | `side` (`driver` · `passenger`); on `debt_payment_confirmed` for a driver also `commuteIds` (comma-separated, the commutes still paused for `commission_unpaid`; absent when none) |
+| ⭐ `coupon_issued` | the harmed side, when staff give a coupon | the debt screen (coupons) in the `side`'s mode | `side` |
+| `driving_suspended_for_debt` · `riding_suspended_for_debt` | the suspended person (**safety** — cannot be switched off) | the debt screen | `side` (`driver` on driving, `passenger` on riding) |
+| `chat_message` | the other side | the thread | `bookingId` for a booking thread, or `seatRequestId` + `commuteId` for a request thread (4.15) |
 | `announcement` | everyone, passengers or drivers — written by staff, **inbox only, never a push** | the screen in `data.link` if present (`home`, `driver_home`, `trips`, `payments`, `profile`, `help`), else the inbox | `announcementId`, `link` (optional) |
 | `staff_message` | one member, written by staff (**safety** — cannot be switched off), **inbox only** | the inbox | *no ids* |
 | `live_trip_auto_shared` · `live_trip_auto_share_failed` | her, when auto-share ran as her trip left (**safety**) | Shared links | `tripId`, `tripSessionId`, `sentTo` (contact ids, comma-separated; not on `_failed`), `failedTo` (contact ids, comma-separated, may be empty) |
@@ -5093,6 +5151,14 @@ Cairo shipped), and never for somebody who owes nothing.
 
 `{ "ids": ["…", "…"] }` or `{ "all": true }`. Returns `{ "unreadCount": n }`. Ids that are not the
 caller's are ignored rather than refused (refusing would confirm they exist).
+
+**Mark unread** (item 48, 2026-11-24): add `"read": false`, e.g. `{ "ids": ["…"], "read": false }`. Same answer.
+
+#### `DELETE /notifications`
+
+Item 48 (2026-11-24). `{ "ids": ["…"] }` (up to 100) or `{ "all": true }`. Removes them from the inbox and returns
+`{ "unreadCount": n }`. Ids that are not the caller's are ignored. A removed notification never comes back in
+`GET /notifications` and stops counting in `unreadCount` and on Home.
 
 #### `GET /notifications/preferences` · `PATCH /notifications/preferences`
 

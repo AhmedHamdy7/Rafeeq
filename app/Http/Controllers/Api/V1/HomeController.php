@@ -746,6 +746,7 @@ final class HomeController extends Controller
             ->where('user_id', $userId)
             ->where('channel', NotificationChannel::InApp->value)
             ->whereNull('read_at')
+            ->whereNull('dismissed_at')
             ->count();
     }
 

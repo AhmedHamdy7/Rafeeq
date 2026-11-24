@@ -10,6 +10,7 @@ use App\Domains\Booking\Support\RequestedPoints;
 use App\Domains\Booking\Support\SeatApproval;
 use App\Domains\Commute\Enums\CommuteLocationType;
 use App\Domains\Commute\Models\CommuteOffer;
+use App\Domains\Commute\Support\CommuteGuards;
 use App\Domains\Geo\Contracts\GeoQueryEngine;
 use App\Domains\Identity\Models\User;
 use App\Domains\Notification\Enums\NotificationType;
@@ -73,6 +74,8 @@ final readonly class CounterofferAction
         if ($request->status !== SeatRequestStatus::Pending) {
             throw DomainException::of(ErrorCode::SeatRequestNotPending);
         }
+
+        CommuteGuards::assertCommuteNotPaused($request->commute_offer_id);
 
         // Offering a new rider a seat is taking a new rider (PAY-12), so the Friday deadline
         // applies here as on a plain approval.

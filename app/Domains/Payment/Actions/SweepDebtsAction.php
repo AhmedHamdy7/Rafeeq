@@ -98,7 +98,7 @@ final readonly class SweepDebtsAction
         DebtNotices::send($userId, $type, array_filter([
             'amount' => $standing->owedPiastres(),
             'fee' => $lateFee?->amount_piastres,
-        ], fn ($v) => $v !== null));
+        ], fn ($v) => $v !== null), DebtSide::Driver);
 
         $account->forceFill(['last_reminded_on' => $this->today()])->save();
         $done['reminded']++;

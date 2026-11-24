@@ -14,7 +14,7 @@ use Illuminate\Support\Facades\Storage;
  *
  *     share      = route km × km rate ÷ max(approved seats, 3)        never rounded to the step
  *     commission = max(10% × share, 8 EGP)                              added on top
- *     seat       = share + commission → nearest 5 EGP, halfway down, but up if RAFEEQ < 8 EGP
+ *     seat       = share + commission, a fraction rounded UP to the next whole pound
  *
  * The worked examples are the partners' own, from the Feature 03 backend file §1 (P-2). They are
  * pinned at the shipped beta settings, so a test failing here means either the formula moved or a
@@ -56,38 +56,40 @@ it('prices 3 seats on 40 km Standard at 110, the driver keeping 100', function (
         ->and($quote->commissionPiastres)->toBe(1_000);
 });
 
-it('prices 4 seats on 40 km Standard at 85: 75 + 8 = 83, to the nearest 5', function () {
+it('prices 4 seats on 40 km Standard at 83: 75 + 8, already a whole pound', function () {
     $quote = quoteFor(40_000, 4);
 
-    expect($quote->seatPricePiastres)->toBe(8_500)
+    expect($quote->seatPricePiastres)->toBe(8_300)
         ->and($quote->driverSharePiastres)->toBe(7_500)
-        // 7.50 is under the minimum, so 8; the rounding up to 85 is RAFEEQ's too.
-        ->and($quote->commissionPiastres)->toBe(1_000);
+        ->and($quote->commissionPiastres)->toBe(800);
 });
 
-it('prices 3 seats on 8 km at 30: the minimum commission carries a short trip', function () {
+it('prices 3 seats on 8 km at 28: the minimum commission carries a short trip', function () {
     $quote = quoteFor(8_000, 3);
 
-    expect($quote->seatPricePiastres)->toBe(3_000)
+    expect($quote->seatPricePiastres)->toBe(2_800)
         ->and($quote->driverSharePiastres)->toBe(2_000)
-        ->and($quote->commissionPiastres)->toBe(1_000);
+        ->and($quote->commissionPiastres)->toBe(800);
 });
 
-it('rounds a share of 79 up to 90, because 85 would leave RAFEEQ only 6', function () {
-    expect(seatForShare(7_900))->toBe(9_000);
+it('keeps a whole-pound seat as it is: share 79 + 8 = 87', function () {
+    expect(seatForShare(7_900))->toBe(8_700);
 });
 
-it('rounds a share of 125 down to 135, because 137.5 is exactly halfway', function () {
-    expect(seatForShare(12_500))->toBe(13_500);
+it('rounds a fraction up to the next pound: 125 + 12.5 = 137.5 → 138', function () {
+    expect(seatForShare(12_500))->toBe(13_800);
 });
 
-it('prices 3 seats on 40 km Comfort at 145: 440 ÷ 3 = 146.67, to the nearest 5', function () {
+it('rounds 115 + 11.5 = 126.5 up to 127', function () {
+    expect(seatForShare(11_500))->toBe(12_700);
+});
+
+it('prices 3 seats on 40 km Comfort at 147: 400 ÷ 3 = 133.33 + 13.33 = 146.67, rounded up', function () {
     $quote = quoteFor(40_000, 3, VehicleTier::Comfort);
 
-    expect($quote->seatPricePiastres)->toBe(14_500)
-        // The share is never rounded to the step; to the piastre only, the remainder to RAFEEQ.
+    expect($quote->seatPricePiastres)->toBe(14_700)
         ->and($quote->driverSharePiastres)->toBe(13_333)
-        ->and($quote->commissionPiastres)->toBe(1_167)
+        ->and($quote->commissionPiastres)->toBe(1_367)
         ->and($quote->kmRatePiastres)->toBe(1_000);
 });
 
@@ -126,7 +128,7 @@ it('follows the commission setting', function () {
 
     $quote = quoteFor(40_000, 3);
 
-    // 100 + 15 = 115, already on a 5-EGP step.
+    // 100 + 15 = 115, already a whole pound.
     expect($quote->seatPricePiastres)->toBe(11_500)
         ->and($quote->driverSharePiastres)->toBe(10_000)
         ->and($quote->commissionRatePercent)->toBe(15);
@@ -135,8 +137,19 @@ it('follows the commission setting', function () {
 it('follows the km rate settings', function () {
     setPlatformSetting('pricing.km_rate_standard_piastres', 900);
 
-    // 40 × 9 ÷ 3 = 120, + 12 = 132 → 130.
-    expect(quoteFor(40_000, 3)->seatPricePiastres)->toBe(13_000);
+    // 40 × 9 ÷ 3 = 120, + 12 = 132.
+    expect(quoteFor(40_000, 3)->seatPricePiastres)->toBe(13_200);
+});
+
+it('prices the owner example: 40 km × 7.5 ÷ 3 = 100, + 20% = 120', function () {
+    setPlatformSetting('pricing.commission_rate_percent', 20);
+
+    expect(quoteFor(40_000, 3)->seatPricePiastres)->toBe(12_000);
+});
+
+it('gives the dashboard a live example at any rate', function () {
+    expect(SeatPricing::exampleAtRate(15))->toBe(['share' => 11_500, 'commission' => 1_800, 'seat' => 13_300])
+        ->and(SeatPricing::exampleAtRate(10))->toBe(['share' => 11_500, 'commission' => 1_200, 'seat' => 12_700]);
 });
 
 /*
@@ -186,7 +199,7 @@ it('freezes the price and its inputs on every generated day', function () {
         ->and($trip->pricing_seat_divisor)->toBe(3)
         ->and($trip->pricing_commission_rate_percent)->toBe(10)
         ->and($trip->pricing_min_commission_piastres)->toBe(800)
-        ->and($trip->pricing_rounding_step_piastres)->toBe(500)
+        ->and($trip->pricing_rounding_step_piastres)->toBe(100)
         // And the commute caches the current price for the driver's own screen.
         ->and($offer->seat_price_piastres)->toBe($expected->seatPricePiastres)
         ->and($offer->driver_share_piastres)->toBe($expected->driverSharePiastres);
@@ -288,4 +301,20 @@ it('refuses an online payment while the beta is cash only', function () {
         'paymentType' => 'online',
     ])->assertStatus(422)
         ->assertJsonPath('error.code', 'PAYMENT_TYPE_NOT_AVAILABLE');
+});
+
+it('prices an offer of 1 seat on a 3-seat car by 3 seats, not by 1', function () {
+    $token = approvedDriver();
+    $id = readyCommute($token, Vehicle::sole()->id, ['seatsTotal' => 1]);
+
+    test()->withToken($token)->postJson("/api/v1/commutes/{$id}/publish")->assertOk();
+
+    $offer = CommuteOffer::findOrFail($id);
+    $trip = ScheduledTrip::query()->orderBy('trip_date')->first();
+    $byApprovedSeats = SeatPricing::quote((int) $offer->route_distance_meters, Vehicle::sole());
+
+    expect($trip->seats_total)->toBe(1)
+        ->and($trip->pricing_approved_seats)->toBe(3)
+        ->and($trip->pricing_seat_divisor)->toBe(3)
+        ->and($trip->seat_price_piastres)->toBe($byApprovedSeats->seatPricePiastres);
 });

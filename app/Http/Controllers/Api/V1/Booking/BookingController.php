@@ -120,7 +120,25 @@ final class BookingController extends Controller
             ]);
         }
 
-        return ApiResponse::success(DriverFees::preview(collect([$target])));
+        if ($request->query('scope') === 'all') {
+            $days = CancelBookingAction::upcomingOfHerSeat($target);
+
+            return ApiResponse::success([
+                'scope' => 'all',
+                'daysCount' => $days->count(),
+                'firstTripDate' => $days->first()?->scheduledTrip?->trip_date?->toDateString(),
+                'lastTripDate' => $days->last()?->scheduledTrip?->trip_date?->toDateString(),
+                ...DriverFees::preview($days),
+            ]);
+        }
+
+        return ApiResponse::success([
+            'scope' => 'day',
+            'daysCount' => 1,
+            'firstTripDate' => $target->scheduledTrip?->trip_date?->toDateString(),
+            'lastTripDate' => $target->scheduledTrip?->trip_date?->toDateString(),
+            ...DriverFees::preview(collect([$target])),
+        ]);
     }
 
     #[ApiErrors(
@@ -245,9 +263,25 @@ final class BookingController extends Controller
     {
         $target = $this->driversBooking($request, $booking);
 
-        return ApiResponse::success(new BookingResource(
-            $action->byDriver($target, $request->user()->id, $request->validated('reason')),
-        ));
+        if ($request->validated('scope') !== 'all') {
+            return ApiResponse::success(new BookingResource(
+                $action->byDriver($target, $request->user()->id, $request->validated('reason')),
+            ), meta: ['scope' => 'day', 'daysCount' => 1, 'cancelledBookingIds' => [(string) $target->getKey()]]);
+        }
+
+        if ($target->status !== BookingStatus::Confirmed) {
+            throw DomainException::of(ErrorCode::BookingNotCancellable, fields: [
+                'status' => [strtoupper($target->status->value)],
+            ]);
+        }
+
+        $cancelled = $action->allUpcomingByDriver($target, $request->user()->id, $request->validated('reason'));
+
+        return ApiResponse::success(new BookingResource($target->refresh()), meta: [
+            'scope' => 'all',
+            'daysCount' => $cancelled->count(),
+            'cancelledBookingIds' => $cancelled->map(fn ($b): string => (string) $b->getKey())->values()->all(),
+        ]);
     }
 
     /**

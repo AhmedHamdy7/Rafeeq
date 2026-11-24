@@ -15,6 +15,7 @@ use App\Domains\Group\Models\GroupMember;
 use App\Domains\Identity\Models\User;
 use App\Domains\Rating\Models\Rating;
 use App\Domains\Safety\Support\OtherParty;
+use App\Domains\Trip\Enums\NavigationStopKind;
 use App\Domains\Trip\Support\AttendanceDisputes;
 use App\Domains\Trip\Support\DriverDelay;
 use Carbon\CarbonImmutable;
@@ -65,6 +66,7 @@ final class BookingResource extends JsonResource
              */
             'membership' => $this->membershipSummary(),
             'commitment' => $this->commitment(),
+            'requestedDaysMask' => $this->requestedDaysMask(),
 
             /*
              * HISTORY-1: where the journey went and who drove, on every booking of the passenger's
@@ -291,6 +293,14 @@ final class BookingResource extends JsonResource
                 $this->resource->relationLoaded('scheduledTrip') && $this->scheduledTrip !== null,
                 fn (): ?string => PickupEta::local($this->scheduledTrip, $this->pickupEta()),
             ),
+            'dropoffEtaAt' => $this->when(
+                $this->resource->relationLoaded('scheduledTrip') && $this->scheduledTrip !== null,
+                fn (): ?string => $this->dropoffEta()?->toIso8601String(),
+            ),
+            'dropoffEtaLocal' => $this->when(
+                $this->resource->relationLoaded('scheduledTrip') && $this->scheduledTrip !== null,
+                fn (): ?string => PickupEta::local($this->scheduledTrip, $this->dropoffEta()),
+            ),
 
             /*
              * HISTORY-4: what the CALLER wrote about this journey, in the shape
@@ -362,6 +372,40 @@ final class BookingResource extends JsonResource
             'offeredAt' => $offer->created_at?->toIso8601String(),
             'closedAt' => $offer->closed_at?->toIso8601String(),
         ];
+    }
+
+    private function requestedDaysMask(): ?int
+    {
+        $mask = $this->resource->loadMissing('seatRequest')->seatRequest?->requested_days_mask;
+
+        if ($mask !== null) {
+            return (int) $mask;
+        }
+
+        $committed = $this->membershipSummary()['committedDaysMask'] ?? null;
+
+        return $committed === null ? null : (int) $committed;
+    }
+
+    private ?CarbonImmutable $dropoffEtaValue = null;
+
+    private bool $dropoffEtaResolved = false;
+
+    private function dropoffEta(): ?CarbonImmutable
+    {
+        if ($this->dropoffEtaResolved) {
+            return $this->dropoffEtaValue;
+        }
+
+        $trip = $this->scheduledTrip;
+        $stops = $trip->relationLoaded('navigationStops') ? $trip->navigationStops : null;
+
+        $this->dropoffEtaValue = $trip->relationLoaded('commuteOffer')
+            ? PickupEta::dropoffForBooking(app(GeoQueryEngine::class), $this->resource, $stops)
+            : PickupEta::fromItinerary($this->resource, $stops, NavigationStopKind::PassengerDropoff);
+        $this->dropoffEtaResolved = true;
+
+        return $this->dropoffEtaValue;
     }
 
     private function pickupEta(): ?CarbonImmutable

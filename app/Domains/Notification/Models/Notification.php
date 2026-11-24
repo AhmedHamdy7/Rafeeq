@@ -34,6 +34,7 @@ class Notification extends Model
             'channel' => NotificationChannel::class,
             'category' => NotificationCategory::class,
             'read_at' => 'datetime',
+            'dismissed_at' => 'datetime',
             'sent_at' => 'datetime',
         ];
     }

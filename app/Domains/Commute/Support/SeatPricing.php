@@ -28,4 +28,25 @@ final class SeatPricing
             roundingStepPiastres: PricingSettings::roundingStepPiastres(),
         );
     }
+
+    public const int EXAMPLE_SHARE_PIASTRES = 11_500;
+
+    /**
+     * @return array{share: int, commission: int, seat: int}
+     */
+    public static function exampleAtRate(int $commissionRatePercent): array
+    {
+        $seat = SeatPriceQuote::seatPriceForShare(
+            self::EXAMPLE_SHARE_PIASTRES * 1000,
+            $commissionRatePercent,
+            PricingSettings::minCommissionPiastres(),
+            PricingSettings::roundingStepPiastres(),
+        );
+
+        return [
+            'share' => self::EXAMPLE_SHARE_PIASTRES,
+            'commission' => $seat - self::EXAMPLE_SHARE_PIASTRES,
+            'seat' => $seat,
+        ];
+    }
 }

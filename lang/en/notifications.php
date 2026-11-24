@@ -75,6 +75,14 @@ return [
         'title' => 'A seat was cancelled',
         'body' => ':name cancelled the booking for :date.',
     ],
+    'passenger_removed_day' => [
+        'title' => 'Removed from a day',
+        'body' => ':name removed you from :date.',
+    ],
+    'removed_from_commute' => [
+        'title' => 'Removed from a commute',
+        'body' => ':name removed you from this commute (:days days).',
+    ],
     /*
      * 🔴 "First to accept gets it" is in the body on purpose. She is being told a race has started,
      * and a message that implied the seat was already hers would make losing it feel like it was

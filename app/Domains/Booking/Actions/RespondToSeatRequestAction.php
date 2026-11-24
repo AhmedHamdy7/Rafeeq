@@ -10,6 +10,7 @@ use App\Domains\Booking\Models\SeatRequest;
 use App\Domains\Booking\Support\SeatOfferClosure;
 use App\Domains\Booking\Support\WaitlistPositions;
 use App\Domains\Commute\Models\ScheduledTrip;
+use App\Domains\Commute\Support\CommuteGuards;
 use App\Domains\Identity\Models\User;
 use App\Domains\Notification\Enums\NotificationType;
 use App\Domains\Notification\Support\Notifier;
@@ -84,6 +85,8 @@ final readonly class RespondToSeatRequestAction
             // and an answered one is not a conversation any more.
             throw DomainException::of(ErrorCode::SeatRequestNotPending);
         }
+
+        CommuteGuards::assertCommuteNotPaused($request->commute_offer_id);
 
         return DB::transaction(function () use ($request, $driver, $note): SeatRequest {
             /*

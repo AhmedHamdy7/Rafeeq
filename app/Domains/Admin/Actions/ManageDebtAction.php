@@ -5,6 +5,9 @@ namespace App\Domains\Admin\Actions;
 use App\Domains\Admin\Models\AdminUser;
 use App\Domains\Admin\Support\AdminActionLog;
 use App\Domains\Booking\Models\Booking;
+use App\Domains\Commute\Enums\CommuteOfferStatus;
+use App\Domains\Commute\Enums\CommutePausedReason;
+use App\Domains\Commute\Models\CommuteOffer;
 use App\Domains\Identity\Models\User;
 use App\Domains\Notification\Enums\NotificationType;
 use App\Domains\Payment\Enums\DebtEntryType;
@@ -68,7 +71,15 @@ final readonly class ManageDebtAction
             return $payment;
         });
 
-        DebtNotices::send($payment->user_id, NotificationType::DebtPaymentConfirmed, ['amount' => $payment->amount_piastres]);
+        DebtNotices::send($payment->user_id, NotificationType::DebtPaymentConfirmed, ['amount' => $payment->amount_piastres], $payment->side, array_filter([
+            'commuteIds' => $payment->side === DebtSide::Passenger ? null : implode(',', CommuteOffer::query()
+                ->where('driver_profile_id', $payment->user_id)
+                ->where('status', CommuteOfferStatus::Paused->value)
+                ->where('paused_reason', CommutePausedReason::CommissionUnpaid->value)
+                ->orderBy('id')
+                ->pluck('id')
+                ->all()),
+        ]));
 
         return $payment;
     }
@@ -94,7 +105,7 @@ final readonly class ManageDebtAction
             return $payment;
         });
 
-        DebtNotices::send($payment->user_id, NotificationType::DebtPaymentRejected);
+        DebtNotices::send($payment->user_id, NotificationType::DebtPaymentRejected, side: $payment->side);
 
         return $payment;
     }
@@ -164,7 +175,7 @@ final readonly class ManageDebtAction
             return $coupon;
         });
 
-        DebtNotices::send($coupon->user_id, NotificationType::CouponIssued, ['amount' => $coupon->value_piastres]);
+        DebtNotices::send($coupon->user_id, NotificationType::CouponIssued, ['amount' => $coupon->value_piastres], $coupon->side);
 
         return $coupon;
     }

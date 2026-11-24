@@ -23,6 +23,9 @@ final class MarkNotificationsReadRequest extends FormRequest
 
             // Mark everything in the inbox read ("Mark all as read").
             'all' => ['nullable', 'boolean'],
+
+            // false marks them unread again. Defaults to true.
+            'read' => ['nullable', 'boolean'],
         ];
     }
 }

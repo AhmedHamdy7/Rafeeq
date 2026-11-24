@@ -33,7 +33,7 @@ final readonly class RequestRouteImpact
 
         try {
             $preview = $this->itinerary->preview($day, $pickup, $request->requested_pickup_label, $dropoff, $request->requested_dropoff_label);
-            $current = $this->itinerary->currentDurationSeconds($day);
+            $current = $this->itinerary->current($day);
             $detour = PickupDetour::measureAll($this->geo, $day->commuteOffer, [$pickup, $dropoff]);
             $blocked = $this->blocksAccept($request);
         } catch (DomainException) {
@@ -45,7 +45,8 @@ final readonly class RequestRouteImpact
         return [
             'tripId' => $day->id,
             'tripDate' => $day->trip_date->toDateString(),
-            'addedMinutes' => (int) round(max(0, $preview->durationSeconds - $current) / 60),
+            'addedMinutes' => (int) round(max(0, $preview->durationSeconds - $current->durationSeconds) / 60),
+            'addedMetres' => (int) max(0, $preview->distance->metres - $current->distance->metres),
             'maxDetourMinutes' => RouteSettings::maxTripDetourMinutes(),
             'withinLimit' => $detour->isWithin(),
             'tier' => $detour->tier()?->value,

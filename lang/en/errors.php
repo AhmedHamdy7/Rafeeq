@@ -67,6 +67,7 @@ return [
     'COMMUTE_NOT_GOING' => 'Only a Going commute can have a return trip.',
     'COMMUTE_RETURN_EXISTS' => 'This commute already has a return trip.',
     'COMMUTE_INVALID_TRANSITION' => 'That change is not possible from the commute’s current state.',
+    'COMMUTE_PAUSED' => 'This commute is paused. Resume it to accept requests.',
     'COMMUTE_TRIP_IN_PROGRESS' => 'A trip on this commute is in progress. End it with Cancel Active Trip first.',
     'COMMUTE_ROUTE_UNAVAILABLE' => "We couldn't calculate the road between your start and end. Try again.",
     'COMMUTE_AC_NOT_AVAILABLE' => 'Your car is registered without AC.',

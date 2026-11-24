@@ -3,6 +3,7 @@
 namespace App\Domains\Commute\Support;
 
 use App\Domains\Commute\Enums\CommuteAudience;
+use App\Domains\Commute\Enums\CommuteOfferStatus;
 use App\Domains\Commute\Enums\CommuteRuleKey;
 use App\Domains\Commute\Models\CommuteOffer;
 use App\Domains\Commute\Models\CommuteRule;
@@ -16,6 +17,15 @@ use App\Domains\Verification\Enums\VerificationType;
 
 final class CommuteGuards
 {
+    public static function assertCommuteNotPaused(string $commuteOfferId): void
+    {
+        $status = CommuteOffer::query()->whereKey($commuteOfferId)->value('status');
+
+        if ($status === CommuteOfferStatus::Paused || $status === CommuteOfferStatus::Paused->value) {
+            throw DomainException::of(ErrorCode::CommutePaused);
+        }
+    }
+
     public static function assertDriverMayUseAudience(string $driverUserId, CommuteAudience|string|null $audience): void
     {
         $audience = is_string($audience) ? CommuteAudience::tryFrom($audience) : $audience;

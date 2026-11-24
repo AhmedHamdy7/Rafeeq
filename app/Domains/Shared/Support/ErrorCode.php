@@ -84,6 +84,7 @@ enum ErrorCode: string
     case CommuteReturnExists = 'COMMUTE_RETURN_EXISTS';
     case CommuteInvalidTransition = 'COMMUTE_INVALID_TRANSITION';
     case CommuteTripInProgress = 'COMMUTE_TRIP_IN_PROGRESS';
+    case CommutePaused = 'COMMUTE_PAUSED';
     case CommuteRouteInvalid = 'COMMUTE_ROUTE_INVALID';
     case CommuteRouteUnavailable = 'COMMUTE_ROUTE_UNAVAILABLE';
 
@@ -445,6 +446,7 @@ enum ErrorCode: string
             self::CommuteNotEditable,
             self::CommuteInvalidTransition,
             self::CommuteTripInProgress,
+            self::CommutePaused,
             // A conflict, not a validation error: the request is well formed and
             // the seat count is legal — it is the already-booked passengers that
             // make it impossible right now.

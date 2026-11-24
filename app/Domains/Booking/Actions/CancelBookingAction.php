@@ -9,12 +9,18 @@ use App\Domains\Booking\Enums\CancelCode;
 use App\Domains\Booking\Enums\DisplacementReason;
 use App\Domains\Booking\Enums\SeatOfferClosedReason;
 use App\Domains\Booking\Enums\SeatOfferStatus;
+use App\Domains\Booking\Enums\SeatRequestStatus;
 use App\Domains\Booking\Enums\SwitchReason;
 use App\Domains\Booking\Models\Booking;
 use App\Domains\Booking\Models\SeatOffer;
+use App\Domains\Booking\Models\SeatRequest;
 use App\Domains\Booking\Support\BookingEventLog;
 use App\Domains\Booking\Support\FreeCancel;
+use App\Domains\Commute\Enums\ScheduledTripStatus;
 use App\Domains\Commute\Models\ScheduledTrip;
+use App\Domains\Group\Enums\GroupMemberStatus;
+use App\Domains\Group\Models\CommuteGroup;
+use App\Domains\Group\Models\GroupMember;
 use App\Domains\Identity\Models\User;
 use App\Domains\Notification\Enums\NotificationType;
 use App\Domains\Notification\Support\Notifier;
@@ -32,6 +38,7 @@ use App\Domains\Shared\Support\ErrorCode;
 use App\Domains\Trip\Actions\BuildNavigationItineraryAction;
 use App\Domains\Trip\Actions\RecordMemberWarningAction;
 use App\Domains\Trip\Enums\WarningKind;
+use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Support\Facades\DB;
 
 /**
@@ -89,14 +96,133 @@ final readonly class CancelBookingAction
                 BookingActorType::Driver,
                 $driverUserId,
                 $reason,
+                notify: false,
                 code: $code ?? CancelCode::RemovedByDriver,
             );
 
             // PAY-23 (C-5): the driver-cancel fee by the notice he gave, on his side.
             DriverFees::chargeCancellation($cancelled);
 
+            $this->tellRemoved($cancelled, null, ($code ?? CancelCode::RemovedByDriver) === CancelCode::RemovedByDriver ? 'passenger_removed_day' : null);
+
             return $cancelled;
         });
+    }
+
+    /**
+     * Item 56: the driver removes her from every upcoming day of this commute at once. Each day is
+     * cancelled as {@see byDriver} would (fee by notice, the freed seat offered to that day's
+     * waiting list), her recurring seat ends, and she is told once.
+     *
+     * @return Collection<int, Booking> the cancelled bookings, earliest first
+     */
+    public function allUpcomingByDriver(Booking $booking, string $driverUserId, ?string $reason = null): Collection
+    {
+        return DB::transaction(function () use ($booking, $driverUserId, $reason): Collection {
+            $days = self::upcomingOfHerSeat($booking);
+            $cancelled = new Collection;
+
+            foreach ($days as $day) {
+                $done = $this->cancel(
+                    $day,
+                    BookingStatus::CancelledByDriver,
+                    BookingActorType::Driver,
+                    $driverUserId,
+                    $reason,
+                    notify: false,
+                    code: CancelCode::RemovedByDriver,
+                );
+
+                DriverFees::chargeCancellation($done);
+                $cancelled->push($done);
+            }
+
+            $commuteId = (string) ScheduledTrip::query()->whereKey($booking->scheduled_trip_id)->value('commute_offer_id');
+
+            SeatRequest::query()
+                ->where('passenger_user_id', $booking->passenger_user_id)
+                ->where('commute_offer_id', $commuteId)
+                ->where('status', SeatRequestStatus::Approved->value)
+                ->update(['status' => SeatRequestStatus::Ended->value]);
+
+            GroupMember::query()
+                ->where('user_id', $booking->passenger_user_id)
+                ->whereIn('commute_group_id', CommuteGroup::query()->where('commute_offer_id', $commuteId)->select('id'))
+                ->whereIn('status', [GroupMemberStatus::Active->value, GroupMemberStatus::NoticeGiven->value])
+                ->update(['status' => GroupMemberStatus::Removed->value, 'left_at' => now()]);
+
+            if ($cancelled->isNotEmpty()) {
+                $this->tellRemoved($cancelled->first(), $cancelled->count(), null);
+            }
+
+            return $cancelled;
+        });
+    }
+
+    /**
+     * Her confirmed bookings on this commute from this one on: the booking itself and every
+     * upcoming day after it, earliest first (the order the trip locks are taken in).
+     *
+     * @return Collection<int, Booking>
+     */
+    public static function upcomingOfHerSeat(Booking $booking): Collection
+    {
+        $commuteId = ScheduledTrip::query()->whereKey($booking->scheduled_trip_id)->value('commute_offer_id');
+
+        $upcoming = Booking::query()
+            ->where('passenger_user_id', $booking->passenger_user_id)
+            ->where('status', BookingStatus::Confirmed->value)
+            ->whereHas('scheduledTrip', fn ($trip) => $trip
+                ->where('commute_offer_id', $commuteId)
+                ->where('status', ScheduledTripStatus::Scheduled->value)
+                ->where('departure_at', '>', now()))
+            ->with('scheduledTrip')
+            ->get();
+
+        if (! $upcoming->contains(fn (Booking $b): bool => $b->is($booking)) && $booking->status === BookingStatus::Confirmed) {
+            $upcoming->push($booking->loadMissing('scheduledTrip'));
+        }
+
+        return $upcoming
+            ->sortBy(fn (Booking $b): string => $b->scheduledTrip?->departure_at?->toIso8601String() ?? '')
+            ->values();
+    }
+
+    /**
+     * One message to her: removed from a day, or from the whole commute.
+     */
+    private function tellRemoved(Booking $booking, ?int $daysCount, ?string $wording): void
+    {
+        $passenger = User::query()->find($booking->passenger_user_id);
+        $driver = User::query()->find($booking->driver_profile_id);
+        $trip = ScheduledTrip::query()->find($booking->scheduled_trip_id);
+
+        if ($passenger === null || $trip === null) {
+            return;
+        }
+
+        if ($daysCount === null) {
+            Notifier::send($passenger, NotificationType::BookingCancelled, [
+                'name' => $driver?->public_first_name ?? '',
+                'date' => $trip->trip_date->format('j/n'),
+            ], [
+                'bookingId' => $booking->id,
+                'commuteId' => $trip->commute_offer_id,
+                'scope' => 'day',
+            ], wording: $wording);
+
+            return;
+        }
+
+        Notifier::send($passenger, NotificationType::RemovedFromCommute, [
+            'name' => $driver?->public_first_name ?? '',
+            'days' => (string) $daysCount,
+        ], [
+            'bookingId' => $booking->id,
+            'commuteId' => $trip->commute_offer_id,
+            'scope' => 'all',
+            'daysCount' => (string) $daysCount,
+        ]);
     }
 
     public function byReplacement(Booking $booking, string $driverUserId): Booking

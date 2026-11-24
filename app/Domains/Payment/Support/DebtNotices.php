@@ -5,6 +5,7 @@ namespace App\Domains\Payment\Support;
 use App\Domains\Identity\Models\User;
 use App\Domains\Notification\Enums\NotificationType;
 use App\Domains\Notification\Support\Notifier;
+use App\Domains\Payment\Enums\DebtSide;
 
 /**
  * The one place a debt notice is written, so every one of them speaks in pounds.
@@ -25,8 +26,9 @@ final class DebtNotices
 
     /**
      * @param  array<string, int>  $amountsPiastres  e.g. ['amount' => 19_800, 'fee' => 1_800]
+     * @param  array<string, string>  $data  ids for the screen the notice opens
      */
-    public static function send(User|string $user, NotificationType $type, array $amountsPiastres = []): void
+    public static function send(User|string $user, NotificationType $type, array $amountsPiastres = [], ?DebtSide $side = null, array $data = []): void
     {
         $user = $user instanceof User ? $user : User::query()->find($user);
 
@@ -34,6 +36,11 @@ final class DebtNotices
             return;
         }
 
-        Notifier::send($user, $type, array_map(fn (int $p): string => self::egp($p), $amountsPiastres));
+        Notifier::send(
+            $user,
+            $type,
+            array_map(fn (int $p): string => self::egp($p), $amountsPiastres),
+            array_filter(['side' => $side?->value, ...$data], fn ($v) => $v !== null && $v !== ''),
+        );
     }
 }

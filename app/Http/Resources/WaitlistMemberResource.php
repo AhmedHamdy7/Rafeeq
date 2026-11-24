@@ -4,6 +4,7 @@ namespace App\Http\Resources;
 
 use App\Domains\Booking\Models\SeatRequest;
 use App\Domains\Booking\Support\StandbyAvailability;
+use App\Domains\Commute\Support\CommuteState;
 use App\Domains\Identity\Models\User;
 
 /**
@@ -46,6 +47,7 @@ final class WaitlistMemberResource
             'commuteId' => $member->commute_offer_id,
             // B1, item 45: the commute's direction, for the group header's Going / Return tag.
             'direction' => $member->commuteOffer?->direction->value,
+            ...CommuteState::fields($member->commuteOffer),
             // B9: `booked` / `pending` on the linked commute on the same days, or null.
             'alsoOnLinked' => LinkedRiders::forSeatRequest($member),
 

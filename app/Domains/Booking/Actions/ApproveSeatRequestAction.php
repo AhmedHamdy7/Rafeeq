@@ -13,6 +13,7 @@ use App\Domains\Booking\Support\SeatAvailabilityChecker;
 use App\Domains\Commute\Enums\ScheduledTripStatus;
 use App\Domains\Commute\Models\CommuteOffer;
 use App\Domains\Commute\Models\ScheduledTrip;
+use App\Domains\Commute\Support\CommuteGuards;
 use App\Domains\Commute\Support\ScheduleLock;
 use App\Domains\Group\Actions\AddMemberToGroupAction;
 use App\Domains\Identity\Models\User;
@@ -109,6 +110,7 @@ final readonly class ApproveSeatRequestAction
          * money whoever presses the button.
          */
         if ($driverDecides) {
+            CommuteGuards::assertCommuteNotPaused($request->commute_offer_id);
             DriverCommission::assertNotOverdue((string) CommuteOffer::query()->whereKey($request->commute_offer_id)->value('driver_profile_id'));
         }
 

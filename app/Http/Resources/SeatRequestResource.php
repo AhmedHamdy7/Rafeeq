@@ -10,6 +10,7 @@ use App\Domains\Booking\Support\PickupEta;
 use App\Domains\Booking\Support\StandbyAvailability;
 use App\Domains\Commute\Enums\ScheduledTripStatus;
 use App\Domains\Commute\Models\ScheduledTrip;
+use App\Domains\Commute\Support\CommuteState;
 use App\Domains\Geo\Contracts\GeoQueryEngine;
 use App\Domains\Geo\Support\NearPlace;
 use App\Domains\Matching\Support\PassengerStanding;
@@ -135,6 +136,8 @@ final class SeatRequestResource extends JsonResource
             'originLabel' => $this->when($this->driverView, fn (): ?string => JourneyCard::route($this->commuteOffer)['originLabel']),
             'destinationLabel' => $this->when($this->driverView, fn (): ?string => JourneyCard::route($this->commuteOffer)['destinationLabel']),
             'impact' => $this->when($this->driverView, fn (): ?array => $this->routeImpact),
+            'commuteStatus' => $this->when($this->driverView, fn (): ?string => CommuteState::status($this->commuteOffer)),
+            'commutePausedReason' => $this->when($this->driverView, fn (): ?string => CommuteState::fields($this->commuteOffer)['commutePausedReason']),
 
             /*
              * Whether she already holds a confirmed future seat on ANOTHER commute (BOOK-34).

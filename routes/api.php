@@ -527,6 +527,7 @@ Route::prefix('v1')->group(function (): void {
          */
         Route::get('notifications', [NotificationController::class, 'index']);
         Route::patch('notifications/read', [NotificationController::class, 'markRead']);
+        Route::delete('notifications', [NotificationController::class, 'destroy']);
         Route::get('notifications/preferences', [NotificationController::class, 'preferences']);
         Route::patch('notifications/preferences', [NotificationController::class, 'updatePreferences']);
 
@@ -778,6 +779,7 @@ Route::prefix('v1')->group(function (): void {
 
         // The driver's side of the same conversation.
         Route::get('driver/seat-requests', [SeatRequestController::class, 'inbox']);
+        Route::get('driver/seat-requests/{seatRequest}', [SeatRequestController::class, 'driverShow']);
         Route::post('driver/seat-requests/{seatRequest}/approve', [SeatRequestController::class, 'approve']);
         Route::post('driver/seat-requests/{seatRequest}/reject', [SeatRequestController::class, 'reject']);
         Route::post('driver/seat-requests/{seatRequest}/waitlist', [SeatRequestController::class, 'waitlist']);

@@ -94,7 +94,7 @@ final class PickupEta
      * @param  Collection<int, NavigationStop>|null  $stops  the trip's stops in order, when the
      *                                                       caller already loaded them for a page
      */
-    public static function fromItinerary(Booking $booking, ?Collection $stops = null): ?CarbonImmutable
+    public static function fromItinerary(Booking $booking, ?Collection $stops = null, NavigationStopKind $kind = NavigationStopKind::PassengerPickup): ?CarbonImmutable
     {
         $departure = $booking->scheduledTrip?->departure_at;
 
@@ -112,7 +112,7 @@ final class PickupEta
         foreach ($stops as $stop) {
             $offset += (int) $stop->leg_duration_seconds;
 
-            if ($stop->booking_id === $booking->id && $stop->kind === NavigationStopKind::PassengerPickup) {
+            if ($stop->booking_id === $booking->id && $stop->kind === $kind) {
                 return CarbonImmutable::instance($departure)->addSeconds($offset);
             }
         }
@@ -141,5 +141,29 @@ final class PickupEta
         }
 
         return self::alongRoute($geo, $offer, $trip, new Coordinate((float) $booking->pickup_lat, (float) $booking->pickup_lng));
+    }
+
+    /**
+     * When the car should reach her drop-off that day: the itinerary when there is one, the route
+     * otherwise.
+     *
+     * @param  Collection<int, NavigationStop>|null  $stops
+     */
+    public static function dropoffForBooking(GeoQueryEngine $geo, Booking $booking, ?Collection $stops = null): ?CarbonImmutable
+    {
+        $fromItinerary = self::fromItinerary($booking, $stops, NavigationStopKind::PassengerDropoff);
+
+        if ($fromItinerary !== null) {
+            return $fromItinerary;
+        }
+
+        $trip = $booking->scheduledTrip;
+        $offer = $trip?->commuteOffer;
+
+        if ($trip === null || $offer === null || $booking->dropoff_lat === null) {
+            return null;
+        }
+
+        return self::alongRoute($geo, $offer, $trip, new Coordinate((float) $booking->dropoff_lat, (float) $booking->dropoff_lng));
     }
 }

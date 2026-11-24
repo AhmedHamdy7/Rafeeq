@@ -48,6 +48,9 @@ final class DriverFees
      */
     private static array $untold = [];
 
+    /** @var array<string, list<string>> */
+    private static array $untoldLines = [];
+
     /**
      * PAY-23: the share of each seat a cancellation this far ahead of departure costs.
      */
@@ -110,7 +113,7 @@ final class DriverFees
             idempotencyKey: $key,
         );
 
-        self::tellLater((string) $driver->id, $kind, $amount);
+        self::tellLater((string) $driver->id, $kind, $amount, $line === null ? null : (string) $line->getKey());
 
         return $line;
     }
@@ -118,15 +121,20 @@ final class DriverFees
     /**
      * The amount, the reason and the 48 hours to appeal, once the money is safely written.
      */
-    private static function tellLater(string $driverId, string $kind, int $amount): void
+    private static function tellLater(string $driverId, string $kind, int $amount, ?string $lineId): void
     {
         $slot = "{$driverId}|{$kind}";
         self::$untold[$slot] = (self::$untold[$slot] ?? 0) + $amount;
 
+        if ($lineId !== null) {
+            self::$untoldLines[$slot][] = $lineId;
+        }
+
         // Registered every time; the first to run sends the total and the rest find nothing.
         DB::afterCommit(function () use ($slot, $driverId, $kind): void {
             $total = self::$untold[$slot] ?? 0;
-            unset(self::$untold[$slot]);
+            $lines = array_values(array_unique(self::$untoldLines[$slot] ?? []));
+            unset(self::$untold[$slot], self::$untoldLines[$slot]);
 
             $driver = User::query()->find($driverId);
 
@@ -142,7 +150,11 @@ final class DriverFees
             }, params: [
                 'amount' => DebtNotices::egp($total),
                 'hours' => (string) FeeSettings::appealHours(),
-            ]);
+            ], data: array_filter([
+                'side' => DebtSide::Driver->value,
+                'debtEntryId' => $lines[0] ?? null,
+                'debtEntryIds' => count($lines) > 1 ? implode(',', $lines) : null,
+            ]));
         });
     }
 

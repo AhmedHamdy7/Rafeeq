@@ -142,6 +142,15 @@ final readonly class BuildNavigationItineraryAction
      */
     public function currentDurationSeconds(ScheduledTrip $trip): int
     {
+        return $this->current($trip)->durationSeconds;
+    }
+
+    /**
+     * The day's run as it stands: the driver's start, that day's confirmed pickups and drop-offs,
+     * the driver's end. Never written.
+     */
+    public function current(ScheduledTrip $trip): NavigationItinerary
+    {
         [$start, $startLabel, $end, $endLabel] = $this->driverEndpoints($trip);
 
         return NavigationItinerary::compose(
@@ -152,7 +161,7 @@ final readonly class BuildNavigationItineraryAction
             $endLabel,
             $this->confirmedPassengerPoints($trip),
             $trip->departure_at === null ? null : CarbonImmutable::parse($trip->departure_at),
-        )->durationSeconds;
+        );
     }
 
     private function rebuild(ScheduledTrip $trip): Collection

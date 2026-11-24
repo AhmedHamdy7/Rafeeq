@@ -10,6 +10,7 @@ use App\Domains\Notification\Support\NotificationPreferences;
 use App\Domains\Shared\Support\ErrorCode;
 use App\Http\Controllers\Controller;
 use App\Http\OpenApi\ApiErrors;
+use App\Http\Requests\Notification\DeleteNotificationsRequest;
 use App\Http\Requests\Notification\MarkNotificationsReadRequest;
 use App\Http\Requests\Notification\UpdateNotificationPreferencesRequest;
 use App\Http\Resources\NotificationResource;
@@ -44,14 +45,30 @@ final class NotificationController extends Controller
     }
 
     /**
-     * PATCH /v1/notifications/read — mark some, or all, as read. Returns the new unread count.
+     * PATCH /v1/notifications/read — mark some, or all, as read; with `read: false`, as unread.
+     * Returns the new unread count.
      */
     public function markRead(MarkNotificationsReadRequest $request): JsonResponse
     {
+        $read = $request->validated('read') ?? true;
+
         $this->inbox($request)
-            ->whereNull('read_at')
+            ->when($read, fn (Builder $query) => $query->whereNull('read_at'), fn (Builder $query) => $query->whereNotNull('read_at'))
             ->when(! $request->boolean('all'), fn (Builder $query) => $query->whereIn('id', $request->validated('ids', [])))
-            ->update(['read_at' => now()]);
+            ->update(['read_at' => $read ? now() : null]);
+
+        return ApiResponse::success(['unreadCount' => $this->unreadCount($request)]);
+    }
+
+    /**
+     * DELETE /v1/notifications — remove some, or all, from the inbox. Ids that are not the
+     * caller's are ignored. Returns the new unread count.
+     */
+    public function destroy(DeleteNotificationsRequest $request): JsonResponse
+    {
+        $this->inbox($request)
+            ->when(! $request->boolean('all'), fn (Builder $query) => $query->whereIn('id', $request->validated('ids', [])))
+            ->update(['dismissed_at' => now()]);
 
         return ApiResponse::success(['unreadCount' => $this->unreadCount($request)]);
     }
@@ -97,7 +114,8 @@ final class NotificationController extends Controller
         // In-app rows only: push rows are the delivery log, one per phone, not inbox items.
         return Notification::query()
             ->where('user_id', $request->user()->id)
-            ->where('channel', NotificationChannel::InApp->value);
+            ->where('channel', NotificationChannel::InApp->value)
+            ->whereNull('dismissed_at');
     }
 
     private function unreadCount(Request $request): int

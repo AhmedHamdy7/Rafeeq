@@ -74,7 +74,7 @@ final readonly class SuspendForDebtAction
             }
         });
 
-        DebtNotices::send($userId, NotificationType::DrivingSuspendedForDebt, ['amount' => $standing->owedPiastres()]);
+        DebtNotices::send($userId, NotificationType::DrivingSuspendedForDebt, ['amount' => $standing->owedPiastres()], DebtSide::Driver);
 
         return true;
     }
@@ -118,7 +118,7 @@ final readonly class SuspendForDebtAction
             }
         });
 
-        DebtNotices::send($userId, NotificationType::RidingSuspendedForDebt, ['amount' => $standing->owedPiastres()]);
+        DebtNotices::send($userId, NotificationType::RidingSuspendedForDebt, ['amount' => $standing->owedPiastres()], DebtSide::Passenger);
 
         return true;
     }

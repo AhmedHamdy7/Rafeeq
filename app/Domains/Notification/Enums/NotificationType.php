@@ -41,6 +41,7 @@ enum NotificationType: string
     case SeatApproved = 'seat_approved';
     case SeatDeclined = 'seat_declined';
     case BookingCancelled = 'booking_cancelled';
+    case RemovedFromCommute = 'removed_from_commute';
     case TripDayCancelled = 'trip_day_cancelled';
 
     case TripDayCancelledByPlatform = 'trip_day_cancelled_by_platform';
@@ -508,6 +509,7 @@ enum NotificationType: string
             self::SeatApproved,
             self::SeatDeclined,
             self::BookingCancelled,
+            self::RemovedFromCommute,
             self::SeatOffered,
             self::CommutePausedSeatCancelled,
             self::CommuteDeletedSeatCancelled,
