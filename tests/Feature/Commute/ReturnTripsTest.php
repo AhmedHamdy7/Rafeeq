@@ -2,9 +2,13 @@
 
 use App\Domains\Commute\Models\CommuteOffer;
 use App\Domains\Commute\Models\ScheduledTrip;
+use App\Domains\Commute\Support\ScheduleLock;
 use App\Domains\Driver\Models\Vehicle;
 use App\Domains\Matching\Models\CommuteDemand;
 use App\Domains\Shared\ValueObjects\DaysMask;
+use App\Domains\Trip\Actions\AutoFinishTripsAction;
+use App\Domains\Trip\Models\TripSession;
+use App\Http\Resources\TripSessionResource;
 use Carbon\CarbonImmutable;
 use Illuminate\Support\Facades\Storage;
 
@@ -429,4 +433,111 @@ it('round 2, item 6: a change proposal on a Return carries the leave time and th
 
     expect($hers['direction'])->toBe('return')
         ->and($hers['changes']['promisedDepartureTime'])->toBe('17:15:00');
+});
+
+function returnRider(string $driverToken, string $returnId, string $phone, string $device): array
+{
+    $pax = verifiedPassenger($phone, device: $device);
+    $trip = ScheduledTrip::query()->where('commute_offer_id', $returnId)->orderBy('departure_at')->firstOrFail();
+
+    $booking = approveSeat($driverToken, requestSeat($pax, $returnId, [
+        'scheduledTripId' => $trip->id,
+        'pickup' => ['lat' => 30.0684, 'lng' => 31.1015, 'label' => 'Mehwar, Sheikh Zayed'],
+        'dropoff' => ['lat' => 30.0624, 'lng' => 31.3614, 'label' => 'Ring Road, Rehab exit'],
+    ])->assertStatus(201)->json('data.id'));
+
+    return ['token' => $pax, 'trip' => $trip, 'bookingId' => $booking];
+}
+
+function minutesApart(string $from, string $to): int
+{
+    return (int) round((strtotime("2000-01-01 {$to}") - strtotime("2000-01-01 {$from}")) / 60);
+}
+
+it('round 3, items 1 and 2: a Return proposal carries the arrival estimate and her own pickup times', function () {
+    [, $return] = publishedPair($this->token, $this->vehicleId);
+    $rider = returnRider($this->token, $return, '01223334444', 'pax-7');
+
+    $driver = rtAs($this->token)->postJson("/api/v1/driver/commutes/{$return}/change-proposals", [
+        'scheduledTripId' => $rider['trip']->id,
+        'scope' => 'only_this_occurrence',
+        'promisedDepartureTime' => '17:15',
+    ])->assertStatus(201);
+
+    $before = $driver->json('data.previous.estimatedArrivalTime');
+    $after = $driver->json('data.changes.estimatedArrivalTime');
+
+    expect($before)->not->toBeNull()
+        ->and(minutesApart($before, $after))->toBe(15);
+
+    $listed = collect(rtAs($this->token)->getJson('/api/v1/driver/change-proposals')->assertOk()->json('data'))->firstWhere('id', $driver->json('data.id'));
+    expect($listed['changes']['estimatedArrivalTime'])->toBe($after);
+
+    $hers = rtAs($rider['token'])->getJson("/api/v1/change-proposals?bookingId={$rider['bookingId']}")->assertOk()->json('data.0');
+
+    expect(minutesApart($hers['previous']['estimatedArrivalTime'], $hers['changes']['estimatedArrivalTime']))->toBe(15)
+        ->and($hers['previous']['estimatedArrivalTime'] <= $before)->toBeTrue()
+        ->and($hers['myPickup']['label'])->toBe('Mehwar, Sheikh Zayed')
+        ->and(minutesApart($hers['myPickup']['previousPickupLocal'], $hers['myPickup']['newPickupLocal']))->toBe(15);
+
+    $roster = $listed['passengers'][0];
+    expect($roster['previousPickupLocal'])->toBe($hers['myPickup']['previousPickupLocal'])
+        ->and($roster['newPickupLocal'])->toBe($hers['myPickup']['newPickupLocal']);
+
+    rtAs($this->token)->getJson("/api/v1/change-proposals/{$driver->json('data.id')}")->assertStatus(404);
+    $one = rtAs($rider['token'])->getJson("/api/v1/change-proposals/{$driver->json('data.id')}?bookingId={$rider['bookingId']}")->assertOk();
+    expect($one->json('data.myPickup.newPickupLocal'))->toBe($hers['myPickup']['newPickupLocal']);
+});
+
+it('round 3, item 1: a Going proposal has no arrival estimate', function () {
+    $going = publishedGoing($this->token, $this->vehicleId);
+    $pax = verifiedPassenger('01223333333', device: 'pax-8');
+    $trip = ScheduledTrip::query()->where('commute_offer_id', $going)->orderBy('departure_at')->firstOrFail();
+    $booking = approveSeat($this->token, requestSeat($pax, $going, ['scheduledTripId' => $trip->id])->assertStatus(201)->json('data.id'));
+
+    $proposal = rtAs($this->token)->postJson("/api/v1/driver/commutes/{$going}/change-proposals", [
+        'scheduledTripId' => $trip->id,
+        'scope' => 'only_this_occurrence',
+        'promisedArrivalTime' => '08:30',
+    ])->assertStatus(201);
+
+    expect($proposal->json('data.changes.estimatedArrivalTime'))->toBeNull()
+        ->and($proposal->json('data.previous.estimatedArrivalTime'))->toBeNull();
+
+    $hers = rtAs($pax)->getJson("/api/v1/change-proposals?bookingId={$booking}")->assertOk()->json('data.0');
+    expect($hers['changes']['estimatedArrivalTime'])->toBeNull()
+        ->and($hers)->toHaveKey('myPickup');
+});
+
+it('round 3, item 3: the driver\'s days say whether their time is already locked', function () {
+    $going = publishedGoing($this->token, $this->vehicleId);
+    $trips = ScheduledTrip::query()->where('commute_offer_id', $going)->orderBy('departure_at')->get();
+    $soon = $trips->first();
+    ScheduledTrip::query()->whereKey($soon->id)->update(['departure_at' => now()->addHours(2)]);
+
+    $days = collect(rtAs($this->token)->getJson("/api/v1/commutes/{$going}")->assertOk()->json('data.upcomingTrips'));
+
+    expect($days->firstWhere('id', $soon->id)['timeLocked'])->toBeTrue()
+        ->and($days->firstWhere('id', $trips->last()->id)['timeLocked'])->toBeFalse()
+        ->and($days->firstWhere('id', $trips->last()->id)['timeLockedAt'])->toBe(
+            $trips->last()->departure_at->copy()->subHours(ScheduleLock::hours())->toIso8601String(),
+        );
+
+    $pax = verifiedPassenger('01223332222', device: 'pax-9');
+    $public = collect(rtAs($pax)->getJson("/api/v1/commutes/{$going}/public")->assertOk()->json('data.upcomingTrips') ?? []);
+    expect($public->every(fn (array $day): bool => ! array_key_exists('timeLocked', $day)))->toBeTrue();
+});
+
+it('round 3, item 4: a Return run counts its still-driving check from the estimate it set off with', function () {
+    [, $return] = publishedPair($this->token, $this->vehicleId);
+    $trip = ScheduledTrip::query()->where('commute_offer_id', $return)->orderBy('departure_at')->firstOrFail();
+
+    expect($trip->promised_arrival_at)->toBeNull()
+        ->and($trip->estimated_arrival_at)->not->toBeNull()
+        ->and(AutoFinishTripsAction::countsFrom($trip)->equalTo($trip->estimated_arrival_at))->toBeTrue();
+
+    $session = TripSession::factory()->create(['scheduled_trip_id' => $trip->id, 'departed_at' => now()]);
+    $shape = (new TripSessionResource($session))->toArray(request());
+
+    expect($shape['expectedArrivalAt'])->toBe($trip->estimated_arrival_at->toIso8601String());
 });

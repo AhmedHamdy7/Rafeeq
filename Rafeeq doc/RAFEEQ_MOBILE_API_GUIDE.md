@@ -2835,6 +2835,21 @@ confirmed on those days it applies at once**, answering `201` with `status: APPL
 `passengers[]` with `bookingId`, `passengerFirstName`, `tripDate`, `pickupLabel`, `previousPickupLocal`, `newPickupLocal` and `response` of `ACCEPTED` ·
 `AWAITING_RESPONSE` · `REJECTED` · `WITHDRAWN`.
 
+On a **Return** proposal that moves the leave time, `changes` and `previous` also carry
+`estimatedArrivalTime` (`H:i:s`, local): the end of the route under the new and the old leave time
+on the driver's payloads, **her drop-off** on the passenger's. `null` on a Going proposal and on one
+that doesn't move the time. The passenger's proposals (`GET /change-proposals`,
+`GET /change-proposals/{proposal}`) carry **`myPickup`** `{label, previousPickupLocal,
+newPickupLocal}` (`H:i:s`), the same times the driver sees for her in `passengers[]`;
+`newPickupLocal` is `null` when the change doesn't move her pickup, and `myPickup` is `null` when her
+booking is no longer live.
+
+🔴 **A proposal for a day inside the lock is not refused.** That is what a proposal is for (COM-17):
+every confirmed passenger on it must accept, and with none it applies at once. The lock is
+`commute.schedule_lock_hours` before departure (12 by default, an admin setting). The driver's own
+`upcomingTrips[]` rows carry `timeLocked` (already inside the lock) and `timeLockedAt` (UTC, when it
+locks). A one-day proposal changes `tripDate`; an all-future one starts at `effectiveFrom`.
+
 **`PATCH /driver/change-proposals/{proposal}`** — revise. Same body. Bumps `version` and **resets
 every answer**, including ones already given.
 
@@ -3920,7 +3935,11 @@ by 15 minutes, **as many times as she needs** — there is deliberately no limit
 stuck in Cairo traffic is not more suspicious the fourth time she says so.
 
 Show it once the run is past its promised arrival, beside `complete`. Response carries
-`stillDrivingCount` and the new `autoFinishCheckAt`.
+`stillDrivingCount` and the new `autoFinishCheckAt`. The run's session carries `autoFinishCheckAt`
+(when to first ask, set when the run departs) and `expectedArrivalAt` (the arrival it counts from,
+also set from departure, `null` before): the promised arrival on a Going day, and on a Return the
+estimated arrival as it stood when the run set off (it stops moving once the run starts). Show the
+dialog from `autoFinishCheckAt` in both directions.
 
 > ⚠️ **It is a convenience, not a safeguard.** A run is only ever closed automatically when **nobody
 > is aboard and nobody is still awaiting a decision**, so a driver who never taps this cannot have a
@@ -6207,6 +6226,7 @@ exist, and every live endpoint must be named here.
 
 | Date | Change |
 |---|---|
+| 2026-11-24 | 🔁 **Return trips, round 3.** Return proposals add `changes` / `previous` `estimatedArrivalTime` (the route's end for the driver, her drop-off for her). The passenger's proposals add `myPickup`. The driver's `upcomingTrips[]` add `timeLocked` / `timeLockedAt`. The trip session adds `expectedArrivalAt`, the arrival the still-driving check counts from. |
 | 2026-11-24 | 🔁 **Return trips, round 2.** `commute.returnCommute` adds `seatPricePiastres` and `seatsAvailable`, and comes on a waiting-list application too. Driver day rows (`GET /driver/trips`, `nextRun`, `laterThisWeek[]`, his `upcomingTrips[]`) add `linkedCommute`. The driver's booking rows add `linkedBooking`. `route-preview` adds `alsoOnLinked`. `nextJourney.dropoff` adds `estimatedArrivalAt` / `estimatedArrivalLocal`. Change proposals add `direction`. |
 | 2026-11-23 | 🔁 **Return trips (items 38, 39, 40, 46).** `direction` is `going` · `return` (old `to_work` / `to_home` are read as aliases). A Return is timed by `promisedDepartureTime` and never re-timed; its arrival is estimated. New day fields `direction`, `promisedDepartureAt` / `Local`, `estimatedArrivalAt` / `Local`. `POST .../return` makes a **linked** Return with the same days and seats and no times; `returnOfCommuteId`, `goingCommute`, `returnCommute`; deleting either side clears the link. **`COMMUTE_OVERLAPS` is replaced by `409 COMMUTE_SCHEDULE_OVERLAP`** (10-minute gap, also on draft schedule save, resume and change proposals). New `422 COMMUTE_NOT_GOING`, `409 COMMUTE_RETURN_EXISTS`. Search and demands take `direction` and `leaveAt` (window `returnWindowMinutes`, 30); `returnDemand` saves the ride back in one call. Seat requests carry `commute.returnCommute`; driver rows carry `alsoOnLinked`. Notifications carry `data.direction`. `GET /commutes/options` drops `defaults.direction` and adds `returnWindowMinutes`, `commuteGapMinutes`. New `POST /testing/commutes/linked-pair`. |
 | 2026-11-20 | 🔧 **`GET /testing/push-log` no longer answers `500`** when a stored push token can't be decrypted or the push provider can't start. It gains `pushProviderError` and `devices[].pushTokenReadable`. Push rows can fail with `token_unreadable` (the token is cleared) or `push_provider_error: …` instead of the job crashing. `meta.pushTokens` on `POST /testing/notifications` counts the tokens before sending (4.17). |

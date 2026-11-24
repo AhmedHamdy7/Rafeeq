@@ -4,6 +4,7 @@ namespace App\Http\Resources;
 
 use App\Domains\Booking\Enums\BookingStatus;
 use App\Domains\Booking\Models\Booking;
+use App\Domains\Trip\Actions\AutoFinishTripsAction;
 use App\Domains\Trip\Enums\TripSessionStatus;
 use App\Domains\Trip\Models\TripSession;
 use Illuminate\Http\Request;
@@ -70,6 +71,11 @@ final class TripSessionResource extends JsonResource
              * decision; the moment is when we LOOK, not when we close.
              */
             'autoFinishCheckAt' => $this->auto_finish_check_at?->toIso8601String(),
+            // Round 3, item 4 of 2026-11-24: the arrival that check counts from, for "{minutes}
+            // past your promised / expected arrival ({time})". A Return's is its estimate when it set off.
+            'expectedArrivalAt' => $this->departed_at === null
+                ? null
+                : AutoFinishTripsAction::countsFrom($this->resource->loadMissing('scheduledTrip')->scheduledTrip)?->toIso8601String(),
             'stillDrivingCount' => (int) $this->still_driving_count,
 
             /*

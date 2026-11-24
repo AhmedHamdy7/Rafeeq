@@ -4,6 +4,7 @@ namespace App\Domains\Trip\Actions;
 
 use App\Domains\Booking\Enums\BookingStatus;
 use App\Domains\Booking\Models\Booking;
+use App\Domains\Commute\Models\ScheduledTrip;
 use App\Domains\Trip\Enums\AttendanceStatus;
 use App\Domains\Trip\Enums\TripSessionStatus;
 use App\Domains\Trip\Models\Attendance;
@@ -66,18 +67,29 @@ final readonly class AutoFinishTripsAction
             return null;
         }
 
-        $from = $trip->promised_arrival_at
-            ?? $trip->estimated_arrival_at
-            ?? ($trip->itinerary_duration_seconds === null
-                ? null
-                : CarbonImmutable::parse($trip->departure_at)->addSeconds((int) $trip->itinerary_duration_seconds));
+        $from = self::countsFrom($trip);
 
         /*
          * No promise and no measured itinerary means no honest moment to count from, so the run is
          * never closed automatically. She closes it herself, which is the correct default: v5 only
          * auto-finishes as a convenience, never as a rule.
          */
-        return $from === null ? null : CarbonImmutable::parse($from)->addMinutes(self::graceMinutes());
+        return $from === null ? null : $from->addMinutes(self::graceMinutes());
+    }
+
+    /**
+     * The arrival the check counts from: the promised arrival of a Going day, a Return's estimate
+     * as it stood when the run set off, or the departure plus the planned duration.
+     */
+    public static function countsFrom(ScheduledTrip $trip): ?CarbonImmutable
+    {
+        $from = $trip->promised_arrival_at
+            ?? $trip->estimated_arrival_at
+            ?? ($trip->itinerary_duration_seconds === null
+                ? null
+                : CarbonImmutable::parse($trip->departure_at)->addSeconds((int) $trip->itinerary_duration_seconds));
+
+        return $from === null ? null : CarbonImmutable::parse($from);
     }
 
     /**

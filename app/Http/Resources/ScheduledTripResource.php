@@ -3,6 +3,7 @@
 namespace App\Http\Resources;
 
 use App\Domains\Commute\Models\ScheduledTrip;
+use App\Domains\Commute\Support\ScheduleLock;
 use App\Domains\Matching\Support\PassengerStanding;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
@@ -52,6 +53,14 @@ final class ScheduledTripResource extends JsonResource
             'driverSharePiastres' => $this->when(
                 SeatPriceView::viewerDrivesCommute($request, $this->commute_offer_id),
                 fn (): int => (int) $this->driver_share_piastres,
+            ),
+            'timeLocked' => $this->when(
+                SeatPriceView::viewerDrivesCommute($request, $this->commute_offer_id),
+                fn (): bool => ScheduleLock::isLocked($this->resource),
+            ),
+            'timeLockedAt' => $this->when(
+                SeatPriceView::viewerDrivesCommute($request, $this->commute_offer_id),
+                fn (): ?string => ScheduleLock::lockedFrom($this->resource)?->toIso8601String(),
             ),
             'linkedCommute' => $this->when(
                 SeatPriceView::viewerDrivesCommute($request, $this->commute_offer_id),
