@@ -47,7 +47,7 @@ final readonly class CounterofferOptions
                 'extraMinutes' => $requested->extraMinutes(),
             ],
             'route' => [
-                'polyline' => $offer->route_polyline,
+                'polyline' => null,
                 'distanceMeters' => (int) $offer->route_distance_meters,
                 'durationSeconds' => (int) $offer->route_duration_seconds,
             ],

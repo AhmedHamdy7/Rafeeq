@@ -148,7 +148,7 @@ final class NavigationRouteResource
              */
             'pointCount' => count($stops),
 
-            'polyline' => $polyline,
+            'polyline' => null,
             'distanceMeters' => $distanceMetres,
             'durationSeconds' => $durationSeconds,
 

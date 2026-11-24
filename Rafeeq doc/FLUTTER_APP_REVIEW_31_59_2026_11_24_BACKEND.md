@@ -2,8 +2,8 @@
 
 Answers to `2026-11-23-backend-requirements-31-59.md` (items 31–59 without the return trips 38, 39, 40, 46).
 Everything below reaches the test server with the next deploy. Old builds keep working: every new request field is
-optional with today's behaviour as the default, and every new response field is additive. One wording change is
-called out in §5 (the passenger's "removed you" notice).
+optional with today's behaviour as the default, and every new response field is additive. Two changes are
+called out: §5 (the passenger's "removed you" notice) and §6 (`polyline` fields are now always `null`).
 
 | # | Item | Change | State |
 |---|---|---|---|
@@ -12,7 +12,7 @@ called out in §5 (the passenger's "removed you" notice).
 | 3 | 45 | Commute status on `GET /driver/waitlist` rows | ✅ built |
 | 4 | 48 | `DELETE /notifications`, mark unread, ids in `data` | ✅ built |
 | 5 | 56 | Remove a passenger from one day or all days | ✅ built |
-| 6 | 47, 51 | `impact.addedMetres`, Google settings pinned and documented | ✅ built · ⚠️ see §6 |
+| 6 | 47, 51 | One road start → end for price, corridor, detour; `addedMetres`; `polyline` sent as `null` | ✅ built · ⚠️ see §6 |
 | 7 | 42 | `debt_payment_confirmed` carries `commuteIds` | ✅ built |
 | 8 | 59 | `promisedArrivalLocal` on every day of the public commute | ✅ confirmed |
 | 9 | 35, 54 | `requestedDaysMask`, drop-off time on the driver's bookings | ✅ built |
@@ -177,26 +177,25 @@ Open `removed_from_commute` on the commute (`commuteId`). An unknown type still 
 
 ## 6 · One Google road (items 47, 51)
 
-**Done:**
-
-- `GET /driver/seat-requests/{id}/route-preview` → **`impact.addedMetres`**: the extra distance of that day's run with
-  her on board, "your road now" (stops without `isProposed`) vs "with her" (all stops). Never negative. The same
-  field is on the inbox row's `impact`.
-- Every Google Routes call the server makes for a road is pinned to the app's settings: `travelMode: DRIVE`,
-  `routingPreference: TRAFFIC_UNAWARE`, `computeAlternativeRoutes: false`, stops as `intermediates` in order.
-  (Only the computed leave time of an arrive-by day uses `TRAFFIC_AWARE` with a departure time; no map depends on
-  it.) Documented in the guide under the route preview.
-- The day's itinerary (`navigation-route`, `route-preview`, `addedMinutes`, `addedMetres`, pickup / drop-off times)
-  already uses exactly the app's stops: driver's start → that day's confirmed pickups and drop-offs (plus her two
-  points in a preview) → driver's end. Suggested points are not stops there.
-- `polyline` / `routePolyline` stay in the responses so older builds keep drawing. Ignore them in the new build.
-
-**⚠️ Not changed yet, needs the owner:** the commute's **published road** still goes driver's start → the driver's
-suggested pickup points → end. That road is what the **seat price** (route km), the **matching corridor**
-(distance-to-route) and the **detour tiers** (`tier`, `withinLimit`, `PICKUP_DETOUR_TOO_LONG`) are measured against.
-Switching it to start → end would make it match what the app draws, but it changes every price on a commute with
-suggested points and moves the detour tiers (D-0034 / D-0042), so it waits for the owner's decision. Until then, a commute with
-suggested pickups can be priced and checked on a slightly longer road than the one drawn.
+- **The commute's road is start → end.** Publishing, `GET /commutes/{id}/price` and the draft
+  `GET /commutes/{id}/route-preview` now measure the driver's start to his end; the suggested points are not stops.
+  The **seat price** (route km), the **matching corridor** (distance-to-route) and the **detour** (`tier`,
+  `withinLimit`, `addedMinutes`, `PICKUP_DETOUR_TOO_LONG`) all use that road: the detour is her two points added to
+  start → end, in road order. Commutes published before keep their stored road until they are republished, and their
+  days keep their frozen price.
+- **A day's road** (`navigation-route`, `route-preview`, pickup / drop-off times) goes driver's start → that day's
+  confirmed pickups and drop-offs (plus her two points in a preview) → end, as the app draws it.
+- **`impact.addedMetres`** on `GET /driver/seat-requests/{id}/route-preview` and on the inbox row's `impact`: the extra
+  distance of that day's run with her on board, "your road now" (stops without `isProposed`) vs "with her" (all
+  stops). Never negative.
+- **Same settings as the app** on every road the server measures: `travelMode: DRIVE`,
+  `routingPreference: TRAFFIC_UNAWARE`, `computeAlternativeRoutes: false`, stops as `intermediates` in order. Only the
+  computed leave time of an arrive-by day uses `TRAFFIC_AWARE` with a departure time; no map depends on it.
+- ⚠️ **`polyline` is no longer sent for drawing.** These keys stay but are always `null`: `routePolyline` on
+  `GET /commutes/{id}`, `route.polyline` on `GET /commutes/{id}/public`, `polyline` on `navigation-route`,
+  `route-preview` (day and draft) and `route.polyline` on `counteroffer-options`. Draw every road from Google through
+  the stops. Make sure the models read these as nullable (an older build that requires a string will fail to parse).
+  `carToPickupPolyline` on the live trip is unchanged: it is the car's live path, not a stop road.
 
 ## 7 · Paid commission, commute still paused (item 42)
 

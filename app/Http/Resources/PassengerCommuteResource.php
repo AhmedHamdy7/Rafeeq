@@ -202,14 +202,12 @@ final class PassengerCommuteResource extends JsonResource
      */
     private function route(CommuteOffer $offer): array
     {
-        $readable = $offer->route_polyline !== null && Polyline::isReadable($offer->route_polyline);
-
         return [
             'start' => $this->end($offer->locations->firstWhere('type', CommuteLocationType::Origin)),
             'end' => $this->end($offer->locations->firstWhere('type', CommuteLocationType::Destination)),
             'distanceKm' => $offer->route_distance_meters === null ? null : round($offer->route_distance_meters / 1000, 1),
             'durationMinutes' => $offer->route_duration_seconds === null ? null : (int) round($offer->route_duration_seconds / 60),
-            'polyline' => $readable ? $offer->route_polyline : null,
+            'polyline' => null,
             'isTrimmed' => false,
         ];
     }

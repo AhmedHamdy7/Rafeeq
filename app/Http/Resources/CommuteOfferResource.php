@@ -54,8 +54,7 @@ final class CommuteOfferResource extends JsonResource
             'audience' => $this->audience->value,
             'minTrustLevel' => $this->min_trust_level,
             'allowsCustomPickup' => $this->allows_custom_pickup,
-            // Present once published. On a draft, read `GET /commutes/{commute}/route-preview`.
-            'routePolyline' => $this->route_polyline,
+            'routePolyline' => null,
             'routeDistanceMeters' => $this->route_distance_meters,
             'routeDurationSeconds' => $this->route_duration_seconds,
             // Set when the journey matched a corridor the platform has named.

@@ -66,9 +66,7 @@ it('is the driver’s start and end alone when nobody is confirmed', function ()
     expect($route['pointCount'])->toBe(2)
         ->and($route['status'])->toBe('CONFIRMED')
         ->and(array_column($route['stops'], 'kind'))->toBe(['DRIVER_START', 'DRIVER_END'])
-        // The road between them, not two isolated pins — v5 §1 is explicit that a map with two
-        // pins "is not sufficient".
-        ->and($route['polyline'])->not->toBeEmpty()
+        ->and($route['polyline'])->toBeNull()
         ->and($route['distanceMeters'])->toBeGreaterThan(0);
 });
 
@@ -315,9 +313,7 @@ it('refuses to pretend one map link can carry an itinerary past the waypoint lim
         ->and($route['waypointLimit'])->toBe(1)
         // The fallback: consecutive segments, each inside the limit.
         ->and(count($route['segments']))->toBeGreaterThan(1)
-        // And the authoritative route is still here in full — that is the part that must never be
-        // lost to a third party's URL rules.
-        ->and($route['polyline'])->not->toBeEmpty()
+        ->and($route['polyline'])->toBeNull()
         ->and($route['stops'])->toHaveCount(4);
 });
 

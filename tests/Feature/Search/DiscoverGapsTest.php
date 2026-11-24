@@ -6,7 +6,6 @@ use App\Domains\Commute\Models\ScheduledTrip;
 use App\Domains\Driver\Models\DriverProfile;
 use App\Domains\Driver\Models\Vehicle;
 use App\Domains\Geo\Models\Place;
-use App\Domains\Geo\Support\Polyline;
 use App\Domains\Identity\Models\User;
 use App\Domains\Matching\Models\CommuteDemand;
 use App\Domains\Matching\Models\MatchNotification;
@@ -345,7 +344,7 @@ it('lets a passenger read a commute: suggested points, weekdays, upcoming days, 
         ->and($detail['vehicle'])->not->toHaveKey('plateNumber')
         ->and($detail['route']['isTrimmed'])->toBeFalse()
         ->and($detail['route']['distanceKm'])->toBeGreaterThan(0)
-        ->and($detail['route']['polyline'])->toBe($offer->route_polyline);
+        ->and($detail['route']['polyline'])->toBeNull();
 
     $origin = $offer->locations()->where('type', 'origin')->sole();
 
@@ -378,7 +377,7 @@ it('draws the whole route once she holds a confirmed seat', function () {
         ->getJson("/api/v1/commutes/{$this->commuteId}/public")->assertOk()->json('data.route');
 
     expect($route['isTrimmed'])->toBeFalse()
-        ->and(Polyline::decode($route['polyline']))->toHaveCount(count(Polyline::decode(CommuteOffer::sole()->route_polyline)));
+        ->and($route['polyline'])->toBeNull();
 });
 
 it('hides a commute that is not published, the same as one that does not exist', function () {

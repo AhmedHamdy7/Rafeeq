@@ -105,18 +105,17 @@ final readonly class PublishCommuteOfferAction
         });
     }
 
+    /**
+     * Item 51 (2026-11-23): the road is the driver's start to his end, as the app draws it. His
+     * suggested points are places a passenger may choose, not stops, so they are not routed
+     * through; the price (route km), the matching corridor and the detour baseline all read this.
+     */
     private function computeRoute(CommuteOffer $offer): Route
     {
-        $origin = $this->pointOf($offer, CommuteLocationType::Origin);
-        $destination = $this->pointOf($offer, CommuteLocationType::Destination);
-
-        $via = [];
-
-        foreach ($offer->locations->where('type', CommuteLocationType::Pickup)->sortBy('sequence') as $pickup) {
-            $via[] = new Coordinate((float) $pickup->lat, (float) $pickup->lng);
-        }
-
-        return $this->geo->routeBetween($origin, $destination, $via);
+        return $this->geo->routeBetween(
+            $this->pointOf($offer, CommuteLocationType::Origin),
+            $this->pointOf($offer, CommuteLocationType::Destination),
+        );
     }
 
     /**

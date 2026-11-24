@@ -77,28 +77,13 @@ final readonly class PickupDetour
         $destination = self::pointOf($offer, CommuteLocationType::Destination);
 
         /*
-         * 🔴 Sorted along the road before measuring, and this is a fix.
-         *
-         * The proposed stops used to be appended AFTER the driver's existing pickups, whatever
-         * their geography — so a passenger choosing the driver's FIRST advertised meeting point on
-         * a commute that advertises a second one further along was measured as: drive to stop one,
-         * drive on to stop two, then **turn back** for her. On a fifty-kilometre corridor that
-         * invented about fifty minutes of detour and refused her with `PICKUP_DETOUR_TOO_LONG` for
-         * a journey where the driver would simply have passed her on the way.
-         *
-         * A detour is only meaningful against a route somebody would actually drive, so the stops
-         * are ordered the way {@see \App\Domains\Trip\Support\StopOrder} orders a navigation
-         * itinerary: by how far along the driver's own line each one sits. A pickup still precedes
-         * its own drop-off, because the pair is checked for travel order before it ever reaches
-         * here.
+         * Item 51 (2026-11-23): measured on the same stops the app draws. The run is the driver's
+         * start to his end; his suggested points are not stops, so the baseline is that road and the
+         * proposal adds only her points, in road order (a pickup still before its own drop-off).
          */
-        $existing = self::existingPickups($offer);
+        $withStop = $geo->routeBetween($origin, $destination, self::inRoadOrder($geo, $origin, $destination, $proposed));
 
-        $via = self::inRoadOrder($geo, $origin, $destination, array_merge($existing, $proposed));
-
-        $withStop = $geo->routeBetween($origin, $destination, $via);
-
-        $baseline = $geo->routeBetween($origin, $destination, self::inRoadOrder($geo, $origin, $destination, $existing));
+        $baseline = $geo->routeBetween($origin, $destination);
 
         /*
          * Never negative. A straight-line engine, and a real provider recomputing
@@ -270,20 +255,6 @@ final readonly class PickupDetour
             : $a['progress'] <=> $b['progress']);
 
         return array_map(fn (array $row): Coordinate => $row['point'], $withProgress);
-    }
-
-    /**
-     * @return array<int, Coordinate>
-     */
-    private static function existingPickups(CommuteOffer $offer): array
-    {
-        $via = [];
-
-        foreach ($offer->locations->where('type', CommuteLocationType::Pickup)->sortBy('sequence') as $pickup) {
-            $via[] = new Coordinate((float) $pickup->lat, (float) $pickup->lng);
-        }
-
-        return $via;
     }
 
     private static function pointOf(CommuteOffer $offer, CommuteLocationType $type): Coordinate

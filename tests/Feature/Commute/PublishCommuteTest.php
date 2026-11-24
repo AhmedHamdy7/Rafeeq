@@ -294,7 +294,8 @@ it('publishes: computes the route once, writes the search box, and generates day
 
     expect($data['status'])->toBe('PUBLISHED')
         ->and($data['publishedAt'])->not->toBeNull()
-        ->and($data['routePolyline'])->not->toBeNull()
+        ->and($data['routePolyline'])->toBeNull()
+        ->and(CommuteOffer::query()->findOrFail($id)->route_polyline)->not->toBeNull()
         ->and($data['routeDistanceMeters'])->toBeGreaterThan(0)
         ->and($data['upcomingTrips'])->not->toBeEmpty();
 

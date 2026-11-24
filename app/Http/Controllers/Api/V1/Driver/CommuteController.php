@@ -261,7 +261,7 @@ final class CommuteController extends Controller
 
         if ($offer->route_polyline !== null) {
             return ApiResponse::success([
-                'polyline' => (string) $offer->route_polyline,
+                'polyline' => null,
                 'distanceMeters' => (int) $offer->route_distance_meters,
                 'durationSeconds' => (int) $offer->route_duration_seconds,
             ]);
@@ -274,7 +274,7 @@ final class CommuteController extends Controller
         }
 
         return ApiResponse::success([
-            'polyline' => (string) $route->polyline,
+            'polyline' => null,
             'distanceMeters' => (int) $route->distance->metres,
             'durationSeconds' => (int) $route->durationSeconds,
         ]);
@@ -467,8 +467,8 @@ final class CommuteController extends Controller
      * the two agree unless an admin moved a rate since the days were generated.
      *
      * The length is the published route's when there is one, and otherwise measured here through
-     * the same routing call publishing makes — origin, the pickups in order, destination — so the
-     * preview and the price the days get cannot disagree about the road.
+     * the same routing call publishing makes — origin to destination, the suggested points not
+     * being stops (item 51) — so the preview and the price the days get cannot disagree.
      */
     #[ApiErrors(ErrorCode::CommuteIncomplete, ErrorCode::VehicleSeatsNotApproved, ErrorCode::NotFound)]
     public function price(Request $request, string $commute, GeoQueryEngine $geo): JsonResponse
@@ -524,16 +524,9 @@ final class CommuteController extends Controller
             ]);
         }
 
-        $via = [];
-
-        foreach ($offer->locations->where('type', CommuteLocationType::Pickup)->sortBy('sequence') as $pickup) {
-            $via[] = new Coordinate((float) $pickup->lat, (float) $pickup->lng);
-        }
-
         return $geo->routeBetween(
             new Coordinate((float) $origin->lat, (float) $origin->lng),
             new Coordinate((float) $destination->lat, (float) $destination->lng),
-            $via,
         );
     }
 
