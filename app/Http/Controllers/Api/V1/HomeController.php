@@ -44,6 +44,7 @@ use App\Http\Resources\CommuteDemandResource;
 use App\Http\Resources\DriverRun;
 use App\Http\Resources\HomeJourney;
 use App\Http\Resources\JourneyCard;
+use App\Http\Resources\LinkedDay;
 use App\Http\Resources\LocalisedLabel;
 use App\Http\Resources\MatchNotificationResource;
 use App\Http\Resources\PersonSummary;
@@ -593,7 +594,12 @@ final class HomeController extends Controller
             // "Every Sun, Tue, Thu" (HOME-3).
             'daysMask' => $state->daysMask(),
             'pickup' => $state->pickup($resource['meetingPoint'], $route['originLabel']),
-            'dropoff' => $state->dropoff($resource['dropoffPoint'], $route['destinationLabel']),
+            'dropoff' => $state->dropoff(
+                $resource['dropoffPoint'],
+                $route['destinationLabel'],
+                is_string($resource['dropoffEtaAt'] ?? null) ? $resource['dropoffEtaAt'] : null,
+                is_string($resource['dropoffEtaLocal'] ?? null) ? $resource['dropoffEtaLocal'] : null,
+            ),
 
             // F3P-04 → F3P-06 (HOME-4). Null before the driver starts and after the ride.
             'live' => $state->live(),
@@ -987,6 +993,7 @@ final class HomeController extends Controller
             ...DriverRun::started($trip),
             ...DriverRun::startWindow($trip, $this->canStart($request->user(), $trip, $start)),
             'startDeadlines' => DriverRun::startDeadlines($trip),
+            'linkedCommute' => LinkedDay::for($trip),
             'leaveBy' => $this->leaveBy($trip, $departures),
             'attendance' => JourneyCard::attendance($group, $trip),
 
@@ -1158,6 +1165,7 @@ final class HomeController extends Controller
                 'seatsTaken' => $trip->seats_taken,
                 'seatsOpen' => (int) max(0, $trip->seats_total - $trip->seats_taken),
                 'waitlistCount' => $this->waitlistCount($waiting, $trip),
+                'linkedCommute' => LinkedDay::for($trip),
             ];
         }
 

@@ -210,11 +210,14 @@ final class HomeJourney
      * a new rider may not push past; null when the driver promised no arrival for that day.
      *
      * @param  array<string, mixed>|null  $dropoffPoint  the booking resource's own `dropoffPoint`
-     * @return array{label: string|null, lat: float|null, lng: float|null, isExact: bool, promisedArrivalAt: string|null, promisedArrivalLocal: string|null}
+     *                                                   `estimatedArrivalAt` / `estimatedArrivalLocal` are her drop-off point's estimate (round 2, item 5
+     *                                                   of 2026-11-24): what a Return card shows, since a Return day has no promised arrival.
+     * @return array{label: string|null, lat: float|null, lng: float|null, isExact: bool, promisedArrivalAt: string|null, promisedArrivalLocal: string|null, estimatedArrivalAt: string|null, estimatedArrivalLocal: string|null}
      */
-    public function dropoff(?array $dropoffPoint, ?string $destinationLabel): array
+    public function dropoff(?array $dropoffPoint, ?string $destinationLabel, ?string $etaAt = null, ?string $etaLocal = null): array
     {
         $promised = $this->trip->promised_arrival_at;
+        $routeEnd = TripTimes::estimatedArrival($this->trip);
 
         return [
             'label' => $dropoffPoint['label'] ?? $destinationLabel,
@@ -223,6 +226,8 @@ final class HomeJourney
             'isExact' => $dropoffPoint !== null && (bool) $dropoffPoint['isExact'],
             'promisedArrivalAt' => $promised?->toIso8601String(),
             'promisedArrivalLocal' => $promised === null ? null : $this->local(CarbonImmutable::instance($promised)),
+            'estimatedArrivalAt' => $etaAt ?? ($routeEnd === null ? null : CarbonImmutable::instance($routeEnd)->toIso8601String()),
+            'estimatedArrivalLocal' => $etaLocal ?? ($routeEnd === null ? null : $this->local(CarbonImmutable::instance($routeEnd))),
         ];
     }
 

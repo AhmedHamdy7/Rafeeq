@@ -94,6 +94,12 @@ final class BookingResource extends JsonResource
                     && SeatPriceView::viewerDrives($request, $this->driver_profile_id),
                 fn (): ?string => LinkedRiders::forTrip((string) $this->passenger_user_id, $this->scheduledTrip),
             ),
+            'linkedBooking' => $this->when(
+                $this->resource->relationLoaded('scheduledTrip')
+                    && $this->scheduledTrip !== null
+                    && SeatPriceView::viewerDrives($request, $this->driver_profile_id),
+                fn (): ?array => LinkedRiders::bookingFor((string) $this->passenger_user_id, $this->scheduledTrip),
+            ),
             'originLabel' => $this->when(
                 $this->routeLoaded(),
                 fn (): ?string => JourneyCard::route($this->scheduledTrip->commuteOffer)['originLabel'],

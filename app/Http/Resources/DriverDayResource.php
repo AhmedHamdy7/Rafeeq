@@ -43,6 +43,7 @@ final class DriverDayResource extends JsonResource
             'cancelledBy' => $this->cancelled_by === null ? null : strtoupper($this->cancelled_by),
             'passengersNotified' => (int) $this->passengers_notified,
             'expiredAt' => $this->expired_at?->toIso8601String(),
+            'linkedCommute' => LinkedDay::for($this->resource),
         ];
     }
 }

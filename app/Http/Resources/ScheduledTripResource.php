@@ -53,6 +53,10 @@ final class ScheduledTripResource extends JsonResource
                 SeatPriceView::viewerDrivesCommute($request, $this->commute_offer_id),
                 fn (): int => (int) $this->driver_share_piastres,
             ),
+            'linkedCommute' => $this->when(
+                SeatPriceView::viewerDrivesCommute($request, $this->commute_offer_id),
+                fn (): ?array => LinkedDay::for($this->resource),
+            ),
 
             /*
              * 🔒 `receives_requests_during_ride` is deliberately NOT here, although it is a column

@@ -2166,7 +2166,14 @@ seat offers) adds:
 On a Return day `BOOKING_BREAKS_FROZEN_PROMISE` never applies (there is no arrival promise): a seat is
 judged on capacity and detour. On time means **leaving** within 5 minutes of the promised leave time.
 Pickup times count forward from the leave time. Change proposals on a Return take
-`promisedDepartureTime` instead of `promisedArrivalTime`.
+`promisedDepartureTime` instead of `promisedArrivalTime`; the proposal's `changes` and `previous`
+both carry it (`"17:00:00"` → `"17:15:00"`), every proposal (driver's and passenger's) carries
+`direction`, and an overlap answers the same `409 COMMUTE_SCHEDULE_OVERLAP` fields as the schedule.
+
+**Home's drop-off on a Return.** `nextJourney.dropoff` adds `estimatedArrivalAt` /
+`estimatedArrivalLocal`: when the run is expected at **her** drop-off (the end of the route when her
+point can't be placed). `nextJourney.estimatedArrivalLocal` stays the end of the route. Once the run
+starts, `nextJourney.live.arrivalEtaAt` is the live ETA to her drop-off.
 
 **Overlap (D3).** Two of his commutes clash when they share a weekday on a date both run and one
 starts before the other's arrival + 10 minutes (`commuteGapMinutes` in `GET /commutes/options`, an
@@ -2188,14 +2195,29 @@ carries `pairedDemandId`, cleared when the other is deleted; after that they are
 **Seat requests.** A passenger's seat request (`POST /commutes/{commute}/seat-requests`,
 `GET /seat-requests/{seatRequest}`) carries `commute.direction` and `commute.returnCommute`:
 `{id, departureLocal (HH:MM), daysMask, runsOnRequestedDays[] (weekday bits, recurring), trialTripId
-(the Return's day on the same date, trial), myStatus (booked · pending · waitlisted · null)}`, only
-while the Return is published. Any non-null `myStatus` hides the "Need a ride back too?" card.
+(the Return's day on the same date, trial), myStatus (booked · pending · waitlisted · null),
+seatPricePiastres, seatsAvailable}`, only while the Return is published. `seatsAvailable` is the free
+seats on the Return's next day among her days (recurring) or on `trialTripId`'s day (trial); `0` when
+full (a request then becomes a waiting-list application), `null` when no such day is scheduled. A
+waiting-list application (`kind: waitlist_application`) carries `returnCommute` the same way. Any
+non-null `myStatus` hides the "Need a ride back too?" card.
 
 **Who rides both ways.** The driver's rows carry `alsoOnLinked` (`booked` · `pending` · `null`): she
 holds a seat or an open request on the linked commute on the same day (recurring: the same weekdays).
-On `GET /driver/seat-requests` and the driver's view of a seat request, `GET /driver/bookings`,
+On `GET /driver/seat-requests` and the driver's view of a seat request,
+`GET /driver/seat-requests/{seatRequest}/route-preview`, `GET /driver/bookings`,
 `GET /driver/waitlist` and `GET /driver/commutes/{commute}/waitlist` (whose rows also carry
-`direction`).
+`direction`). The driver's booking rows also carry **`linkedBooking`** when `alsoOnLinked` is
+`booked`, for the Passenger screen's "On your return too" row: `{bookingId, commuteId, direction,
+pickupLabel, pickupEtaLocal (HH:MM), daysMask (her weekdays on a recurring seat, else null), tripDate
+(a one-day seat, else null)}`; `null` otherwise. Passengers never get it.
+
+**The linked commute on a driver day.** Day rows the driver reads (`GET /driver/trips`, `GET
+/driver/home` `nextRun` and `laterThisWeek[]`, and `upcomingTrips[]` on his own `GET /commutes/{commute}`)
+carry **`linkedCommute`**: `{id, direction, status, tripId, departureLocal, promisedArrivalLocal,
+estimatedArrivalLocal}` for the other commute of the pair in any live state (drafts too). The day
+fields (`Y-m-d H:i:s`) are that commute's day on the **same date**, and all `null` when it doesn't run
+that date (or that day is cancelled). `linkedCommute` is `null` when the commute isn't linked.
 
 **Notifications.** Every notification about a commute, a day or a booking carries `data.direction`.
 `match_found` on a Return says "leaves at 5:10 PM".
@@ -4372,7 +4394,7 @@ they explain.
 | `nextJourney.tripSessionId` | The run's **session** id, once the driver has started it; `null` before. Not the trip id. Use it for `GET /safety/live-shares?tripSessionId=`, SOS and the `private-trip.{tripSessionId}` channel. |
 | `nextJourney.daysMask` | The days she rides — her requested days, or the commute's days. Sat 1 … Fri 64. |
 | `nextJourney.pickup` | `{label, at, local, lat, lng, isExact}` — "Your agreed pickup · Rehab Gate 2 · 07:05". `label`/`lat`/`lng`/`isExact` are `meetingPoint`'s (fuzzed, label `null`, until confirmed). **`at` is her pickup time** — departure plus the drive to her stop — and is the same instant her arrival grace counts from. `meetingPoint` stays. |
-| `nextJourney.dropoff` | `{label, promisedArrivalAt, promisedArrivalLocal}`. The promise is the day's; `null` when the driver promised no arrival. |
+| `nextJourney.dropoff` | `{label, lat, lng, isExact, promisedArrivalAt, promisedArrivalLocal, estimatedArrivalAt, estimatedArrivalLocal}`. The promise is the day's; `null` when the driver promised no arrival (always on a Return). The estimate is when the run is expected at her drop-off. |
 | `nextJourney.live` | `{pickupEtaAt, arrivalEtaAt, progressPercent, driverArrivedAt, graceStartsAt, graceEndsAt, boardedAt, stopsBeforeYou}` (`graceStartsAt` / `graceEndsAt`: her 5-minute grace on arrived, as on `GET /trips/{trip}/location`; `null` in other phases. `stopsBeforeYou`: stops before her pickup on en-route, `0` on arrived, `null` on board), **only** while `phase` is `driver_en_route` / `driver_arrived` / `on_board`, or `driver_delayed` on a run that has started (filled as en route); `null` otherwise. `pickupEtaAt` + `progressPercent` (to her pickup) on en-route; `driverArrivedAt` and `progressPercent: 100` on arrived; `arrivalEtaAt` + `progressPercent` (to her drop-off) + `boardedAt` on board. `pickupEtaAt` is the same live time as `navigation-route` (routed from the car's latest position, 4.9); otherwise ETAs are counted from the last stop the car reached plus the itinerary's measured leg times, never in the past; `null` when no itinerary was built. `progressPercent` stops at 99 until the car is recorded there. **Poll `/home` every 30 s while `live` is not null**, and not otherwise. |
 | `nextJourney.canLeaveWithoutFee` | Show **Leave Without Fee** only when `true`. It calls `POST /bookings/{booking}/exit-without-fee` (4.9) — the same server finding, so it is never refused when this is `true`. Also `true` mid-run when the driver has not arrived 5 min after her pickup time, or the car has passed her stop. |
 | `nextJourney.checkIn` | `{groupId, answer, cutoffAt, canAnswer}` (TRIP-26). `answer` is `coming` or `null` (no answer = coming; "I can't make it" cancels the day, so it never shows here). `cutoffAt` is 2 h before departure; show the two buttons only while `canAnswer`. Answer with `POST /groups/{group}/attendance` `{tripId, status: "coming" \| "away"}`. |
@@ -6185,6 +6207,7 @@ exist, and every live endpoint must be named here.
 
 | Date | Change |
 |---|---|
+| 2026-11-24 | 🔁 **Return trips, round 2.** `commute.returnCommute` adds `seatPricePiastres` and `seatsAvailable`, and comes on a waiting-list application too. Driver day rows (`GET /driver/trips`, `nextRun`, `laterThisWeek[]`, his `upcomingTrips[]`) add `linkedCommute`. The driver's booking rows add `linkedBooking`. `route-preview` adds `alsoOnLinked`. `nextJourney.dropoff` adds `estimatedArrivalAt` / `estimatedArrivalLocal`. Change proposals add `direction`. |
 | 2026-11-23 | 🔁 **Return trips (items 38, 39, 40, 46).** `direction` is `going` · `return` (old `to_work` / `to_home` are read as aliases). A Return is timed by `promisedDepartureTime` and never re-timed; its arrival is estimated. New day fields `direction`, `promisedDepartureAt` / `Local`, `estimatedArrivalAt` / `Local`. `POST .../return` makes a **linked** Return with the same days and seats and no times; `returnOfCommuteId`, `goingCommute`, `returnCommute`; deleting either side clears the link. **`COMMUTE_OVERLAPS` is replaced by `409 COMMUTE_SCHEDULE_OVERLAP`** (10-minute gap, also on draft schedule save, resume and change proposals). New `422 COMMUTE_NOT_GOING`, `409 COMMUTE_RETURN_EXISTS`. Search and demands take `direction` and `leaveAt` (window `returnWindowMinutes`, 30); `returnDemand` saves the ride back in one call. Seat requests carry `commute.returnCommute`; driver rows carry `alsoOnLinked`. Notifications carry `data.direction`. `GET /commutes/options` drops `defaults.direction` and adds `returnWindowMinutes`, `commuteGapMinutes`. New `POST /testing/commutes/linked-pair`. |
 | 2026-11-20 | 🔧 **`GET /testing/push-log` no longer answers `500`** when a stored push token can't be decrypted or the push provider can't start. It gains `pushProviderError` and `devices[].pushTokenReadable`. Push rows can fail with `token_unreadable` (the token is cleared) or `push_provider_error: …` instead of the job crashing. `meta.pushTokens` on `POST /testing/notifications` counts the tokens before sending (4.17). |
 | 2026-11-20 | 🧪 **Patrol run requests of 2026-11-20.** 🔴 A stop more than **3 km** from the road is refused with `422 COMMUTE_ROUTE_INVALID`: on a draft (`PUT /commutes/{commute}/route`, `pickups.{index}` / `dropoffs.{index}`, measured from the road between origin and destination) and on a change proposal or a change applied at once (`pickups.{index}`, measured from the commute's current route). Switching car compares the seats each day offers: the commute's default counts only when some day has no seats of its own. Seat offers gain **`conflictingSeatRequestId`**. `nextJourney` gains **`tripSessionId`**; `GET /safety/live-shares` takes `?tripId=`. `GET /driver/eligibility` documented as it is sent: `blockers[]` are objects. Testing (4.17): `/testing/seat-requests/{seatRequest}/close` takes `EXPIRED` and `ENDED`; new `PATCH /testing/account/fields`, `POST`/`DELETE /testing/commutes/{commute}/pause`, `GET /testing/push-log`; `POST /testing/notifications` answers `meta` with the push facts. |

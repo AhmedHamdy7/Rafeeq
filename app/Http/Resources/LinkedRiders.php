@@ -7,9 +7,11 @@ use App\Domains\Booking\Enums\SeatRequestCommitment;
 use App\Domains\Booking\Enums\SeatRequestStatus;
 use App\Domains\Booking\Models\Booking;
 use App\Domains\Booking\Models\SeatRequest;
+use App\Domains\Booking\Support\PickupEta;
 use App\Domains\Commute\Enums\CommuteOfferStatus;
 use App\Domains\Commute\Models\CommuteOffer;
 use App\Domains\Commute\Models\ScheduledTrip;
+use App\Domains\Geo\Contracts\GeoQueryEngine;
 use App\Domains\Shared\ValueObjects\DaysMask;
 use Carbon\CarbonImmutable;
 use Carbon\CarbonInterface;
@@ -37,6 +39,56 @@ final class LinkedRiders
     public static function forTrip(string $passengerId, ScheduledTrip $trip): ?string
     {
         return self::status($passengerId, (string) $trip->commute_offer_id, $trip->trip_date->toDateString(), null);
+    }
+
+    /**
+     * Her seat on the linked commute on this day, for the Passenger screen's "On your return too" row
+     * (round 2, item 3 of 2026-11-24). `daysMask` is the weekdays of a recurring seat; a one-day seat
+     * has `daysMask` null and its `tripDate`.
+     *
+     * @return array{bookingId: string, commuteId: string, direction: string, pickupLabel: string|null, pickupEtaLocal: string|null, daysMask: int|null, tripDate: string|null}|null
+     */
+    public static function bookingFor(string $passengerId, ScheduledTrip $trip): ?array
+    {
+        $linked = self::linkedId((string) $trip->commute_offer_id);
+
+        if ($linked === null) {
+            return null;
+        }
+
+        $booking = Booking::query()
+            ->where('passenger_user_id', $passengerId)
+            ->whereIn('status', [BookingStatus::Pending->value, BookingStatus::Confirmed->value])
+            ->whereIn('scheduled_trip_id', ScheduledTrip::query()
+                ->where('commute_offer_id', $linked)
+                ->where('trip_date', $trip->trip_date->toDateString())
+                ->select('id'))
+            ->with(['scheduledTrip.commuteOffer', 'scheduledTrip.navigationStops', 'seatRequest'])
+            ->first();
+
+        if ($booking === null) {
+            return null;
+        }
+
+        $day = $booking->scheduledTrip;
+        $request = $booking->seatRequest;
+        $recurring = $request !== null && $request->commitment !== SeatRequestCommitment::Trial;
+        $mask = $recurring
+            ? (int) ($request->requested_days_mask ?? $day->commuteOffer->schedule()->value('days_mask') ?? 0)
+            : null;
+
+        return [
+            'bookingId' => (string) $booking->getKey(),
+            'commuteId' => $linked,
+            'direction' => $day->commuteOffer->direction->value,
+            'pickupLabel' => $booking->pickup_label,
+            'pickupEtaLocal' => TripTimes::clock(PickupEta::local(
+                $day,
+                PickupEta::forBooking(app(GeoQueryEngine::class), $booking, $day->navigationStops),
+            )),
+            'daysMask' => $mask,
+            'tripDate' => $recurring ? null : $day->trip_date->toDateString(),
+        ];
     }
 
     public static function status(string $passengerId, string $offerId, ?string $date, ?int $mask): ?string

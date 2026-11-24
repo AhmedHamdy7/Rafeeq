@@ -15,6 +15,7 @@ use App\Domains\Trip\Actions\BuildNavigationItineraryAction;
 use App\Domains\Trip\Support\LiveStopEtas;
 use App\Http\Controllers\Controller;
 use App\Http\OpenApi\ApiErrors;
+use App\Http\Resources\LinkedRiders;
 use App\Http\Resources\NavigationRouteResource;
 use App\Http\Responses\ApiResponse;
 use Illuminate\Http\JsonResponse;
@@ -114,6 +115,7 @@ final class NavigationRouteController extends Controller
         return ApiResponse::success([
             ...NavigationRouteResource::preview($itinerary),
             'impact' => $impact->for($pending, $day),
+            'alsoOnLinked' => LinkedRiders::forSeatRequest($pending),
         ]);
     }
 

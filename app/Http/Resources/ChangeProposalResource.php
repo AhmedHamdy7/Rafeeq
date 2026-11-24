@@ -34,6 +34,8 @@ final class ChangeProposalResource extends JsonResource
             'commuteId' => $this->commute_offer_id,
             'tripId' => $this->scheduled_trip_id,
             'tripDate' => $this->scheduledTrip?->trip_date?->toDateString(),
+            // Round 2, item 6 of 2026-11-24: Going / Return, so a Return's change reads "Leaves at".
+            'direction' => $this->resource->loadMissing('commuteOffer')->commuteOffer?->direction->value,
             'scope' => $this->scope->value,
             'status' => strtoupper($this->status->value),
 
