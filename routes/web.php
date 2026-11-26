@@ -46,6 +46,7 @@ use App\Livewire\Admin\SosDetail;
 use App\Livewire\Admin\Statistics;
 use App\Livewire\Admin\Support;
 use App\Livewire\Admin\SupportCase;
+use App\Livewire\Admin\System;
 use App\Livewire\Admin\Team;
 use App\Livewire\Admin\VerificationQueue;
 use Illuminate\Support\Facades\Route;
@@ -167,6 +168,7 @@ Route::prefix('admin')->name('admin.')->middleware(SetAdminLocale::class)->group
         Route::get('settings', Settings::class)->name('settings');
         Route::get('announcements', Announcements::class)->name('announcements');
         Route::get('content', Content::class)->name('content');
+        Route::get('system', System::class)->name('system');
 
         Route::get('account', Account::class)->name('account');
 

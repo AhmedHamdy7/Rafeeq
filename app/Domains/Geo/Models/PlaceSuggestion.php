@@ -4,8 +4,10 @@ namespace App\Domains\Geo\Models;
 
 use App\Domains\Geo\Enums\PlaceSuggestionKind;
 use App\Domains\Geo\Support\PlaceNameMatch;
+use Database\Factories\PlaceSuggestionFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Concerns\HasUlids;
+use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
@@ -15,7 +17,8 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 ])]
 class PlaceSuggestion extends Model
 {
-    use HasUlids;
+    /** @use HasFactory<PlaceSuggestionFactory> */
+    use HasFactory, HasUlids;
 
     protected function casts(): array
     {

@@ -2,12 +2,17 @@
 
 namespace App\Domains\Geo\Models;
 
+use Database\Factories\AreaFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
+use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 
 #[Fillable(['google_place_id', 'name_en', 'name_ar', 'city_en', 'city_ar', 'lat', 'lng', 'viewport', 'group_id'])]
 class Area extends Model
 {
+    /** @use HasFactory<AreaFactory> */
+    use HasFactory;
+
     protected $primaryKey = 'google_place_id';
 
     public $incrementing = false;

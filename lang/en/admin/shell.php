@@ -50,6 +50,7 @@ return [
         'support' => 'Support cases',
         'settings' => 'Settings',
         'content' => 'Content',
+        'system' => 'System',
         'team' => 'Team and roles',
         'audit' => 'Audit log',
     ],

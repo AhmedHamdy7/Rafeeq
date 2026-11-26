@@ -102,6 +102,7 @@ final class Navigation
             'configuration' => [
                 ['key' => 'settings', 'route' => 'admin.settings', 'icon' => 'settings', 'can' => AdminPermission::SettingsManage],
                 ['key' => 'content', 'route' => 'admin.content', 'icon' => 'file', 'can' => AdminPermission::SettingsManage],
+                ['key' => 'system', 'route' => 'admin.system', 'icon' => 'columns', 'can' => AdminPermission::SystemMaintain],
             ],
             'team' => [
                 ['key' => 'team', 'route' => 'admin.team', 'icon' => 'users', 'can' => AdminPermission::AdminManage],

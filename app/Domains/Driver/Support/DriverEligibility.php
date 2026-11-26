@@ -2,6 +2,7 @@
 
 namespace App\Domains\Driver\Support;
 
+use App\Domains\Driver\Enums\DriverBlockerNextStep;
 use App\Domains\Driver\Enums\DriverProfileStatus;
 use App\Domains\Identity\Enums\AccountStatus;
 use App\Domains\Identity\Enums\ProfileStatus;
@@ -31,24 +32,24 @@ final class DriverEligibility
         $blockers = [];
 
         if ($user->account_status !== AccountStatus::Active) {
-            $blockers[] = self::blocker('account_not_active', 'CONTACT_SUPPORT');
+            $blockers[] = self::blocker('account_not_active', DriverBlockerNextStep::ContactSupport);
         }
 
         if ($user->phone_verified_at === null) {
-            $blockers[] = self::blocker('phone_not_verified', 'VERIFY_PHONE');
+            $blockers[] = self::blocker('phone_not_verified', DriverBlockerNextStep::VerifyPhone);
         }
 
         if ($user->profile_status !== ProfileStatus::BasicComplete) {
-            $blockers[] = self::blocker('profile_incomplete', 'COMPLETE_PROFILE');
+            $blockers[] = self::blocker('profile_incomplete', DriverBlockerNextStep::CompleteProfile);
         }
 
         // A date of birth is optional for a passenger and required here: a
         // driving licence has a legal minimum age, so "we don't know" cannot
         // be treated as "old enough".
         if ($user->date_of_birth === null) {
-            $blockers[] = self::blocker('date_of_birth_missing', 'COMPLETE_PROFILE');
+            $blockers[] = self::blocker('date_of_birth_missing', DriverBlockerNextStep::CompleteProfile);
         } elseif ($user->date_of_birth->age < ProfileSettings::minimumAgeYears()) {
-            $blockers[] = self::blocker('below_minimum_age', 'NONE');
+            $blockers[] = self::blocker('below_minimum_age', DriverBlockerNextStep::None);
         }
 
         /*
@@ -61,22 +62,22 @@ final class DriverEligibility
 
         if ($profile !== null) {
             if ($profile->status === DriverProfileStatus::Approved) {
-                $blockers[] = self::blocker('already_a_driver', 'OPEN_DRIVER_DASHBOARD');
+                $blockers[] = self::blocker('already_a_driver', DriverBlockerNextStep::OpenDriverDashboard);
             }
 
             // §14: one pending application only. Without this, someone could
             // queue several and have reviewers duplicate each other's work.
             if ($profile->status === DriverProfileStatus::PendingReview) {
-                $blockers[] = self::blocker('application_under_review', 'WAIT_FOR_REVIEW');
+                $blockers[] = self::blocker('application_under_review', DriverBlockerNextStep::WaitForReview);
             }
 
             if ($profile->status === DriverProfileStatus::Suspended) {
-                $blockers[] = self::blocker('driver_suspended', 'CONTACT_SUPPORT');
+                $blockers[] = self::blocker('driver_suspended', DriverBlockerNextStep::ContactSupport);
             }
         }
 
         if (DriverBlocker::isOn($user->id)) {
-            $blockers[] = self::blocker('not_eligible', 'CONTACT_SUPPORT');
+            $blockers[] = self::blocker('not_eligible', DriverBlockerNextStep::ContactSupport);
         }
 
         return [
@@ -88,13 +89,13 @@ final class DriverEligibility
     /**
      * @return array<string, string>
      */
-    private static function blocker(string $reason, string $nextStep): array
+    private static function blocker(string $reason, DriverBlockerNextStep $nextStep): array
     {
         return [
             'reason' => $reason,
             // What the app should offer, so the screen never has to map a
             // reason string to a button itself and get it wrong.
-            'nextStep' => $nextStep,
+            'nextStep' => $nextStep->value,
             'message' => __('driver.eligibility.'.$reason),
         ];
     }

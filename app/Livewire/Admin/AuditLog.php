@@ -30,7 +30,7 @@ class AuditLog extends Component
 {
     use WithPagination;
 
-    public const array AREAS = ['admin', 'verification', 'driver', 'sos', 'incident', 'account', 'settings'];
+    public const array AREAS = ['admin', 'verification', 'driver', 'sos', 'incident', 'account', 'settings', 'system'];
 
     #[Url(as: 'area')]
     public string $area = '';

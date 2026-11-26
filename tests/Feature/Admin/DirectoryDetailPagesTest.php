@@ -13,6 +13,7 @@ use App\Domains\Driver\Enums\VehicleVerificationStatus;
 use App\Domains\Identity\Enums\Gender;
 use App\Domains\Reliability\Models\ReliabilityEvent;
 use App\Domains\Trip\Models\MemberWarning;
+use App\Domains\Verification\Models\UserVerification;
 use App\Livewire\Admin\Directory\BookingDetail;
 use App\Livewire\Admin\Directory\CommuteDetail;
 use App\Livewire\Admin\Directory\VehicleDetail;
@@ -72,7 +73,11 @@ it('keeps a car from staff without the driver desk', function () {
 
 it('resumes a women-only commute after a gender review, with a reason', function () {
     $commute = CommuteOffer::factory()->published()->create();
-    $commute->driverProfile->user->forceFill(['gender' => Gender::Woman])->save();
+    $driver = $commute->driverProfile->user;
+    $driver->forceFill(['gender' => Gender::Woman])->save();
+    // Women-only needs a woman with an APPROVED national ID (item 30, 2026-11-23), not only the
+    // gender on her profile.
+    UserVerification::factory()->for($driver)->approved()->create();
     app(ChangeCommuteStatusAction::class)->pause($commute, CommutePausedReason::GenderReview);
     actingAsAdmin(adminWithRole(AdminRole::Operations));
 

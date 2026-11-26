@@ -22,6 +22,7 @@ use App\Domains\Shared\Support\ErrorCode;
 use App\Domains\Shared\ValueObjects\Coordinate;
 use App\Domains\Shared\ValueObjects\DaysMask;
 use App\Http\Controllers\Controller;
+use App\Http\OpenApi\ApiErrors;
 use App\Http\Resources\CommuteOfferResource;
 use App\Http\Responses\ApiResponse;
 use Carbon\CarbonImmutable;
@@ -37,6 +38,7 @@ use Illuminate\Http\Request;
  */
 final class TestingReturnTripsController extends Controller
 {
+    #[ApiErrors(ErrorCode::DriverNotEligible, ErrorCode::ValidationFailed, ErrorCode::NotFound)]
     public function linkedPair(
         Request $request,
         CreateCommuteOfferAction $create,

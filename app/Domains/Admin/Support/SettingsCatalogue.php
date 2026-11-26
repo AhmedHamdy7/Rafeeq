@@ -91,6 +91,8 @@ final class SettingsCatalogue
         'trip.wait_grace_seconds' => ['group' => 'trip', 'min' => 60, 'max' => 900, 'unit' => 'seconds'],
         // The "+2 min" extension is gone (TRIP-11): every passenger gets the same grace.
         'trip.arrival_radius_meters' => ['group' => 'trip', 'min' => 50, 'max' => 1_000, 'unit' => 'meters'],
+        // How far along the route past her stop the car must be before "the driver drove past her".
+        'trip.passed_stop_meters' => ['group' => 'trip', 'min' => 50, 'max' => 2_000, 'unit' => 'meters'],
         'trip.dispute_window_hours' => ['group' => 'trip', 'min' => 1, 'max' => 168, 'unit' => 'hours'],
         'trip.location_batch_max' => ['group' => 'trip', 'min' => 10, 'max' => 500, 'unit' => 'points'],
         'trip.location_clock_skew_seconds' => ['group' => 'trip', 'min' => 10, 'max' => 900, 'unit' => 'seconds'],

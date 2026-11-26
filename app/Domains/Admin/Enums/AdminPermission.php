@@ -74,6 +74,10 @@ enum AdminPermission: string
     case AuditLogView = 'audit_log.view';
     case SettingsManage = 'settings.manage';
     case AdminManage = 'admin.manage';
+    // Running the fixed list of maintenance commands on the System page (migrate, clear caches,
+    // restart workers). Super admin only — see App\Livewire\Admin\System for why it is a list
+    // and not a shell.
+    case SystemMaintain = 'system.maintain';
 
     /**
      * @return array<int, string>
