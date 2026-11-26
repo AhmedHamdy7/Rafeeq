@@ -3,6 +3,7 @@
 namespace App\Http\Resources;
 
 use App\Domains\Geo\Support\NearPlace;
+use App\Domains\Geo\Support\Polyline;
 use App\Domains\Trip\Models\NavigationStop;
 use App\Domains\Trip\Support\DirectionsLink;
 use App\Domains\Trip\Support\ItineraryStop;
@@ -119,7 +120,7 @@ final class NavigationRouteResource
             'status' => 'PREVIEW_NOT_CONFIRMED',
             ...self::body(
                 $stops,
-                $itinerary->polyline,
+                Polyline::isReadable($itinerary->polyline) ? $itinerary->polyline : null,
                 $itinerary->distance->metres,
                 $itinerary->durationSeconds,
                 $link,
@@ -148,7 +149,7 @@ final class NavigationRouteResource
              */
             'pointCount' => count($stops),
 
-            'polyline' => null,
+            'polyline' => $polyline,
             'distanceMeters' => $distanceMetres,
             'durationSeconds' => $durationSeconds,
 

@@ -30,6 +30,7 @@ final readonly class TripPosition
         /** How confident the phone was, in metres. Null when it did not say. */
         public ?int $accuracyMeters = null,
         public ?int $speedKmh = null,
+        public ?int $heading = null,
     ) {}
 
     /**
@@ -43,6 +44,7 @@ final readonly class TripPosition
             recordedAt: CarbonImmutable::parse($row['recordedAt']),
             accuracyMeters: isset($row['accuracyMeters']) ? (int) $row['accuracyMeters'] : null,
             speedKmh: isset($row['speedKmh']) ? (int) $row['speedKmh'] : null,
+            heading: isset($row['heading']) ? (int) $row['heading'] : null,
         );
     }
 
@@ -59,6 +61,7 @@ final readonly class TripPosition
             'recordedAt' => $this->recordedAt->toIso8601String(),
             'accuracyMeters' => $this->accuracyMeters,
             'speedKmh' => $this->speedKmh,
+            'heading' => $this->heading,
         ];
     }
 }

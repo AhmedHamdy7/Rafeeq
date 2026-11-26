@@ -36,6 +36,16 @@ Schedule::command('commutes:generate-trips')
     ->timezone('Africa/Cairo')
     ->withoutOverlapping();
 
+Schedule::command('commutes:refresh-roads')
+    ->dailyAt('02:30')
+    ->timezone('Africa/Cairo')
+    ->withoutOverlapping();
+
+Schedule::command('places:refresh-coordinates')
+    ->dailyAt('02:45')
+    ->timezone('Africa/Cairo')
+    ->withoutOverlapping();
+
 /*
  * The membership side of the same daily roll: stale requests expired, leave
  * notices completed, and committed members seated on the days the generator has

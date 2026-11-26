@@ -145,7 +145,7 @@ it('sends only the position on the channel, and nothing about who is in the car'
     // No passenger list, no driver name, no booking ids — a channel payload is the easiest
     // thing in a system to end up logged by a proxy.
     expect(array_keys($event->broadcastWith()))
-        ->toEqualCanonicalizing(['lat', 'lng', 'recordedAt', 'accuracyMeters', 'speedKmh']);
+        ->toEqualCanonicalizing(['lat', 'lng', 'recordedAt', 'accuracyMeters', 'speedKmh', 'heading']);
 });
 
 /*

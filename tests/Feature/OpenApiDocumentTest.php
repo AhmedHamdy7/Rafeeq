@@ -173,6 +173,7 @@ it('generates a document describing every /v1 route', function () {
         'POST /v1/driver/vehicles/{vehicle}/activate',
         'POST /v1/driver/vehicles/{vehicle}/documents',
         'GET /v1/places',
+        'GET /v1/places/suggestions',
         'GET /v1/commutes',
         'POST /v1/commutes',
         'GET /v1/commutes/{commute}',

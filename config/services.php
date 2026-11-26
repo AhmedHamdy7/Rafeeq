@@ -57,6 +57,7 @@ return [
         // and the server's IPs. Without it the areas the app sends are kept as sent.
         'server_key' => env('GOOGLE_MAPS_SERVER_KEY'),
         'geocoding_endpoint' => env('GOOGLE_GEOCODING_ENDPOINT', 'https://maps.googleapis.com/maps/api/geocode/json'),
+        'places_endpoint' => env('GOOGLE_PLACES_ENDPOINT', 'https://places.googleapis.com/v1/places'),
     ],
 
     'slack' => [

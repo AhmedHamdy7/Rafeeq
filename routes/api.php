@@ -35,6 +35,7 @@ use App\Http\Controllers\Api\V1\Notification\NotificationController;
 use App\Http\Controllers\Api\V1\Payment\DebtController;
 use App\Http\Controllers\Api\V1\Payment\MoneyController;
 use App\Http\Controllers\Api\V1\PlaceController;
+use App\Http\Controllers\Api\V1\PlaceSuggestionController;
 use App\Http\Controllers\Api\V1\Rating\RatingController;
 use App\Http\Controllers\Api\V1\Safety\SafetyController;
 use App\Http\Controllers\Api\V1\Search\BrowseCommutesController;
@@ -451,6 +452,7 @@ Route::prefix('v1')->group(function (): void {
      */
     Route::middleware('auth:sanctum')->group(function (): void {
         Route::get('places', [PlaceController::class, 'index']);
+        Route::get('places/suggestions', [PlaceSuggestionController::class, 'index']);
 
         /*
          * The two screens the app opens on.

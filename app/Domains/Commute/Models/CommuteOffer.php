@@ -12,6 +12,7 @@ use App\Domains\Commute\Enums\CommuteType;
 use App\Domains\Driver\Models\DriverProfile;
 use App\Domains\Driver\Models\Vehicle;
 use App\Domains\Geo\Models\Corridor;
+use App\Domains\Geo\Support\DrawableRoad;
 use App\Domains\Group\Models\CommuteGroup;
 use Database\Factories\CommuteOfferFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
@@ -53,6 +54,7 @@ class CommuteOffer extends Model
             'allows_custom_pickup' => 'boolean',
             'route_distance_meters' => 'integer',
             'route_duration_seconds' => 'integer',
+            'route_fetched_at' => 'datetime',
             'bbox_min_lat' => 'decimal:7',
             'bbox_max_lat' => 'decimal:7',
             'bbox_min_lng' => 'decimal:7',
@@ -62,6 +64,11 @@ class CommuteOffer extends Model
             'paused_reason' => CommutePausedReason::class,
             'archived_at' => 'datetime',
         ];
+    }
+
+    public function drawableRoutePolyline(): ?string
+    {
+        return DrawableRoad::stored($this->route_polyline, $this->route_fetched_at);
     }
 
     public function driverProfile(): BelongsTo

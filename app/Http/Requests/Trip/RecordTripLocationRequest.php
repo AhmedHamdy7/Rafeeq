@@ -47,6 +47,8 @@ final class RecordTripLocationRequest extends FormRequest
             // Column is a smallint, so the ceiling is the column's and not a judgement about
             // how fast a car can go.
             'points.*.speedKmh' => ['nullable', 'integer', 'min:0', 'max:32767'],
+
+            'points.*.heading' => ['nullable', 'numeric', 'min:0', 'max:360'],
         ];
     }
 }

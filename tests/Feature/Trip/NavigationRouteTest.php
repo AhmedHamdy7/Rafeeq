@@ -66,7 +66,7 @@ it('is the driver’s start and end alone when nobody is confirmed', function ()
     expect($route['pointCount'])->toBe(2)
         ->and($route['status'])->toBe('CONFIRMED')
         ->and(array_column($route['stops'], 'kind'))->toBe(['DRIVER_START', 'DRIVER_END'])
-        ->and($route['polyline'])->toBeNull()
+        ->and($route['polyline'])->toBe(ScheduledTrip::query()->findOrFail($this->tripId)->itinerary_polyline)
         ->and($route['distanceMeters'])->toBeGreaterThan(0);
 });
 
@@ -313,7 +313,7 @@ it('refuses to pretend one map link can carry an itinerary past the waypoint lim
         ->and($route['waypointLimit'])->toBe(1)
         // The fallback: consecutive segments, each inside the limit.
         ->and(count($route['segments']))->toBeGreaterThan(1)
-        ->and($route['polyline'])->toBeNull()
+        ->and($route['polyline'])->not->toBeNull()
         ->and($route['stops'])->toHaveCount(4);
 });
 

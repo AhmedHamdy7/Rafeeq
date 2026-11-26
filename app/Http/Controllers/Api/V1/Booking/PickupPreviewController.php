@@ -103,6 +103,7 @@ final class PickupPreviewController extends Controller
             // Stated rather than left for the client to compare two numbers and get the
             // boundary case wrong.
             'withinLimit' => $detour->isWithin(),
+            'polyline' => $detour->polyline,
 
             /*
              * When the car should reach this point on that day — an ESTIMATE: the departure plus
@@ -153,6 +154,7 @@ final class PickupPreviewController extends Controller
             'tier' => $detour->tier()?->value,
             'extraMinutes' => $detour->extraMinutes(),
             'withinLimit' => $detour->isWithin(),
+            'polyline' => $detour->polyline,
             'tripId' => $trip?->id,
             'estimatedDropoffAt' => $estimated?->toIso8601String(),
             'estimatedDropoffLocal' => $trip === null ? null : PickupEta::local($trip, $estimated),

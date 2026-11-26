@@ -86,6 +86,7 @@ final readonly class PublishCommuteOfferAction
                 'route_polyline' => $route->polyline,
                 'route_distance_meters' => $route->distance->metres,
                 'route_duration_seconds' => $route->durationSeconds,
+                'route_fetched_at' => $route->isFallback ? null : ($route->fetchedAt ?? now()),
                 'corridor_id' => $this->corridorFor($offer)?->id,
                 ...$box->toColumns(),
             ])->save();

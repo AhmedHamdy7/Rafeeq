@@ -82,6 +82,7 @@ final readonly class SaveCommuteRouteAction
                 'route_polyline' => null,
                 'route_distance_meters' => null,
                 'route_duration_seconds' => null,
+                'route_fetched_at' => null,
                 'bbox_min_lat' => null,
                 'bbox_max_lat' => null,
                 'bbox_min_lng' => null,

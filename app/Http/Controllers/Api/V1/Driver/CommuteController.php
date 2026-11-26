@@ -28,6 +28,7 @@ use App\Domains\Commute\Support\SeatPricing;
 use App\Domains\Driver\Enums\DriverProfileStatus;
 use App\Domains\Driver\Models\DriverProfile;
 use App\Domains\Geo\Contracts\GeoQueryEngine;
+use App\Domains\Geo\Support\DrawableRoad;
 use App\Domains\Geo\ValueObjects\Route;
 use App\Domains\Identity\Enums\Capability;
 use App\Domains\Payment\Support\DriverFees;
@@ -261,7 +262,7 @@ final class CommuteController extends Controller
 
         if ($offer->route_polyline !== null) {
             return ApiResponse::success([
-                'polyline' => null,
+                'polyline' => $offer->drawableRoutePolyline(),
                 'distanceMeters' => (int) $offer->route_distance_meters,
                 'durationSeconds' => (int) $offer->route_duration_seconds,
             ]);
@@ -274,7 +275,7 @@ final class CommuteController extends Controller
         }
 
         return ApiResponse::success([
-            'polyline' => null,
+            'polyline' => DrawableRoad::of($route),
             'distanceMeters' => (int) $route->distance->metres,
             'durationSeconds' => (int) $route->durationSeconds,
         ]);

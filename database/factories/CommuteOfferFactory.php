@@ -49,6 +49,7 @@ class CommuteOfferFactory extends Factory
             'route_polyline' => '}_p~iF~ps|U_ulL',
             'route_distance_meters' => 32000,
             'route_duration_seconds' => 2880,
+            'route_fetched_at' => now(),
             // The automatic price for 32 km in the factory's Standard, 3-seat car (PAY-42):
             // share 80 EGP, commission max(8, 8) = 8, 88 → 90.
             'seat_price_piastres' => 9000,

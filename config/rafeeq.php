@@ -1015,6 +1015,19 @@ return [
         'min_seat_divisor' => 3,
     ],
 
+    'places' => [
+        'merge_metres' => 30,
+        'shared_pin_metres' => 50,
+        'shared_pin_users' => 3,
+        'nearby_radius_metres' => 5000,
+        'search_radius_metres' => 50000,
+        'default_limit' => 8,
+        'max_limit' => 20,
+        'google_coords_keep_days' => 30,
+        'google_coords_refresh_days' => 27,
+        'refresh_batch' => 500,
+    ],
+
     'geo' => [
         /*
          * DEPLOY-ONLY. Which routing engine answers geographic questions.
@@ -1059,6 +1072,9 @@ return [
          * why the two are cached separately (see CachingGeoEngine).
          */
         'route_cache_days' => 30,
+
+        'road_keep_days' => 30,
+        'road_refresh_days' => 7,
 
         'area_radius_metres' => ['district' => 4000, 'city' => 8000],
 

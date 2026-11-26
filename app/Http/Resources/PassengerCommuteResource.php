@@ -12,7 +12,6 @@ use App\Domains\Commute\Models\ScheduledTrip;
 use App\Domains\Commute\Support\RouteSettings;
 use App\Domains\Geo\Contracts\GeoQueryEngine;
 use App\Domains\Geo\Support\NearPlace;
-use App\Domains\Geo\Support\Polyline;
 use App\Domains\Matching\Support\PassengerStanding;
 use App\Domains\Shared\ValueObjects\Coordinate;
 use Carbon\CarbonImmutable;
@@ -207,7 +206,7 @@ final class PassengerCommuteResource extends JsonResource
             'end' => $this->end($offer->locations->firstWhere('type', CommuteLocationType::Destination)),
             'distanceKm' => $offer->route_distance_meters === null ? null : round($offer->route_distance_meters / 1000, 1),
             'durationMinutes' => $offer->route_duration_seconds === null ? null : (int) round($offer->route_duration_seconds / 60),
-            'polyline' => null,
+            'polyline' => $offer->drawableRoutePolyline(),
             'isTrimmed' => false,
         ];
     }

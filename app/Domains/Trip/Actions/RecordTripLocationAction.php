@@ -12,6 +12,7 @@ use App\Domains\Shared\ValueObjects\Coordinate;
 use App\Domains\Shared\ValueObjects\Distance;
 use App\Domains\Trip\Enums\TripSessionStatus;
 use App\Domains\Trip\Events\TripLocationUpdated;
+use App\Domains\Trip\Jobs\BroadcastPickupEtas;
 use App\Domains\Trip\Models\TripSession;
 use App\Domains\Trip\Support\LiveLocationStore;
 use App\Domains\Trip\Support\TripSettings;
@@ -104,6 +105,7 @@ final readonly class RecordTripLocationAction
          */
         if ($moved) {
             TripLocationUpdated::dispatch($session->id, $latest);
+            BroadcastPickupEtas::dispatch((string) $session->id);
         }
 
         return $accepted;

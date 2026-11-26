@@ -17,10 +17,10 @@ class AreaRegistry
 {
     public function __construct(private GoogleGeocoder $geocoder) {}
 
-    public function resolve(PointArea $sent, Coordinate $point): ?string
+    public function resolve(PointArea $sent, Coordinate $point, bool $lookup = true): ?string
     {
         try {
-            $checked = $this->serverArea($point);
+            $checked = $lookup ? $this->serverArea($point) : $this->knownServerArea($point);
 
             if ($checked !== null) {
                 return $checked;
@@ -52,13 +52,24 @@ class AreaRegistry
         ];
     }
 
+    public function knownServerArea(Coordinate $point): ?string
+    {
+        if (! $this->geocoder->available()) {
+            return null;
+        }
+
+        $known = Cache::get(self::cacheKey($point));
+
+        return is_string($known) ? $known : null;
+    }
+
     public function serverArea(Coordinate $point): ?string
     {
         if (! $this->geocoder->available()) {
             return null;
         }
 
-        $key = 'areas:at:'.round($point->lat, 4).','.round($point->lng, 4);
+        $key = self::cacheKey($point);
 
         return Cache::remember($key, now()->addDays(30), function () use ($point): ?string {
             $found = $this->geocoder->areaAt($point, 'en');
@@ -110,5 +121,10 @@ class AreaRegistry
         $area->save();
 
         return $area;
+    }
+
+    private static function cacheKey(Coordinate $point): string
+    {
+        return 'areas:at:'.round($point->lat, 4).','.round($point->lng, 4);
     }
 }

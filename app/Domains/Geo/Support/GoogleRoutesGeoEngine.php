@@ -209,6 +209,7 @@ final class GoogleRoutesGeoEngine implements GeoQueryEngine
             // Item 51: one road per stop list, the same one the app asks Google for.
             'computeAlternativeRoutes' => false,
             'polylineEncoding' => 'ENCODED_POLYLINE',
+            'polylineQuality' => 'OVERVIEW',
             'units' => 'METRIC',
         ];
 

@@ -7,6 +7,7 @@ use App\Domains\Booking\Support\RequestRouteImpact;
 use App\Domains\Commute\Enums\ScheduledTripStatus;
 use App\Domains\Commute\Models\CommuteOffer;
 use App\Domains\Commute\Models\ScheduledTrip;
+use App\Domains\Geo\Support\DrawableRoad;
 use App\Domains\Shared\Exceptions\DomainException;
 use App\Domains\Shared\Support\ErrorCode;
 use App\Domains\Shared\ValueObjects\Coordinate;
@@ -58,7 +59,7 @@ final class NavigationRouteController extends Controller
         return ApiResponse::success([
             ...NavigationRouteResource::confirmed(
                 $stops,
-                $occurrence->itinerary_polyline,
+                DrawableRoad::stored($occurrence->itinerary_polyline, $occurrence->itinerary_built_at),
                 $occurrence->itinerary_distance_meters,
                 $occurrence->itinerary_duration_seconds,
                 LiveStopEtas::for($occurrence->loadMissing('tripSession'), $stops),

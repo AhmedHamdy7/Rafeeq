@@ -64,6 +64,7 @@ it('reads the road distance and duration Google returns', function () {
             && str_contains($request->header('X-Goog-FieldMask')[0], 'routes.distanceMeters')
             && $request['travelMode'] === 'DRIVE'
             && $request['routingPreference'] === 'TRAFFIC_UNAWARE'
+            && $request['polylineQuality'] === 'OVERVIEW'
             && ! isset($request['departureTime']);
     });
 });

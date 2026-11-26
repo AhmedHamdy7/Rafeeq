@@ -387,7 +387,7 @@ quarter of an hour.
    → 200  a ranked list; each row has commuteId, score + its breakdown, driver summary, vehicle
 
 8  POST /commutes/{commute}/pickup-preview   { lat, lng }
-   → 200  { addedMinutes, runTotalMinutes, maxDetourMinutes, pointMeters, tier, extraMinutes, withinLimit }
+   → 200  { addedMinutes, runTotalMinutes, maxDetourMinutes, pointMeters, tier, extraMinutes, withinLimit, polyline }
 ```
 
 Step 8 creates nothing. It exists so the passenger can see the detour **before** committing to a
@@ -451,7 +451,7 @@ travelled is step 19, and the driver records that. Two different tables on purpo
 ```
 16 POST /trips/{trip}/start                                  (driver)  → 201  the session
 17 POST /trips/{trip}/status   { status: "EN_ROUTE" }         (driver)  → 200
-   POST /trips/{trip}/location { points: [ {lat,lng,recordedAt,accuracyMeters,speedKmh}, ... ] }
+   POST /trips/{trip}/location { points: [ {lat,lng,recordedAt,accuracyMeters,speedKmh,heading}, ... ] }
    → 200  { accepted, rejected, rejectedReason }
 ```
 
@@ -750,6 +750,7 @@ fails if this list and the running routes ever disagree in either direction.
 | `GET /matches` | 4.6 Search, demands, saved searches |
 | `POST /matches/{match}/opened` | 4.6 Search, demands, saved searches |
 | `GET /places` | 4.6 Search, demands, saved searches |
+| `GET /places/suggestions` | 4.6 Search, demands, saved searches |
 | `GET /saved-searches` | 4.6 Search, demands, saved searches |
 | `POST /saved-searches` | 4.6 Search, demands, saved searches |
 | `DELETE /saved-searches/{search}` | 4.6 Search, demands, saved searches |
@@ -1955,12 +1956,13 @@ approved seats, `409 COMMUTE_NOT_EDITABLE` on a draft or archived commute.
 The road for the Route step (COM-02). Call it after saving the route.
 
 ```json
-{ "polyline": null, "distanceMeters": 46206, "durationSeconds": 5940 }
+{ "polyline": "ezq{Dg~d~D…", "distanceMeters": 46206, "durationSeconds": 5940 }
 ```
 
-Since 2026-11-24 (item 51) `polyline` is always `null`: draw the road from Google through Start and End. The
-distance and time are the server's measurement of that same road (start → end, the suggested points are not stops),
-which is what the price uses.
+`polyline` is the road from Start to End (the suggested points are not stops) as a Google encoded polyline, measured
+with the settings in "Drawing the road" below; draw it and skip your own Routes call. It is `null` when the server has
+no road younger than 30 days (or Google did not answer): then ask Google yourself, as before. The distance and time are
+the same road's, which is what the price uses.
 
 `503 COMMUTE_ROUTE_UNAVAILABLE` means the road can't be calculated right now: show "Route not
 available" with Retry and keep Next disabled. A failed answer isn't cached, so Retry asks again.
@@ -2254,7 +2256,7 @@ confirmed seat (16h+: 0 · 10–16h: 10 % · < 10h: 25 %) — **show it first** 
 | `maxDetourMinutes` / `maxWalkMinutes` | **RAFEEQ's** limits, the same on every commute (C-1, COM-31): two tiers (COM-40). On your way: point within 1.5 km, up to 10 min for her, up to 20 min for the whole trip. A bit far: within 3 km, 15 min and 30 min. `maxDetourMinutes` is the outer limit, 30. `detourTiers` on `GET /commutes/options` has every number. Read-only — sending either when creating or revising a commute is refused with `422`. |
 | `audience`, `minTrustLevel` | Who may join. |
 | `allowsCustomPickup` | **Defaults to true.** Only decides whether a confirmed passenger may ask to move their pickup. |
-| `routePolyline`, `routeDistanceMeters`, `routeDurationSeconds` | Computed at publish from the driver's start to his end; the suggested points are not stops (item 51). `routePolyline` is always `null` since 2026-11-24: draw the road from Google. Distance and duration are `null` on a draft. **Only ever returned to the commute's own driver.** |
+| `routePolyline`, `routeDistanceMeters`, `routeDurationSeconds` | Computed at publish from the driver's start to his end; the suggested points are not stops (item 51). `routePolyline` is that road as a Google encoded polyline, refreshed every 7 days; `null` on a draft and whenever the stored road is older than 30 days (then draw it from Google yourself). Distance and duration are `null` on a draft and stay as published. **Only ever returned to the commute's own driver.** |
 | `createdAt`, `updatedAt` | UTC timestamps. `updatedAt` changes on every saved step. |
 | `formStep` | The form step the driver stopped at, 1 to 5, sent on `PATCH` to a draft. `null` until sent. Stored only; use `missing[]` for what's still needed. |
 | `publishedAt`, `pausedAt`, `pausedReason`, `pausedMessage`, `archivedAt` | `pausedReason` is `by_driver` · `vehicle_suspended` · `licence_expired` · `commission_unpaid` · `account_suspended` · `driver_suspended` · `gender_review` · `by_staff` — all but `by_driver` are automatic or staff decisions, so show the right copy. `by_staff` means RAFEEQ staff paused it from the dashboard: show "Paused by RAFEEQ" with `pausedMessage` (staff's text, in the language they wrote it; `null` for every other reason). Only staff resume it: Resume and Publish answer `409 COMMUTE_INVALID_TRANSITION` with `fields.pausedReason: ["by_staff"]`; hide the Resume button. `licence_expired` means her licence lapsed (COM-26): she can resume after the renewed licence is approved. `driver_suspended` means staff suspended her driving only (PROF-27): Resume answers `403 DRIVER_NOT_ELIGIBLE` and Passenger mode still works. `account_suspended` means staff suspended her account (F1-3); once it is lifted she resumes the commute herself. `commission_unpaid` means a week's commission missed two Fridays (PAY-45): show the debt screen; after paying she resumes the commute herself. |
@@ -2316,7 +2318,7 @@ that is not published, answers `404`. A women-only commute is shown to everybody
 | `allowsCustomPickup`, `maxPointDistanceMetres`, `maxDetourMinutes` | Whether she may drop her own pin, and the outer limits it is checked against: 3 km from the route and 30 min for the whole trip (COM-40). Preview a pin with `POST /commutes/{commute}/pickup-preview`. |
 | `detourTiers` | `{onWay: {pointMeters, requestMinutes, tripMinutes}, far: {...}}` — 🟢 1500 m / 10 / 20 and 🔴 3000 m / 15 / 30 today. Draw the green area from `onWay.pointMeters` and the red ring from `far.pointMeters` (= `maxPointDistanceMetres`). A point in the red ring can be sent like any other ("A bit far"); beyond it, it can't. Distance is a straight line to the route polyline. |
 | `schedule` | `{daysMask, departureTime, timezone, startDate, endDate}` — **the days it runs** ("Every Sun · Tue · Thu"). |
-| `route` | `{start, end, distanceKm, durationMinutes, polyline, isTrimmed}`. 🔒 **Before she holds a confirmed seat the line is trimmed ~1 km at each end** and `start` / `end` are `{label, lat, lng}` of the trimmed ends, labelled by **area only** ("Nasr City"); `isTrimmed: true`. Once she has a confirmed booking on it, the whole line (`isTrimmed: false`). `distanceKm` / `durationMinutes` are the whole run's ("27 km · about 52 min"). `polyline` is always `null` since 2026-11-24 (item 51): draw the road from Google between `start` and `end`. |
+| `route` | `{start, end, distanceKm, durationMinutes, polyline, isTrimmed}`. 🔒 **Before she holds a confirmed seat the line is trimmed ~1 km at each end** and `start` / `end` are `{label, lat, lng}` of the trimmed ends, labelled by **area only** ("Nasr City"); `isTrimmed: true`. Once she has a confirmed booking on it, the whole line (`isTrimmed: false`). `distanceKm` / `durationMinutes` are the whole run's ("27 km · about 52 min"). `polyline` is the published road (start → end) as a Google encoded polyline, or `null` when the server has none younger than 30 days: then draw it from Google between `start` and `end`. |
 | `pickups[]` / `dropoffs[]` | The driver's suggested points, in road order: `{id, label, lat, lng, estimatedTime}`. **`id` is the `suggestionId` a seat request takes.** `estimatedTime` is `HH:MM:SS` on the commute's clock from the usual departure. Empty arrays when the driver gave none (B07) — her own pin is always the other way to choose. |
 | `upcomingTrips[]` | The next up to 20 days: the `otherDays[]` item of a match result (`id`, `tripDate`, `departureAt`, `departureLocal`, `promisedArrivalAt`, `promisedArrivalLocal`, `seatsAvailable`, `myStatus`, `overlapsBooking`) plus that day's `seatPricePiastres` and **`pointTimes[]`** — `{pointId, estimatedAt, estimatedLocal}` for each suggested point on that day (use these, not `estimatedTime`, once she picks a day). `promisedArrivalLocal` (`Y-m-d H:i:s`) is filled on **every** day that has a promise, booked or not (item 59). It is `null` on a Return (timed by `promisedDepartureLocal`, with `estimatedArrivalLocal`) and on a day generated without a promise; show `estimatedArrivalLocal` there, never "—". |
 | `requestEligibility` | `{canRequest, reason}` — whether she may ask for a seat on this commute. `reason`: `null` · `women_only` · `gender_not_set` · `own_commute` · `already_requested` · `account_restricted` (riding suspended for debt). Disable **Request Seat** with the reason when `canRequest` is `false`. A hint: `POST /commutes/{commute}/seat-requests` still makes the same checks. Per-day standing stays in `upcomingTrips[].myStatus`. |
@@ -2464,6 +2466,40 @@ nearest first.
 the places nearest that point, **closest first**, each with `distanceMetres`. Use the first one's
 `name` as the pin's `label` on a seat request (let her edit it). Empty when nothing is within
 `radiusMetres` (default 5 km).
+
+#### `GET /places/suggestions` — signed-in
+
+YuGo's own points, learned from what people really pick. **Show them first; call Google only when
+this returns nothing.** Two ways to call it:
+
+| Call | Use it for |
+|---|---|
+| `?lat=&lng=&kind=start\|end\|pickup\|dropoff&limit=8` | "Suggested near you" before she types: rows within 5 km of `lat` / `lng` (her location or the map centre), nearest first in 300 m steps, then the ones used for that `kind` (`start` / `pickup` = getting in, `end` / `dropoff` = getting out), then the most used. |
+| `?q=&lat=&lng=` | While she types. Matches the name in English and Arabic, ignoring case and Arabic letter forms (`ا/أ/إ/آ`, `ه/ة`, `ي/ى`, tashkeel). `lat` / `lng` are optional and only order the results (within 50 km). **An empty list means "ask Google now".** |
+
+`lat` + `lng` are required without `q`. `limit` 1–20, default 8. The answer is a list, each item in the
+point shape you already send:
+
+```json
+{ "id": "01JD…", "kind": "commute_point", "label": "Ring Road, Rehab exit", "lat": 30.0624, "lng": 31.4914,
+  "googlePlaceId": null, "area": { "placeId": "ChIJ…", "name": "Rehab", "city": "Cairo" },
+  "distanceMetres": 140, "uses": 12 }
+```
+
+Send `lat`, `lng`, `label`, `googlePlaceId` and `area` back on the commute, demand, seat request or
+pickup change exactly as given: **no Google call** (no Autocomplete, no Place Details, no reverse
+geocode). `label` follows `Accept-Language` when both languages are known. `kind` is
+`commute_point` (a published commute's start, end or suggested point), `google_place` (a place
+somebody chose from Google search) or `shared_pin` (a spot 3 or more different people dropped a pin
+within 50 m of). Don't show `kind`; it's for your logs.
+
+🔒 **How the list is built (no new call from the app):** every point the app already sends on a
+**published** commute, a demand, a seat request or a pickup change is counted on the row within 30 m,
+or creates one. A pin she dropped herself stays **hers**: it is only shown to others once **3
+different people** picked a point within 50 m, at the centre of those pins, named by a label at least
+2 of them typed (otherwise by the area). Google coordinates are kept at most 30 days: a place used
+in the last 30 days gets fresh coordinates from Google, others leave the list until somebody picks
+them again.
 
 ---
 
@@ -2890,7 +2926,7 @@ anybody else's request.
 | `maxDetourMinutes` | RAFEEQ's whole-trip cap. |
 | `canDropPin` | `true`: the driver can also place his own pin (C04), and send it as `{lat, lng, label}`. |
 | `requested` | `{pickup, dropoff, addedMinutes, withinLimit, tier, extraMinutes}`: what she asked for. |
-| `route` | `{polyline, distanceMeters, durationSeconds}`: the published route. `polyline` is always `null` since 2026-11-24; draw it from Google. |
+| `route` | `{polyline, distanceMeters, durationSeconds}`: the published route. `polyline` as on `GET /commutes/{commute}`: the road, or `null` (then draw it from Google). |
 | `pickups[]` · `dropoffs[]` | The options: `{suggestionId, label, lat, lng, addedMinutes, changeFromRequestedMinutes, walkMeters, withinLimit, tier, extraMinutes, refusalCode}`. Her own suggested point is left out. |
 
 `changeFromRequestedMinutes` is negative when the option saves time ("saves 6 min"). `walkMeters` is the
@@ -3253,7 +3289,7 @@ Published as `pointCount` so you do not have to count, and so the screen can say
 | `nextStopIndex` | Index in `stops` of the next stop: the first not reached, skipping `DRIVER_START`. Null when every stop is reached. Use it as "next"; don't work it out yourself. |
 | `nextStopDistanceMeters` | Road distance from the car to the next stop. Null without a live position. |
 | `etasAreLive` | `true` once the run is underway and the ETAs are recalculated as above. |
-| `polyline` · `distanceMeters` · `durationSeconds` | The whole run, summed from the legs. `polyline` is always `null` since 2026-11-24 (item 51): draw the road from Google through `stops[]`. |
+| `polyline` · `distanceMeters` · `durationSeconds` | The whole run, summed from the legs. `polyline` is the day's road through `stops[]` in order, joined from the legs; `null` when the day's road was built more than 30 days ago. On `route-preview` it is the road **with** her two points. Draw it when present; ask Google through `stops[]` only when it is `null`. |
 | `googleMapsDirectionsUrl` | Open this for the external map. **Can be null** — see below. |
 | `exceedsWaypointLimit` · `waypointLimit` · `segments` | The fallback. |
 
@@ -3289,19 +3325,20 @@ four points can appear here while `navigation-route` still returns two.
 
 ##### Drawing the road (items 47, 51, 2026-11-24)
 
-The app draws every road live from Google Routes through `stops[]` in order, and no longer draws `polyline`.
-The server measures the same stops with the **same request settings**, so what is drawn is what was measured:
+Since 2026-11-26 the server sends each road as `polyline` again (Google encoded), so the app draws it and makes no
+Routes call. When `polyline` is `null` the app asks Google itself through `stops[]` in order. Both use the **same
+request settings**, so what is drawn is what was measured:
 
 | Google Routes field | Value |
 |---|---|
 | `travelMode` | `DRIVE` |
 | `routingPreference` | `TRAFFIC_UNAWARE` |
 | `computeAlternativeRoutes` | `false` |
+| `polylineQuality` | `OVERVIEW` |
 | `intermediates` | the stops between the driver's start and end, in `sequence` order, as stopovers |
 
 "Your road now" is the stops without `isProposed`; "with her" is all of them. `impact.addedMinutes` and
-`impact.addedMetres` are the difference between those two, each leg measured with the settings above. `polyline`
-is sent as `null`. The only call that uses traffic is the computed leave time of an
+`impact.addedMetres` are the difference between those two, each leg measured with the settings above. The only call that uses traffic is the computed leave time of an
 arrive-by day (`TRAFFIC_AWARE` with a departure time); nothing a map draws depends on it.
 
 > 🔒 **Both of these are driver-only, and a passenger gets `404`.** The payload is every other
@@ -3646,6 +3683,7 @@ the person commits.
 | `maxDetourMinutes` | The outer whole-trip limit in minutes (COM-40). |
 | `withinLimit` | Whether a request would be accepted. Show the consequence before they ask. |
 | `pointMeters` | How far this point is from the route. |
+| `polyline` | The road from the driver's start through this point to his end, Google encoded. Draw it instead of asking Google; `null` when Google did not answer. |
 | `tier` · `extraMinutes` | `on_way`, `far`, or `null` when a request can't be sent (grey the pin). Discover shows `on_way` under Matching and `far` under Other commutes, labelled "A bit far". |
 | `tripId` · `estimatedPickupAt` · `estimatedPickupLocal` | "Pickup around 7:55" (DISCOVER-14): when the car should reach this point on that day — **an estimate**, the departure plus the point's share of the route's duration. `null` when the commute has no upcoming day. Once she is booked, read `pickupEta` on the booking. |
 
@@ -3733,7 +3771,9 @@ trip. Show the driver's "Expired" card from `status: "EXPIRED"`.
 The same as `pickup-preview`, for a drop-off. **Request:** `lat`, `lng` (the drop-off), optional
 `pickup {lat, lng}` (measured together, as the seat request will be) and `scheduledTripId`.
 **Response:** `addedMinutes`, `addedKm`, `runTotalMinutes`, `maxDetourMinutes`, `pointMeters`,
-`tier`, `extraMinutes`, `withinLimit`, `tripId`, `estimatedDropoffAt`, `estimatedDropoffLocal`.
+`tier`, `extraMinutes`, `withinLimit`, `polyline`, `tripId`, `estimatedDropoffAt`, `estimatedDropoffLocal`.
+`polyline` is the road from the driver's start through her points to his end (Google encoded), or `null` when Google
+did not answer; draw it on the request screen instead of asking Google.
 `addedMinutes` is by road when the server runs the Google engine; with the `straight_line` engine it
 is a straight-line estimate.
 
@@ -4210,7 +4250,10 @@ grace ran out. **The outcome is decided by the clock, not by anything the app se
 
 #### `POST /trips/{trip}/location` — active, profile complete, driver only
 
-**Request:** `points[]` (1–60), each `{lat, lng, recordedAt, accuracyMeters, speedKmh}`.
+**Request:** `points[]` (1–60), each `{lat, lng, recordedAt, accuracyMeters, speedKmh, heading}`.
+`heading` is optional, degrees 0–360 from north (the phone's bearing), so the passenger's car icon points
+the right way. Send every **3–5 s** while driving to a pickup and every **10 s** otherwise; the server
+accepts any rate.
 
 An **array**, because a phone that loses signal buffers and sends the backlog. `recordedAt` is the
 **device's** clock — that is what makes six buffered points describe six real moments.
@@ -4233,7 +4276,7 @@ no trail row and sends no `location.updated`.
 
 | Field | Meaning |
 |---|---|
-| `position` | `{lat, lng, recordedAt, accuracyMeters, speedKmh}`, or **`null` when the run has gone quiet**. |
+| `position` | `{lat, lng, recordedAt, accuracyMeters, speedKmh, heading}`, or **`null` when the run has gone quiet**. `heading` is `null` when the driver's app didn't send one. |
 | `lastLocationAt` | When the last reading arrived, whether or not a position is still current. **This is how you know your map is stale rather than that the car has stopped.** |
 | `isUnderway` | Whether the run is out on the road. |
 | `pickupEtaAt` | **Passenger with a confirmed seat, before her pickup:** when the car should reach her. The same number the driver sees as `etaAt` on her stop in `navigation-route`, and as `nextJourney.live.pickupEtaAt` on `/home`. Null for the driver, before the start, once he marked arrival, and after she boarded. |
@@ -6079,7 +6122,7 @@ afterwards — once you are subscribed, every event on that channel reaches you.
 |---|---|
 | Channel | `private-trip.{tripSessionId}` — the **session** id from `GET /trips/{trip}`, not the trip id |
 | Event | `location.updated` |
-| Payload | `{lat, lng, recordedAt, accuracyMeters, speedKmh}` |
+| Payload | `{lat, lng, recordedAt, accuracyMeters, speedKmh, heading}` |
 
 🔒 **Only while the run is underway.** A subscription that outlived the journey would keep a socket
 open onto positions pushed after everybody got out. You will be refused if you are not the driver or
@@ -6090,6 +6133,11 @@ channel payload is the easiest thing in a system to end up logged by a proxy.
 
 **Always implement the polling fallback** (`GET /trips/{trip}/location`). The situation a live map
 is for — a bad connection at a bus stop — is the same situation where a socket does not open.
+
+**Listen instead of polling.** Move the car on every `location.updated` (glide between points, turn the
+icon to `heading`). Her pickup time arrives on her own channel as `trip.pickup_eta` (6.2). Keep the
+15 s `GET /trips/{trip}/location` only while the socket is down, and use it once on open to draw
+`carToPickupPolyline`.
 
 ### 6.2 The seat race — `private-occurrence.{scheduledTripId}` and `private-user.{userId}`
 
@@ -6141,6 +6189,7 @@ they are for, on the same channel and envelope as `offer.closed`. There is no ch
 | `chat.read` | The person who wrote the messages | `{bookingId, seatRequestId, readAt}`. Every message you wrote in that thread is now read. |
 | `chat.event` | Both people on the booking | `{bookingId, seatRequestId: null, event: {event, at}}`. A ride moment just happened (`driver_arrived`, `picked_up`, `ride_completed`). The same item that `meta.events` will now return. |
 | `account.banned` | The member just banned | `{caseNumber, permanent: true, activeTripId}`. Open the hold screen now, or when `activeTripId` is not `null`, once that run ends. The Pusher frame's `event` is exactly `account.banned` (no dot, no class name) and its `data` is the envelope, as a JSON string to decode. |
+| `trip.pickup_eta` | Each confirmed passenger of the run, while her pickup is still ahead | `{tripId, tripSessionId, bookingId, pickupEtaAt, stopsBeforeYou}`. Sent after each batch of positions that moves the car (at most one every few seconds per run). The same `pickupEtaAt` and `stopsBeforeYou` as `GET /trips/{trip}/location`. `pickupEtaAt` is `null` and `stopsBeforeYou` is `0` once the driver is at her pickup. |
 | `chat.typing` | The other person in the thread | `{bookingId, seatRequestId}`. They are typing. Sent straight to the socket, not through the queue. Show the typing bubble for that thread, and hide it after 5 seconds with no new `chat.typing` or when their `chat.message` arrives. |
 
 ```json
@@ -6226,6 +6275,8 @@ exist, and every live endpoint must be named here.
 
 | Date | Change |
 |---|---|
+| 2026-11-26 | 📍 **Google Maps cost, Asks 2 and 3.** New **`GET /places/suggestions`** (4.6): YuGo's own points near her or by name, learned from published commutes, demands, seat requests and pickup changes; a private pin is shown only once 3 people picked within 50 m; Google coordinates kept 30 days (`places:refresh-coordinates`, daily 02:45 Cairo). Call Google only when it returns nothing. **Live trip:** `points[].heading` on `POST /trips/{trip}/location`, `heading` in `position` and in `location.updated`; new **`trip.pickup_eta`** on `private-user.{userId}` with `pickupEtaAt` and `stopsBeforeYou`. Search no longer reverse-geocodes her start and end on the server (only saved points are checked). |
+| 2026-11-26 | 🗺️ **The server sends the road again** (Google Maps cost, Ask 1). `polyline` is a Google encoded polyline on `GET /commutes/{commute}/route-preview`, `routePolyline` on the driver's commute, `route.polyline` on `GET /commutes/{commute}/public` and `counteroffer-options`, `polyline` on `navigation-route` (the day's road) and `driver/seat-requests/{id}/route-preview` (with her points), and new `polyline` on `pickup-preview` / `dropoff-preview` (start → her points → end). Draw it and skip your own Routes call; it is `null` when the server has no road younger than 30 days or Google did not answer, and then the app asks Google as before. Roads are fetched again every 7 days (`commutes:refresh-roads`, daily 02:30 Cairo); distance, duration and price stay as published. Search results and match cards still carry no road. |
 | 2026-11-24 | 🔁 **Return trips, round 3.** Return proposals add `changes` / `previous` `estimatedArrivalTime` (the route's end for the driver, her drop-off for her). The passenger's proposals add `myPickup`. The driver's `upcomingTrips[]` add `timeLocked` / `timeLockedAt`. The trip session adds `expectedArrivalAt`, the arrival the still-driving check counts from. |
 | 2026-11-24 | 🔁 **Return trips, round 2.** `commute.returnCommute` adds `seatPricePiastres` and `seatsAvailable`, and comes on a waiting-list application too. Driver day rows (`GET /driver/trips`, `nextRun`, `laterThisWeek[]`, his `upcomingTrips[]`) add `linkedCommute`. The driver's booking rows add `linkedBooking`. `route-preview` adds `alsoOnLinked`. `nextJourney.dropoff` adds `estimatedArrivalAt` / `estimatedArrivalLocal`. Change proposals add `direction`. |
 | 2026-11-23 | 🔁 **Return trips (items 38, 39, 40, 46).** `direction` is `going` · `return` (old `to_work` / `to_home` are read as aliases). A Return is timed by `promisedDepartureTime` and never re-timed; its arrival is estimated. New day fields `direction`, `promisedDepartureAt` / `Local`, `estimatedArrivalAt` / `Local`. `POST .../return` makes a **linked** Return with the same days and seats and no times; `returnOfCommuteId`, `goingCommute`, `returnCommute`; deleting either side clears the link. **`COMMUTE_OVERLAPS` is replaced by `409 COMMUTE_SCHEDULE_OVERLAP`** (10-minute gap, also on draft schedule save, resume and change proposals). New `422 COMMUTE_NOT_GOING`, `409 COMMUTE_RETURN_EXISTS`. Search and demands take `direction` and `leaveAt` (window `returnWindowMinutes`, 30); `returnDemand` saves the ride back in one call. Seat requests carry `commute.returnCommute`; driver rows carry `alsoOnLinked`. Notifications carry `data.direction`. `GET /commutes/options` drops `defaults.direction` and adds `returnWindowMinutes`, `commuteGapMinutes`. New `POST /testing/commutes/linked-pair`. |

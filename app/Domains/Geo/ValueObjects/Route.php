@@ -5,6 +5,7 @@ namespace App\Domains\Geo\ValueObjects;
 use App\Domains\Geo\Support\Polyline;
 use App\Domains\Shared\ValueObjects\Coordinate;
 use App\Domains\Shared\ValueObjects\Distance;
+use Carbon\CarbonImmutable;
 
 /**
  * A road route between two points: the line itself, how far it is, and how long
@@ -30,6 +31,7 @@ final readonly class Route
         public int $durationSeconds,
         private ?array $points = null,
         public bool $isFallback = false,
+        public ?CarbonImmutable $fetchedAt = null,
     ) {}
 
     /**

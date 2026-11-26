@@ -217,20 +217,20 @@ final class SearchCommutesRequest extends FormRequest
 
     private function withAreas(SearchCriteria $criteria): SearchCriteria
     {
-        return self::googleAreas($criteria, $this->validated('origin'), $this->validated('destination'));
+        return self::googleAreas($criteria, $this->validated('origin'), $this->validated('destination'), lookup: false);
     }
 
     /**
      * @param  array<string, mixed>|null  $origin
      * @param  array<string, mixed>|null  $destination
      */
-    public static function googleAreas(SearchCriteria $criteria, ?array $origin, ?array $destination): SearchCriteria
+    public static function googleAreas(SearchCriteria $criteria, ?array $origin, ?array $destination, bool $lookup = true): SearchCriteria
     {
         $areas = app(AreaRegistry::class);
 
         return $criteria->withGoogleAreas(
-            $areas->resolve(PointArea::from($origin), $criteria->origin),
-            $areas->resolve(PointArea::from($destination), $criteria->destination),
+            $areas->resolve(PointArea::from($origin), $criteria->origin, $lookup),
+            $areas->resolve(PointArea::from($destination), $criteria->destination, $lookup),
         );
     }
 

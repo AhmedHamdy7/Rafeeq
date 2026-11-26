@@ -14,6 +14,7 @@ use App\Domains\Driver\Models\Vehicle;
 use App\Domains\Geo\Contracts\GeoQueryEngine;
 use App\Domains\Geo\Support\CachingGeoEngine;
 use App\Domains\Geo\Support\GoogleRoutesGeoEngine;
+use App\Domains\Geo\Support\PlaceLearning;
 use App\Domains\Geo\Support\StraightLineGeoEngine;
 use App\Domains\Identity\Contracts\OtpSender;
 use App\Domains\Identity\Support\HttpSmsOtpSender;
@@ -128,6 +129,8 @@ class AppServiceProvider extends ServiceProvider
     public function boot(): void
     {
         $this->composeAdminQueueCounts();
+
+        PlaceLearning::register();
 
         // A Livewire click re-renders through /livewire/update, which skips the route's
         // middleware: without this a dashboard set to Arabic answers its first click in English.

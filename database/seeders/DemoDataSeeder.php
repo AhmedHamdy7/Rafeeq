@@ -56,6 +56,7 @@ use App\Domains\Verification\Models\TrustScore;
 use App\Domains\Verification\Models\UserVerification;
 use Illuminate\Database\Console\Seeds\WithoutModelEvents;
 use Illuminate\Database\Seeder;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 use RuntimeException;
 
@@ -897,7 +898,7 @@ class DemoDataSeeder extends Seeder
     /**
      * The route publishing would store for a straight run between two places.
      *
-     * @return array{route_polyline: string, route_distance_meters: int, route_duration_seconds: int}
+     * @return array{route_polyline: string, route_distance_meters: int, route_duration_seconds: int, route_fetched_at: Carbon}
      */
     private static function seededRoute(Place $origin, Place $destination): array
     {
@@ -910,6 +911,7 @@ class DemoDataSeeder extends Seeder
             'route_polyline' => $route->polyline,
             'route_distance_meters' => $route->distance->metres,
             'route_duration_seconds' => $route->durationSeconds,
+            'route_fetched_at' => now(),
         ];
     }
 }

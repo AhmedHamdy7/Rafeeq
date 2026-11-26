@@ -59,6 +59,7 @@ final readonly class CachingGeoEngine implements GeoQueryEngine
                 polyline: $cached->polyline,
                 distance: Distance::fromMetres($cached->distance_meters),
                 durationSeconds: $cached->duration_seconds,
+                fetchedAt: $cached->fetched_at === null ? null : CarbonImmutable::instance($cached->fetched_at),
             );
         }
 
@@ -95,6 +96,7 @@ final readonly class CachingGeoEngine implements GeoQueryEngine
                 polyline: $cached->polyline,
                 distance: Distance::fromMetres($cached->distance_meters),
                 durationSeconds: $cached->duration_seconds,
+                fetchedAt: $cached->fetched_at === null ? null : CarbonImmutable::instance($cached->fetched_at),
             );
         }
 
@@ -118,6 +120,7 @@ final readonly class CachingGeoEngine implements GeoQueryEngine
                 polyline: $cached->polyline,
                 distance: Distance::fromMetres($cached->distance_meters),
                 durationSeconds: $cached->duration_seconds,
+                fetchedAt: $cached->fetched_at === null ? null : CarbonImmutable::instance($cached->fetched_at),
             );
         }
 

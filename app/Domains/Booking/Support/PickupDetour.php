@@ -10,6 +10,7 @@ use App\Domains\Commute\Enums\CommuteLocationType;
 use App\Domains\Commute\Models\CommuteOffer;
 use App\Domains\Commute\Support\RouteSettings;
 use App\Domains\Geo\Contracts\GeoQueryEngine;
+use App\Domains\Geo\Support\DrawableRoad;
 use App\Domains\Geo\Support\Polyline;
 use App\Domains\Geo\ValueObjects\Route;
 use App\Domains\Group\Models\CommuteGroup;
@@ -52,6 +53,7 @@ final readonly class PickupDetour
          */
         public float $runTotalMinutes,
         public int $pointMeters = 0,
+        public ?string $polyline = null,
     ) {}
 
     public static function measure(GeoQueryEngine $geo, CommuteOffer $offer, Coordinate $proposed): self
@@ -102,6 +104,7 @@ final readonly class PickupDetour
             addedKm: $addedKm,
             runTotalMinutes: round(self::runTotalFor($geo, $offer) + $addedMinutes, 1),
             pointMeters: self::farthestFromRoute($geo, $published, $proposed),
+            polyline: DrawableRoad::of($withStop),
         );
     }
 

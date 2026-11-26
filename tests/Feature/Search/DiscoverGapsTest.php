@@ -344,7 +344,7 @@ it('lets a passenger read a commute: suggested points, weekdays, upcoming days, 
         ->and($detail['vehicle'])->not->toHaveKey('plateNumber')
         ->and($detail['route']['isTrimmed'])->toBeFalse()
         ->and($detail['route']['distanceKm'])->toBeGreaterThan(0)
-        ->and($detail['route']['polyline'])->toBeNull();
+        ->and($detail['route']['polyline'])->toBe($offer->route_polyline);
 
     $origin = $offer->locations()->where('type', 'origin')->sole();
 
@@ -377,7 +377,7 @@ it('draws the whole route once she holds a confirmed seat', function () {
         ->getJson("/api/v1/commutes/{$this->commuteId}/public")->assertOk()->json('data.route');
 
     expect($route['isTrimmed'])->toBeFalse()
-        ->and($route['polyline'])->toBeNull();
+        ->and($route['polyline'])->toBe(CommuteOffer::sole()->route_polyline);
 });
 
 it('hides a commute that is not published, the same as one that does not exist', function () {
