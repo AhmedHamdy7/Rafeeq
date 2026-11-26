@@ -1,5 +1,6 @@
 <?php
 
+use App\Domains\Admin\Actions\UpdatePlatformSettingAction;
 use App\Domains\Admin\Enums\AdminRole;
 use App\Domains\Admin\Models\AdminAction;
 use App\Domains\Admin\Models\PlatformSetting;
@@ -199,3 +200,57 @@ it('belongs to the super admin alone', function (AdminRole $role) {
 
     Livewire::test(Settings::class)->assertForbidden();
 })->with([AdminRole::Operations, AdminRole::SafetyLead, AdminRole::Verification, AdminRole::Finance, AdminRole::Support]);
+
+/*
+ * The page layout: one section on screen, a search across all of them, and "changed only".
+ */
+it('shows one section at a time and switches between them', function () {
+    actingAsAdmin(adminWithRole(AdminRole::SuperAdmin));
+
+    Livewire::test(Settings::class)
+        ->assertViewHas('active', 'auth')
+        ->assertSee('auth.otp.ttl_seconds')
+        ->assertDontSee('trip.wait_grace_seconds')
+        ->call('showGroup', 'trip')
+        ->assertViewHas('active', 'trip')
+        ->assertSee('trip.wait_grace_seconds')
+        ->assertDontSee('auth.otp.ttl_seconds')
+        // An unknown section changes nothing.
+        ->call('showGroup', 'nope')
+        ->assertViewHas('active', 'trip');
+});
+
+it('searches every section by label or key', function () {
+    actingAsAdmin(adminWithRole(AdminRole::SuperAdmin));
+
+    Livewire::test(Settings::class)
+        ->set('search', 'wait_grace')
+        ->assertSee('trip.wait_grace_seconds')
+        ->assertDontSee('auth.otp.ttl_seconds')
+        ->set('search', __(SettingsCatalogue::labelKey('auth.otp.ttl_seconds')))
+        ->assertSee('auth.otp.ttl_seconds')
+        ->set('search', 'no-such-setting-anywhere')
+        ->assertSee(__('admin.settings.no_results', ['q' => 'no-such-setting-anywhere']));
+});
+
+it('narrows to the settings moved off their default', function () {
+    $admin = adminWithRole(AdminRole::SuperAdmin);
+    app(UpdatePlatformSettingAction::class)->update('trip.wait_grace_seconds', 420, $admin, 'Drivers report the Ring Road needs longer.');
+    actingAsAdmin($admin);
+
+    Livewire::test(Settings::class)
+        ->call('showGroup', 'trip')
+        ->set('changedOnly', true)
+        ->assertSee('trip.wait_grace_seconds')
+        ->assertDontSee('trip.arrival_radius_meters')
+        ->assertViewHas('counts', fn (array $counts) => $counts['trip']['changed'] === 1);
+});
+
+it('opens the section of the setting being changed', function () {
+    actingAsAdmin(adminWithRole(AdminRole::SuperAdmin));
+
+    Livewire::test(Settings::class)
+        ->call('edit', 'trip.wait_grace_seconds')
+        ->assertViewHas('active', 'trip')
+        ->assertSee(__('admin.settings.new_value'));
+});

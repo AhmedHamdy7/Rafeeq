@@ -1230,6 +1230,315 @@ a.ad-stat:hover {
   }
 }
 
+/* ---------- Settings page: sections at the side, one section on screen ---------- */
+
+.ad-set-layout {
+  display: grid;
+  grid-template-columns: 230px minmax(0, 1fr);
+  gap: 20px;
+  align-items: start;
+}
+
+.ad-set-nav {
+  position: sticky;
+  inset-block-start: calc(var(--top-h) + 16px);
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 6px;
+  background: var(--bg-surface);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-sm);
+}
+
+.ad-set-nav__item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  inline-size: 100%;
+  padding: 9px 10px;
+  border: none;
+  border-radius: var(--radius-md);
+  background: none;
+  color: var(--fg-muted);
+  font: inherit;
+  font-size: var(--fs-body);
+  font-weight: 600;
+  text-align: start;
+  cursor: pointer;
+  transition: background var(--dur-fast) var(--ease-out), color var(--dur-fast) var(--ease-out);
+}
+
+.ad-set-nav__item:hover {
+  background: var(--bg-sunken);
+  color: var(--fg-default);
+}
+
+.ad-set-nav__item.is-active {
+  background: var(--brand-soft-bg);
+  color: var(--brand-soft-fg);
+}
+
+.ad-set-nav__item:focus-visible {
+  outline: none;
+  box-shadow: var(--shadow-focus);
+}
+
+.ad-set-nav__label {
+  flex: 1;
+  min-inline-size: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Something in this section has been moved off its default. */
+.ad-set-nav__dot {
+  inline-size: 7px;
+  block-size: 7px;
+  border-radius: 50%;
+  background: var(--brand);
+  flex: none;
+}
+
+.ad-set-nav__count,
+.ad-set-count {
+  min-inline-size: 22px;
+  padding: 1px 7px;
+  border-radius: var(--radius-pill);
+  background: var(--bg-sunken);
+  color: var(--fg-muted);
+  font-size: var(--fs-caption);
+  font-weight: 650;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+}
+
+.ad-set-nav__item.is-active .ad-set-nav__count {
+  background: var(--bg-surface);
+  color: var(--brand-soft-fg);
+}
+
+.ad-btn--primary .ad-set-count {
+  background: rgba(255, 255, 255, 0.22);
+  color: inherit;
+}
+
+.ad-set-main {
+  min-inline-size: 0;
+}
+
+.ad-set-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 4px 12px;
+  margin-block-end: 12px;
+}
+
+.ad-set-head__title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+  font-size: var(--fs-heading);
+  font-weight: 700;
+}
+
+.ad-set-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-block-end: 20px;
+}
+
+.ad-set-row {
+  background: var(--bg-surface);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-sm);
+  transition: border-color var(--dur-fast) var(--ease-out), box-shadow var(--dur-fast) var(--ease-out);
+}
+
+.ad-set-row:hover {
+  border-color: var(--border-strong);
+}
+
+/* A changed value carries a brand stripe on its leading edge, so a scan down the list finds them. */
+.ad-set-row.is-changed {
+  border-inline-start: 3px solid var(--brand);
+}
+
+.ad-set-row.is-open {
+  border-color: var(--border-focus);
+  box-shadow: var(--shadow-focus);
+}
+
+.ad-set-row__main {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  gap: 10px 20px;
+  align-items: center;
+  padding: 14px 16px;
+}
+
+.ad-set-row__info {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  min-inline-size: 0;
+}
+
+.ad-set-row__title {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  font-weight: 650;
+  font-size: 14px;
+  color: var(--fg-default);
+}
+
+.ad-set-row__meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 8px;
+  font-size: var(--fs-small);
+  color: var(--fg-muted);
+}
+
+.ad-set-row__value {
+  display: flex;
+  align-items: baseline;
+  gap: 5px;
+  justify-content: flex-end;
+  min-inline-size: 110px;
+}
+
+.ad-set-row__num {
+  font-size: 22px;
+  font-weight: 700;
+  line-height: 1.1;
+  color: var(--fg-default);
+  font-variant-numeric: tabular-nums;
+}
+
+.ad-set-row__num.is-different {
+  color: var(--brand);
+}
+
+.ad-set-row__unit {
+  font-size: var(--fs-small);
+  color: var(--fg-muted);
+}
+
+.ad-set-row__text {
+  max-inline-size: 260px;
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+
+.ad-set-row__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  justify-content: flex-end;
+}
+
+.ad-set-row__panel {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding: 14px 16px 16px;
+  border-block-start: 1px solid var(--border-subtle);
+  background: var(--bg-sunken);
+  border-end-start-radius: var(--radius-lg);
+  border-end-end-radius: var(--radius-lg);
+}
+
+.ad-set-edit {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.ad-set-edit__compare {
+  display: flex;
+  align-items: flex-end;
+  gap: 16px;
+}
+
+.ad-set-edit__compare > div {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.ad-set-edit__inputs {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.ad-set-edit__slider {
+  flex: 1;
+  min-inline-size: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.ad-set-range {
+  inline-size: 100%;
+  accent-color: var(--brand);
+  cursor: pointer;
+}
+
+.ad-set-edit__scale {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+@media (max-width: 1023px) {
+  .ad-set-layout {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 12px;
+  }
+
+  /* On a narrow screen the sections become a row of chips that scrolls sideways. */
+  .ad-set-nav {
+    position: static;
+    flex-direction: row;
+    overflow-x: auto;
+    scrollbar-width: none;
+  }
+
+  .ad-set-nav__item {
+    inline-size: auto;
+    flex: none;
+  }
+}
+
+@media (max-width: 767px) {
+  .ad-set-row__main {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .ad-set-row__value,
+  .ad-set-row__actions {
+    justify-content: flex-start;
+  }
+
+  .ad-set-edit__inputs {
+    flex-direction: column;
+    align-items: stretch;
+  }
+}
+
 /* ---------- Paging under a list ---------- */
 
 .ad-pager {

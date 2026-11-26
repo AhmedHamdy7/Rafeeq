@@ -12,6 +12,7 @@ use App\Domains\Admin\Support\SettingsLadders;
 use App\Domains\Shared\Exceptions\DomainException;
 use Illuminate\Support\Facades\Auth;
 use Livewire\Attributes\Layout;
+use Livewire\Attributes\Url;
 use Livewire\Component;
 
 /**
@@ -45,9 +46,42 @@ class Settings extends Component
     /** @var array<string, string> */
     public array $ladderValues = [];
 
+    /** The section on screen (one of SettingsCatalogue::GROUPS); empty means the first. */
+    #[Url(as: 'group', except: '')]
+    public string $group = '';
+
+    /** Searches every section at once, by label (in the current language) or by key. */
+    #[Url(as: 'q', except: '')]
+    public string $search = '';
+
+    public bool $changedOnly = false;
+
     public function mount(): void
     {
         $this->authorizeTo();
+    }
+
+    public function showGroup(string $group): void
+    {
+        if (! in_array($group, SettingsCatalogue::GROUPS, true)) {
+            return;
+        }
+
+        $this->cancel();
+        $this->cancelLadder();
+        $this->reset('historyFor', 'search');
+        $this->group = $group;
+    }
+
+    // Opening a setting's history from anywhere brings its section on screen with it.
+    public function updatedHistoryFor(?string $key): void
+    {
+        $this->group = self::groupOf((string) $key) ?? $this->group;
+    }
+
+    private static function groupOf(string $key): ?string
+    {
+        return (SettingsCatalogue::entry($key) ?? SettingsCatalogue::textEntry($key))['group'] ?? null;
     }
 
     public function edit(string $key, string $mode = 'update'): void
@@ -64,6 +98,10 @@ class Settings extends Component
             default => (string) PlatformSetting::value($key, SettingsCatalogue::defaultFor($key)),
         };
         $this->reason = '';
+
+        if ($this->editing !== null && $this->search === '') {
+            $this->group = self::groupOf($this->editing) ?? $this->group;
+        }
     }
 
     public function cancel(): void
@@ -121,6 +159,7 @@ class Settings extends Component
         $rungs = SettingsLadders::ladder($name) ?? abort(404);
 
         $this->ladder = $name;
+        $this->group = 'fees';
         $this->ladderValues = array_map(fn (string $key) => (string) PlatformSetting::value($key, SettingsCatalogue::defaultFor($key)), $rungs);
     }
 
@@ -205,8 +244,50 @@ class Settings extends Component
             ];
         }
 
+        // Counts for the section list, before any filter: what is in each section and how much of it
+        // has been moved off the default.
+        $counts = [];
+
+        foreach ($groups as $name => $rows) {
+            $counts[$name] = [
+                'total' => count($rows),
+                'changed' => count(array_filter($rows, fn (array $row) => $row['override'] !== null)),
+            ];
+        }
+
+        $ordered = array_values(array_filter(SettingsCatalogue::GROUPS, fn (string $name) => isset($groups[$name])));
+        $active = in_array($this->group, $ordered, true) ? $this->group : ($ordered[0] ?? '');
+        $query = trim($this->search);
+
+        // Searching looks through every section; otherwise only the open one is drawn.
+        $visible = [];
+
+        foreach ($ordered as $name) {
+            if ($query === '' && $name !== $active) {
+                continue;
+            }
+
+            $rows = array_values(array_filter($groups[$name], function (array $row) use ($query): bool {
+                if ($this->changedOnly && $row['override'] === null) {
+                    return false;
+                }
+
+                return $query === ''
+                    || mb_stripos($row['key'], $query) !== false
+                    || mb_stripos((string) __(SettingsCatalogue::labelKey($row['key'])), $query) !== false;
+            }));
+
+            if ($rows !== [] || ($query === '' && $name === $active)) {
+                $visible[$name] = $rows;
+            }
+        }
+
         return view('livewire.admin.settings', [
-            'groups' => $groups,
+            'groups' => $visible,
+            'sections' => $ordered,
+            'counts' => $counts,
+            'active' => $active,
+            'query' => $query,
             // F02: each fee ladder with its rungs as they stand, for the ladder card.
             'ladders' => collect(SettingsLadders::LADDERS)->map(fn (array $rungs) => array_map(
                 fn (string $key) => (int) PlatformSetting::value($key, SettingsCatalogue::defaultFor($key)),

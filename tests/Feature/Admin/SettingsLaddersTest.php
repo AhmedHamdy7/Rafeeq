@@ -49,5 +49,6 @@ it('prices a rung on the EGP 110 example seat the way the fee is charged', funct
 it('shows the ladder card on the settings page', function () {
     actingAsAdmin(adminWithRole(AdminRole::SuperAdmin));
 
-    $this->get(route('admin.settings'))->assertOk()->assertSee(__('admin.settings.ladders.title'));
+    // One section on screen at a time: the ladders live in Fees.
+    $this->get(route('admin.settings', ['group' => 'fees']))->assertOk()->assertSee(__('admin.settings.ladders.title'));
 });
