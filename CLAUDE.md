@@ -1,5 +1,20 @@
 # CLAUDE.md
 
+## ⚠️ Production on the VPS runs with a FIXED OTP (`123456`)
+
+The VPS (153.79.251.111, Namecheap) hosts two copies of the app:
+
+| | Production | Staging |
+|---|---|---|
+| URL | `api.yugoeg.com` | `staging.yugoeg.com` |
+| Folder | `/var/www/rafeeq` | `/var/www/rafeeq-staging` |
+| Branch | `main` | `staging` |
+| Deploys | automatically on push to `main`, after `tests` passes | automatically on push to `staging`, after `tests` passes |
+
+There is no SMS provider yet, so **both** run `APP_ENV=staging` with `RAFEEQ_DEV_OTP_CODE=123456` — the fixed code is refused outright under `APP_ENV=production` (`RequestOtpAction`). On production that means **anyone who knows a phone number can sign in as that person**.
+
+**Before real users sign in on `api.yugoeg.com`:** set up the SMS provider (`RAFEEQ_OTP_DRIVER=http` + `RAFEEQ_SMS_*`, see `DEPLOYMENT.md`), remove `RAFEEQ_DEV_OTP_CODE`, choose a real virus scanner, and set `APP_ENV=production` in `/var/www/rafeeq/.env`. Production already has rate limits on and dashboard MFA on.
+
 ## ⚠️ Rate limits are currently DISABLED
 
 `RAFEEQ_RATE_LIMITS=off` is set (local `.env` and `.env.production.example`) so the team can test without locking itself out. This turns off:

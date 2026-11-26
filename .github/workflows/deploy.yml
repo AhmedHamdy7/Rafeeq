@@ -1,0 +1,115 @@
+# Deploys to the VPS (153.79.251.111). One branch per environment, same server:
+#
+#   branch    environment  URL                  folder
+#   main      production   api.yugoeg.com       /var/www/rafeeq
+#   staging   staging      staging.yugoeg.com   /var/www/rafeeq-staging
+#
+# A push to either branch → tests.yml (Pint + Pest on MySQL 8) → if green, deploy the exact commit
+# that was tested to that branch's environment. A red run never deploys.
+#
+# Usual flow: work on `staging`, check it on staging.yugoeg.com, then open a PR staging → main and
+# merge it to release to production.
+#
+# Re-deploy by hand (e.g. after fixing something on the server): Actions → deploy → Run workflow.
+# It also refuses a commit tests.yml has not passed on.
+#
+# Repository secrets (Settings → Secrets and variables → Actions), shared by both:
+#   DEPLOY_HOST          153.79.251.111
+#   DEPLOY_USER          deploy
+#   DEPLOY_SSH_KEY       private key whose public half is in ~deploy/.ssh/authorized_keys
+#   DEPLOY_KNOWN_HOSTS   output of `ssh-keyscan <host>`, so the runner refuses a server that is
+#                        not ours instead of trusting whatever answers on that IP
+name: deploy
+
+on:
+  workflow_run:
+    workflows: [tests]
+    types: [completed]
+    branches: [main, staging]
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: Where to deploy
+        type: choice
+        options: [staging, production]
+        default: staging
+      ref:
+        description: Branch, tag or commit SHA (tests must have passed on it). Empty = the environment's own branch.
+        type: string
+        default: ''
+
+permissions:
+  contents: read
+  actions: read
+
+env:
+  # workflow_run: the branch that was pushed decides. workflow_dispatch: the choice made.
+  TARGET: >-
+    ${{ github.event_name == 'workflow_dispatch' && inputs.environment
+        || (github.event.workflow_run.head_branch == 'main' && 'production' || 'staging') }}
+
+jobs:
+  deploy:
+    # `event == 'push'`: tests.yml also runs on pull requests; only a push to the branch deploys.
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    environment: ${{ github.event_name == 'workflow_dispatch' && inputs.environment || (github.event.workflow_run.head_branch == 'main' && 'production' || 'staging') }}
+
+    # One deploy per environment at a time, and never cancel one half-way through a migration.
+    concurrency:
+      group: deploy-${{ github.event_name == 'workflow_dispatch' && inputs.environment || (github.event.workflow_run.head_branch == 'main' && 'production' || 'staging') }}
+      cancel-in-progress: false
+
+    steps:
+      - name: Resolve commit
+        id: commit
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RUN_SHA: ${{ github.event.workflow_run.head_sha }}
+          REF: ${{ inputs.ref }}
+        run: |
+          if [ -n "$RUN_SHA" ]; then
+            # The commit tests.yml actually passed on — not whatever the branch is by now.
+            sha="$RUN_SHA"
+          else
+            if [ -z "$REF" ]; then
+              [ "$TARGET" = production ] && REF=main || REF=staging
+            fi
+            sha="$(gh api "repos/$GITHUB_REPOSITORY/commits/$REF" --jq .sha)"
+            # A manual deploy must not skip the gate the automatic one has.
+            passed="$(gh api "repos/$GITHUB_REPOSITORY/actions/workflows/tests.yml/runs?head_sha=$sha&status=success" --jq .total_count)"
+            if [ "$passed" = "0" ]; then
+              echo "::error::tests.yml has not passed on $sha ($REF). Push it to staging or open a PR so the tests run first."
+              exit 1
+            fi
+          fi
+          echo "sha=$sha" >> "$GITHUB_OUTPUT"
+          echo "Deploying $sha to $TARGET"
+
+      - name: Set up SSH
+        env:
+          DEPLOY_SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
+          DEPLOY_KNOWN_HOSTS: ${{ secrets.DEPLOY_KNOWN_HOSTS }}
+        run: |
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$DEPLOY_SSH_KEY" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          printf '%s\n' "$DEPLOY_KNOWN_HOSTS" > ~/.ssh/known_hosts
+
+      - name: Deploy
+        env:
+          DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
+          DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
+          SHA: ${{ steps.commit.outputs.sha }}
+        run: |
+          case "$TARGET" in
+            production) dir=/var/www/rafeeq ;;
+            staging)    dir=/var/www/rafeeq-staging ;;
+            *) echo "unknown environment $TARGET"; exit 1 ;;
+          esac
+          ssh -o StrictHostKeyChecking=yes -o BatchMode=yes \
+            "$DEPLOY_USER@$DEPLOY_HOST" \
+            "bash $dir/deploy/deploy.sh $SHA"

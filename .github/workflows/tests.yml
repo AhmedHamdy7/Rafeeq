@@ -1,4 +1,5 @@
-# Runs on every pull request and every push to main.
+# Runs on every pull request and every push to main or staging. A green run on a push is what
+# lets deploy.yml release it (main → production, staging → staging).
 #
 # 🔴 MySQL 8.0, not SQLite and not MariaDB: the schema relies on spatial columns and indexes and
 # on an indexed virtual CHAR column that MariaDB refuses (PROGRESS, standard #16) — a suite that
@@ -8,7 +9,7 @@ name: tests
 on:
   pull_request:
   push:
-    branches: [main]
+    branches: [main, staging]
 
 concurrency:
   group: tests-${{ github.ref }}

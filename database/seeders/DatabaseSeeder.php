@@ -209,7 +209,7 @@ class DatabaseSeeder extends Seeder
      * For a real deployment use `php artisan admin:create`, which prompts for a password and
      * prints a freshly generated secret once.
      */
-    private const DEMO_ADMIN_EMAIL = 'admin@admin';
+    private const DEMO_ADMIN_EMAIL = 'admin@admin.com';
 
     private const DEMO_ADMIN_PASSWORD = 'password';
 
