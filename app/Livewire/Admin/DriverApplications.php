@@ -26,6 +26,7 @@ use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\Rule;
 use Livewire\Attributes\Layout;
+use Livewire\Attributes\Url;
 use Livewire\Component;
 use Livewire\WithPagination;
 
@@ -86,6 +87,12 @@ class DriverApplications extends Component
     public string $suspendPlate = '';
 
     public string $suspendNote = '';
+
+    /** applications · renewals · reported — one of the three queues on screen at a time. */
+    #[Url(as: 'tab', except: 'applications')]
+    public string $tab = 'applications';
+
+    public const array TABS = ['applications', 'renewals', 'reported'];
 
     public function mount(): void
     {
@@ -439,7 +446,10 @@ class DriverApplications extends Component
 
     public function render()
     {
+        $this->tab = in_array($this->tab, self::TABS, true) ? $this->tab : 'applications';
+
         return view('livewire.admin.driver-applications', [
+            'activeTab' => $this->tab,
             'applications' => $this->pendingPage(),
             'renewals' => Vehicle::query()->whereNotNull('registration_renewal_submitted_at')->whereHas('driverProfile.user')->with('driverProfile.user')->orderBy('registration_renewal_submitted_at')->limit(50)->get(),
             'reportedCars' => Vehicle::query()->where('suspension_reason', VehicleSuspensionReason::Report->value)->whereHas('driverProfile.user')->with('driverProfile.user')->limit(50)->get(),

@@ -106,6 +106,20 @@ return [
         'approve_item' => 'اعتماد :item',
         'identity_approved' => 'تم اعتماد :item لـ :name.',
         'rejected' => 'اترفض :name.',
+        'tabs' => [
+            'applications' => 'طلبات السواقين',
+            'renewals' => 'تجديد رخص العربيات',
+            'reported' => 'موقوفة بعد بلاغ',
+        ],
+        'step_identity' => 'الهوية',
+        'step_cars' => 'العربيات',
+        'ready' => 'جاهز للاعتماد',
+        'waiting_on' => 'مستني: :items',
+        'cars_count' => '{0} مفيش عربية|{1} عربية واحدة|[2,*] :count عربيات',
+        'licence_valid' => 'الرخصة سارية',
+        'waiting_since' => 'مستني من :time',
+        'no_reported' => 'مفيش عربية موقوفة بعد بلاغ.',
+        'suspend_title' => 'إيقاف عربية بعد بلاغ',
 
         // مراجعة العربية (F2-7): اللي المراجع بيقرره عن كل عربية قبل الاعتماد.
         'cars_review' => [

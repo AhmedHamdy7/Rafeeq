@@ -1771,3 +1771,315 @@ a.ad-stat:hover {
   inline-size: auto;
   margin: 12px 16px 0;
 }
+
+/* ---------- Drivers page: tabs, one card per application ---------- */
+
+.ad-drv-tabcount {
+  min-inline-size: 20px;
+  padding: 1px 7px;
+  border-radius: var(--radius-pill);
+  background: var(--bg-sunken);
+  color: var(--fg-muted);
+  font-size: var(--fs-caption);
+  font-weight: 700;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+}
+
+.ad-drv-tabcount.is-hot {
+  background: var(--brand-soft-bg);
+  color: var(--brand-soft-fg);
+}
+
+.ad-drv-tabcount.is-bad {
+  background: var(--danger-100);
+  color: var(--danger-600);
+}
+
+.ad-drv {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  padding: 18px;
+  background: var(--bg-surface);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-xl);
+  box-shadow: var(--shadow-sm);
+}
+
+.ad-drv--compact {
+  gap: 12px;
+  padding: 16px;
+}
+
+.ad-drv__head {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.ad-drv__avatar {
+  inline-size: 44px;
+  block-size: 44px;
+  font-size: 17px;
+}
+
+.ad-drv__avatar--bad {
+  background: var(--danger-100);
+  color: var(--danger-600);
+}
+
+.ad-drv__who {
+  flex: 1;
+  min-inline-size: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.ad-drv__name {
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--fg-default);
+}
+
+.ad-drv__meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 8px;
+  font-size: var(--fs-small);
+  color: var(--fg-muted);
+}
+
+.ad-drv__status {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  justify-content: flex-end;
+}
+
+/* An Egyptian plate, drawn like one: boxed, bold, never broken across lines. */
+.ad-drv__plate {
+  display: inline-block;
+  padding: 1px 8px;
+  border: 1.5px solid var(--border-strong);
+  border-radius: var(--radius-sm);
+  background: var(--bg-surface);
+  color: var(--fg-default);
+  font-weight: 700;
+  font-size: var(--fs-small);
+  white-space: nowrap;
+}
+
+.ad-drv__grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.ad-drv__panel {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 14px;
+  border-radius: var(--radius-lg);
+  background: var(--bg-sunken);
+  min-inline-size: 0;
+}
+
+.ad-drv__panel-title {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  margin: 0;
+  font-size: var(--fs-caption);
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--fg-muted);
+}
+
+.ad-drv__items {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.ad-drv__item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 12px;
+  border-radius: var(--radius-md);
+  background: var(--bg-surface);
+  border: 1px solid var(--border-subtle);
+}
+
+/* The step marker: empty ring → amber ring (waiting) → green tick → red cross. */
+.ad-drv__mark {
+  inline-size: 24px;
+  block-size: 24px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  flex: none;
+  border: 2px solid var(--border-strong);
+  color: #fff;
+}
+
+.ad-drv__mark.is-pending {
+  border-color: var(--warning-600);
+  background: var(--warning-100);
+}
+
+.ad-drv__mark.is-approved {
+  border-color: var(--success-600);
+  background: var(--success-600);
+}
+
+.ad-drv__mark.is-rejected {
+  border-color: var(--danger-600);
+  background: var(--danger-600);
+}
+
+.ad-drv__item-body {
+  flex: 1;
+  min-inline-size: 0;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 10px;
+}
+
+.ad-drv__item-name {
+  font-weight: 650;
+}
+
+.ad-drv__item-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  justify-content: flex-end;
+}
+
+.ad-drv__car {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px;
+  border-radius: var(--radius-md);
+  background: var(--bg-surface);
+  border: 1px solid var(--border-subtle);
+}
+
+.ad-drv__car-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 10px;
+}
+
+.ad-drv__car-fields {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.ad-drv__car-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.ad-drv__details {
+  margin: 0;
+}
+
+.ad-drv__foot {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding-block-start: 14px;
+  border-block-start: 1px solid var(--border-subtle);
+}
+
+.ad-drv__foot-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.ad-drv-cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+  gap: 14px;
+}
+
+.ad-drv__renew {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 8px;
+}
+
+.ad-drv__renew .ad-field {
+  flex: 1;
+  min-inline-size: 160px;
+  margin: 0;
+}
+
+.ad-drv-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.ad-drv-list > li {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 16px;
+  border-block-end: 1px solid var(--border-subtle);
+}
+
+.ad-drv-list > li:last-child {
+  border-block-end: none;
+}
+
+@media (max-width: 1023px) {
+  .ad-drv__grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+@media (max-width: 767px) {
+  .ad-drv {
+    padding: 14px;
+  }
+
+  .ad-drv__head {
+    flex-wrap: wrap;
+  }
+
+  .ad-drv__status {
+    inline-size: 100%;
+    justify-content: flex-start;
+  }
+
+  .ad-drv__item {
+    flex-wrap: wrap;
+  }
+
+  .ad-drv__item-actions {
+    inline-size: 100%;
+    justify-content: flex-start;
+  }
+
+  .ad-drv__car-fields {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}

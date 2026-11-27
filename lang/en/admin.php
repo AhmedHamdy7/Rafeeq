@@ -108,6 +108,20 @@ return [
         'approve_item' => 'Approve :item',
         'identity_approved' => 'Approved the :item of :name.',
         'rejected' => 'Rejected :name.',
+        'tabs' => [
+            'applications' => 'Applications',
+            'renewals' => 'Registration renewals',
+            'reported' => 'Suspended after a report',
+        ],
+        'step_identity' => 'Identity',
+        'step_cars' => 'Cars',
+        'ready' => 'Ready to approve',
+        'waiting_on' => 'Waiting on: :items',
+        'cars_count' => '{0} No car|{1} :count car|[2,*] :count cars',
+        'licence_valid' => 'Licence valid',
+        'waiting_since' => 'Waiting :time',
+        'no_reported' => 'No car is suspended after a report.',
+        'suspend_title' => 'Suspend a car after a report',
 
         // The car review (F2-7): what the reviewer decides about each car before approving.
         'cars_review' => [
