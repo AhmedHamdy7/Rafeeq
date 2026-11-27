@@ -22,7 +22,7 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <meta name="robots" content="noindex, nofollow">
-    <title>RAFEEQ</title>
+    <title>YuGo</title>
     <style>
         :root { color-scheme: light dark; }
         body {
@@ -45,7 +45,7 @@
 </head>
 <body>
     <main>
-        <h1>RAFEEQ</h1>
+        <h1>YuGo</h1>
         <p>منصّة مشاركة المشاوير اليومية المخطَّطة.</p>
         <p style="margin-top:16px"><a href="{{ route('admin.login') }}">لوحة التحكم</a></p>
     </main>

@@ -19,7 +19,7 @@ return [
     ],
     'code' => [
         'title' => 'Enter your code',
-        'text' => 'Open your authenticator app and type the 6-digit code for RAFEEQ — not the setup key you added to it.',
+        'text' => 'Open your authenticator app and type the 6-digit code for YuGo — not the setup key you added to it.',
         'label' => '6-digit code',
         'digit' => 'Digit :n',
         'verify' => 'Verify',

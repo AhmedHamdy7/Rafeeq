@@ -40,7 +40,7 @@ return [
         'version' => env('API_VERSION', '1.0.0'),
 
         'description' => <<<'MARKDOWN'
-        RAFEEQ — planned commute sharing. **Not** an on-demand ride-hailing API.
+        YuGo — planned commute sharing. **Not** an on-demand ride-hailing API.
 
         ## Response envelope
 
@@ -121,7 +121,7 @@ return [
     ],
 
     'ui' => [
-        'title' => 'RAFEEQ API',
+        'title' => 'YuGo API',
     ],
 
     /*

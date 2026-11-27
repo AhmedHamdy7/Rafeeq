@@ -74,7 +74,7 @@ return [
     'version' => 'Version :version · :at · :name',
     'content_saved' => 'Saved as a new version.',
     'content_app_note' => 'The app reads these through GET /v1/content/{key}. Each save is a new version, so the app knows to refresh.',
-    'events_hint' => 'Every message RAFEEQ sends by itself, and the switch in the member\'s settings that governs it. Safety ones cannot be switched off.',
+    'events_hint' => 'Every message YuGo sends by itself, and the switch in the member\'s settings that governs it. Safety ones cannot be switched off.',
     'switch' => 'Member\'s switch',
     'example' => 'Title (in the app language)',
     'categories' => [

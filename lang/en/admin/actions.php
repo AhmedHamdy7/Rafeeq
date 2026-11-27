@@ -14,7 +14,7 @@ return [
     'ban_confirm' => 'Ban :name permanently? They will see the restricted screen and cannot appeal in the app.',
     'already_reversed' => 'This event was already reversed.',
     'no_open_appeal' => 'There is no open appeal on this event.',
-    'warning_title' => 'A warning from RAFEEQ',
+    'warning_title' => 'A warning from YuGo',
     'warning_text' => 'Warning text (they read this)',
     'warning_text_hint' => 'Write it in their app language. Say what happened and what happens if it repeats.',
     'message_title' => 'Title',
@@ -44,7 +44,7 @@ return [
         'hide_rating' => 'The review stops showing and stops counting in their average. Open complaints about it are closed as upheld.',
         'restore_rating' => 'The review shows and counts again. Open complaints about it are closed as dismissed.',
         'message' => 'Lands in their app inbox, in the language you write it in. Never a push. The full text is kept in the audit log.',
-        'warn' => 'A formal warning for low reliability or repeated violations (ADM-05). They read your text in their app inbox under "A warning from RAFEEQ", never as a push. Your reason stays internal. It changes nothing else.',
+        'warn' => 'A formal warning for low reliability or repeated violations (ADM-05). They read your text in their app inbox under "A warning from YuGo", never as a push. Your reason stays internal. It changes nothing else.',
     ],
     'confirm' => [
         'correct' => 'Save the correction',

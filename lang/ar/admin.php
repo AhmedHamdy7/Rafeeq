@@ -2,7 +2,7 @@
 
 return [
 
-    'title' => 'تشغيل رفيق',
+    'title' => 'تشغيل يوجو',
 
     'nav' => [
         'payments' => 'المدفوعات',
@@ -610,7 +610,7 @@ return [
             'pricing__km_rate_standard_piastres' => 'عربية عادية: سعر الكيلو من المسار',
             'pricing__km_rate_comfort_piastres' => 'عربية كومفورت: سعر الكيلو من المسار',
             'pricing__commission_rate_percent' => 'نسبة بتتضاف فوق نصيب السائق',
-            'pricing__min_commission_piastres' => 'أقل عمولة لرفيق على المقعد',
+            'pricing__min_commission_piastres' => 'أقل عمولة ليوجو على المقعد',
             'pricing__rounding_step_piastres' => 'كسر سعر المقعد بيتقرّب لفوق لأقرب',
             'pricing__min_seat_divisor' => 'السعر مايتقسمش على أقل من',
             'driver__min_approved_seats' => 'أقل عدد مقاعد ممكن تتعتمد للعربية',

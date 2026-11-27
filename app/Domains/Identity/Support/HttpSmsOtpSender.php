@@ -49,7 +49,7 @@ final class HttpSmsOtpSender implements OtpSender
         return new self(
             url: (string) $config['url'],
             apiKey: (string) $config['api_key'],
-            sender: (string) ($config['sender'] ?? 'Rafeeq'),
+            sender: (string) ($config['sender'] ?? 'YuGo'),
             auth: (string) ($config['auth'] ?? 'bearer'),
             fields: $config['fields'],
             timeoutSeconds: (int) ($config['timeout_seconds'] ?? 10),

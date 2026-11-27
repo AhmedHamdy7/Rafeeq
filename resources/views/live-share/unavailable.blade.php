@@ -12,7 +12,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <meta name="robots" content="noindex, nofollow, noarchive">
     <meta name="referrer" content="no-referrer">
-    <title>الرابط مش متاح · رفيق</title>
+    <title>الرابط مش متاح · يوجو</title>
     <style>
         :root { color-scheme: light dark; }
         body { margin: 0; min-height: 100vh; display: grid; place-items: center; padding: 24px;

@@ -2,7 +2,7 @@
 
 return [
 
-    'title' => 'Rafeeq Operations',
+    'title' => 'YuGo Operations',
 
     'nav' => [
         'payments' => 'Payments',
@@ -613,7 +613,7 @@ return [
             'pricing__km_rate_standard_piastres' => 'Standard car: per km of route',
             'pricing__km_rate_comfort_piastres' => 'Comfort car: per km of route',
             'pricing__commission_rate_percent' => '% added on top of the driver’s share',
-            'pricing__min_commission_piastres' => 'Least RAFEEQ takes per seat',
+            'pricing__min_commission_piastres' => 'Least YuGo takes per seat',
             'pricing__rounding_step_piastres' => 'A fraction of the seat price is rounded up to the next',
             'pricing__min_seat_divisor' => 'Price never divided by fewer seats than',
             'driver__min_approved_seats' => 'Fewest seats a car can be approved for',

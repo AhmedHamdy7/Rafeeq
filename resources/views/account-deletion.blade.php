@@ -11,7 +11,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <meta name="robots" content="noindex, nofollow, noarchive">
     <meta name="referrer" content="no-referrer">
-    <title>امسح حسابك · رفيق</title>
+    <title>امسح حسابك · يوجو</title>
     <style>
         :root { color-scheme: light dark; }
         body { margin: 0; min-height: 100vh; display: grid; place-items: center; padding: 24px;
@@ -32,14 +32,14 @@
 <body>
 <main>
     @if ($step === 'phone')
-        <h1>امسح حسابك على رفيق</h1>
+        <h1>امسح حسابك على يوجو</h1>
         <p>هنبعتلك كود على رقمك عشان نتأكد إنه بتاعك. بعد المسح:</p>
         <ul>
             <li>رحلاتك الجاية بتتلغي من غير أي رسوم، واللي معاك في الرحلة بيتبلّغ.</li>
             <li>اسمك وصورتك وإيميلك وأماكنك المحفوظة وجهات الاتصال بيتمسحوا.</li>
             <li>سجل الرحلات والمدفوعات والتقييمات والبلاغات بيفضل من غير اسم ولا رقم، لأن القانون والأمان محتاجينه.</li>
         </ul>
-        <p>مينفعش تمسح الحساب وعليك فلوس لرفيق، أو عندك رحلة قريبة إلغاؤها عليه رسوم.</p>
+        <p>مينفعش تمسح الحساب وعليك فلوس ليوجو، أو عندك رحلة قريبة إلغاؤها عليه رسوم.</p>
         @if ($error)<p class="error">{{ $error }}</p>@endif
         <form method="post" action="{{ route('account-deletion.code') }}">
             @csrf

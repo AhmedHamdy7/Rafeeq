@@ -7,7 +7,7 @@
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
-    <title>{{ config('scramble.ui.title', 'RAFEEQ API') }}</title>
+    <title>{{ config('scramble.ui.title', 'YuGo API') }}</title>
     <script src="https://unpkg.com/@stoplight/elements@8.4.2/web-components.min.js"></script>
     <link rel="stylesheet" href="https://unpkg.com/@stoplight/elements@8.4.2/styles.min.css">
     <style>html, body { margin: 0; height: 100%; }</style>

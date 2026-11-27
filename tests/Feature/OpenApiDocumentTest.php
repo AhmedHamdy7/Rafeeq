@@ -458,7 +458,7 @@ it('generates a document describing every /v1 route', function () {
 it('carries the API identity the mobile team needs', function () {
     $document = openApiDocument();
 
-    expect($document['info']['title'])->toBe('RAFEEQ API')
+    expect($document['info']['title'])->toBe('YuGo API')
         ->and($document['info']['version'])->toBe('1.0.0')
         // The envelope, the localisation header and the single-use refresh
         // rule are the three things a client gets wrong without being told.

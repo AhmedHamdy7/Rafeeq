@@ -20,7 +20,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <meta name="robots" content="noindex, nofollow, noarchive">
     <meta name="referrer" content="no-referrer">
-    <title>رحلة مباشرة · رفيق</title>
+    <title>رحلة مباشرة · يوجو</title>
     <style>
         :root { color-scheme: light dark; --bg: #fbfbfd; --card: #fff; --fg: #1c1c28; --muted: #6b6b7b; --line: #e6e6ef; --brand: #6d28d9; --ok: #0f9d58; --warn: #b45309; }
         @media (prefers-color-scheme: dark) {
@@ -46,7 +46,7 @@
 </head>
 <body>
 <main>
-    <p class="brand">رفيق · رحلة مباشرة</p>
+    <p class="brand">يوجو · رحلة مباشرة</p>
 
     <div class="card">
         <h1>{{ $driverName }}</h1>

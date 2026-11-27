@@ -7,7 +7,7 @@
 return [
     'map_failed' => 'The map could not load. Everything else on this page is still correct.',
     'map_legend' => ['route' => 'Planned route', 'trail' => 'GPS trail', 'pickup' => 'Pickups', 'dropoff' => 'Drop-off', 'car' => 'Car now'],
-    'brand' => 'RAFEEQ',
+    'brand' => 'YuGo',
     'brand_sub' => 'Operations',
 
     'groups' => [

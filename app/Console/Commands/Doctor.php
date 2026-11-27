@@ -36,7 +36,7 @@ final class Doctor extends Command
     public function handle(): int
     {
         $this->line('');
-        $this->line('RAFEEQ — deployment check');
+        $this->line('YuGo — deployment check');
         $this->line('');
 
         $this->checkEnvironment();
