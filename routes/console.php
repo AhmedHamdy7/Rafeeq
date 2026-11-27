@@ -336,6 +336,7 @@ Schedule::command('model:prune', ['--model' => [
 Schedule::command('rafeeq:backup')
     ->dailyAt('23:55')
     ->timezone('Africa/Cairo')
+    ->when(fn (): bool => (bool) config('rafeeq.backup.enabled'))
     ->withoutOverlapping();
 
 /*

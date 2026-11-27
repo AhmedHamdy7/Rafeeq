@@ -185,6 +185,7 @@ class System extends Component
             'failedJobs' => $this->tab === 'status' ? SystemHealth::failedJobs() : [],
             'backups' => $this->tab === 'status' ? Backups::all() : [],
             'backupFresh' => $this->tab === 'status' && Backups::isFresh(),
+            'backupEnabled' => (bool) config('rafeeq.backup.enabled'),
             // Not `errors`: that name is the validation error bag in every Blade view.
             'logEntries' => $this->tab === 'errors' ? SystemHealth::recentErrors() : [],
             'disk' => $this->tab === 'status' ? ['free' => @disk_free_space(base_path()) ?: 0, 'total' => @disk_total_space(base_path()) ?: 0] : null,

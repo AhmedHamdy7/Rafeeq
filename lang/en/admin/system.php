@@ -42,6 +42,7 @@ return [
     'backups' => [
         'title' => 'Backups',
         'fresh' => 'A good backup exists from the last 24 hours.',
+        'disabled' => 'Nightly backups are off on this server (RAFEEQ_BACKUP_ENABLED=false). "Back up now" still works.',
         'stale' => 'The last good backup is more than a day old — check the scheduler and the failed backups below.',
         'none' => 'No backup yet. The first one runs tonight at 23:55, or run one now.',
         'when' => 'When',

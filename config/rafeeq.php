@@ -1470,6 +1470,9 @@ return [
      * `manifest.json`; folders older than `keep_days` are deleted by the next run.
      */
     'backup' => [
+        // Off on staging (RAFEEQ_BACKUP_ENABLED=false): its data is demo data, rebuilt by the demo
+        // commands, and not worth the disk. "Back up now" on the System page still works by hand.
+        'enabled' => (bool) env('RAFEEQ_BACKUP_ENABLED', true),
         'path' => env('RAFEEQ_BACKUP_PATH', storage_path('backups')),
         'keep_days' => (int) env('RAFEEQ_BACKUP_KEEP_DAYS', 7),
     ],

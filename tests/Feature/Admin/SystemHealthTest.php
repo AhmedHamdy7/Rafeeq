@@ -89,6 +89,21 @@ it('schedules the backup nightly', function () {
         ->and($event->timezone)->toBe('Africa/Cairo');
 });
 
+it('skips the nightly backup where it is switched off, and says so on the page', function () {
+    Process::fake();
+    $event = collect(app(Schedule::class)->events())
+        ->first(fn ($event) => str_contains((string) $event->command, 'rafeeq:backup'));
+
+    config(['rafeeq.backup.enabled' => true]);
+    expect($event->filtersPass(app()))->toBeTrue();
+
+    config(['rafeeq.backup.enabled' => false]);
+    expect($event->filtersPass(app()))->toBeFalse();
+
+    actingAsAdmin(adminWithRole(AdminRole::SuperAdmin));
+    Livewire::test(System::class)->assertSee(__('admin/system.backups.disabled'));
+});
+
 // ---- Redaction ----------------------------------------------------------------------------
 
 it('hides phone numbers, national IDs, emails and secrets from what the page shows', function () {

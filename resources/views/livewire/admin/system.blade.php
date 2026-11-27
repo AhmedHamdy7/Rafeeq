@@ -57,7 +57,9 @@
                             wire:confirm="{{ __('admin/system.confirm.backup') }}" wire:loading.attr="disabled">{{ __('admin/system.commands.backup.label') }}</button>
                 </x-slot:actions>
 
-                @if ($backupFresh)
+                @if (! $backupEnabled)
+                    <p class="ad-flash" style="margin:0 0 12px"><x-admin.icon name="info" />{{ __('admin/system.backups.disabled') }}</p>
+                @elseif ($backupFresh)
                     <p class="ad-flash" style="margin:0 0 12px"><x-admin.icon name="check" />{{ __('admin/system.backups.fresh') }}</p>
                 @else
                     <p class="ad-flash ad-flash--error" style="margin:0 0 12px"><x-admin.icon name="alert" />{{ $backups === [] ? __('admin/system.backups.none') : __('admin/system.backups.stale') }}</p>
