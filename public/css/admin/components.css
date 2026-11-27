@@ -2083,3 +2083,128 @@ a.ad-stat:hover {
     grid-template-columns: minmax(0, 1fr);
   }
 }
+
+/* ---------- System page: status tiles, disk, log, terminal ---------- */
+
+.ad-sys-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(210px, 1fr));
+  gap: 12px;
+  margin-block-end: 16px;
+}
+
+.ad-sys-tile {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 14px 16px;
+  background: var(--bg-surface);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-sm);
+}
+
+.ad-sys-tile__dot {
+  inline-size: 12px;
+  block-size: 12px;
+  margin-block-start: 4px;
+  border-radius: 50%;
+  flex: none;
+  background: var(--fg-subtle);
+}
+
+.ad-sys-tile.is-running .ad-sys-tile__dot {
+  background: var(--success-600);
+  box-shadow: 0 0 0 4px var(--success-100);
+}
+
+.ad-sys-tile.is-starting .ad-sys-tile__dot {
+  background: var(--warning-600);
+  box-shadow: 0 0 0 4px var(--warning-100);
+}
+
+.ad-sys-tile.is-stopped {
+  border-color: var(--danger-600);
+}
+
+.ad-sys-tile.is-stopped .ad-sys-tile__dot {
+  background: var(--danger-600);
+  box-shadow: 0 0 0 4px var(--danger-100);
+}
+
+.ad-sys-tile__name {
+  font-weight: 650;
+  color: var(--fg-default);
+}
+
+.ad-sys-tile__state {
+  font-size: var(--fs-small);
+  color: var(--fg-muted);
+}
+
+.ad-sys-cols {
+  display: grid;
+  grid-template-columns: minmax(0, 2fr) minmax(0, 1fr);
+  gap: 16px;
+  align-items: start;
+  margin-block-end: 16px;
+}
+
+.ad-sys-disk {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.ad-sys-disk__bar {
+  block-size: 10px;
+  border-radius: var(--radius-pill);
+  background: var(--bg-sunken);
+  overflow: hidden;
+}
+
+.ad-sys-disk__bar > span {
+  display: block;
+  block-size: 100%;
+  border-radius: inherit;
+  background: var(--brand);
+}
+
+.ad-sys-disk__bar > span.is-warn {
+  background: var(--danger-600);
+}
+
+.ad-sys-log {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.ad-sys-log > li {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 6px 12px;
+  padding: 10px 16px;
+  border-block-end: 1px solid var(--border-subtle);
+  font-size: 12.5px;
+}
+
+.ad-sys-term {
+  background: #0d1117;
+  color: #c9d1d9;
+  border-radius: 10px;
+  padding: 14px 16px;
+  font-family: var(--font-mono);
+  font-size: 12.5px;
+  line-height: 1.55;
+  max-block-size: 560px;
+  overflow: auto;
+  text-align: start;
+}
+
+@media (max-width: 1023px) {
+  .ad-sys-cols {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}

@@ -1459,4 +1459,28 @@ return [
         ],
     ],
 
+    /*
+     * The nightly backup (`rafeeq:backup`): the database, gzipped, and everything under
+     * storage/app (identity documents, report evidence), each night at 23:55 Cairo time.
+     *
+     * 🔴 On the same disk as the app it guards against a bad migration, a wrong delete or a
+     * corrupted table — NOT against losing the server. A copy somewhere else is a separate step.
+     *
+     * Each run is a folder `YYYY-MM-DD_HHMMSS` with `database.sql.gz`, `files.tar.gz` and a
+     * `manifest.json`; folders older than `keep_days` are deleted by the next run.
+     */
+    'backup' => [
+        'path' => env('RAFEEQ_BACKUP_PATH', storage_path('backups')),
+        'keep_days' => (int) env('RAFEEQ_BACKUP_KEEP_DAYS', 7),
+    ],
+
+    /*
+     * What the System page asks systemd about: `{prefix}-queue` and `{prefix}-reverb`. Empty means
+     * the app folder's name — `rafeeq` for /var/www/rafeeq, `rafeeq-staging` for the staging copy —
+     * which is how the VPS units are named (deploy/systemd, CLAUDE.md).
+     */
+    'ops' => [
+        'service_prefix' => env('RAFEEQ_SERVICE_PREFIX', ''),
+    ],
+
 ];

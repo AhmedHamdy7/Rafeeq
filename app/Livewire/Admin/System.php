@@ -5,9 +5,13 @@ namespace App\Livewire\Admin;
 use App\Domains\Admin\Enums\AdminPermission;
 use App\Domains\Admin\Models\AdminUser;
 use App\Domains\Admin\Support\AdminActionLog;
+use App\Domains\Shared\Support\Backups;
+use App\Domains\Shared\Support\SystemHealth;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\DB;
 use Livewire\Attributes\Layout;
+use Livewire\Attributes\Url;
 use Livewire\Component;
 use Symfony\Component\Console\Output\BufferedOutput;
 use Throwable;
@@ -47,7 +51,15 @@ class System extends Component
         'doctor' => ['rafeeq:doctor', [], false],
         'schedule_list' => ['schedule:list', [], false],
         'about' => ['about', [], false],
+        // Reads the data, never changes it (BackupNow). Confirmed because it takes a while.
+        'backup' => ['rafeeq:backup', [], true],
+        'queue_retry_all' => ['queue:retry', ['id' => ['all']], true],
     ];
+
+    public const array TABS = ['status', 'commands', 'errors'];
+
+    #[Url(as: 'tab', except: 'status')]
+    public string $tab = 'status';
 
     /** How many runs stay on screen; older ones are still in the audit log. */
     private const int HISTORY = 10;
@@ -71,6 +83,37 @@ class System extends Component
         abort_unless(array_key_exists($key, self::COMMANDS), 404);
 
         [$command, $arguments] = self::COMMANDS[$key];
+
+        $this->execute($admin, $key, $command, $arguments);
+    }
+
+    /** Puts one failed job back on the queue. Only a uuid that is really in failed_jobs. */
+    public function retryFailed(string $uuid): void
+    {
+        $admin = $this->admin();
+        abort_unless($admin?->can(AdminPermission::SystemMaintain->value) === true, 403);
+        abort_unless(DB::table('failed_jobs')->where('uuid', $uuid)->exists(), 404);
+
+        $this->execute($admin, 'queue_retry', 'queue:retry', ['id' => [$uuid]]);
+    }
+
+    /** Drops one failed job for good (after reading why it failed). */
+    public function forgetFailed(string $uuid): void
+    {
+        $admin = $this->admin();
+        abort_unless($admin?->can(AdminPermission::SystemMaintain->value) === true, 403);
+        abort_unless(DB::table('failed_jobs')->where('uuid', $uuid)->exists(), 404);
+
+        $this->execute($admin, 'queue_forget', 'queue:forget', ['id' => $uuid]);
+    }
+
+    /**
+     * @param  array<string, mixed>  $arguments
+     */
+    private function execute(AdminUser $admin, string $key, string $command, array $arguments): void
+    {
+        // A backup or a migration can outlast the default limit on a request.
+        @set_time_limit(600);
 
         $output = new BufferedOutput;
 
@@ -97,7 +140,7 @@ class System extends Component
 
         array_unshift($this->runs, [
             'key' => $key,
-            'command' => 'php artisan '.$command.($arguments === [] ? '' : ' '.implode(' ', array_keys($arguments))),
+            'command' => self::display($command, $arguments),
             'exit' => $exit,
             'output' => $text === '' ? __('admin/system.no_output') : $text,
             'at' => now()->timezone('Africa/Cairo')->format('H:i:s'),
@@ -111,12 +154,40 @@ class System extends Component
         $this->runs = [];
     }
 
+    /**
+     * `php artisan migrate --force`, `php artisan queue:retry all` — how a command reads on screen.
+     *
+     * @param  array<string, mixed>  $arguments
+     */
+    public static function display(string $command, array $arguments): string
+    {
+        $parts = ['php artisan', $command];
+
+        foreach ($arguments as $name => $value) {
+            $parts[] = str_starts_with((string) $name, '--') ? $name : implode(' ', (array) $value);
+        }
+
+        return implode(' ', $parts);
+    }
+
     public function render()
     {
+        $this->tab = in_array($this->tab, self::TABS, true) ? $this->tab : 'status';
+
         return view('livewire.admin.system', [
             'commands' => self::COMMANDS,
             'environment' => app()->environment(),
             'url' => config('app.url'),
+            // Only what the open tab needs: the log is read from disk, the services are asked of systemd.
+            'services' => $this->tab === 'status' ? SystemHealth::services() : [],
+            'heartbeat' => $this->tab === 'status' ? SystemHealth::schedulerLastBeat() : null,
+            'queue' => $this->tab === 'status' ? SystemHealth::queue() : null,
+            'failedJobs' => $this->tab === 'status' ? SystemHealth::failedJobs() : [],
+            'backups' => $this->tab === 'status' ? Backups::all() : [],
+            'backupFresh' => $this->tab === 'status' && Backups::isFresh(),
+            // Not `errors`: that name is the validation error bag in every Blade view.
+            'logEntries' => $this->tab === 'errors' ? SystemHealth::recentErrors() : [],
+            'disk' => $this->tab === 'status' ? ['free' => @disk_free_space(base_path()) ?: 0, 'total' => @disk_total_space(base_path()) ?: 0] : null,
         ])->title(__('admin/system.title'));
     }
 

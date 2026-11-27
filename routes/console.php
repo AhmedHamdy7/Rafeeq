@@ -8,6 +8,7 @@ use App\Domains\Notification\Models\Message;
 use App\Domains\Notification\Models\Notification;
 use App\Domains\Outbox\Models\OutboxEvent;
 use App\Domains\Payment\Models\PaymentWebhook;
+use App\Domains\Shared\Support\SystemHealth;
 use Illuminate\Support\Facades\Schedule;
 
 /*
@@ -325,3 +326,23 @@ Schedule::command('model:prune', ['--model' => [
     ->dailyAt('04:45')
     ->timezone('Africa/Cairo')
     ->withoutOverlapping();
+
+/*
+ * The nightly backup (database + uploaded files, last 7 days kept). See config/rafeeq.php →
+ * backup, and BackupNow. Infrastructure only: it reads, it never changes anything.
+ *
+ * If it does not run: the System page shows the last backup getting older, in red after a day.
+ */
+Schedule::command('rafeeq:backup')
+    ->dailyAt('23:55')
+    ->timezone('Africa/Cairo')
+    ->withoutOverlapping();
+
+/*
+ * The scheduler's own heartbeat: a file touched every minute, which the System page reads to
+ * show whether the scheduler is running at all. A file rather than the cache, so clearing the
+ * cache cannot make a healthy scheduler look stopped.
+ */
+Schedule::call(fn () => @touch(SystemHealth::heartbeatFile()))
+    ->name('ops:scheduler-heartbeat')
+    ->everyMinute();

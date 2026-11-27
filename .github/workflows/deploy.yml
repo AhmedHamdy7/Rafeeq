@@ -89,20 +89,43 @@ jobs:
           echo "sha=$sha" >> "$GITHUB_OUTPUT"
           echo "Deploying $sha to $TARGET"
 
+      # Checks each secret's SHAPE (never prints a value) and says exactly which one is wrong.
+      # `::error::` lines become annotations on the run, readable without opening the log.
+      - name: Check secrets
+        env:
+          DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
+          DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
+          DEPLOY_SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
+          DEPLOY_KNOWN_HOSTS: ${{ secrets.DEPLOY_KNOWN_HOSTS }}
+        run: |
+          bad=0
+          host="$(printf '%s' "$DEPLOY_HOST" | tr -d '[:space:]')"
+          user="$(printf '%s' "$DEPLOY_USER" | tr -d '[:space:]')"
+          [ -n "$host" ] || { echo "::error::Secret DEPLOY_HOST is missing or empty."; bad=1; }
+          [ -z "$host" ] || printf '%s' "$host" | grep -Eq '^[0-9a-zA-Z.-]+$' || { echo "::error::Secret DEPLOY_HOST should be just the IP (153.79.251.111), with nothing else."; bad=1; }
+          [ "$host" = "$DEPLOY_HOST" ] || echo "::warning::Secret DEPLOY_HOST has spaces or a line break around it (ignored, but worth cleaning)."
+          [ -n "$user" ] || { echo "::error::Secret DEPLOY_USER is missing or empty (should be: deploy)."; bad=1; }
+          printf '%s' "$DEPLOY_SSH_KEY" | grep -q 'BEGIN OPENSSH PRIVATE KEY' || { echo "::error::Secret DEPLOY_SSH_KEY is missing, or does not start with -----BEGIN OPENSSH PRIVATE KEY-----."; bad=1; }
+          printf '%s' "$DEPLOY_SSH_KEY" | grep -q 'END OPENSSH PRIVATE KEY' || { echo "::error::Secret DEPLOY_SSH_KEY is cut short: the -----END OPENSSH PRIVATE KEY----- line is missing."; bad=1; }
+          printf '%s' "$DEPLOY_KNOWN_HOSTS" | grep -Eq '(ssh-ed25519|ecdsa-sha2|ssh-rsa) ' || { echo "::error::Secret DEPLOY_KNOWN_HOSTS is missing, or has no key line (each line looks like: 153.79.251.111 ssh-ed25519 AAAA...)."; bad=1; }
+          echo "DEPLOY_HOST=$host" >> "$GITHUB_ENV"
+          echo "DEPLOY_USER=$user" >> "$GITHUB_ENV"
+          exit $bad
+
       - name: Set up SSH
         env:
           DEPLOY_SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
           DEPLOY_KNOWN_HOSTS: ${{ secrets.DEPLOY_KNOWN_HOSTS }}
         run: |
           install -m 700 -d ~/.ssh
-          printf '%s\n' "$DEPLOY_SSH_KEY" > ~/.ssh/id_ed25519
+          # Pasted through a browser, a key can arrive with Windows line endings — ssh refuses those.
+          printf '%s\n' "$DEPLOY_SSH_KEY" | tr -d '\r' > ~/.ssh/id_ed25519
           chmod 600 ~/.ssh/id_ed25519
-          printf '%s\n' "$DEPLOY_KNOWN_HOSTS" > ~/.ssh/known_hosts
+          printf '%s\n' "$DEPLOY_KNOWN_HOSTS" | tr -d '\r' > ~/.ssh/known_hosts
+          ssh-keygen -y -f ~/.ssh/id_ed25519 > /dev/null 2>&1 || { echo "::error::Secret DEPLOY_SSH_KEY is not a readable private key (copied incompletely?)."; exit 1; }
 
       - name: Deploy
         env:
-          DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
-          DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
           SHA: ${{ steps.commit.outputs.sha }}
         run: |
           case "$TARGET" in
@@ -110,6 +133,14 @@ jobs:
             staging)    dir=/var/www/rafeeq-staging ;;
             *) echo "unknown environment $TARGET"; exit 1 ;;
           esac
-          ssh -o StrictHostKeyChecking=yes -o BatchMode=yes \
+          # DEPLOY_HOST / DEPLOY_USER come trimmed from "Check secrets".
+          set +e
+          ssh -o StrictHostKeyChecking=yes -o BatchMode=yes -o ConnectTimeout=20 \
             "$DEPLOY_USER@$DEPLOY_HOST" \
-            "bash $dir/deploy/deploy.sh $SHA"
+            "bash $dir/deploy/deploy.sh $SHA" 2> >(tee /tmp/ssh-err >&2)
+          code=$?
+          if [ $code -ne 0 ]; then
+            # The first lines of what went wrong, as an annotation (no secret is ever in them).
+            echo "::error::Deploy to $TARGET failed (exit $code): $(head -c 600 /tmp/ssh-err | tr '\n' ' ')"
+          fi
+          exit $code
