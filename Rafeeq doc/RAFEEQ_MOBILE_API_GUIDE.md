@@ -14,7 +14,7 @@
 >
 > **Base URL:** `{host}/api/v1` · **Auth:** bearer token · **Format:** JSON only.
 
-**Last updated:** 2026-11-26 · **291 endpoints live** · Phases 0–7, 9 and 11 complete · 10, 12 and 13 all but a decision each
+**Last updated:** 2026-11-28 · **292 endpoints live** · Phases 0–7, 9 and 11 complete · 10, 12 and 13 all but a decision each
 
 ---
 
@@ -22,7 +22,7 @@
 
 ### What is ready
 
-**291 endpoints live** and tested, across the 47 designed screens:
+**292 endpoints live** and tested, across the 47 designed screens:
 
 | | Count | Covers |
 |---|---|---|
@@ -191,6 +191,19 @@ Accept-Language: ar    (or en)
 
 Arabic is the default. This changes `error.message` and any human-facing string we generate. It
 does **not** translate user content — a driver's note comes back as they typed it.
+
+### 1.4.1 App version (send it on every request)
+
+```
+X-App-Platform: ios      (or android)
+X-App-Version: 1.3.0
+```
+
+Optional, and strongly recommended. When both are present and staff have marked that version as
+one that must update (below the minimum, or below the latest with force update on), **every** call
+except `GET /app/version` answers **`426 APP_UPDATE_REQUIRED`**. Show the update screen and send her
+to the store link from `GET /app/version` (4.19). Without the headers nothing is ever refused for
+being out of date, so an install that does not send them relies on its own launch check alone.
 
 ### 1.5 Time
 
@@ -946,6 +959,7 @@ fails if this list and the running routes ever disagree in either direction.
 | `POST /sos/{sos}/cancel` | 4.12 Safety |
 | `GET /content/{key}` | 4.18 Content |
 | `GET /support/contact` | 4.18 Content |
+| `GET /app/version` | 4.19 App version |
 | `GET /notifications` | 4.14 Notifications |
 | `PATCH /notifications/read` | 4.14 Notifications |
 | `DELETE /notifications` | 4.14 Notifications |
@@ -5221,6 +5235,7 @@ hold must still be able to read the notice that says so.
 | `chat_message` | the other side | the thread | `bookingId` for a booking thread, or `seatRequestId` + `commuteId` for a request thread (4.15) |
 | `announcement` | everyone, passengers or drivers — written by staff, **inbox only, never a push** | the screen in `data.link` if present (`home`, `driver_home`, `trips`, `payments`, `profile`, `help`), else the inbox | `announcementId`, `link` (optional) |
 | `staff_message` | one member, written by staff (**safety** — cannot be switched off), **inbox only** | the inbox | *no ids* |
+| `app_update` | members whose phone on that store has an older app version (or an unknown one) — once per version, when staff tick "notify users" (**trip** switch), **push and inbox** | the store: `data.storeUrl` (or call `GET /app/version`, 4.19) | `platform`, `version`, `storeUrl`, `minimumVersion`, `forceUpdate` |
 | `live_trip_auto_shared` · `live_trip_auto_share_failed` | her, when auto-share ran as her trip left (**safety**) | Shared links | `tripId`, `tripSessionId`, `sentTo` (contact ids, comma-separated; not on `_failed`), `failedTo` (contact ids, comma-separated, may be empty) |
 | `rating_due` · `rating_due_riders` · `rating_reminder` | passenger / driver | rate (4.13) | `bookingId` or `tripId` (+ `riderCount` on `rating_due_riders`). `rating_due` goes to each passenger at her drop-off (or at completion if still aboard), never on a `NO_SHOW`. `rating_due_riders` goes to the driver once when the run completes, if anybody rode. |
 | `sos_picked_up` · `report_resolved` · `report_closed` | the reporter | the SOS / report | `sosId` / `incidentId` |
@@ -6083,6 +6098,49 @@ The texts staff write on the dashboard's **Content** page. **Public**: no token 
 
 Any field may be `null` (a language inside may be `null` too): hide that line. `chat` is `null`: there is no member support chat yet.
 
+## 4.19 App version (update prompts)
+
+Staff set, per store, the **latest** version, the **minimum** still allowed, the **store link** and a
+**force update** switch, on the dashboard's **App versions** page. **Public**: call it on every
+launch, before sign-in.
+
+`GET /app/version?platform=ios&version=1.3.0` — `platform` is `ios` or `android` (required);
+`version` is this install's version (a build suffix like `1.3.0+45` is ignored).
+
+```json
+{
+  "success": true,
+  "data": {
+    "platform": "ios",
+    "configured": true,
+    "currentVersion": "1.3.0",
+    "latestVersion": "1.4.0",
+    "minimumVersion": "1.2.0",
+    "forceUpdate": false,
+    "updateRequired": false,
+    "updateAvailable": true,
+    "storeUrl": "https://apps.apple.com/app/id0000000000",
+    "releaseNotes": "Faster search and a new trip screen."
+  }
+}
+```
+
+| `updateRequired` | `updateAvailable` | Show |
+|---|---|---|
+| `true` | `true` | **Blocking** update screen with one button to `storeUrl`. No way past it. |
+| `false` | `true` | A dismissible "new version" prompt with `releaseNotes`; remember the dismissal per version. |
+| `false` | `false` | Nothing. |
+
+- `updateRequired` is `true` when `version` is below `minimumVersion`, or below `latestVersion` while `forceUpdate` is on.
+- Versions compare **as numbers, part by part**: `1.10.0` is newer than `1.9.0`. Do the same if you compare on the device.
+- `configured: false` (and every other field `null`) until staff set this store: carry on as normal.
+- Without `version`, the policy still comes back and both flags are `false`.
+- `releaseNotes` follows `Accept-Language`, falling back to the other language; `null` when staff wrote none.
+- Also send `X-App-Platform` / `X-App-Version` on every request (1.4.1): then any call from a version that must update answers `426 APP_UPDATE_REQUIRED`, and you show this same blocking screen.
+- `422 VALIDATION_FAILED` for a missing or unknown `platform`.
+
+The **`app_update`** notification (4.14) announces a new version to members on an older one; its `data` carries `platform`, `version`, `storeUrl`, `minimumVersion` and `forceUpdate`.
+
 ## 5. The one shape every feature shares
 
 Every other response shape is documented in the chapter that returns it. This one is not, because it
@@ -6275,6 +6333,7 @@ exist, and every live endpoint must be named here.
 
 | Date | Change |
 |---|---|
+| 2026-11-28 | 📲 **App version and update prompts.** New public **`GET /app/version?platform=&version=`** (4.19): latest and minimum version per store, the store link, `forceUpdate`, what's new, and for this install `updateRequired` (block) / `updateAvailable` (suggest). New optional headers **`X-App-Platform`** and **`X-App-Version`** (1.4.1): send them on every request and a version that must update gets **`426 APP_UPDATE_REQUIRED`** everywhere except `GET /app/version`; without them nothing changes. New notification type **`app_update`** (4.14), push and inbox, once per version, only to members on an older version. The product is now called **YuGo / يوجو** in every text the server writes. |
 | 2026-11-26 | 📍 **Google Maps cost, Asks 2 and 3.** New **`GET /places/suggestions`** (4.6): YuGo's own points near her or by name, learned from published commutes, demands, seat requests and pickup changes; a private pin is shown only once 3 people picked within 50 m; Google coordinates kept 30 days (`places:refresh-coordinates`, daily 02:45 Cairo). Call Google only when it returns nothing. **Live trip:** `points[].heading` on `POST /trips/{trip}/location`, `heading` in `position` and in `location.updated`; new **`trip.pickup_eta`** on `private-user.{userId}` with `pickupEtaAt` and `stopsBeforeYou`. Search no longer reverse-geocodes her start and end on the server (only saved points are checked). |
 | 2026-11-26 | 🗺️ **The server sends the road again** (Google Maps cost, Ask 1). `polyline` is a Google encoded polyline on `GET /commutes/{commute}/route-preview`, `routePolyline` on the driver's commute, `route.polyline` on `GET /commutes/{commute}/public` and `counteroffer-options`, `polyline` on `navigation-route` (the day's road) and `driver/seat-requests/{id}/route-preview` (with her points), and new `polyline` on `pickup-preview` / `dropoff-preview` (start → her points → end). Draw it and skip your own Routes call; it is `null` when the server has no road younger than 30 days or Google did not answer, and then the app asks Google as before. Roads are fetched again every 7 days (`commutes:refresh-roads`, daily 02:30 Cairo); distance, duration and price stay as published. Search results and match cards still carry no road. |
 | 2026-11-24 | 🔁 **Return trips, round 3.** Return proposals add `changes` / `previous` `estimatedArrivalTime` (the route's end for the driver, her drop-off for her). The passenger's proposals add `myPickup`. The driver's `upcomingTrips[]` add `timeLocked` / `timeLockedAt`. The trip session adds `expectedArrivalAt`, the arrival the still-driving check counts from. |

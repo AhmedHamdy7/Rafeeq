@@ -425,10 +425,12 @@ return [
             'account' => 'إيقاف الحسابات',
             'settings' => 'الإعدادات',
             'system' => 'أوامر النظام',
+            'app_version' => 'إصدارات التطبيق',
         ],
         'actions' => [
             'admin__login' => 'دخل الداشبورد',
             'system__run' => 'شغّل أمر نظام',
+            'app_version__update' => 'غيّر إعدادات إصدار التطبيق',
             'ticket__take' => 'استلم حالة دعم',
             'ticket__resolve' => 'حل حالة دعم',
             'ticket__close' => 'قفل حالة دعم',

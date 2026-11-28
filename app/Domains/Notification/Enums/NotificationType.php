@@ -470,6 +470,14 @@ enum NotificationType: string
     /** Staff to one member, from their profile (D19). Inbox only. */
     case StaffMessage = 'staff_message';
 
+    /**
+     * A new app version is out (the dashboard's App versions page). Sent once per version, only to
+     * members whose phone on that store is on an older version. Push and inbox; the data carries
+     * `platform`, `version`, `storeUrl`, `minimumVersion` and `forceUpdate` so the app opens the
+     * right store.
+     */
+    case AppUpdate = 'app_update';
+
     case LiveTripAutoShared = 'live_trip_auto_shared';
 
     case LiveTripAutoShareFailed = 'live_trip_auto_share_failed';
@@ -580,6 +588,8 @@ enum NotificationType: string
             self::CommuteStillNotStarted,
             // Service news (road works, a new corridor). Follows her Trip switch.
             self::Announcement => NotificationCategory::Trip,
+            // Like service news: an out-of-date app is what stops her trips working.
+            self::AppUpdate => NotificationCategory::Trip,
         };
     }
 }

@@ -12,6 +12,11 @@ enum ErrorCode: string
     case MethodNotAllowed = 'METHOD_NOT_ALLOWED';
     case Conflict = 'CONFLICT';
     case Gone = 'GONE';
+    /**
+     * This app version must be updated before it can be used (App versions page). Only ever sent
+     * when the request carries X-App-Platform and X-App-Version; GET /app/version gives the link.
+     */
+    case AppUpdateRequired = 'APP_UPDATE_REQUIRED';
     case PageExpired = 'PAGE_EXPIRED';
     case PayloadTooLarge = 'PAYLOAD_TOO_LARGE';
     case TooManyRequests = 'TOO_MANY_REQUESTS';
@@ -374,6 +379,7 @@ enum ErrorCode: string
             self::MethodNotAllowed => 405,
             self::Conflict => 409,
             self::Gone => 410,
+            self::AppUpdateRequired => 426,
             self::PageExpired => 419,
             self::PayloadTooLarge => 413,
             self::ValidationFailed => 422,

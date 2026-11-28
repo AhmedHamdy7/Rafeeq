@@ -490,6 +490,10 @@ return [
         'title' => ':title',
         'body' => ':body',
     ],
+    'app_update' => [
+        'title' => 'YuGo :version is out',
+        'body' => 'Update to version :version for the latest fixes and features.',
+    ],
     'staff_message' => [
         'title' => ':title',
         'body' => ':body',

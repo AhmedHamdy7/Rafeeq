@@ -416,6 +416,10 @@ return [
         'title' => ':title',
         'body' => ':body',
     ],
+    'app_update' => [
+        'title' => 'نزل إصدار جديد من يوجو :version',
+        'body' => 'حدّث التطبيق للإصدار :version علشان توصلك آخر التحسينات.',
+    ],
     'staff_message' => [
         'title' => ':title',
         'body' => ':body',

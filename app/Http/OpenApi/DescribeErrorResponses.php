@@ -89,6 +89,12 @@ final class DescribeErrorResponses implements OperationTransformer
 
         $middleware = $routeInfo->route->gatherMiddleware();
 
+        // EnforceMinimumAppVersion runs on every /v1 call except the version check itself, and
+        // answers 426 when the app sends a version that must update.
+        if ($routeInfo->route->uri() !== 'api/v1/app/version') {
+            $codes[] = ErrorCode::AppUpdateRequired;
+        }
+
         if ($this->hasFormRequest($routeInfo)) {
             $codes[] = ErrorCode::ValidationFailed;
         }

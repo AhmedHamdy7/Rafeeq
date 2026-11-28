@@ -2208,3 +2208,174 @@ a.ad-stat:hover {
     grid-template-columns: minmax(0, 1fr);
   }
 }
+
+/* ---------- App versions: one card per store ---------- */
+
+.ad-appv-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+  margin-block-end: 16px;
+  align-items: start;
+}
+
+.ad-appv {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  padding: 18px;
+  background: var(--bg-surface);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-xl);
+  box-shadow: var(--shadow-sm);
+}
+
+.ad-appv__head {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.ad-appv__badge {
+  inline-size: 44px;
+  block-size: 44px;
+  border-radius: var(--radius-md);
+  display: grid;
+  place-items: center;
+  flex: none;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  color: #fff;
+}
+
+.ad-appv__badge--ios {
+  background: #111827;
+}
+
+.ad-appv__badge--android {
+  background: #16a34a;
+}
+
+.ad-appv__title {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 700;
+}
+
+.ad-appv__stats {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.ad-appv__stats > div {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 10px 12px;
+  border-radius: var(--radius-md);
+  background: var(--bg-sunken);
+}
+
+.ad-appv__num {
+  font-size: 20px;
+  font-weight: 700;
+  color: var(--fg-default);
+}
+
+.ad-appv__num.is-ok {
+  color: var(--success-600);
+}
+
+.ad-appv__num.is-warn {
+  color: var(--warning-600);
+}
+
+.ad-appv__form {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.ad-appv__form .ad-field {
+  margin: 0;
+}
+
+.ad-appv__pair {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+/* A switch row: the whole row is the click target, the state shows in its border. */
+.ad-appv__switch {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 12px 14px;
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-md);
+  cursor: pointer;
+  transition: border-color var(--dur-fast) var(--ease-out), background var(--dur-fast) var(--ease-out);
+}
+
+.ad-appv__switch input {
+  margin-block-start: 3px;
+  inline-size: 18px;
+  block-size: 18px;
+  accent-color: var(--brand);
+  flex: none;
+}
+
+.ad-appv__switch > span {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.ad-appv__switch.is-on {
+  border-color: var(--brand);
+  background: var(--brand-soft-bg);
+}
+
+.ad-appv__switch.is-danger {
+  border-color: var(--danger-600);
+  background: var(--danger-100);
+}
+
+.ad-appv__switch.is-danger input {
+  accent-color: var(--danger-600);
+}
+
+.ad-appv__rules {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.ad-appv__rules li {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+@media (max-width: 1023px) {
+  .ad-appv-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+@media (max-width: 767px) {
+  .ad-appv__stats {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .ad-appv__pair {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}

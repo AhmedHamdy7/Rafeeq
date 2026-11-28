@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Middleware\EnforceMinimumAppVersion;
 use App\Http\Middleware\EnsureAccountIsActive;
 use App\Http\Middleware\EnsureAdminMfaIsConfirmed;
 use App\Http\Middleware\EnsureAdminSessionIsFresh;
@@ -66,6 +67,9 @@ return Application::configure(basePath: dirname(__DIR__))
 
         $middleware->api(append: [
             SetLocaleFromHeader::class,
+            // After the locale, so the 426 reads in her language. Acts only when the app sends
+            // X-App-Platform and X-App-Version — see the class.
+            EnforceMinimumAppVersion::class,
             InjectTestingFaults::class,
         ]);
 

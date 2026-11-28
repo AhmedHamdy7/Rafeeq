@@ -8,6 +8,7 @@ return [
     'NOT_FOUND' => 'The requested resource was not found.',
     'METHOD_NOT_ALLOWED' => 'This method is not allowed for this endpoint.',
     'CONFLICT' => 'This request conflicts with the current state.',
+    'APP_UPDATE_REQUIRED' => 'This version of YuGo is no longer supported. Please update the app to continue.',
     'GONE' => 'This resource is no longer available.',
     'PAGE_EXPIRED' => 'Your session expired. Please try again.',
     'PAYLOAD_TOO_LARGE' => 'The uploaded file is too large.',

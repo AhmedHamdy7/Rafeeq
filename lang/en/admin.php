@@ -428,10 +428,12 @@ return [
             'account' => 'Account holds',
             'settings' => 'Settings',
             'system' => 'System commands',
+            'app_version' => 'App versions',
         ],
         'actions' => [
             'admin__login' => 'Signed in',
             'system__run' => 'Ran a system command',
+            'app_version__update' => 'Changed an app version policy',
             'ticket__take' => 'Took a support case',
             'ticket__resolve' => 'Resolved a support case',
             'ticket__close' => 'Closed a support case',

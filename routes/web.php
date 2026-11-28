@@ -12,6 +12,7 @@ use App\Livewire\Admin\AcceptInvitation;
 use App\Livewire\Admin\Account;
 use App\Livewire\Admin\Announcements;
 use App\Livewire\Admin\Appeals;
+use App\Livewire\Admin\AppVersions;
 use App\Livewire\Admin\AuditLog;
 use App\Livewire\Admin\Content;
 use App\Livewire\Admin\Coupons;
@@ -169,6 +170,7 @@ Route::prefix('admin')->name('admin.')->middleware(SetAdminLocale::class)->group
         Route::get('announcements', Announcements::class)->name('announcements');
         Route::get('content', Content::class)->name('content');
         Route::get('system', System::class)->name('system');
+        Route::get('app-versions', AppVersions::class)->name('app-versions');
 
         Route::get('account', Account::class)->name('account');
 

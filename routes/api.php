@@ -13,6 +13,7 @@ use App\Http\Controllers\Api\V1\Account\StatsController;
 use App\Http\Controllers\Api\V1\Account\SuspensionAppealController;
 use App\Http\Controllers\Api\V1\Account\VerificationController;
 use App\Http\Controllers\Api\V1\Account\WarningController;
+use App\Http\Controllers\Api\V1\AppVersionController;
 use App\Http\Controllers\Api\V1\Auth\OtpController;
 use App\Http\Controllers\Api\V1\Auth\SessionController;
 use App\Http\Controllers\Api\V1\Booking\BookingController;
@@ -88,6 +89,9 @@ use Illuminate\Support\Facades\Route;
 Route::prefix('v1')->group(function (): void {
 
     Route::get('content/{key}', [ContentController::class, 'show']);
+
+    // Public: the app asks on every launch, before sign-in. Never refused for being out of date.
+    Route::get('app/version', [AppVersionController::class, 'show'])->middleware('throttle:120,1');
 
     Route::prefix('auth')->group(function (): void {
         Route::post('otp/request', [OtpController::class, 'request']);
